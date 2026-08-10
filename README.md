@@ -11,6 +11,22 @@ directly or serve the directory.
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
+## Deploying
+
+`netlify.toml` copies `index.html` into `dist/` and publishes that. The publish
+directory is explicit rather than the repo root, so the Constitution specs, the
+blueprint and the design reference images stay out of the deployed site.
+
+There is nothing to install — no `package.json`, no framework, no build step
+beyond the copy.
+
+## Typography
+
+Onest is embedded in the document as a base64 `woff2` (the latin variable subset,
+covering 400–700 in one 32KB file). Self-hosting it removes two external requests
+and a render-blocking stylesheet, so the real face paints on the first frame with
+no fallback flash — and the page renders correctly with no network at all.
+
 ## Layout
 
 | Viewport | Navigation | Content |

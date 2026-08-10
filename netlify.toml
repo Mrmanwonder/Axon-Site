@@ -1,0 +1,31 @@
+# Mastery is a single static file — there is no framework, no dependencies and
+# nothing to compile. The "build" copies the one published artifact into an
+# empty directory.
+#
+# This is deliberately not `publish = "."`: the repo also holds the Constitution
+# specs, the blueprint and the design reference images, none of which should be
+# fetchable from the public site. Publishing an explicit directory keeps the
+# deploy to exactly what belongs on the web.
+
+[build]
+  command = "mkdir -p dist && cp index.html dist/index.html"
+  publish = "dist"
+
+[build.environment]
+  # Nothing to install. Skips the dependency step entirely.
+  NETLIFY_SKIP_DEFAULT_PLUGINS = "false"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# The font is embedded in the document as a data URI, so there is no separate
+# asset to cache. The document itself must not be cached hard, or a redeploy
+# won't reach anyone who has already visited.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
