@@ -1,8 +1,44 @@
 # Working in this repo
 
-This is a single static file. `index.html` contains all markup, styles and script —
-no build step, no package manager, no framework, no backend. Don't introduce one
-without being asked.
+`index.html` is the entire front end: all markup, styles and script in one static
+file, with no build step, package manager or framework. Don't introduce one without
+being asked. It also serves as the design system — the tokens, the type scale, the
+glass lens and the spring engine are the reference implementation, so read it
+before building UI.
+
+`supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
+test suites that run inside a rolled-back transaction and are safe against any
+database, production included.
+
+## The four hard rules
+
+`CLAUDE.md` names four rules whose violation is a product failure. Each is enforced
+by a constraint rather than a convention, because a rule that lives only in a prompt
+eventually gets broken:
+
+1. **The model never assigns marks.** `student_attempt.marks_source` is NOT NULL and
+   can only name a human origin, so a mark with no human provenance cannot be
+   stored. `mark_loss_event.ai_explanation` is the model's only writable field.
+2. **Never fabricate a scheme.** A Tier 1 attempt cannot reference a
+   `canonical_question`, and scheme text cannot be stored without its source and
+   version.
+3. **Unsure data never reaches analytics.** Aggregate from `attempt_analytics` and
+   `mark_loss_analytics`, never the base tables. They exclude unsure-unconfirmed and
+   student-rejected rows.
+4. **Fail visibly.** An unreadable page becomes a `page_unreadable` row, never a
+   silent omission.
+
+## Database conventions
+
+- Internal helpers live in `private`, not `public`. Anything in `public` is a
+  PostgREST RPC endpoint; a `SECURITY DEFINER` helper taking arbitrary ids becomes a
+  cross-account read if exposed there.
+- Every `SECURITY DEFINER` function pins `search_path`.
+- Views that touch user data need `security_invoker = true`, or they become a hole
+  straight through RLS.
+- `consent_event` is append-only. Order it by `seq`, never `created_at`: `now()` is
+  the transaction timestamp, so rows written together are indistinguishable by time.
+- Consent state is always read authoritatively, never cached optimistically.
 
 ## Before changing the nav or the glass
 
