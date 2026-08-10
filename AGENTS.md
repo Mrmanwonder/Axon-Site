@@ -32,8 +32,16 @@ This is easy to get wrong and looks almost right when you do.
 ## Haptics
 
 `navigator.vibrate` only, always feature-detected, wrapped in try/catch. 10ms for
-selection, 18ms for consequential confirmation, nothing for passive or read-only
-interaction. Don't add a buzz to scrolling or row taps.
+selection (tabs, switches, the shutter), 18ms for consequential confirmation,
+nothing for passive or read-only interaction. Don't add a buzz to scrolling or row
+taps.
+
+## The draft toast
+
+Its spring is normalised so `0` = shown and `1` = dismissed, and every handler maps
+it as `-140 * p`. `initScan()` and the drag-release path once used `-140 * (1 - p)`,
+which inverted the range and parked the toast permanently off-screen. If you touch
+one of those handlers, keep all of them on the same mapping.
 
 ## Verifying
 

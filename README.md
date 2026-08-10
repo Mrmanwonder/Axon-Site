@@ -52,7 +52,7 @@ vertical in the rail.
 `navigator.vibrate`, weighted to the interaction, feature-detected and silent where
 unsupported (which is every desktop browser):
 
-- **10ms tick** — tab bar selection, settings switch toggles
+- **10ms tick** — tab bar selection, settings switch toggles, camera shutter
 - **18ms pulse** — confirming something consequential: the board/class warning
   sheet's primary button, and *Confirm & save to Library*
 
