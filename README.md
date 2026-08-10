@@ -1,0 +1,68 @@
+# Mastery
+
+A responsive web app that shows a student exactly where their marks go — built from
+the original single-file device-frame prototype, now a real site rather than a
+scaled-down phone mockup.
+
+`index.html` is the whole thing: no build step, no dependencies, no backend. Open it
+directly or serve the directory.
+
+```bash
+python3 -m http.server 8000   # then open http://localhost:8000
+```
+
+## Layout
+
+| Viewport | Navigation | Content |
+| --- | --- | --- |
+| `< 768px` | Floating glass tab bar, bottom | Single column |
+| `≥ 768px` | Persistent left rail, icons only (76px) | Home two-up, Insights in 2 columns |
+| `≥ 1024px` | Same rail with labels (216px) | Content column caps and centres |
+
+Between those points, type and spacing scale continuously with `clamp()` — the
+gutter, heading sizes, insight headline and card radius all ramp with the viewport
+rather than snapping at a breakpoint, so the two layouts read as one design.
+
+Library rows stay single-column at every width; they're already dense, and a second
+column would only shorten each row's usable text.
+
+## The glass and the physics
+
+Both are carried over from the prototype intact, not re-approximated.
+
+**The lens.** The tab bar's highlight is a real `feDisplacementMap`, not a
+`backdrop-filter`. `generateLensMap()` renders a signed-distance normal map to a
+canvas and feeds it to the filter as a data URI, so the pill genuinely refracts the
+content behind it. The nav is one DOM subtree in both orientations, and every
+coordinate — `x`, `y`, `width`, `height` — comes from measuring the real tab rects,
+which is what lets the same code drive a horizontal tab bar and a vertical rail.
+The map is regenerated on resize and on every breakpoint crossing, then cached by
+size so a resize storm doesn't rebuild an identical canvas each frame.
+
+Measurements are taken against `#refractlayer`, the filter's own reference box, so
+the pill, the displacement map and the icons all share one origin.
+
+**The springs.** `spring()` is the original velocity-integrating solver. Press
+states, the pill glide, switch thumbs and sheet transitions all run through it. The
+pill's squash-stretch follows the axis of travel — horizontal in the tab bar,
+vertical in the rail.
+
+## Haptics
+
+`navigator.vibrate`, weighted to the interaction, feature-detected and silent where
+unsupported (which is every desktop browser):
+
+- **10ms tick** — tab bar selection, settings switch toggles
+- **18ms pulse** — confirming something consequential: the board/class warning
+  sheet's primary button, and *Confirm & save to Library*
+
+Deliberately silent on scrolling, row taps, filter chips, disclosure toggles, and
+the lightweight link/upload confirmations that share the warning sheet's markup.
+The tick is bound to the tab elements rather than to `pick()`, so programmatic
+navigation doesn't buzz.
+
+## Themes
+
+Dark and light are equal first-class modes, defined as custom properties on the root
+element. Switch via Appearance in Settings (Light / Dark / System) or the corner
+button. `prefers-reduced-motion` collapses transitions.

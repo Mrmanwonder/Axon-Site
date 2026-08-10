@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000000" id="themeColor">
+<meta name="description" content="Mastery — see exactly where your marks go.">
+<title>Mastery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;}
+
+  /* ── responsive scale: one continuous ramp, not two designs ── */
+  :root{
+    --spring:cubic-bezier(.32,.72,0,1);
+    --top-inset:env(safe-area-inset-top,0px);
+    --bot-inset:env(safe-area-inset-bottom,0px);
+    --gutter:clamp(14px,4vw,18px);
+    --text-gutter:calc(var(--gutter) + 4px);
+    --r-card:clamp(20px,5vw,24px);
+    --fs-h1:clamp(27px,7.4vw,34px);
+    --fs-insight:clamp(18px,4.8vw,21px);
+    --fs-sec:clamp(11.5px,3vw,12.5px);
+    --view-top:calc(var(--top-inset) + clamp(14px,3.6vw,22px));
+    --view-bottom:calc(128px + var(--bot-inset));
+    --dock-pad:max(9px,var(--bot-inset));
+    --rail-w:0px;
+    color-scheme:dark;
+  }
+  [data-theme="light"]{color-scheme:light;}
+
+  html,body{height:100%;}
+  body{margin:0;overflow:hidden;background:var(--bg);
+    font-family:'Onest',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    transition:background .4s ease;}
+
+  .app{position:fixed;inset:0;overflow:hidden;
+    background:var(--bg);color:var(--label);font-variant-numeric:tabular-nums;
+    transition:background .4s ease,color .4s ease;}
+  [data-theme="dark"]{
+    --bg:#000;--surface:#151517;--surface-sunk:#0E0E10;--hairline:rgba(255,255,255,.075);
+    --label:#F5F5F7;--label-2:rgba(235,235,245,.6);--label-3:rgba(235,235,245,.32);
+    --blue:#3A86FF;--green:#30D158;--amber:#FF9F0A;--red:#FF6B57;--statusfg:#fff;
+    --nav-bg:rgba(38,38,42,.52);--nav-border:rgba(255,255,255,.16);--nav-rim:rgba(255,255,255,.30);
+    --nav-shadow:0 16px 40px rgba(0,0,0,.6);--nav-pill:rgba(255,255,255,.16);--nav-pill-rim:rgba(255,255,255,.30);
+    --nav-icon:rgba(235,235,245,.62);--nav-icon-on:#fff;--sheet-bg:#1C1C1F;--scrim:rgba(0,0,0,.55);
+    --field:#1B1B1E;
+  }
+  [data-theme="light"]{
+    --bg:#F4F4F7;--surface:#FFFFFF;--surface-sunk:#EDEDF1;--hairline:rgba(60,60,67,.11);
+    --label:#0C0C10;--label-2:rgba(60,60,67,.68);--label-3:rgba(60,60,67,.4);
+    --blue:#2C74E8;--green:#249B49;--amber:#C77A06;--red:#D8462F;--statusfg:#0C0C10;
+    --nav-bg:rgba(255,255,255,.62);--nav-border:rgba(255,255,255,.85);--nav-rim:rgba(255,255,255,.95);
+    --nav-shadow:0 10px 30px rgba(28,28,40,.16),0 2px 8px rgba(28,28,40,.08);
+    --nav-pill:rgba(120,120,130,.13);--nav-pill-rim:rgba(255,255,255,.9);
+    --nav-icon:rgba(28,28,32,.55);--nav-icon-on:#0C0C10;--sheet-bg:#FFFFFF;--scrim:rgba(20,20,28,.32);
+    --field:#EDEDF1;
+  }
+
+  /* header */
+  .header{position:absolute;top:0;left:0;right:0;height:calc(var(--top-inset) + 52px);z-index:30;pointer-events:none;}
+  .header .plate{position:absolute;inset:0;background:var(--nav-bg);backdrop-filter:blur(26px) saturate(1.8);-webkit-backdrop-filter:blur(26px) saturate(1.8);border-bottom:.5px solid var(--hairline);opacity:0;transition:opacity .26s ease;}
+  .header.stuck .plate{opacity:1;}
+  .header .t{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px;}
+  .header .t span{font-size:16px;font-weight:600;letter-spacing:-.02em;opacity:0;transform:translateY(5px);transition:opacity .22s ease,transform .3s var(--spring);}
+  .header.stuck .t span{opacity:1;transform:none;}
+
+  .view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+    padding-top:var(--view-top);padding-bottom:var(--view-bottom);
+    /* Percentages here resolve against the containing block (the app shell),
+       not the view's own box, so the rail has to come out explicitly or the
+       column ends up narrow and pushed off-centre beside the sidebar. */
+    padding-inline:max(0px,calc((100% - var(--rail-w) - var(--vmax,100%)) / 2));
+    scrollbar-width:none;display:none;}
+  .view.on{display:block;}
+  .view::-webkit-scrollbar{display:none;}
+
+  .greet{padding:16px var(--text-gutter) 2px;}
+  .greet .d{font-size:14px;font-weight:500;color:var(--label-3);margin-bottom:2px;}
+  .greet h1{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.036em;line-height:1.06;}
+  .greet .sub{font-size:14px;color:var(--label-3);margin-top:5px;line-height:1.45;}
+
+  .sectitle{margin:26px var(--text-gutter) 9px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;letter-spacing:.055em;color:var(--label-3);}
+  .sectitle.tight{margin-top:20px;}
+  .subnote{margin:8px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;line-height:1.5;color:var(--label-3);}
+  .note{margin:9px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;line-height:1.5;color:var(--label-3);}
+
+  .card{margin:0 var(--gutter);background:var(--surface);border:.5px solid var(--hairline);border-radius:var(--r-card);will-change:transform;}
+  [data-theme="light"] .card{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .list{margin:0 var(--gutter);border-radius:var(--r-card);overflow:hidden;background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .list{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .row{display:flex;align-items:center;gap:13px;padding:15px 18px;position:relative;will-change:transform;}
+  .row + .row::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .row .b{flex:1;min-width:0;}
+  .row .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;}
+  .row .t2{font-size:13px;color:var(--label-3);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .chev{width:7px;height:12px;opacity:.3;flex-shrink:0;}
+  .lost{font-size:15.5px;font-weight:600;letter-spacing:-.02em;text-align:right;}
+  .lost small{display:block;font-size:11px;font-weight:500;color:var(--label-3);margin-top:2px;}
+
+  .tier{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;}
+  .tier.t2{background:rgba(48,209,88,.16);color:var(--green);}
+  .tier.t1{background:var(--surface-sunk);color:var(--label-2);}
+  .tier.uns{background:rgba(255,159,10,.16);color:var(--amber);}
+
+  /* filter bar */
+  .filterbar{position:sticky;top:var(--view-top);z-index:12;padding:10px 0 10px var(--gutter);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;background:var(--bg);}
+  .filterbar::-webkit-scrollbar{display:none;}
+  .filterbar::after{content:"";flex:0 0 var(--gutter);}
+  .fchip{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:14px;background:var(--surface);border:.5px solid var(--hairline);font-size:13.5px;font-weight:500;color:var(--label-2);letter-spacing:-.01em;cursor:pointer;}
+  .fchip.active{background:var(--blue);border-color:transparent;color:#fff;font-weight:600;}
+  .fchip svg{width:9px;height:9px;opacity:.55;}
+
+  /* search */
+  .searchwrap{padding:12px var(--gutter) 2px;}
+  .search{display:flex;align-items:center;gap:9px;background:var(--field);border-radius:14px;padding:11px 13px;}
+  .search svg{width:16px;height:16px;fill:none;stroke:var(--label-3);stroke-width:2;stroke-linecap:round;}
+  .search input{flex:1;background:none;border:none;outline:none;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
+  .search input::placeholder{color:var(--label-3);}
+
+  /* cheap marks */
+  .cheap{display:flex;align-items:flex-start;gap:13px;padding:16px 18px;position:relative;will-change:transform;}
+  .cheap + .cheap::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .cheap .rank{width:24px;height:24px;border-radius:8px;flex-shrink:0;background:var(--surface-sunk);color:var(--label-2);font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .cheap .b{flex:1;}
+  .cheap .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;line-height:1.35;}
+  .cheap .t2{font-size:13px;color:var(--label-3);margin-top:5px;}
+  .cheap .gain{font-size:15.5px;font-weight:700;color:var(--green);letter-spacing:-.02em;flex-shrink:0;text-align:right;}
+  .cheap .gain small{display:block;font-size:10.5px;font-weight:500;color:var(--label-3);margin-top:2px;letter-spacing:0;}
+
+  /* cause */
+  .causecard{padding:18px;}
+  .causebar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin-bottom:16px;}
+  .causebar i{display:block;height:100%;border-radius:2px;}
+  .causegrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;}
+  .cz{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .cz .sw2{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+  .cz .n{flex:1;font-size:13px;color:var(--label-2);letter-spacing:-.01em;}
+  .cz .v{font-size:13px;font-weight:600;color:var(--label);}
+
+  /* mastery map */
+  .mapcard{padding:18px 18px 14px;}
+  .maprow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .maprow:last-of-type{margin-bottom:0;}
+  .maprow .ch{width:104px;font-size:12.5px;color:var(--label-2);letter-spacing:-.01em;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .maprow .cells{flex:1;display:flex;gap:4px;}
+  .maprow .cells i{flex:1;height:22px;border-radius:5px;cursor:pointer;}
+  .maplegend{display:flex;align-items:center;gap:7px;margin-top:15px;padding-top:13px;border-top:.5px solid var(--hairline);font-size:11.5px;color:var(--label-3);}
+  .maplegend .ramp{flex:1;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--m1),var(--m5));}
+
+  /* trend */
+  .trendcard{padding:18px 18px 12px;}
+  .trendcard .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;}
+  .trendcard .hd .k{font-size:13.5px;color:var(--label-2);}
+  .trendcard .hd .v{font-size:13.5px;font-weight:600;color:var(--green);}
+  .trendcard svg{display:block;width:100%;}
+  .xlab{display:flex;justify-content:space-between;padding:7px 2px 0;font-size:11px;color:var(--label-3);}
+
+  /* question type */
+  .qt{padding:15px 18px;position:relative;}
+  .qt + .qt::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .qt .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;}
+  .qt .n{font-size:15px;font-weight:500;letter-spacing:-.015em;}
+  .qt .r{font-size:13px;color:var(--label-3);}
+  .qt .r b{color:var(--label);font-weight:600;font-size:14px;}
+  .qt .track{height:5px;border-radius:3px;background:var(--surface-sunk);overflow:hidden;}
+  .qt .track i{display:block;height:100%;border-radius:3px;background:var(--blue);width:0;transition:width 1s var(--spring);}
+
+  /* empty / insufficient state */
+  .estate{margin:18px var(--gutter);padding:28px 22px;border-radius:var(--r-card);background:var(--surface);border:.5px solid var(--hairline);text-align:center;}
+  .estate .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+  .estate .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .estate h4{margin:0 0 7px;font-size:18px;font-weight:700;letter-spacing:-.025em;}
+  .estate p{margin:0 0 18px;font-size:14px;line-height:1.5;color:var(--label-2);}
+  .estate .prog{display:flex;align-items:center;gap:9px;margin-bottom:18px;}
+  .estate .prog .tr{flex:1;height:6px;border-radius:3px;background:var(--surface-sunk);overflow:hidden;}
+  .estate .prog .tr i{display:block;height:100%;width:50%;background:var(--blue);border-radius:3px;}
+  .estate .prog span{font-size:12px;color:var(--label-3);font-weight:500;}
+
+  /* buttons */
+  .btn{padding:15px;border-radius:18px;text-align:center;font-size:16px;font-weight:600;letter-spacing:-.015em;cursor:pointer;will-change:transform;display:flex;align-items:center;justify-content:center;gap:9px;}
+  .btn.primary{background:var(--blue);color:#fff;box-shadow:0 8px 20px rgba(58,134,255,.26);}
+  .btn.ghost{background:var(--surface-sunk);color:var(--label);}
+  .btn.plain{color:var(--label-3);font-weight:500;padding:11px;}
+  .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* library thumb */
+  .thumb{width:44px;height:56px;border-radius:8px;flex-shrink:0;overflow:hidden;background:var(--surface-sunk);position:relative;border:.5px solid var(--hairline);}
+  .thumb .ln{position:absolute;left:6px;right:6px;height:2px;border-radius:1px;background:var(--label-3);opacity:.35;}
+
+  /* scan */
+  .method{display:flex;align-items:center;gap:14px;padding:17px 18px;position:relative;will-change:transform;cursor:pointer;}
+  .method + .method::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .method .ic{width:38px;height:38px;border-radius:12px;flex-shrink:0;background:rgba(58,134,255,.15);display:flex;align-items:center;justify-content:center;}
+  .method .ic svg{width:19px;height:19px;fill:none;stroke:var(--blue);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .method .b{flex:1;}
+  .method .t1{font-size:16px;font-weight:500;letter-spacing:-.015em;}
+  .method .t2{font-size:13px;color:var(--label-3);margin-top:2px;line-height:1.4;}
+
+  .draft{margin:16px var(--gutter) 0;padding:15px 17px;border-radius:20px;background:rgba(255,159,10,.11);border:.5px solid rgba(255,159,10,.28);display:flex;align-items:center;gap:13px;}
+  .draft .ic{width:32px;height:32px;border-radius:10px;background:rgba(255,159,10,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .draft .ic svg{width:16px;height:16px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .draft .b{flex:1;}
+  .draft .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .draft .t2{font-size:12.5px;color:var(--label-2);margin-top:2px;}
+  .draft .go{font-size:14px;font-weight:600;color:var(--amber);}
+
+  /* ── camera-first scan viewfinder ── */
+  #v2{padding-top:0;}
+  .scanhero{position:relative;height:60vh;min-height:420px;max-height:560px;background:#050506;overflow:hidden;border-radius:0 0 28px 28px;}
+  .feed{position:absolute;inset:0;background:
+      radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
+  .feedgrid{position:absolute;inset:0;background-image:
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size:34px 34px;opacity:.5;}
+  .sweep{position:absolute;left:0;right:0;height:2px;top:18%;
+    background:linear-gradient(90deg, transparent, rgba(58,134,255,.9), transparent);
+    box-shadow:0 0 16px 2px rgba(58,134,255,.5);
+    animation:sweepmove 3.2s ease-in-out infinite;}
+  @keyframes sweepmove{0%,100%{top:16%}50%{top:78%}}
+  .frame{position:absolute;left:9%;right:9%;top:12%;bottom:22%;pointer-events:none;}
+  .cn{position:absolute;width:26px;height:26px;border-color:#fff;border-style:solid;border-width:0;opacity:.92;}
+  .cn.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:8px 0 0 0;}
+  .cn.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 8px 0 0;}
+  .cn.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 8px;}
+  .cn.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 8px 0;}
+  .scanhint{position:absolute;left:0;right:0;top:calc(12% + 60px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
+
+  .draftsicon{position:absolute;top:16px;right:16px;width:38px;height:38px;border-radius:19px;
+    background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;
+    opacity:0;transform:scale(.7);pointer-events:none;transition:opacity .3s var(--spring),transform .3s var(--spring);will-change:transform;}
+  .draftsicon.show{opacity:1;transform:scale(1);pointer-events:auto;}
+  .draftsicon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .draftsicon .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:4px;background:var(--amber);border:1.5px solid #1a1a1c;}
+
+  .scanctrls{position:absolute;left:0;right:0;bottom:22px;display:flex;align-items:center;justify-content:center;gap:34px;}
+  .sidebtn{width:46px;height:46px;border-radius:23px;background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .shutter .ring{width:56px;height:56px;border-radius:28px;background:#fff;transition:transform .15s ease,border-radius .15s ease;}
+  .shutter.capturing .ring{transform:scale(.78);border-radius:18px;}
+
+  .drafttoast{position:absolute;left:10px;right:10px;top:10px;z-index:6;
+    background:rgba(30,30,34,.7);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
+    border:.5px solid rgba(255,255,255,.16);border-radius:20px;padding:10px 14px 13px;
+    transform:translateY(-140%);will-change:transform;touch-action:none;}
+  .drafttoast .dh{width:34px;height:4px;background:rgba(255,255,255,.3);border-radius:2px;margin:0 auto 9px;}
+  .drafttoast .row2{display:flex;align-items:center;gap:12px;}
+  .drafttoast .ic{width:32px;height:32px;border-radius:10px;background:rgba(255,159,10,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .drafttoast .ic svg{width:16px;height:16px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .drafttoast .b{flex:1;min-width:0;}
+  .drafttoast .t1{font-size:14px;font-weight:600;color:#fff;letter-spacing:-.015em;}
+  .drafttoast .t2{font-size:12px;color:rgba(255,255,255,.6);margin-top:1px;}
+  .drafttoast .go{font-size:13.5px;font-weight:600;color:#fff;background:var(--blue);padding:8px 13px;border-radius:11px;flex-shrink:0;}
+
+  .scanbelow{padding-top:20px;}
+
+  /* ── fullscreen paper review ── */
+  .reviewsheet{position:absolute;inset:0;z-index:55;background:var(--bg);transform:translateX(100%);will-change:transform;display:flex;flex-direction:column;transition:transform .42s cubic-bezier(.32,.72,0,1);}
+  .reviewsheet.open{transform:translateX(0);}
+  .rvhead{padding-top:calc(var(--top-inset) + 10px);height:calc(var(--top-inset) + 48px);display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:16px;flex-shrink:0;border-bottom:.5px solid var(--hairline);}
+  .rvback{width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;background:var(--surface-sunk);cursor:pointer;will-change:transform;}
+  .rvback svg{width:16px;height:16px;}
+  .rvtitle{font-size:15px;font-weight:600;letter-spacing:-.015em;}
+  .rvsave{font-size:15px;font-weight:600;color:var(--blue);cursor:pointer;will-change:transform;}
+  .rvscroll{flex:1;overflow-y:auto;padding-bottom:40px;scrollbar-width:none;}
+  .rvscroll::-webkit-scrollbar{display:none;}
+  .rvcrop{margin:16px 18px 0;height:230px;border-radius:20px;background:var(--surface-sunk);border:.5px solid var(--hairline);position:relative;overflow:hidden;padding:20px;}
+  .rvcrop .ln{position:absolute;left:20px;right:20px;height:2px;border-radius:1px;background:var(--label-3);opacity:.3;}
+  .rvzoom{position:absolute;bottom:12px;right:14px;font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.45);padding:4px 9px;border-radius:8px;}
+  .fval{font-size:15px;color:var(--label-2);font-weight:500;letter-spacing:-.01em;}
+
+  .proc{padding:18px;}
+  .proc .hd{font-size:15.5px;font-weight:600;letter-spacing:-.018em;margin-bottom:3px;}
+  .proc .sub{font-size:13px;color:var(--label-3);margin-bottom:16px;}
+  .pline{display:flex;align-items:center;gap:11px;padding:9px 0;font-size:14px;}
+  .pline .st{width:18px;height:18px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .pline .st.done{background:var(--green);}
+  .pline .st.done svg{width:10px;height:10px;stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .pline .st.now{border:2px solid var(--blue);}
+  .pline .st.wait{border:2px solid var(--hairline);}
+  .pline .lb{flex:1;color:var(--label-2);letter-spacing:-.01em;}
+  .pline.now .lb{color:var(--label);font-weight:500;}
+  .skel{height:11px;border-radius:5px;background:linear-gradient(90deg,var(--surface-sunk) 25%,rgba(140,140,150,.16) 50%,var(--surface-sunk) 75%);background-size:200% 100%;animation:sk 1.5s linear infinite;}
+  @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* ── Home-only: insight card / attention / scan cta ── */
+  .insight{margin-top:18px;padding:clamp(17px,4.6vw,22px) clamp(17px,4.6vw,22px) 6px;}
+  .chips{display:flex;gap:7px;margin-bottom:12px;}
+  .chip{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;letter-spacing:.005em;}
+  .chip.n{background:var(--surface-sunk);color:var(--label-2);}
+  .chip.conf-likely{background:rgba(255,159,10,.16);color:var(--amber);}
+  .chip.conf-confirmed{background:rgba(48,209,88,.16);color:var(--green);}
+  .insight .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.32;}
+  .insight .line em{font-style:normal;color:var(--blue);}
+  .disclose{margin-top:14px;border-top:.5px solid var(--hairline);}
+  .disclose .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;cursor:pointer;font-size:14px;font-weight:500;color:var(--label-2);}
+  .disclose .toggle .car{width:11px;height:11px;transition:transform .32s var(--spring);opacity:.5;}
+  .disclose.open .toggle .car{transform:rotate(90deg);}
+  .disclose .panel{overflow:hidden;height:0;transition:height .38s var(--spring);}
+  .disclose .inner{padding-bottom:16px;}
+  .dgroup{margin-bottom:13px;}
+  .dgroup:last-child{margin-bottom:0;}
+  .dgroup .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);margin-bottom:4px;}
+  .dgroup .v{font-size:14px;line-height:1.5;color:var(--label-2);}
+  .attention{margin-top:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;}
+  .attention .ic{width:34px;height:34px;border-radius:11px;flex-shrink:0;background:rgba(255,159,10,.16);display:flex;align-items:center;justify-content:center;}
+  .attention .ic svg{width:17px;height:17px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .attention .b{flex:1;}
+  .attention .b .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;}
+  .attention .b .t2{font-size:13px;color:var(--label-3);margin-top:2px;}
+  .scanbtn{margin:14px var(--gutter) 0;padding:16px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--blue);color:#fff;font-size:16px;font-weight:600;letter-spacing:-.015em;box-shadow:0 8px 20px rgba(58,134,255,.28);will-change:transform;cursor:pointer;}
+  .scanbtn svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* ── Settings-only ── */
+  .srow{display:flex;align-items:center;gap:13px;padding:13px 18px;position:relative;will-change:transform;}
+  .srow + .srow::before{content:"";position:absolute;top:0;left:57px;right:0;height:.5px;background:var(--hairline);}
+  .srow.noicon + .srow.noicon::before{left:18px;}
+  .srow .ic{width:29px;height:29px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .srow .ic svg{width:16px;height:16px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .srow .lbl{flex:1;font-size:16px;font-weight:400;letter-spacing:-.015em;}
+  .srow .lbl small{display:block;font-size:12.5px;color:var(--label-3);margin-top:2px;letter-spacing:-.005em;}
+  .srow .aux{font-size:15.5px;color:var(--label-3);letter-spacing:-.015em;}
+  .locked{font-size:12px;font-weight:600;color:var(--label-3);background:var(--surface-sunk);padding:3px 8px;border-radius:7px;}
+  .sprofile{margin:16px var(--gutter) 0;padding:20px;display:flex;align-items:center;gap:15px;border-radius:var(--r-card);}
+  .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
+  .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
+  .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
+  .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
+  .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);cursor:pointer;transition:background .22s ease,color .22s ease;}
+  .seg button.on{background:var(--surface);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600;}
+  [data-theme="dark"] .seg button.on{background:#3A3A3E;}
+  .sw{width:56px;height:34px;position:relative;flex-shrink:0;cursor:pointer;}
+  .sw .tr{position:absolute;inset:0;border-radius:17px;background:#3A3A3E;transition:background .32s ease;}
+  [data-theme="light"] .sw .tr{background:#D9D9DE;}
+  .sw.on .tr{background:var(--green);}
+  .sw .th{position:absolute;top:3px;left:3px;width:28px;height:28px;border-radius:14px;background:#fff;
+    box-shadow:0 3px 8px rgba(0,0,0,.32),0 1px 2px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.95);
+    will-change:transform;display:flex;align-items:center;justify-content:center;}
+  .sw .gI{width:2px;height:12px;border-radius:1px;background:var(--green);opacity:0;transition:opacity .18s ease .06s;}
+  .sw.on .gI{opacity:1;}
+  .sw .gO{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:9px;height:9px;
+    border:1.6px solid rgba(255,255,255,.5);border-radius:50%;opacity:1;transition:opacity .18s ease;}
+  [data-theme="light"] .sw .gO{border-color:rgba(0,0,0,.26);}
+  .sw.on .gO{opacity:0;}
+  .sfoot{text-align:center;color:var(--label-3);font-size:12.5px;margin:24px 0 0;line-height:1.6;}
+
+  /* ── warning sheet ── */
+  .scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .3s ease;}
+  .scrim.on{opacity:1;pointer-events:auto;}
+  .sheet{position:absolute;left:8px;right:8px;bottom:max(8px,var(--bot-inset));z-index:51;background:var(--sheet-bg);border-radius:32px;padding:24px 22px 18px;transform:translateY(115%);will-change:transform;box-shadow:0 -10px 50px rgba(0,0,0,.4);border:.5px solid var(--hairline);
+    /* never taller than the shell — a landscape phone has ~390px to work with */
+    max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;}
+  .sheet::-webkit-scrollbar{display:none;}
+  .sheet .warnic{width:44px;height:44px;border-radius:14px;background:rgba(255,159,10,.16);display:flex;align-items:center;justify-content:center;margin-bottom:15px;}
+  .sheet .warnic svg{width:22px;height:22px;fill:none;stroke:var(--amber);stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .sheet h4{margin:0 0 7px;font-size:21px;font-weight:700;letter-spacing:-.028em;line-height:1.2;}
+  .sheet .body{font-size:14.5px;line-height:1.5;color:var(--label-2);}
+  .sheet ul{margin:14px 0 0;padding:0;list-style:none;}
+  .sheet li{display:flex;gap:10px;font-size:14px;line-height:1.45;color:var(--label-2);padding:8px 0;border-top:.5px solid var(--hairline);}
+  .sheet li b{color:var(--label);font-weight:600;}
+  .sheet li .d{width:6px;height:6px;border-radius:3px;background:var(--amber);flex-shrink:0;margin-top:6px;}
+  .sheet .acts{margin-top:18px;display:flex;flex-direction:column;gap:9px;}
+
+  /* nav — one DOM, two orientations. Geometry comes from JS measurement. */
+  .tabdock{position:absolute;left:0;right:0;bottom:0;z-index:35;padding:0 13px var(--dock-pad);}
+  .tabbar{position:relative;padding:5px;border-radius:32px;overflow:hidden;background:var(--nav-bg);
+    backdrop-filter:blur(30px) saturate(2);-webkit-backdrop-filter:blur(30px) saturate(2);
+    box-shadow:var(--nav-shadow);transition:background .4s ease,box-shadow .4s ease;}
+  .tabbar .rim{position:absolute;inset:0;border-radius:32px;pointer-events:none;z-index:5;
+    border:.5px solid var(--nav-border);box-shadow:inset 0 1px 0 var(--nav-rim),inset 0 -1px 0 rgba(255,255,255,.08);}
+  .refractlayer{position:relative;display:flex;align-items:center;}
+  .pill{position:absolute;top:0;left:0;height:46px;border-radius:26px;background:var(--nav-pill);will-change:transform;transition:background .4s ease;}
+  .tab{flex:1;position:relative;z-index:1;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .tab .lbl{display:none;}
+  .isec{min-width:0;}
+  .tab svg{width:24px;height:24px;fill:none;stroke:var(--nav-icon);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s ease,fill .25s ease;}
+  .tab.on svg{stroke:var(--nav-icon-on);}
+  .tab.on svg.solid{fill:var(--nav-icon-on);stroke:none;}
+  .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--red);box-shadow:0 0 0 2px var(--nav-bg);}
+  .tab .pfp{width:25px;height:25px;border-radius:13px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#fff;transition:box-shadow .25s ease;}
+  .tab.on .pfp{box-shadow:0 0 0 2px var(--nav-icon-on);}
+  .lensglow{position:absolute;top:0;left:0;height:46px;border-radius:26px;pointer-events:none;z-index:3;
+    box-shadow:inset 0 1px 0 var(--nav-pill-rim),inset 0 -1px 0 rgba(255,255,255,.1),
+    inset 1px 0 0 rgba(255,255,255,.14),inset -1px 0 0 rgba(255,255,255,.14);
+    background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,0) 58%);will-change:transform;}
+
+  .themebtn{position:absolute;bottom:calc(74px + var(--bot-inset));right:14px;z-index:41;font-size:12px;font-weight:600;padding:6px 11px;border-radius:11px;background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);cursor:pointer;}
+
+  /* ══════════════ TABLET ≥768: nav becomes a left rail, content reflows ══════════════ */
+  @media (min-width:768px){
+    :root{--rail-w:76px;--view-bottom:clamp(30px,5vh,56px);}
+
+    .tabdock{top:0;bottom:0;left:0;right:auto;width:var(--rail-w);
+      padding:var(--gutter) 7px;display:flex;flex-direction:column;justify-content:center;}
+    .refractlayer{flex-direction:column;align-items:stretch;}
+    .tab{flex:0 0 auto;height:48px;}
+
+    .header{left:var(--rail-w);}
+    .view{left:var(--rail-w);--vmax:760px;}
+    .reviewsheet{left:var(--rail-w);}
+    .rvscroll{padding-inline:max(0px,calc((100% - var(--rail-w) - 760px) / 2));}
+    .themebtn{bottom:16px;right:16px;}
+
+    /* sheets centre inside the content area rather than spanning the rail */
+    .sheet{left:var(--rail-w);right:0;bottom:16px;
+      width:min(520px,calc(100% - var(--rail-w) - 2 * var(--gutter)));
+      margin-inline:auto;}
+
+    /* Home — hero insight + needs-attention side by side above recent scans */
+    #v0{--vmax:900px;}
+    .hgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+      gap:var(--gutter);align-items:start;padding:0 var(--gutter);margin-top:18px;}
+    .hgrid > .card{margin:0;}
+    .hgrid .insight{margin-top:0;}
+    .hgrid .attention{margin-top:0;}
+
+    /* Insights — cards into two columns */
+    #v1{--vmax:1100px;}
+    .igrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:2px var(--gutter);align-items:start;padding-inline:var(--gutter);}
+    .igrid .card,.igrid .list{margin-inline:0;}
+    .igrid .sectitle,.igrid .subnote{margin-inline:4px;}
+
+    /* Scan — viewfinder becomes a contained panel */
+    #v2{--vmax:820px;padding-top:var(--view-top);}
+    .scanhero{margin:0 var(--gutter);border-radius:var(--r-card);
+      height:clamp(360px,44vh,520px);min-height:0;}
+
+    /* Library rows stay single-column — they're already dense. */
+  }
+
+  /* ≥1024: room for labels, so the rail earns them */
+  @media (min-width:1024px){
+    :root{--rail-w:216px;}
+    .tabdock{padding:var(--gutter) 12px;}
+    .tab{justify-content:flex-start;gap:13px;padding-left:15px;}
+    .tab .lbl{display:block;font-size:15px;font-weight:500;letter-spacing:-.015em;
+      color:var(--nav-icon);transition:color .25s ease;}
+    .tab.on .lbl{color:var(--nav-icon-on);font-weight:600;}
+    .tab svg,.tab .pfp{flex:0 0 auto;}
+    .tab .dot{top:13px;right:auto;left:33px;}
+  }
+
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
+</style>
+</head>
+<body data-page="dark">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="lensTab" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+    <feFlood flood-color="rgb(128,128,128)" result="neutral"/>
+    <feImage id="lensTabImg" x="0" y="0" width="10" height="10" result="lensmap" preserveAspectRatio="none"/>
+    <feMerge result="dmap"><feMergeNode in="neutral"/><feMergeNode in="lensmap"/></feMerge>
+    <feDisplacementMap in="SourceGraphic" in2="dmap" scale="14" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</defs></svg>
+
+<div class="app" id="app" style="--m1:rgba(58,134,255,.12);--m5:#3A86FF;">
+
+    <div class="themebtn" onclick="flipTheme()" id="themebtn">Light</div>
+    <div class="header" id="hdr"><div class="plate"></div><div class="t"><span id="hdrTitle">Home</span></div></div>
+
+    <!-- ══════════════ 0 · HOME ══════════════ -->
+    <div class="view on" id="v0">
+      <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
+
+      <div class="hgrid">
+      <div class="card insight press">
+        <div class="chips"><span class="chip n">14 papers</span><span class="chip conf-likely">Likely</span></div>
+        <div class="line">You're losing most marks to <em>unstated assumptions</em> in derivation questions — not to the physics itself.</div>
+        <div class="disclose" id="disc">
+          <div class="toggle" onclick="toggleDisc()"><span>Show reasoning</span>
+            <svg class="car" viewBox="0 0 7 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+          <div class="panel" id="discPanel"><div class="inner">
+            <div class="dgroup"><div class="k">What we read</div><div class="v">Across 14 papers, 9 of 23 derivation answers reached the correct final expression but skipped a stated starting condition.</div></div>
+            <div class="dgroup"><div class="k">What the scheme asks</div><div class="v">CBSE marking allocates 1 mark to stating assumptions before the derivation begins, awarded independently of the result.</div></div>
+            <div class="dgroup"><div class="k">Why we think this</div><div class="v">The pattern holds across two examiners and three chapters. Confidence is Likely, not Confirmed, because only 6 of the 14 papers were scheme-verified.</div></div>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="card attention press">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.5v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+        <div class="b"><div class="t1">3 answers need a quick check</div><div class="t2">Across 2 papers · marked Unsure</div></div>
+        <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+      </div>
+      </div>
+
+      <div class="sectitle">Recent scans</div>
+      <div class="list">
+        <div class="row press"><div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span class="tier t2">Scheme-verified</span><span>6 Aug</span></div></div><div class="lost">7<small>marks lost</small></div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="row press"><div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span class="tier uns">2 unsure</span><span>4 Aug</span></div></div><div class="lost">11<small>marks lost</small></div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="row press"><div class="b"><div class="t1">Physics · Optics Revision</div><div class="t2"><span class="tier t1">Extracted</span><span>1 Aug</span></div></div><div class="lost">4<small>marks lost</small></div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+      </div>
+
+      <div class="scanbtn press" onclick="pick(2)">
+        <svg viewBox="0 0 24 24"><path d="M3 8V5.5A1.5 1.5 0 0 1 4.5 4H7M17 4h2.5A1.5 1.5 0 0 1 21 5.5V8M21 16v2.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H4.5A1.5 1.5 0 0 1 3 18.5V16"/><path d="M7 12h10"/></svg>
+        Scan new paper
+      </div>
+    </div>
+
+    <!-- ══════════════ 1 · INSIGHTS ══════════════ -->
+    <div class="view" id="v1">
+      <div class="greet"><h1>Insights</h1><div class="sub">Everything across your 14 scanned papers.</div></div>
+      <div class="filterbar">
+        <div class="fchip active">Physics <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">Last 3 months <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+      </div>
+
+      <div class="igrid">
+      <section class="isec">
+      <div class="sectitle tight">Cheap marks</div>
+      <div class="list">
+        <div class="cheap press"><div class="rank">1</div><div class="b"><div class="t1">Write the formula before substituting</div><div class="t2">17 questions · every scheme awards it separately</div></div><div class="gain">14<small>marks</small></div></div>
+        <div class="cheap press"><div class="rank">2</div><div class="b"><div class="t1">State assumptions at the start of a derivation</div><div class="t2">9 questions · 1 mark each, result-independent</div></div><div class="gain">9<small>marks</small></div></div>
+        <div class="cheap press"><div class="rank">3</div><div class="b"><div class="t1">Carry units through to the final answer</div><div class="t2">11 questions · usually the last half-mark</div></div><div class="gain">6<small>marks</small></div></div>
+      </div>
+      <div class="subnote">Ranked by marks recovered per unit of effort, not by how often each appears.</div>
+      </section>
+
+      <section class="isec">
+      <div class="sectitle">Marks lost by cause</div>
+      <div class="card causecard">
+        <div class="causebar">
+          <i style="flex:23;background:#4C7DF0"></i><i style="flex:19;background:#3FA9A0"></i><i style="flex:16;background:#8A6FD1"></i>
+          <i style="flex:14;background:#C98A3E"></i><i style="flex:11;background:#C46B8A"></i><i style="flex:10;background:#7C9455"></i><i style="flex:7;background:#78808F"></i>
+        </div>
+        <div class="causegrid">
+          <div class="cz"><span class="sw2" style="background:#4C7DF0"></span><span class="n">Conceptual gap</span><span class="v">23</span></div>
+          <div class="cz"><span class="sw2" style="background:#3FA9A0"></span><span class="n">Procedural slip</span><span class="v">19</span></div>
+          <div class="cz"><span class="sw2" style="background:#8A6FD1"></span><span class="n">Misread question</span><span class="v">16</span></div>
+          <div class="cz"><span class="sw2" style="background:#C98A3E"></span><span class="n">Incomplete</span><span class="v">14</span></div>
+          <div class="cz"><span class="sw2" style="background:#C46B8A"></span><span class="n">Presentation</span><span class="v">11</span></div>
+          <div class="cz"><span class="sw2" style="background:#7C9455"></span><span class="n">Keyword miss</span><span class="v">10</span></div>
+          <div class="cz"><span class="sw2" style="background:#78808F"></span><span class="n">Timed out</span><span class="v">7</span></div>
+        </div>
+      </div>
+      <div class="subnote">Different kinds of problem, coloured categorically — no cause ranks worse than another.</div>
+      </section>
+
+      <section class="isec">
+      <div class="sectitle">Concept mastery</div>
+      <div class="card mapcard">
+        <div class="maprow"><span class="ch">Kinematics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
+        <div class="maprow"><span class="ch">Laws of Motion</span><span class="cells"><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.25)"></i></span></div>
+        <div class="maprow"><span class="ch">Work &amp; Energy</span><span class="cells"><i style="background:rgba(58,134,255,.25)"></i><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.25)"></i><i style="background:rgba(58,134,255,.12)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
+        <div class="maprow"><span class="ch">Rotational</span><span class="cells"><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.25)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
+        <div class="maprow"><span class="ch">Optics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i></span></div>
+        <div class="maplegend"><span>Less practised</span><span class="ramp"></span><span>Mastered</span></div>
+      </div>
+      </section>
+
+      <section class="isec">
+      <div class="sectitle">Trend</div>
+      <div class="card trendcard press">
+        <div class="hd"><span class="k">Marks lost per paper · Physics</span><span class="v">↓ 6 since March</span></div>
+        <svg viewBox="0 0 288 92" preserveAspectRatio="none" height="92">
+          <line x1="0" y1="8" x2="288" y2="8" stroke="var(--hairline)" stroke-width="1"/>
+          <line x1="0" y1="46" x2="288" y2="46" stroke="var(--hairline)" stroke-width="1"/>
+          <line x1="0" y1="84" x2="288" y2="84" stroke="var(--hairline)" stroke-width="1"/>
+          <path id="trendline" d="M10,16 L56,28 L102,22 L148,44 L194,52 L240,62 L278,74" fill="none" stroke="var(--blue)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="400" stroke-dashoffset="400" vector-effect="non-scaling-stroke" style="transition:stroke-dashoffset 1.6s var(--spring)"/>
+          <circle cx="278" cy="74" r="4" fill="var(--blue)"/>
+        </svg>
+        <div class="xlab"><span>Paper 1</span><span>7</span><span>14</span></div>
+      </div>
+      <div class="subnote">Plotted against papers, not dates. Nothing here compares you to anyone else.</div>
+      </section>
+
+      <section class="isec">
+      <div class="sectitle">By question type</div>
+      <div class="list">
+        <div class="qt"><div class="hd"><span class="n">2-mark short answer</span><span class="r"><b>91%</b> retained</span></div><div class="track"><i data-w="91"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">MCQ</span><span class="r"><b>88%</b> retained</span></div><div class="track"><i data-w="88"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">Numerical</span><span class="r"><b>74%</b> retained</span></div><div class="track"><i data-w="74"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">Diagram-based</span><span class="r"><b>69%</b> retained</span></div><div class="track"><i data-w="69"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">5-mark long answer</span><span class="r"><b>52%</b> retained</span></div><div class="track"><i data-w="52"></i></div></div>
+      </div>
+      <div class="subnote">Nearly all marks held on 2-markers, half lost on every 5-marker — a pattern the cause and concept views both miss.</div>
+      </section>
+      </div>
+    </div>
+
+    <div class="view" id="v1b">
+      <div class="greet"><h1>Insights</h1></div>
+      <div class="estate">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M7 16v-3M12 16V8M17 16v-5"/></svg></div>
+        <h4>Not enough papers yet</h4>
+        <p>Patterns need about four papers before they mean anything. With two, anything shown here would be noise dressed as insight.</p>
+        <div class="prog"><div class="tr"><i></i></div><span>2 of 4</span></div>
+        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Scan a paper</div>
+      </div>
+      <div class="subnote" style="text-align:center;margin-top:14px">Tap Insights again to preview the populated state → <span style="color:var(--blue);font-weight:600;cursor:pointer" onclick="pick(1)">full Insights</span></div>
+    </div>
+
+    <!-- ══════════════ 2 · SCAN ══════════════ -->
+    <div class="view" id="v2">
+
+      <!-- viewfinder: opens immediately, covers most of the viewport -->
+      <div class="scanhero">
+        <div class="feed">
+          <div class="feedgrid"></div>
+          <div class="sweep"></div>
+        </div>
+        <div class="frame">
+          <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
+        </div>
+        <div class="scanhint">Fits Physics · Unit Test — align all four corners</div>
+
+        <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
+          <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
+          <span class="badge"></span>
+        </div>
+
+        <div class="scanctrls">
+          <div class="sidebtn press" onclick="openSheetGeneric('link')">
+            <svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
+          </div>
+          <div class="shutter press" onclick="capture()"><div class="ring"></div></div>
+          <div class="sidebtn press" onclick="openSheetGeneric('upload')">
+            <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+          </div>
+        </div>
+
+        <!-- swipeable resume-draft toast -->
+        <div class="drafttoast" id="draftToast">
+          <div class="dh"></div>
+          <div class="row2">
+            <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <div class="b"><div class="t1">Resume draft</div><div class="t2">Physics booklet · 8 of ~16 pages added</div></div>
+            <div class="go press" onclick="closeDraftToast(true)">Resume</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scanbelow">
+        <div class="sectitle tight">Processing</div>
+        <div class="card proc press" onclick="openReview()">
+          <div class="hd">Reading page 3 of 6</div>
+          <div class="sub">Physics · PYQ 2023 · started 40s ago</div>
+          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Pages uploaded</span></div>
+          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Layout detected · 14 questions found</span></div>
+          <div class="pline now"><span class="st now"></span><span class="lb">Reading handwriting</span></div>
+          <div class="pline"><span class="st wait"></span><span class="lb">Matching to marking scheme</span></div>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><div class="skel" style="width:82%"></div><div class="skel" style="width:64%"></div><div class="skel" style="width:73%"></div></div>
+        </div>
+        <div class="subnote">Progress names the actual step. Tap to open this paper's full review.</div>
+
+        <div class="sectitle">Needs your eyes first</div>
+        <div class="list">
+          <div class="row press" onclick="openReview()"><div class="thumb" style="background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3)"><div class="ln" style="top:14px;background:var(--amber)"></div><div class="ln" style="top:24px;right:18px;background:var(--amber)"></div></div>
+            <div class="b"><div class="t1">Page 5 couldn't be read</div><div class="t2">Glare across the lower half</div><div class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></div></div>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+          <div class="row press" onclick="openReview()"><div class="b"><div class="t1">Q7 — final answer unclear</div><div class="t2">We read "42.6", low confidence</div><div class="t2" style="margin-top:6px"><span class="tier uns">Unsure</span></div></div>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        </div>
+        <div class="subnote">Unsure items come first. Nothing is ever dropped silently.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════ FULLSCREEN PAPER REVIEW ══════════════ -->
+    <div class="reviewsheet" id="reviewsheet">
+      <div class="rvhead">
+        <div class="rvback press" onclick="closeReview()"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></div>
+        <div class="rvtitle">Physics · PYQ 2023</div>
+        <div class="rvsave press" onclick="closeReview()">Save</div>
+      </div>
+      <div class="rvscroll">
+        <div class="rvcrop">
+          <div class="ln" style="top:20px"></div><div class="ln" style="top:34px;right:60px"></div><div class="ln" style="top:48px"></div>
+          <div class="ln" style="top:62px;right:30px"></div><div class="ln" style="top:82px"></div><div class="ln" style="top:96px;right:90px"></div>
+          <span class="rvzoom">Page 3 of 6</span>
+        </div>
+
+        <div class="sectitle tight">Detected automatically</div>
+        <div class="list">
+          <div class="row press" onclick="cycleField(this,['Physics','Chemistry','Mathematics','Biology'])">
+            <div class="b"><div class="t1">Subject</div></div>
+            <span class="fval">Physics</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+          </div>
+          <div class="row press" onclick="cycleField(this,['Rotational Motion','Kinematics','Optics','Work & Energy'])">
+            <div class="b"><div class="t1">Chapter</div></div>
+            <span class="fval">Rotational Motion</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+          </div>
+          <div class="row press" onclick="cycleField(this,['10 Aug 2026','9 Aug 2026','8 Aug 2026'])">
+            <div class="b"><div class="t1">Date taken</div></div>
+            <span class="fval">10 Aug 2026</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+          </div>
+        </div>
+
+        <div class="sectitle">Couldn't tell — your call</div>
+        <div class="list">
+          <div class="row press" id="ttRow" onclick="cycleField(this,['PYQ','Sample paper','Unit test','Mid-term'],true)">
+            <div class="b"><div class="t1">Test type</div><div class="t2">This decides whether a scheme match is attempted</div></div>
+            <span class="fval" style="color:var(--label-3)">Tap to set</span><span class="tier uns" style="margin-left:6px">Needs input</span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+          </div>
+        </div>
+        <div class="subnote">Everything here stays editable, even after it's auto-filled — nothing is locked just because we were confident.</div>
+
+        <div style="margin:20px var(--gutter) 4px"><div class="btn primary press" onclick="confirmSave()">Confirm &amp; save to Library</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ DRAFTS PANEL ══════════════ -->
+    <div class="scrim" id="draftsScrim" onclick="closeDrafts()"></div>
+    <div class="sheet" id="draftsSheet">
+      <h4 style="margin-bottom:14px">Drafts</h4>
+      <div class="list">
+        <div class="row press">
+          <div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>
+          <div class="b"><div class="t1">Physics booklet</div><div class="t2">8 of ~16 pages · saved locally</div></div>
+          <div class="go press" style="color:var(--blue);font-weight:600;font-size:14px" onclick="closeDrafts();closeDraftToast(true)">Resume</div>
+        </div>
+      </div>
+      <div class="subnote">Drafts stay on this device even if a booklet capture gets interrupted — nothing is lost, nothing re-uploads.</div>
+      <div class="acts"><div class="btn plain press" onclick="closeDrafts()">Close</div></div>
+    </div>
+
+    <!-- ══════════════ 3 · LIBRARY ══════════════ -->
+    <div class="view" id="v3">
+      <div class="greet"><h1>Library</h1></div>
+      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input placeholder="Search questions, chapters, concepts"></div></div>
+      <div class="filterbar">
+        <div class="fchip">All subjects <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 22px 10px;">
+        <span style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
+        <span style="font-size:13.5px;color:var(--blue);font-weight:500;cursor:pointer">Most recent ▾</span>
+      </div>
+      <div class="list">
+        <div class="row press"><div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:15px;right:16px"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:31px"></div><div class="ln" style="top:40px;right:20px"></div></div>
+          <div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span>Rotational Motion</span><span>·</span><span>6 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
+          <div class="lost">7<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="row press"><div class="thumb"><div class="ln" style="top:10px"></div><div class="ln" style="top:19px;right:18px"></div><div class="ln" style="top:28px"></div><div class="ln" style="top:37px;right:22px"></div></div>
+          <div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span>Application of Derivatives</span></div><div class="t2" style="margin-top:2px"><span>4 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier uns">2 unsure</span></div></div>
+          <div class="lost">11<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="row press"><div class="thumb"><div class="ln" style="top:9px"></div><div class="ln" style="top:18px"></div><div class="ln" style="top:27px;right:14px"></div><div class="ln" style="top:36px"></div><div class="ln" style="top:45px;right:24px"></div></div>
+          <div class="b"><div class="t1">Physics · Optics Revision</div><div class="t2"><span>Ray Optics</span><span>·</span><span>1 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier t1">Extracted</span></div></div>
+          <div class="lost">4<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="row press"><div class="thumb"><div class="ln" style="top:12px"></div><div class="ln" style="top:21px;right:20px"></div><div class="ln" style="top:30px"></div></div>
+          <div class="b"><div class="t1">Physics · PYQ 2023</div><div class="t2"><span>Full paper</span><span>·</span><span>26 Jul</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
+          <div class="lost">18<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+      </div>
+      <div class="subnote">Search matches question text and concepts, not just paper titles.</div>
+    </div>
+
+    <!-- ══════════════ 4 · SETTINGS ══════════════ -->
+    <div class="view" id="v4">
+      <div class="greet"><h1>Settings</h1></div>
+      <div class="card sprofile press"><div class="pic">M</div><div><div class="n">Maya Rahman</div><div class="e">maya.rahman@school.edu</div></div></div>
+
+      <div class="sectitle">Profile</div>
+      <div class="list">
+        <div class="srow" onclick="openSheet('board')">
+          <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
+          <div class="lbl">Board</div><div class="aux">CBSE</div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+        </div>
+        <div class="srow" onclick="openSheet('class')">
+          <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
+          <div class="lbl">Class</div><div class="aux">11</div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+        </div>
+        <div class="srow">
+          <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+        </div>
+      </div>
+      <div class="note">Removing a subject archives its analysis rather than deleting it.</div>
+
+      <div class="sectitle">Notifications</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">Paper ready<small>Extraction finished and ready to review</small></div><div class="sw on" data-on="1"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Correction needed<small>An item came back Unsure</small></div><div class="sw on" data-on="1"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Weekly digest<small>One message summarising the week</small></div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+      </div>
+      <div class="note">Notifications report state. There are no streak reminders or return nudges.</div>
+
+      <div class="sectitle">AI transparency</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">Always show reasoning<small>Expand every disclosure panel by default</small></div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Confidence indicators<small>Confirmed, Likely and Unsure labels</small></div><div class="locked">Always on</div></div>
+      </div>
+
+      <div class="sectitle">Display &amp; accessibility</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">Appearance</div>
+          <div class="seg" id="segTheme">
+            <button data-mode="light" onclick="setTheme('light',this)">Light</button>
+            <button data-mode="dark" class="on" onclick="setTheme('dark',this)">Dark</button>
+            <button data-mode="system" onclick="setTheme('system',this)">System</button>
+          </div>
+        </div>
+        <div class="srow noicon"><div class="lbl">Text size</div><div class="seg"><button>S</button><button class="on">M</button><button>L</button></div></div>
+        <div class="srow noicon"><div class="lbl">Reduce motion</div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Language<small>Interface only — content follows the paper</small></div><div class="aux">English</div></div>
+      </div>
+
+      <div class="sectitle">Privacy &amp; data</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">What we collect</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon"><div class="lbl">Download your data</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon"><div class="lbl" style="color:var(--red)">Delete my data</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+      </div>
+      <div class="note">No targeted advertising. There's nothing to opt out of because it was never built in.</div>
+
+      <div class="sectitle">Account &amp; billing</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">Plan<small>Managed by Imran Rahman</small></div><div class="locked">Read only</div></div>
+        <div class="srow noicon"><div class="lbl" style="color:var(--blue)">Request a change</div></div>
+        <div class="srow noicon"><div class="lbl">Guardian contact<small>imran.r@gmail.com</small></div><div class="locked">Read only</div></div>
+      </div>
+
+      <div class="sectitle">Help &amp; support</div>
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">FAQ<small>How marks and schemes work</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon"><div class="lbl">Report a problem<small>Attaches this screen's context</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+      </div>
+
+      <div style="margin-top:14px"></div>
+      <div class="list"><div class="srow noicon"><div class="lbl" style="color:var(--red)">Sign out</div></div></div>
+      <div class="sfoot">Mastery 2.4.1 · Build 3120</div>
+    </div>
+
+    <!-- ══════════════ WARNING SHEET ══════════════ -->
+    <div class="scrim" id="scrim" onclick="closeSheet()"></div>
+    <div class="sheet" id="sheet">
+      <div class="warnic"><svg viewBox="0 0 24 24"><path d="M12 8.5v5M12 17v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+      <h4 id="shTitle">Change class to 12?</h4>
+      <div class="body" id="shBody"></div>
+      <ul id="shList"></ul>
+      <div class="acts">
+        <div class="btn primary press" id="shPrimary" onclick="confirmSheet()">Change to Class 12</div>
+        <div class="btn ghost press" onclick="closeSheet()">Talk to support instead</div>
+        <div class="btn plain" onclick="closeSheet()">Cancel</div>
+      </div>
+    </div>
+
+    <!-- ══════════════ NAV ══════════════ -->
+    <div class="tabdock">
+      <div class="tabbar" id="tabbar">
+        <div class="refractlayer" id="refractlayer">
+          <div class="pill" id="pill"></div>
+          <div class="tab on" onclick="pick(0)" aria-label="Home"><svg class="solid" viewBox="0 0 24 24"><path d="M3.6 10.3 12 3.2l8.4 7.1c.3.3.5.7.5 1.1v8a1.6 1.6 0 0 1-1.6 1.6h-4.2v-5.6a1 1 0 0 0-1-1h-4.2a1 1 0 0 0-1 1V21H4.7a1.6 1.6 0 0 1-1.6-1.6v-8c0-.4.2-.8.5-1.1Z"/></svg><span class="lbl">Home</span></div>
+          <div class="tab" onclick="pick(1)" aria-label="Insights"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M6.5 16V9.5M11 16V5M15.5 16v-4M20 16v-8"/></svg><span class="lbl">Insights</span></div>
+          <div class="tab" onclick="pick(2)" aria-label="Scan"><svg viewBox="0 0 24 24"><path d="M3 8.6V6.4A1.9 1.9 0 0 1 4.9 4.5H7M17 4.5h2.1A1.9 1.9 0 0 1 21 6.4v2.2M21 15.4v2.2a1.9 1.9 0 0 1-1.9 1.9H17M7 19.5H4.9A1.9 1.9 0 0 1 3 17.6v-2.2"/><path d="M7 12h10"/></svg><span class="lbl">Scan</span></div>
+          <div class="tab" onclick="pick(3)" aria-label="Library"><svg viewBox="0 0 24 24"><path d="M5 4.5h14v15H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg><span class="dot"></span><span class="lbl">Library</span></div>
+          <div class="tab" onclick="pick(4)" aria-label="Settings"><div class="pfp">M</div><span class="lbl">Settings</span></div>
+        </div>
+        <div class="lensglow" id="lensglow"></div>
+        <div class="rim"></div>
+      </div>
+    </div>
+
+</div>
+
+<script>
+/* ── displacement lens ── */
+function generateLensMap({w,h,radius,depth=12,curvature=2.3}){
+  const cv=document.createElement('canvas');cv.width=Math.round(w);cv.height=Math.round(h);
+  const ctx=cv.getContext('2d'),img=ctx.createImageData(cv.width,cv.height),D=img.data;
+  const W=cv.width,H=cv.height,hw=W/2,hh=H/2,r=Math.min(radius,hw,hh);
+  const put=(x,y,dx,dy)=>{const i=(y*W+x)*4;D[i]=128+dx*127;D[i+1]=128+dy*127;D[i+2]=128;D[i+3]=255;};
+  for(let y=0;y<Math.ceil(hh);y++)for(let x=0;x<Math.ceil(hw);x++){
+    const px=x+.5-hw,py=y+.5-hh,qx=Math.abs(px)-(hw-r),qy=Math.abs(py)-(hh-r);
+    const mx=Math.max(qx,0),my=Math.max(qy,0);
+    const inward=-(Math.hypot(mx,my)+Math.min(Math.max(qx,qy),0)-r);
+    let dx=0,dy=0;
+    if(inward>=0&&inward<depth){
+      const mag=Math.pow(1-inward/depth,curvature);let nx,ny;
+      if(qx>0||qy>0){const l=Math.hypot(mx,my)||1;nx=mx/l*Math.sign(px);ny=my/l*Math.sign(py);}
+      else if(qx>qy){nx=Math.sign(px);ny=0;}else{nx=0;ny=Math.sign(py);}
+      dx=-nx*mag;dy=-ny*mag;
+    }
+    const xr=W-1-x,yb=H-1-y;
+    put(x,y,dx,dy);if(xr!==x)put(xr,y,-dx,dy);if(yb!==y)put(x,yb,dx,-dy);
+    if(xr!==x&&yb!==y)put(xr,yb,-dx,-dy);
+  }
+  ctx.putImageData(img,0,0);return cv.toDataURL();
+}
+
+/* ── spring: subtle, near-critical ── */
+const loops=new Map();
+function spring(key,{to,stiffness=200,damping=25,onUpdate}){
+  const prev=loops.get(key);if(prev&&prev.raf)cancelAnimationFrame(prev.raf);
+  const s=prev?prev.state:{pos:to,vel:0},dt=1/60;
+  const step=()=>{s.vel+=(-stiffness*(s.pos-to)-damping*s.vel)*dt;s.pos+=s.vel*dt;onUpdate(s.pos,s.vel);
+    if(Math.abs(s.vel)>.015||Math.abs(s.pos-to)>.015)loops.set(key,{raf:requestAnimationFrame(step),state:s});
+    else{s.pos=to;s.vel=0;onUpdate(to,0);loops.set(key,{raf:0,state:s});}};
+  loops.set(key,{raf:requestAnimationFrame(step),state:s});
+}
+const seed=(k,p)=>loops.set(k,{raf:0,state:{pos:p,vel:0}});
+
+document.querySelectorAll('.press').forEach((el,i)=>{
+  const key='p'+i;seed(key,1);
+  const go=v=>spring(key,{to:v,stiffness:320,damping:27,onUpdate:p=>el.style.transform=`scale(${p.toFixed(4)})`});
+  el.addEventListener('pointerdown',()=>go(.988));
+  ['pointerup','pointerleave','pointercancel'].forEach(e=>el.addEventListener(e,()=>go(1)));
+});
+
+/* ── haptics ──
+   Weight matched to consequence, per Apple's own pattern: a light tick for
+   selection, a firmer pulse for something you can't casually undo. Silently
+   absent on anything without a vibration motor (i.e. every desktop). */
+const CAN_VIBRATE = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+function haptic(ms){
+  if(!CAN_VIBRATE) return;
+  try{ navigator.vibrate(ms); }catch(_){ /* some browsers throw without a gesture */ }
+}
+const hapticTick = ()=>haptic(10);   // selection: tab bar, switches
+const hapticFirm = ()=>haptic(18);   // consequential: warning-sheet primary, save-to-Library
+
+/* ── nav / tabs ──
+   The pill is measured, never computed: flexbox rounds each item's width
+   independently, so division math drifts a pixel or two. We read the real
+   tab rects and interpolate between two real measurements during the spring.
+
+   Everything below is axis-agnostic — x, y, w and h all come from the
+   measurement — so the same code drives the bottom tab bar on phones and
+   the vertical rail on tablets. generateLensMap() is regenerated whenever
+   the pill's dimensions change, which includes every resize and every
+   crossing of the 768px / 1024px boundaries. */
+const PILL_R=26;
+const railQuery=matchMedia('(min-width:768px)');
+const isRail=()=>railQuery.matches;
+let offsets=[],current=0,insightsFull=true;
+const $id=id=>document.getElementById(id);
+
+function measureTabs(){
+  // Measured against the refract layer, which is the filter's own reference
+  // box — so pill, lens map and icons all share one origin and agree exactly.
+  const base=$id('refractlayer').getBoundingClientRect();
+  offsets=[...document.querySelectorAll('.tab')].map(t=>{
+    const r=t.getBoundingClientRect();
+    return {x:r.left-base.left, y:r.top-base.top, w:r.width, h:r.height};
+  });
+}
+function lerpOffset(p){
+  const i0=Math.max(0,Math.min(offsets.length-1,Math.floor(p)));
+  const i1=Math.max(0,Math.min(offsets.length-1,Math.ceil(p)));
+  const t=p-i0, a=offsets[i0], b=offsets[i1];
+  return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t,
+          w:a.w+(b.w-a.w)*t, h:a.h+(b.h-a.h)*t};
+}
+
+/* Displacement maps are pure functions of size — cache so a resize storm
+   or a re-pick doesn't rebuild an identical canvas every frame. */
+const lensCache=new Map();
+function lensMapFor(w,h){
+  const k=Math.round(w)+'x'+Math.round(h);
+  let v=lensCache.get(k);
+  if(!v){ v=generateLensMap({w,h,radius:PILL_R}); lensCache.set(k,v); }
+  return v;
+}
+function paintLens(o){
+  const fe=$id('lensTabImg'), map=lensMapFor(o.w,o.h);
+  fe.setAttribute('width',o.w); fe.setAttribute('height',o.h);
+  fe.setAttribute('href',map);
+  fe.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href',map);
+}
+function applyPill(o,sx,sy){
+  const p=$id('pill'), g=$id('lensglow'), fe=$id('lensTabImg');
+  const t=`translate(${o.x.toFixed(2)}px,${o.y.toFixed(2)}px) scale(${(sx||1).toFixed(3)},${(sy||1).toFixed(3)})`;
+  p.style.width=g.style.width=o.w+'px';
+  p.style.height=g.style.height=o.h+'px';
+  p.style.transform=g.style.transform=t;
+  fe.setAttribute('x',o.x); fe.setAttribute('y',o.y);
+}
+function layoutTabs(){
+  measureTabs();
+  const o=offsets[current];
+  if(!o||!o.w||!o.h) return;
+  paintLens(o);
+  applyPill(o,1,1);
+  $id('refractlayer').style.filter='url(#lensTab)';
+}
+seed('tab',0);
+const TITLES=['Home','Insights','Scan','Library','Settings'];
+function pick(i){
+  if(i===1&&current===1) insightsFull=!insightsFull;
+  document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('on',idx===i));
+  document.getElementById('v0').classList.toggle('on',i===0);
+  document.getElementById('v1').classList.toggle('on',i===1&&insightsFull);
+  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsFull);
+  document.getElementById('v2').classList.toggle('on',i===2);
+  document.getElementById('v3').classList.toggle('on',i===3);
+  document.getElementById('v4').classList.toggle('on',i===4);
+  document.getElementById('hdrTitle').textContent=TITLES[i];
+  document.getElementById('hdr').classList.remove('stuck');
+  const wasScan=current===2;
+  current=i;
+  measureTabs();
+  if(!offsets[i]) return;
+  paintLens(offsets[i]);
+  const vertical=isRail();
+  spring('tab',{to:i,stiffness:210,damping:24,onUpdate:(p,v)=>{
+    const o=lerpOffset(p);
+    // squash-stretch along the axis of travel: X in the tab bar, Y in the rail
+    const a=Math.abs(Math.max(-.055,Math.min(.055,v*.011)));
+    applyPill(o, vertical?1-a*.5:1+a, vertical?1+a:1-a*.5);
+  }});
+  if(i===1&&insightsFull) animateInsights();
+  if(i===2&&!wasScan) initScan();
+}
+function animateInsights(){
+  setTimeout(()=>{
+    const tl=document.getElementById('trendline'); if(tl) tl.style.strokeDashoffset=0;
+    document.querySelectorAll('.qt .track i').forEach((el,i)=>setTimeout(()=>el.style.width=el.dataset.w+'%',80*i));
+  },150);
+}
+
+/* ── switches ── */
+document.querySelectorAll('.sw').forEach((sw,i)=>{
+  const th=sw.querySelector('.th'); const key='sw'+i;
+  let on=sw.dataset.on==='1';
+  const place=p=>th.style.transform=`translateX(${p*22}px)`;
+  seed(key,on?1:0); place(on?1:0);
+  sw.addEventListener('click',()=>{on=!on;sw.classList.toggle('on',on);
+    hapticTick();
+    spring(key,{to:on?1:0,stiffness:280,damping:26,onUpdate:place});});
+});
+
+/* ── disclosure ── */
+function toggleDisc(){
+  const d=document.getElementById('disc'),p=document.getElementById('discPanel');
+  const open=d.classList.toggle('open');
+  p.style.height=open?p.firstElementChild.offsetHeight+'px':'0px';
+}
+
+/* ── theme ── */
+function applyTheme(resolved){
+  document.documentElement.dataset.theme=resolved;
+  document.body.dataset.page=resolved;
+  document.getElementById('themebtn').textContent=resolved==='dark'?'Light':'Dark';
+  // keep the browser/OS chrome in step with the app surface
+  const mc=document.getElementById('themeColor');
+  if(mc) mc.setAttribute('content',resolved==='dark'?'#000000':'#F4F4F7');
+}
+function setTheme(mode,btn){
+  if(btn) document.querySelectorAll('#segTheme button').forEach(b=>b.classList.toggle('on',b===btn));
+  const resolved=mode==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):mode;
+  applyTheme(resolved);
+}
+function flipTheme(){
+  const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  applyTheme(next);
+  document.querySelectorAll('#segTheme button').forEach(b=>b.classList.toggle('on',b.dataset.mode===next));
+}
+
+/* ── warning sheet ── */
+const COPY={
+  class:{title:'Change class to 12?',
+    body:"This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class 11.",
+    items:[['Archived papers keep their old scope.','They\'re labelled "analysed under Class 11" and are never re-mapped, so nothing is orphaned.'],
+      ['They can\'t be re-verified.','Class 11 papers won\'t reach Tier 2 against the Class 12 scheme.'],
+      ['Insights split at the change.','Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.']],
+    primary:'Change to Class 12',primaryClass:'primary'},
+  board:{title:'Board changes go through support',
+    body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
+    items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
+      ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
+      ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
+    primary:'Contact support',primaryClass:'ghost'}
+};
+seed('sheet',1);
+// The sheet is shared between the board/class warnings and the lightweight
+// link/upload confirmations, so it tracks whether its primary action is
+// actually consequential — only then does confirming earn a firmer pulse.
+let sheetConsequential=false;
+function confirmSheet(){
+  if(sheetConsequential) hapticFirm();
+  closeSheet();
+}
+function confirmSave(){
+  hapticFirm();
+  closeReview();
+}
+function openSheet(k){
+  sheetConsequential=true;
+  const c=COPY[k];
+  document.getElementById('shTitle').textContent=c.title;
+  document.getElementById('shBody').textContent=c.body;
+  document.getElementById('shList').innerHTML=c.items.map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
+  const prim=document.getElementById('shPrimary');
+  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
+  document.getElementById('scrim').classList.add('on');
+  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+}
+function closeSheet(){
+  document.getElementById('scrim').classList.remove('on');
+  spring('sheet',{to:1,stiffness:260,damping:30,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+}
+
+/* ── scan: draft toast (swipeable), drafts panel, fullscreen review ── */
+seed('draftToast',0); // 0 = shown, 1 = dismissed
+seed('drafts',1);
+seed('review',1);
+let draftDismissed=false, dragStartY=null, dragCurrentY=0;
+
+function initScan(){
+  if(!draftDismissed){
+    spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
+      const y=-140*(1-p);
+      document.getElementById('draftToast').style.transform=`translateY(${y}%)`;
+    }});
+    document.getElementById('draftsIcon').classList.remove('show');
+  }
+}
+function closeDraftToast(resume){
+  spring('draftToast',{to:1,stiffness:260,damping:28,onUpdate:p=>{
+    const y=-140*p;
+    document.getElementById('draftToast').style.transform=`translateY(${y}%)`;
+  },});
+  draftDismissed=true;
+  setTimeout(()=>document.getElementById('draftsIcon').classList.add('show'),180);
+  if(resume){ openReview(); }
+}
+// swipe up to dismiss
+const toastEl=document.getElementById('draftToast');
+toastEl.addEventListener('pointerdown',e=>{dragStartY=e.clientY;dragCurrentY=0;toastEl.setPointerCapture(e.pointerId);});
+toastEl.addEventListener('pointermove',e=>{
+  if(dragStartY===null)return;
+  dragCurrentY=Math.min(0,e.clientY-dragStartY);
+  toastEl.style.transform=`translateY(${dragCurrentY}px)`;
+});
+toastEl.addEventListener('pointerup',()=>{
+  if(dragStartY===null)return;
+  if(dragCurrentY<-40) closeDraftToast(false);
+  else spring('draftToast',{to:0,stiffness:280,damping:26,onUpdate:p=>toastEl.style.transform=`translateY(${-140*(1-p)}%)`});
+  dragStartY=null;
+});
+
+function openDrafts(){
+  document.getElementById('draftsScrim').classList.add('on');
+  spring('drafts',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('draftsSheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+}
+function closeDrafts(){
+  document.getElementById('draftsScrim').classList.remove('on');
+  spring('drafts',{to:1,stiffness:260,damping:30,onUpdate:p=>document.getElementById('draftsSheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+}
+
+function openReview(){
+  document.getElementById('reviewsheet').classList.add('open');
+}
+function closeReview(){
+  document.getElementById('reviewsheet').classList.remove('open');
+}
+function cycleField(row,options,marksResolved){
+  const span=row.querySelector('.fval');
+  const cur=options.indexOf(span.textContent);
+  const next=options[(cur+1+options.length)%options.length];
+  span.textContent=next; span.style.color='var(--label)';
+  if(marksResolved){
+    const tag=row.querySelector('.tier');
+    tag.textContent='Set by you'; tag.className='tier t2';
+  }
+}
+function capture(){
+  const sh=document.querySelector('.shutter');
+  sh.classList.add('capturing');
+  setTimeout(()=>sh.classList.remove('capturing'),160);
+}
+function openSheetGeneric(kind){
+  // reuses the warning-sheet mechanics for a lightweight confirmation
+  sheetConsequential=false;
+  const c = kind==='link'
+    ? {title:'Paste a link',body:'Add a school-shared PDF or drive link. It gets added as the next page in this paper.',items:[],primary:'Paste from clipboard',primaryClass:'primary'}
+    : {title:'Upload from Files or Gallery',body:'Pick one or more pages to add to this paper. You can reorder them before submitting.',items:[],primary:'Choose files',primaryClass:'primary'};
+  document.getElementById('shTitle').textContent=c.title;
+  document.getElementById('shBody').textContent=c.body;
+  document.getElementById('shList').innerHTML='';
+  const prim=document.getElementById('shPrimary');
+  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
+  document.getElementById('scrim').classList.add('on');
+  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+}
+
+/* ── haptics: selection ── */
+// Bound to the tabs themselves, not to pick(), so programmatic navigation
+// (the "Scan new paper" button, the empty-state link) stays silent.
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',hapticTick));
+
+/* ── header collapse + boot ── */
+const hdr=document.getElementById('hdr');
+// Passive: scrolling is read-only, so it collapses the header and nothing else.
+document.querySelectorAll('.view').forEach(v=>v.addEventListener('scroll',
+  ()=>hdr.classList.toggle('stuck',v.scrollTop>28),{passive:true}));
+
+layoutTabs();
+window.addEventListener('load',layoutTabs);
+window.addEventListener('resize',layoutTabs);
+// Crossing a breakpoint changes the pill's axis and dimensions, so the lens
+// map has to be rebuilt for the new geometry.
+railQuery.addEventListener('change',layoutTabs);
+matchMedia('(min-width:1024px)').addEventListener('change',layoutTabs);
+// Onest loading can change tab metrics in the labelled rail.
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
+</script>
+</body>
+</html>
