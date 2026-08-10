@@ -4,21 +4,54 @@ A responsive web app that shows a student exactly where their marks go — built
 the original single-file device-frame prototype, now a real site rather than a
 scaled-down phone mockup.
 
-`index.html` is the whole thing: no build step, no dependencies, no backend. Open it
-directly or serve the directory.
+`index.html` is the front end and the design system. `src/` holds ES modules for data
+and flow; `vendor/` holds the Supabase client. No bundler, no framework, no install.
+
+It must be **served**, not opened as a file — ES modules do not load over `file://`.
 
 ```bash
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
+## What works
+
+- **Auth** — email or phone OTP, no passwords, no social sign-in. Only the guardian
+  holds credentials; the student is a profile under that session.
+- **Onboarding** — the eight steps in order, with the legally load-bearing ones
+  enforced: no student data before consent, consent itemised per purpose with optional
+  purposes off, payment after consent.
+- **Guardian verification** — a swappable adapter. The development stub is wired;
+  DigiLocker is the intended production adapter and needs a server-side token
+  exchange. Only a reference and a timestamp are ever stored.
+- **Settings** — appearance, text size, reduce motion, reasoning, and notification
+  switches all persist. The weekly-digest and improve-extraction switches write to the
+  consent ledger instead of preferences, so turning one off is a recorded withdrawal.
+- **Ingestion** — upload pages or a PDF to private storage, or paste a link. The paper
+  type is asked once because it decides Tier 1 vs Tier 2.
+- **Data export and account deletion**, both from Settings.
+
+## What does not work yet
+
+Extraction. Pages reach storage and are recorded, but nothing reads them, so no
+attempts or mark-loss events are produced yet. That is milestone 5, and CLAUDE.md
+wants the OCR accuracy harness (milestone 2) settled first — red-pen extraction is the
+riskiest assumption in the product.
+
+Links are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over the
+bytes, so a server-side fetcher has to resolve them.
+
 ## Deploying
 
-`netlify.toml` copies `index.html` into `dist/` and publishes that. The publish
-directory is explicit rather than the repo root, so the Constitution specs, the
-blueprint and the design reference images stay out of the deployed site.
+`netlify.toml` copies `index.html`, `src/` and `vendor/` into `dist/` and publishes
+that. The publish directory is explicit rather than the repo root, so the Constitution
+specs, the blueprint and the design reference images stay out of the deployed site.
 
-There is nothing to install — no `package.json`, no framework, no build step
-beyond the copy.
+There is nothing to install — no `package.json`, no framework, no build step beyond
+the copy.
+
+The Supabase publishable key is committed in `src/config.js` on purpose. It carries no
+authority: every table has RLS with no policy for `anon`, so the key alone reaches
+nothing, and it is the signed-in session that grants access.
 
 ## Typography
 

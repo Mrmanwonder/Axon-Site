@@ -6,9 +6,40 @@ being asked. It also serves as the design system — the tokens, the type scale,
 glass lens and the spring engine are the reference implementation, so read it
 before building UI.
 
+`src/` holds ES modules for data and flow, loaded natively — no bundler. `vendor/`
+holds the Supabase client, vendored rather than pulled from a CDN so there is no
+third-party runtime dependency. The modules must be served over http; ES modules
+do not load from `file://`.
+
 `supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
 test suites that run inside a rolled-back transaction and are safe against any
 database, production included.
+
+## The bridge between index.html and src/
+
+`index.html` owns the design system; `src/` owns data and flow. Rather than
+duplicating primitives, the inline script publishes them and the modules call them:
+`__masteryHaptic`, `__masterySwitch`, `__masteryOpenSheet`, `__masteryRebindPress`,
+`__masteryOpenDisclosure`, `__masteryRenderLibrary`. Add to that list rather than
+reimplementing a spring or a sheet in a module — the two will drift otherwise.
+
+Switches whose state belongs to the app carry `data-managed`, and the generic `.sw`
+handler skips them. Two handlers on one switch race: whichever runs second reads a
+class the first already flipped, which once turned a consent grant into a
+withdrawal.
+
+## Erasure
+
+`delete_my_account()` strips personal data but keeps `guardian` and `student` rows as
+tombstones, because `consent_event` references them `ON DELETE RESTRICT` and the
+ledger is the compliance evidence. Deleting them is not an option, and neither is
+`ON DELETE SET NULL` — that is an UPDATE, which the append-only trigger refuses.
+Storage objects must be cleared through the Storage API *before* calling it, since
+it releases the auth row and the session then cannot authorise storage deletes.
+
+It is deliberately in `public` and callable by `authenticated`: the client has to be
+able to call it. It takes no arguments and derives the account from `auth.uid()`, so
+there is nothing to tamper with. The advisor flags it; that flag is expected.
 
 ## The four hard rules
 
@@ -64,6 +95,16 @@ meant to ramp continuously, not step.
 Percentage padding inside `.view` resolves against the app shell, not the view's own
 box, so `--rail-w` has to be subtracted explicitly in the centring calculation.
 This is easy to get wrong and looks almost right when you do.
+
+## Colour
+
+Red appears in exactly one place: the sign-out row. Not errors, not warnings, not
+notification dots, not destructive rows like deleting an account. Amber carries
+attention, blue carries accent. The scan crop contains real red pen, and if the UI
+spent red freely every screen would read as a rebuke.
+
+Cause colours are seven categorical hues of equal weight, never a severity ramp. The
+values are in `CLAUDE.md`; take them from there rather than inventing a shade.
 
 ## Haptics
 

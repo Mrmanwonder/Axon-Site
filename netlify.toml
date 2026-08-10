@@ -8,7 +8,7 @@
 # deploy to exactly what belongs on the web.
 
 [build]
-  command = "mkdir -p dist && cp index.html dist/index.html"
+  command = "mkdir -p dist && cp index.html dist/index.html && cp -r src vendor dist/"
   publish = "dist"
 
 [build.environment]

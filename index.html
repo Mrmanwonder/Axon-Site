@@ -253,7 +253,6 @@
   .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
   .shutter .ring{width:56px;height:56px;border-radius:28px;background:#fff;transition:transform .15s ease,border-radius .15s ease;}
-  .shutter.capturing .ring{transform:scale(.78);border-radius:18px;}
 
   .drafttoast{position:absolute;left:10px;right:10px;top:10px;z-index:6;
     background:rgba(30,30,34,.7);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
@@ -392,7 +391,9 @@
   .tab svg{width:24px;height:24px;fill:none;stroke:var(--nav-icon);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s ease,fill .25s ease;}
   .tab.on svg{stroke:var(--nav-icon-on);}
   .tab.on svg.solid{fill:var(--nav-icon-on);stroke:none;}
-  .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--red);box-shadow:0 0 0 2px var(--nav-bg);}
+  /* Not red: red is reserved for sign out, the one irreversible-feeling action
+     in the interface. A notification dot is an accent, not a rebuke. */
+  .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--blue);box-shadow:0 0 0 2px var(--nav-bg);}
   .tab .pfp{width:25px;height:25px;border-radius:13px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#fff;transition:box-shadow .25s ease;}
   .tab.on .pfp{box-shadow:0 0 0 2px var(--nav-icon-on);}
   .lensglow{position:absolute;top:0;left:0;height:46px;border-radius:26px;pointer-events:none;z-index:3;
@@ -495,6 +496,54 @@
 
   ::selection{background:rgba(58,134,255,.32);color:#fff;}
 
+  /* ── text size ──
+     Scales the typographic tokens rather than zooming the layout, so the nav
+     geometry the lens depends on stays exactly where it was measured. */
+  [data-text="s"]{--fs-h1:clamp(24px,6.6vw,30px);--fs-insight:clamp(16px,4.3vw,19px);
+    --fs-sec:clamp(10.5px,2.7vw,11.5px);--fs-body:14px;--fs-row:14px;--fs-row2:12px;--fs-lbl:15px;}
+  [data-text="m"]{--fs-body:15px;--fs-row:15.5px;--fs-row2:13px;--fs-lbl:16px;}
+  [data-text="l"]{--fs-h1:clamp(30px,8.2vw,38px);--fs-insight:clamp(20px,5.3vw,24px);
+    --fs-sec:clamp(12.5px,3.3vw,13.5px);--fs-body:17px;--fs-row:17.5px;--fs-row2:14.5px;--fs-lbl:18px;}
+
+  .row .t1,.cheap .t1,.method .t1{font-size:var(--fs-row,15.5px);}
+  .row .t2,.cheap .t2,.method .t2{font-size:var(--fs-row2,13px);}
+  .srow .lbl{font-size:var(--fs-lbl,16px);}
+  .srow .lbl small{font-size:calc(var(--fs-row2,13px) - .5px);}
+  .sheet .body,.estate p{font-size:var(--fs-body,15px);}
+
+  /* ── reduce motion ──
+     The in-app toggle mirrors the OS setting, since a student may want stillness
+     without changing their whole phone. */
+  [data-motion="reduce"] *{transition-duration:.01ms !important;animation-duration:.01ms !important;}
+  [data-motion="reduce"] .sweep{animation:none;opacity:.35;}
+  [data-motion="reduce"] .skel{animation:none;}
+
+  /* ── app toast ── */
+  #appToast{position:absolute;left:10px;right:10px;top:calc(var(--top-inset) + 8px);z-index:60;
+    background:rgba(30,30,34,.82);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
+    border:.5px solid rgba(255,255,255,.16);border-radius:18px;padding:12px 15px;
+    transform:translateY(-160%);transition:transform .38s var(--spring);pointer-events:none;}
+  #appToast.show{transform:translateY(0);}
+  #appToast .t1{font-size:14px;font-weight:500;color:#fff;letter-spacing:-.01em;line-height:1.4;}
+  #appToast[data-tone="warn"]{border-color:rgba(255,159,10,.42);}
+  [data-theme="light"] #appToast{background:rgba(255,255,255,.9);border-color:rgba(60,60,67,.14);
+    box-shadow:0 10px 30px rgba(28,28,40,.18);}
+  [data-theme="light"] #appToast .t1{color:var(--label);}
+  @media (min-width:768px){#appToast{left:calc(var(--rail-w) + 16px);right:16px;max-width:520px;}}
+
+  /* ── onboarding overlay ── */
+  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;}
+  #obroot[hidden]{display:none;}
+  @media (min-width:768px){#obroot{padding-inline:max(0px,calc((100% - 620px) / 2));}}
+
+  /* Sheet extras used by the generic sheet opener. */
+  .sheet .sh-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+  .sheet .sh-choice{padding:13px 15px;border-radius:15px;background:var(--surface-sunk);
+    font-size:15.5px;font-weight:500;letter-spacing:-.015em;cursor:pointer;will-change:transform;}
+  .sheet .sh-input{margin-top:16px;}
+  .sheet .sh-input input{width:100%;background:var(--field);border:none;outline:none;border-radius:14px;
+    padding:13px 14px;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
+
   /* Stop single-word orphans in the headlines now that widths vary. */
   .greet h1,.insight .line,.estate h4,.sheet h4,.proc .hd{text-wrap:balance;}
 
@@ -556,9 +605,9 @@
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
       </div>
 
-      <div class="scanbtn press" onclick="pick(2)">
-        <svg viewBox="0 0 24 24"><path d="M3 8V5.5A1.5 1.5 0 0 1 4.5 4H7M17 4h2.5A1.5 1.5 0 0 1 21 5.5V8M21 16v2.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H4.5A1.5 1.5 0 0 1 3 18.5V16"/><path d="M7 12h10"/></svg>
-        Scan new paper
+      <div class="scanbtn press" id="uploadBtn" role="button" tabindex="0">
+        <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+        Add a paper
       </div>
     </div>
 
@@ -676,12 +725,15 @@
           <span class="badge"></span>
         </div>
 
+        <!-- No in-app camera in v1: the phone's own camera app is better than
+             anything achievable in a PWA, so the shutter opens the OS picker,
+             which offers camera or gallery. -->
         <div class="scanctrls">
-          <div class="sidebtn press" onclick="openSheetGeneric('link')">
+          <div class="sidebtn press" data-action="link" role="button" tabindex="0" aria-label="Add a link">
             <svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
           </div>
-          <div class="shutter press" onclick="capture()"><div class="ring"></div></div>
-          <div class="sidebtn press" onclick="openSheetGeneric('upload')">
+          <div class="shutter press" data-action="upload" role="button" tabindex="0" aria-label="Add pages"><div class="ring"></div></div>
+          <div class="sidebtn press" data-action="upload" role="button" tabindex="0" aria-label="Upload from files">
             <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
           </div>
         </div>
@@ -795,10 +847,10 @@
         <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 22px 10px;">
-        <span style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
+        <span id="libraryCount" style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
         <span style="font-size:13.5px;color:var(--blue);font-weight:500;cursor:pointer">Most recent ▾</span>
       </div>
-      <div class="list">
+      <div class="list" id="libraryList">
         <div class="row press"><div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:15px;right:16px"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:31px"></div><div class="ln" style="top:40px;right:20px"></div></div>
           <div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span>Rotational Motion</span><span>·</span><span>6 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
           <div class="lost">7<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
@@ -818,7 +870,7 @@
     <!-- ══════════════ 4 · SETTINGS ══════════════ -->
     <div class="view" id="v4">
       <div class="greet"><h1>Settings</h1></div>
-      <div class="card sprofile press"><div class="pic">M</div><div><div class="n">Maya Rahman</div><div class="e">maya.rahman@school.edu</div></div></div>
+      <div class="card sprofile press"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman</div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
 
       <div class="sectitle">Profile</div>
       <div class="list">
@@ -829,7 +881,7 @@
         </div>
         <div class="srow" onclick="openSheet('class')">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
-          <div class="lbl">Class</div><div class="aux">11</div>
+          <div class="lbl">Class</div><div class="aux" id="set-class-aux">11</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
         <div class="srow">
@@ -842,15 +894,16 @@
 
       <div class="sectitle">Notifications</div>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">Paper ready<small>Extraction finished and ready to review</small></div><div class="sw on" data-on="1"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
-        <div class="srow noicon"><div class="lbl">Correction needed<small>An item came back Unsure</small></div><div class="sw on" data-on="1"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
-        <div class="srow noicon"><div class="lbl">Weekly digest<small>One message summarising the week</small></div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Paper ready<small>Extraction finished and ready to review</small></div><div class="sw on" id="set-paperready" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Correction needed<small>An item came back Unsure</small></div><div class="sw on" id="set-correction" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Weekly digest to the parent<small>Consent — turning this off is recorded as a withdrawal</small></div><div class="sw" id="set-digest" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
       </div>
       <div class="note">Notifications report state. There are no streak reminders or return nudges.</div>
 
       <div class="sectitle">AI transparency</div>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">Always show reasoning<small>Expand every disclosure panel by default</small></div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Always show reasoning<small>Expand every disclosure panel by default</small></div><div class="sw" id="set-reasoning" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Help improve extraction<small>Consent — uses anonymised corrections. Off unless you turn it on.</small></div><div class="sw" id="set-improve" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
         <div class="srow noicon"><div class="lbl">Confidence indicators<small>Confirmed, Likely and Unsure labels</small></div><div class="locked">Always on</div></div>
       </div>
 
@@ -863,16 +916,17 @@
             <button data-mode="system" onclick="setTheme('system',this)">System</button>
           </div>
         </div>
-        <div class="srow noicon"><div class="lbl">Text size</div><div class="seg"><button>S</button><button class="on">M</button><button>L</button></div></div>
-        <div class="srow noicon"><div class="lbl">Reduce motion</div><div class="sw" data-on="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl">Text size</div><div class="seg" id="segText"><button data-size="s">S</button><button data-size="m" class="on">M</button><button data-size="l">L</button></div></div>
+        <div class="srow noicon"><div class="lbl">Reduce motion<small>Stillness here without changing your whole phone</small></div><div class="sw" id="set-reducemotion" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
         <div class="srow noicon"><div class="lbl">Language<small>Interface only — content follows the paper</small></div><div class="aux">English</div></div>
       </div>
 
       <div class="sectitle">Privacy &amp; data</div>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">What we collect</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon"><div class="lbl">Download your data</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon"><div class="lbl" style="color:var(--red)">Delete my data</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon" id="set-collect"><div class="lbl">What we collect</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon" id="set-export"><div class="lbl">Download your data<small>Everything we hold, as one file</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon" id="set-delete-data"><div class="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon" id="set-delete-account"><div class="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
       </div>
       <div class="note">No targeted advertising. There's nothing to opt out of because it was never built in.</div>
 
@@ -890,7 +944,8 @@
       </div>
 
       <div style="margin-top:14px"></div>
-      <div class="list"><div class="srow noicon"><div class="lbl" style="color:var(--red)">Sign out</div></div></div>
+      <!-- The single sanctioned use of red in the interface. -->
+      <div class="list"><div class="srow noicon" id="set-signout"><div class="lbl" style="color:var(--red)">Sign out</div></div></div>
       <div class="sfoot">Mastery 2.4.1 · Build 3120</div>
     </div>
 
@@ -901,9 +956,10 @@
       <h4 id="shTitle">Change class to 12?</h4>
       <div class="body" id="shBody"></div>
       <ul id="shList"></ul>
+      <div id="shExtras"></div>
       <div class="acts">
         <div class="btn primary press" id="shPrimary" onclick="confirmSheet()">Change to Class 12</div>
-        <div class="btn ghost press" onclick="closeSheet()">Talk to support instead</div>
+        <div class="btn ghost press" id="shGhost" onclick="closeSheet()">Talk to support instead</div>
         <div class="btn plain" onclick="closeSheet()">Cancel</div>
       </div>
     </div>
@@ -923,6 +979,15 @@
         <div class="rim"></div>
       </div>
     </div>
+
+  <!-- Ingestion input. Deliberately without `capture`: that would force the
+       camera open and prevent picking an already-taken photo or a PDF. On mobile
+       the OS picker offers the camera anyway, which is the v1 intent. -->
+  <input type="file" id="fileInput" multiple accept="image/*,application/pdf" hidden>
+
+  <div id="appToast" role="status" aria-live="polite"><div class="t1"></div></div>
+
+  <div id="obroot" hidden aria-label="Set up your account"></div>
 
 </div>
 
@@ -1082,15 +1147,32 @@ function animateInsights(){
 }
 
 /* ── switches ── */
-document.querySelectorAll('.sw').forEach((sw,i)=>{
+/* Switches whose state belongs to the app layer carry data-managed and are
+   skipped here. Two handlers on one switch race: whichever ran second read a
+   class the first had already flipped, so a grant was recorded as a withdrawal.
+   The app owns the state; this file still owns the physics, published below. */
+document.querySelectorAll('.sw:not([data-managed])').forEach((sw,i)=>{
   const th=sw.querySelector('.th'); const key='sw'+i;
-  let on=sw.dataset.on==='1';
+  let on=sw.classList.contains('on')||sw.dataset.on==='1';
   const place=p=>th.style.transform=`translateX(${p*22}px)`;
   seed(key,on?1:0); place(on?1:0);
   sw.addEventListener('click',()=>{on=!on;sw.classList.toggle('on',on);
     hapticTick();
     spring(key,{to:on?1:0,stiffness:280,damping:26,onUpdate:place});});
 });
+
+/* Same spring for app-managed switches, so a settings toggle feels identical to
+   a demo one. State is the caller's business; this only animates. */
+let __swKey=0;
+const __swKeys=new WeakMap();
+window.__masterySwitch=function(el,on){
+  if(!el) return;
+  if(!__swKeys.has(el)){ __swKeys.set(el,'msw'+(__swKey++)); seed(__swKeys.get(el), on?1:0); }
+  const key=__swKeys.get(el), th=el.querySelector('.th');
+  el.classList.toggle('on',!!on);
+  spring(key,{to:on?1:0,stiffness:280,damping:26,
+    onUpdate:p=>{ if(th) th.style.transform=`translateX(${p*22}px)`; }});
+};
 
 /* ── disclosure ── */
 function toggleDisc(){
@@ -1239,12 +1321,10 @@ function cycleField(row,options,marksResolved){
     tag.textContent='Set by you'; tag.className='tier t2';
   }
 }
-function capture(){
-  hapticTick();
-  const sh=document.querySelector('.shutter');
-  sh.classList.add('capturing');
-  setTimeout(()=>sh.classList.remove('capturing'),160);
-}
+/* The shutter no longer simulates a capture: v1 has no in-app camera, so it
+   opens the OS picker instead. The ring-squash animation is gone with it — it
+   implied a photo had been taken when what actually happens is a file chooser.
+   The press spring and the selection tick (wired in src/app.js) carry it. */
 function openSheetGeneric(kind){
   // reuses the warning-sheet mechanics for a lightweight confirmation
   sheetConsequential=false;
@@ -1300,6 +1380,118 @@ railQuery.addEventListener('change',layoutTabs);
 matchMedia('(min-width:1024px)').addEventListener('change',layoutTabs);
 // Onest loading can change tab metrics in the labelled rail.
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Bridge to the application modules.
+
+   index.html owns the design system — the springs, the lens, the haptics, the
+   sheet. The modules in src/ own data and flow. Rather than duplicating any of
+   the above (which would let the two drift), the primitives are published here
+   and the modules call them.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+window.__masteryHaptic = { tick: hapticTick, firm: hapticFirm };
+
+// Press springs are attached at boot, so markup rendered later (onboarding,
+// sheet choices) needs them bound too.
+window.__masteryRebindPress = function(scope){
+  (scope||document).querySelectorAll('.press').forEach(el=>{
+    if(el.dataset.pressBound) return;
+    el.dataset.pressBound='1';
+    const key='p-late-'+(Math.random().toString(36).slice(2));
+    seed(key,1);
+    const go=v=>spring(key,{to:v,stiffness:320,damping:27,onUpdate:p=>el.style.transform=`scale(${p.toFixed(4)})`});
+    el.addEventListener('pointerdown',()=>go(.988));
+    ['pointerup','pointerleave','pointercancel'].forEach(e=>el.addEventListener(e,()=>go(1)));
+  });
+};
+
+window.__masteryOpenDisclosure = function(d){
+  const p=d.querySelector('.panel');
+  if(!p||d.classList.contains('open')) return;
+  d.classList.add('open');
+  p.style.height=p.firstElementChild.offsetHeight+'px';
+};
+
+/* Generic sheet. Same spring, scrim and geometry as the board/class warning —
+   the app layer supplies copy, an optional input, and optional choice rows. */
+let sheetConfirm=null, sheetChoice=null;
+window.__masteryOpenSheet = function(cfg){
+  sheetConsequential = cfg.primaryClass === 'primary' && !cfg.choices;
+  sheetConfirm = cfg.onConfirm || null;
+  sheetChoice  = cfg.onChoice  || null;
+
+  document.getElementById('shTitle').textContent = cfg.title || '';
+  document.getElementById('shBody').textContent  = cfg.body  || '';
+  document.getElementById('shList').innerHTML =
+    (cfg.items||[]).map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
+
+  const extras=document.getElementById('shExtras');
+  extras.innerHTML='';
+  if(cfg.input){
+    extras.innerHTML=`<div class="sh-input"><input id="${cfg.input.id}" placeholder="${cfg.input.placeholder||''}"></div>`;
+  }
+  if(cfg.choices){
+    extras.innerHTML=`<div class="sh-choices">${cfg.choices.map(c=>
+      `<div class="sh-choice press" data-choice="${c.value}">${c.label}</div>`).join('')}</div>`;
+    extras.querySelectorAll('[data-choice]').forEach(el=>el.addEventListener('click',()=>{
+      hapticTick(); const v=el.dataset.choice; closeSheet(); sheetChoice&&sheetChoice(v);
+    }));
+    window.__masteryRebindPress(extras);
+  }
+
+  // Choices are the action, so the primary button would be a second way to do
+  // the same thing. Hide it rather than leave a dead control on screen.
+  const prim=document.getElementById('shPrimary');
+  prim.style.display = cfg.choices ? 'none' : '';
+  if(!cfg.choices){ prim.textContent=cfg.primary||'Confirm'; prim.className='btn '+(cfg.primaryClass||'primary')+' press'; }
+  document.getElementById('shGhost').style.display = cfg.choices ? 'none' : '';
+
+  document.getElementById('scrim').classList.add('on');
+  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+};
+
+// confirmSheet() already fires the firm haptic for consequential actions; this
+// adds the app-supplied action on top.
+const __baseConfirmSheet = confirmSheet;
+confirmSheet = function(){
+  const fn = sheetConfirm; sheetConfirm=null;
+  __baseConfirmSheet();
+  if(fn) fn();
+};
+
+window.__masteryRenderLibrary = function(papers, opts){
+  const list=document.getElementById('libraryList');
+  const count=document.getElementById('libraryCount');
+  if(!list) return;
+  if(count) count.textContent = `${papers.length} paper${papers.length===1?'':'s'}` + (opts&&opts.stale?' · offline copy':'');
+  if(!papers.length){
+    list.innerHTML=`<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
+    return;
+  }
+  const TYPE={unit_test:'Unit test',mid_term:'Mid-term',final_exam:'Final exam',pyq:'PYQ',sample_paper:'Sample paper'};
+  list.innerHTML = papers.map(p=>{
+    const pages=(p.paper_page&&p.paper_page[0]&&p.paper_page[0].count)||0;
+    const qs=(p.student_attempt&&p.student_attempt[0]&&p.student_attempt[0].count)||0;
+    const tier = p.tier==='tier_2'
+      ? '<span class="tier t2">Scheme-matched</span>'
+      : '<span class="tier t1">Teacher\'s marks</span>';
+    return `<div class="row press">
+      <div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>
+      <div class="b"><div class="t1">${TYPE[p.type]||p.type}</div>
+        <div class="t2"><span>${new Date(p.date_taken).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span><span>·</span><span>${pages} page${pages===1?'':'s'}</span></div>
+        <div class="t2" style="margin-top:6px">${tier}${qs?'':'<span class="tier uns" style="margin-left:6px">Not read yet</span>'}</div></div>
+      <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
+    </div>`;
+  }).join('');
+  window.__masteryRebindPress(list);
+};
 </script>
+
+<!-- Vendored rather than pulled from a CDN: no third-party runtime dependency,
+     and the app still boots with no network. Deferred so the design system above
+     has already published its primitives. -->
+<script src="vendor/supabase.umd.js" defer></script>
+<script type="module" src="src/app.js"></script>
 </body>
 </html>
