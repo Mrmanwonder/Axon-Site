@@ -1,6 +1,6 @@
 // Application glue: auth gate, settings, ingestion, account actions.
 
-import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './supabase.js';
+import { sb, currentSession, currentGuardian, signOut, onAuthChange, authRedirectError, clearAuthParamsFromUrl } from './supabase.js';
 import { startOnboarding } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
@@ -331,6 +331,10 @@ function showOnboarding() {
     // Passed so a guardian who arrived by clicking the emailed link is not sent
     // back to the beginning of a flow they have already half-completed.
     session: ctx.session,
+    // A link that failed redirects back here with the reason in the fragment.
+    // Without this it is discarded and the guardian sees the landing page again,
+    // with nothing to distinguish "that link is spent" from "nothing happened".
+    authError: authRedirectError(),
     // The rows just created are handed straight over rather than re-fetched.
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just
@@ -364,6 +368,9 @@ async function boot() {
   applyPrefs(ctx.prefs);
 
   ctx.session = await currentSession();
+  // Read after getSession, so the client has finished with the fragment, and
+  // before any render — a reload should not replay an error already dealt with.
+  clearAuthParamsFromUrl();
   if (!ctx.session) return showOnboarding();
 
   ctx.guardian = await currentGuardian();

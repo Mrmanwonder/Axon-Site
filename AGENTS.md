@@ -11,6 +11,13 @@ holds the Supabase client, vendored rather than pulled from a CDN so there is no
 third-party runtime dependency. The modules must be served over http; ES modules
 do not load from `file://`.
 
+`supabase/functions/` holds Edge Functions, deployed separately from the site — Netlify
+publishes `dist/` and never touches them. `send-auth-email/auth-email.html` is the
+sign-in email and the only copy of it: the function substitutes the same
+`{{ .Token }}`-style placeholders the dashboard would, so pasting the file into
+Authentication → Emails and running the hook produce the same message. Edit that file,
+not a copy in the dashboard.
+
 `supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
 test suites that run inside a rolled-back transaction and are safe against any
 database, production included.

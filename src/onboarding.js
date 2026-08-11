@@ -27,11 +27,16 @@ function firm() { window.__masteryHaptic?.firm?.(); }
 
 const SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
 
-export function startOnboarding(root, { onComplete, session = null }) {
+export function startOnboarding(root, { onComplete, session = null, authError = null }) {
   const state = {
     // A live session with no guardian row means the emailed link was clicked;
     // pick the flow up at the only thing still missing.
-    step: session ? 'nameOnly' : 'landing',
+    //
+    // A failed link is the mirror image: no session, but a reason. Land on the
+    // account step carrying it, because the way out is to ask for a new code —
+    // not to read the pitch again.
+    step: session ? 'nameOnly' : (authError ? 'account' : 'landing'),
+    error: session ? null : authError,
     contact: session?.user?.email ?? session?.user?.phone ?? '',
     parentName: '',
     studentAge: null,
@@ -108,11 +113,11 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       ${err(error)}
       <div class="searchwrap"><div class="search">
-        <input id="ob-code" placeholder="6-digit code, or paste the link" autocomplete="one-time-code">
+        <input id="ob-code" inputmode="numeric" placeholder="6-digit code, or paste the link" autocomplete="one-time-code">
       </div></div>
-      <div class="subnote">Sent to ${esc(state.contact)}. If the email contains a link rather than a
-        code, paste the whole link here — that works too, and it still works after your mail app has
-        already opened it.</div>
+      <div class="subnote">Sent to ${esc(state.contact)}. The code is good for an hour. The email also
+        has a button, and pasting that link in here works too — worth knowing, because mail apps often
+        open links before you do, which spends them.</div>
       <div class="btn primary press" id="ob-verify" style="margin:18px">Continue</div>
       <div class="btn plain press" id="ob-resend">Send it again</div>
     `), { title: 'Check your email' });

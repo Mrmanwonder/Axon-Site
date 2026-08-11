@@ -17,6 +17,12 @@ if (!window.supabase?.createClient) {
 }
 const { createClient } = window.supabase;
 
+// Snapshot the URL before the client is constructed. `detectSessionInUrl` reads
+// the fragment and then strips it, so anything we want to say about a failed
+// link has to be taken now — a moment later it is gone and the app simply shows
+// the landing page as though nothing had been attempted.
+const LANDED_WITH = { hash: location.hash, search: location.search };
+
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
@@ -28,6 +34,45 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     detectSessionInUrl: true,
   },
 });
+
+/**
+ * Why the emailed link did not sign anyone in, in words worth showing.
+ *
+ * Supabase reports a failed verification by redirecting back with the reason in
+ * the fragment, which the client then discards. Read once at boot, from the
+ * snapshot taken above; returns null when the landing was ordinary.
+ *
+ * `otp_expired` is the common one and it is usually not the guardian's fault:
+ * scanners and mail previews follow links, and the token is spent by whoever
+ * touches it first. So the message points at the code rather than blaming them.
+ */
+export function authRedirectError() {
+  const from = (s) => new URLSearchParams(String(s ?? '').replace(/^[#?]/, ''));
+  for (const params of [from(LANDED_WITH.hash), from(LANDED_WITH.search)]) {
+    const code = params.get('error_code');
+    const error = params.get('error');
+    if (!code && !error) continue;
+    if (code === 'otp_expired' || /expired|invalid/i.test(params.get('error_description') ?? '')) {
+      return 'That link had already been used — mail apps often open links before you do. ' +
+        'Ask for a new code and type the six digits instead.';
+    }
+    if (error === 'access_denied') return 'That link did not sign you in. Ask for a new code and type it here.';
+    return (params.get('error_description') || 'That link did not work.').replace(/\+/g, ' ');
+  }
+  return null;
+}
+
+/**
+ * Drop auth debris from the address bar.
+ *
+ * The success path is cleaned by the client itself, but a failed verification
+ * leaves `#error=…` sitting there, and a reload would then re-report an error
+ * the guardian has already read and moved past.
+ */
+export function clearAuthParamsFromUrl() {
+  if (!/error|access_token|token_hash/.test(location.hash + location.search)) return;
+  history.replaceState(null, '', location.pathname);
+}
 
 /** True when the string looks like a phone number rather than an email. */
 export function isPhone(contact) {
@@ -52,8 +97,35 @@ export async function sendOtp(contact) {
       emailRedirectTo: window.location.origin + window.location.pathname,
     },
   });
-  if (error) throw error;
+  if (error) throw new Error(sendFailureMessage(error, isPhone(value)));
   return { channel: isPhone(value) ? 'sms' : 'email', sentTo: value };
+}
+
+/**
+ * Turn a send failure into something a parent can act on.
+ *
+ * The two that actually happen are worth naming. The rate limit is per address
+ * and short, so "wait" is the whole answer. A 5xx from the mail step usually
+ * means the project's SMTP is not configured to reach addresses outside the
+ * team — a setup problem on our side, and saying so is better than letting
+ * someone retype their address believing they got it wrong.
+ */
+function sendFailureMessage(error, phone) {
+  const raw = error?.message ?? '';
+  if (error?.status === 429 || /rate limit/i.test(raw)) {
+    return 'That was a lot of requests in a row. Wait a minute, then ask again.';
+  }
+  if (error?.status >= 500 || /error sending|smtp/i.test(raw)) {
+    return phone
+      ? 'The message could not be sent. This one is on us, not you — try again shortly.'
+      : 'The email could not be sent. This one is on us, not you — try again shortly.';
+  }
+  if (/invalid|malformed/i.test(raw)) {
+    return phone
+      ? 'That phone number does not look complete. Include the country code, like +91.'
+      : 'That email address does not look complete.';
+  }
+  return raw || 'That code could not be sent.';
 }
 
 /**
@@ -127,7 +199,14 @@ export async function verifyOtp(contact, input) {
     ? { phone: value.replace(/[\s-]/g, ''), token, type: 'sms' }
     : { email: value, token, type: 'email' };
   const { data, error } = await sb.auth.verifyOtp(payload);
-  if (error) throw error;
+  if (error) {
+    // A spent or timed-out code is the ordinary case, not an error condition
+    // worth alarming anyone about. Say what to do instead of what went wrong.
+    if (/expired|invalid|not found/i.test(error.message ?? '')) {
+      throw new Error('That code has expired or has already been used. Ask for a new one.');
+    }
+    throw error;
+  }
   return data.session;
 }
 
