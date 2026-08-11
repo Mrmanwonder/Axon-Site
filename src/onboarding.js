@@ -15,7 +15,10 @@
 // onboarding-only pieces (.obwrap, the phase rail, .obfield, .obpanel,
 // .obfoot, .obseal) live there too, under the onboarding overlay section.
 
-import { sb, sendOtp, verifyOtp, currentSession } from './supabase.js';
+import {
+  sb, sendOtp, verifyOtp, currentSession,
+  signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
+} from './supabase.js';
 import { getVerificationAdapter } from './verification.js';
 import { listPurposes, recordConsent } from './consent.js';
 import { PAPER_TYPES } from './papers.js';
@@ -87,6 +90,24 @@ const ICONS = {
   stamp: '<path d="M12 3.5 5 6v6c0 4 3 7 7 8.5 4-1.5 7-4.5 7-8.5V6l-7-2.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
 };
 
+// Provider marks. These are the two brands' own assets, not our iconography, so
+// they are whole <svg> strings rather than entries in ICONS: they are filled
+// rather than stroked, and Google's is drawn on a 48 grid it cannot leave.
+// Google keeps its four colours because its brand terms require them. Apple's is
+// currentColor, which the CSS resolves to black on light and white on dark —
+// exactly the pair Apple specifies.
+const BRAND = {
+  google: `<svg viewBox="0 0 48 48" aria-hidden="true">
+    <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17Z"/>
+    <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46Z"/>
+    <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7Z"/>
+    <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07Z"/>
+  </svg>`,
+  apple: `<svg viewBox="0 0 24 24" class="apl" aria-hidden="true">
+    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.377-2.376-2.076-.16-3.844 1.132-4.923 1.132ZM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.687.805-3.583 1.818-.804.896-1.482 2.337-1.296 3.714 1.343.104 2.79-.688 3.634-1.703Z"/>
+  </svg>`,
+};
+
 // Icon and a specific one-liner per purpose. The generic alternative — repeating
 // "Required" down four rows — turns the most consequential screen in the flow
 // into a wall of identical switches, which is how blanket consent gets clicked
@@ -105,13 +126,24 @@ const svg = (paths, cls = '') =>
 const chev = () =>
   `<svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">${ICONS.chev}</svg>`;
 
-export function startOnboarding(root, { onComplete, session = null }) {
+export function startOnboarding(root, { onComplete, session = null, providerError = null }) {
   const state = {
-    // A live session with no guardian row means the emailed link was clicked;
-    // pick the flow up at the only thing still missing.
-    step: session ? 'nameOnly' : 'landing',
+    // A live session with no guardian row means the emailed link was clicked, or
+    // Google or Apple sent us back signed in; pick the flow up at the only thing
+    // still missing. A refused provider round trip opens on the account step
+    // instead — landing would make the tap look like it did nothing.
+    step: session ? 'nameOnly' : providerError ? 'account' : 'landing',
     contact: session?.user?.email ?? session?.user?.phone ?? '',
-    parentName: '',
+    // Google and Apple both hand back a name, so on that path the one remaining
+    // question arrives already answered and needs only a glance. Apple withholds
+    // it unless the parent chose to share it, and then the field is simply empty
+    // — which is the same state the emailed-link path lands in.
+    parentName: session?.user?.user_metadata?.full_name
+      ?? session?.user?.user_metadata?.name ?? '',
+    // 'google', 'apple', or 'email'/'phone' for the OTP paths.
+    provider: session?.user?.app_metadata?.provider ?? null,
+    busyProvider: null,
+    error: providerError?.message ?? null,
     studentAge: null,
     verification: null,
     guardian: null,
@@ -177,6 +209,20 @@ export function startOnboarding(root, { onComplete, session = null }) {
       ${hint ? `<div class="hint">${esc(hint)}</div>` : ''}
     </div>`);
 
+  // Provider buttons, above the typed path. "Continue with" rather than "Sign in
+  // with": a parent arriving here does not have an account yet, and Apple's
+  // guidelines allow the phrasing.
+  const providers = () => h(`
+    <div class="obalt">
+      ${OAUTH_PROVIDERS.map((p) => `
+        <div class="btn press" data-provider="${p}" role="button" tabindex="0">
+          ${BRAND[p]}<span>${state.busyProvider === p
+            ? `Opening ${esc(PROVIDER_LABEL[p])}…`
+            : `Continue with ${esc(PROVIDER_LABEL[p])}`}</span>
+        </div>`).join('')}
+    </div>
+    <div class="obor">or</div>`);
+
   const method = (attr, { icon, tone = 'ic-b', t1, t2 = '' }) => h(`
     <div class="method press" ${attr}>
       <div class="ic ${tone}">${svg(icon)}</div>
@@ -234,6 +280,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
   function account(error) {
     return shell(h(`
       ${err(error)}
+      ${providers()}
       <div class="obfields">
         ${field({
           id: 'ob-name', label: 'Your name', value: state.parentName,
@@ -291,7 +338,12 @@ export function startOnboarding(root, { onComplete, session = null }) {
       <div class="obfoot">
         <div class="btn primary press" id="ob-name-go">Continue</div>
       </div>
-    `), { title: 'One detail', sub: `Signed in as ${state.contact}.` });
+    `), {
+      title: 'One detail',
+      sub: PROVIDER_LABEL[state.provider]
+        ? `Signed in with ${PROVIDER_LABEL[state.provider]} as ${state.contact}.`
+        : `Signed in as ${state.contact}.`,
+    });
   }
 
   // ── step 3 · age gate and verification ───────────────────────────────────
@@ -536,6 +588,28 @@ export function startOnboarding(root, { onComplete, session = null }) {
     on('#ob-start', 'click', () => { tick(); go('account'); });
     on('#ob-student', 'click', () => { tick(); go('studentDead'); });
     onActivate('[data-back]', (e) => { tick(); go(e.currentTarget.dataset.back); });
+
+    // Hands off to the provider and navigates away, so there is no success case
+    // to handle here — the session arrives on the way back in and boot() picks
+    // the flow up at the one detail still missing. Anything typed into the fields
+    // is deliberately not carried across: the provider is about to supply both,
+    // and the name it gives is the one the parent will recognise.
+    onActivate('[data-provider]', async (e) => {
+      const provider = e.currentTarget.dataset.provider;
+      if (state.busyProvider) return;
+      firm();
+      state.busyProvider = provider;
+      await render();
+      try {
+        await signInWithProvider(provider);
+      } catch (err) {
+        state.busyProvider = null;
+        state.error = isProviderNotEnabled(err)
+          ? `${PROVIDER_LABEL[provider]} sign-in isn't switched on yet. Use your email or phone below.`
+          : err.message || `${PROVIDER_LABEL[provider]} sign-in didn't open.`;
+        render();
+      }
+    });
 
     on('#ob-send', 'click', async () => {
       const name = root.querySelector('#ob-name')?.value.trim() ?? '';

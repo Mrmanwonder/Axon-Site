@@ -1,6 +1,8 @@
 // Application glue: auth gate, settings, ingestion, account actions.
 
-import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './supabase.js';
+import {
+  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+} from './supabase.js';
 import { startOnboarding } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
@@ -322,7 +324,7 @@ async function refreshLibrary() {
 
 // ── boot ───────────────────────────────────────────────────────────────────
 
-function showOnboarding() {
+function showOnboarding(providerError = null) {
   const overlay = $('#obroot');
   if (!overlay) return;
   overlay.hidden = false;
@@ -331,6 +333,10 @@ function showOnboarding() {
     // Passed so a guardian who arrived by clicking the emailed link is not sent
     // back to the beginning of a flow they have already half-completed.
     session: ctx.session,
+    // A Google or Apple round trip that came back refused. Handed in so the flow
+    // opens on the account step already saying so, rather than looking like the
+    // tap did nothing.
+    providerError,
     // The rows just created are handed straight over rather than re-fetched.
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just
@@ -363,8 +369,13 @@ async function startApp() {
 async function boot() {
   applyPrefs(ctx.prefs);
 
+  // Read before the session, and unconditionally: it clears the error out of the
+  // URL either way, so a refused attempt cannot linger in the address bar and
+  // reappear on the next reload.
+  const providerError = takeProviderError();
+
   ctx.session = await currentSession();
-  if (!ctx.session) return showOnboarding();
+  if (!ctx.session) return showOnboarding(providerError);
 
   ctx.guardian = await currentGuardian();
   if (!ctx.guardian) return showOnboarding();
