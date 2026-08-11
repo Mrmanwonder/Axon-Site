@@ -4,40 +4,12 @@ Project context and hard constraints. Read this before writing code.
 
 ## What this is
 
-A study companion for CBSE students in classes 9–12. They upload graded exam papers;
+A study companion for Cambridge (CAIE) students — IGCSE, AS and A Level. They upload
+graded exam papers;
 the app extracts questions, their answers, and the teacher's marks, then explains where
 marks were lost and what to do differently.
 
 Not a grading tool. Not a teacher product. The student is the only daily user.
-
-The ingestion pipeline — everything between a page of paper and a committed, explained
-question — is specified separately and in full, across four documents. It is the
-highest-risk subsystem in the product and every other feature is downstream of it.
-
-| Document | Owns |
-| --- | --- |
-| `SCANNING_SYSTEM.md` | *What* the pipeline does: the ten stages, the confidence model, the failure taxonomy, the accuracy gates |
-| `IMAGE_PIPELINE.md` | What the device does to a page. **Replaces `SCANNING_SYSTEM.md` §4 and §5 outright** |
-| `REVIEW_PIPELINE.md` | *How* it runs: queues, workers, the paper state machine, the model client, the prompts |
-| `STORAGE_R2.md` | Where the bytes live. **Replaces every Supabase Storage reference** |
-
-Where they disagree with this document about the pipeline, they win. The four hard
-rules below are the exception: they bind all four, and they are enforced as database
-constraints rather than by convention. `REVIEW_PIPELINE.md` §4 sketches a schema that
-predates those constraints — its runtime columns are layered onto the tables that
-already exist rather than replacing them.
-
-Two things the later documents changed, worth stating here because they contradict
-what came before:
-
-- **Preprocessing may change geometry and encoding. It may not change tone.** No
-  grayscale, no binarisation, no sharpening, no denoise, no contrast stretch, no
-  illumination flattening. Every one of those was standard advice for a classical OCR
-  engine reading printed text, and every one of them destroys signal a vision model
-  would have used. The mask is derived from the image and never written back to it.
-- **Explanations run after review, not before.** No explanation may be built on a mark
-  the student has not confirmed. Generating twenty and then having question seven
-  corrected buys a stale explanation or a wasted call.
 
 ## Hard rules
 
@@ -83,17 +55,7 @@ corrupt everything downstream.
 - Web-first PWA. Mobile viewport is the design target (~380px); desktop is secondary.
 - `index.html` is the entire front end and the design system. `src/` holds ES modules for
   data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
-- Supabase: Postgres, auth, storage, and Edge Functions. Auth is passwordless: email or
-  phone OTP, or Google or Apple. A provider only vouches for the address — it shortens no
-  part of the flow, and the age gate, guardian verification and consent still happen in
-  order. An Edge Function gets **two seconds of CPU** — enough to orchestrate, never
-  enough to touch a pixel. All image work is on the device or nowhere.
-- Cloudflare R2 holds every user document, over the S3 API. Postgres holds metadata
-  only, and bytes go device-to-bucket on a presigned URL without passing through a
-  function. See `STORAGE_R2.md`.
-- Models are reached through OpenRouter, behind one client, on Zero Data Retention
-  endpoints with provider data collection denied. Model IDs live in a table, never in
-  code. See `REVIEW_PIPELINE.md` §7.
+- Supabase: Postgres, auth, storage. Auth is email or phone OTP only.
 - Offline: past papers and their analysis must be readable offline. Scanning and
   extraction are online-only. Cache read paths; queue nothing that needs the model.
 - Performance floor: must hold 60fps on mid-tier Android. This is a real constraint, not
@@ -108,8 +70,7 @@ guardian           id, auth_user_id, name, contact, verified_at,
                    verification_method, verification_ref, deleted_at
 consent_event      id, seq, guardian_id, student_id?, purpose, granted,
                    notice_version, method, created_at     ← append-only
-student            id, guardian_id, board, class_level, age_band, first_name,
-                   avatar_seed
+student            id, guardian_id, board, class_level, age_band, first_name
 paper              id, student_id, type, tier, date_taken
 paper_page         id, paper_id, student_id, page_number, source_kind,
                    storage_path?, source_url?, status
@@ -128,8 +89,18 @@ concept            id, name, chapter_id
 Two tiers:
 - Tier 1 — school tests. No official scheme. `canonical_question_id` is null.
   Explanation is grounded in the teacher's marks and remarks.
-- Tier 2 — board PYQs and sample papers. Matched to a shared `canonical_question`
-  carrying the official scheme. Extracted and verified once, reused across all students.
+- Tier 2 — Cambridge past papers and specimen papers. Matched to a shared
+  `canonical_question` carrying the official scheme. Extracted and verified once, reused
+  across all students.
+
+`board` is CAIE for every new profile; CBSE remains in the enum only for accounts created
+before the switch. `class_level` stays 9–12 and carries the Cambridge stage: 9 and 10 are
+IGCSE (Years 10 and 11), 11 is AS Level, 12 is A Level. The stage is derived from it in
+`src/curriculum.js`, never stored twice.
+
+A Cambridge subject is identified by its four-digit syllabus code, not its name: Physics is
+0625 at IGCSE and 9702 at A Level, with different papers and different mark schemes. The
+code is collected at profile creation and re-mapped when a student changes stage.
 
 `cause` is a fixed enum: `conceptual_gap`, `procedural_slip`, `misread_question`,
 `incomplete`, `presentation`, `keyword_miss`, `timed_out`.
@@ -259,26 +230,20 @@ No behavioural tracking or targeted advertising. Ever.
 Ordered milestones. Do not start the next until the previous holds.
 
 1. **Question detail screen, hardcoded data, fully polished.** Exercises the whole design
-   language. Get this feeling right before anything is real. — *built*
-2. **Supabase schema + auth + onboarding**, per the account model above. — *built*
-3. **Upload ingestion.** Pages and PDFs reach private storage. — *built*
-4. **The scanning pipeline**, specified in full by `SCANNING_SYSTEM.md` — which owns this
-   subsystem and supersedes anything here that disagrees with it. Ten stages, its own
-   build order, and its own gates. Capture is now in v1; the milestone below is what
-   replaced the earlier upload-only scope.
-5. **End-to-end: one paper captured → extracted → explained**, with the accuracy harness
-   measuring it rather than an assumption that it works.
+   language. Get this feeling right before anything is real.
+2. **OCR accuracy harness** — 20 real marked papers, measure extraction of questions,
+   student answers, and teacher's red-pen remarks separately. Red-pen extraction is the
+   riskiest assumption in the product. If it comes back poor, the product changes shape,
+   and it is far cheaper to learn that now.
+3. **Supabase schema + auth + onboarding**, per the account model above. — *built*
+4. **Upload-first ingestion.** No in-app camera in v1 — phone camera apps are better than
+   anything achievable in a PWA, and shipping a mediocre scanner undermines the core
+   quality claim. Build capture properly once extraction is proven. — *built*
+5. **End-to-end: one paper uploaded → extracted → explained.** Extraction is the
+   remaining gap: pages reach storage, but nothing reads them yet.
 
-Explicitly not in v1: practice questions, peer comparison, predicted board scores, ICSE
-and state boards, parent dashboard beyond billing and consent.
-
-**Capture is in v1, as decided.** The earlier position — no in-app camera, because a
-phone's own camera app beats anything achievable in a PWA — has been reversed:
-`SCANNING_SYSTEM.md` §3 makes capture a stated differentiator, which means it has to be
-genuinely good rather than merely present. Upload stays a first-class path permanently,
-not a fallback. The container question that decision raises (Capacitor with a native
-document scanner, versus pure web) is still open and is recorded in `SCANNING_SYSTEM.md`;
-the pipeline is built so that only stage 0 changes when it is answered.
+Explicitly not in v1: in-app camera, practice questions, peer comparison, predicted board
+scores, CBSE, ICSE and state boards, parent dashboard beyond billing and consent.
 
 Peer ranking and score prediction are engagement rocket fuel and mental-health hazards in
 this market. If they are ever built, they are opt-in and never default.

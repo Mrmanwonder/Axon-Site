@@ -20,8 +20,24 @@ database, production included.
 `index.html` owns the design system; `src/` owns data and flow. Rather than
 duplicating primitives, the inline script publishes them and the modules call them:
 `__masteryHaptic`, `__masterySwitch`, `__masteryOpenSheet`, `__masteryRebindPress`,
-`__masteryOpenDisclosure`, `__masteryRenderLibrary`. Add to that list rather than
-reimplementing a spring or a sheet in a module — the two will drift otherwise.
+`__masteryOpenDisclosure`, `__masteryInsightsReady`, `__masteryRenderHome`,
+`__masteryRenderInsights`, `__masteryRenderScan`, `__masteryRenderLibrary`. Add to that
+list rather than reimplementing a spring or a sheet in a module — the two will drift
+otherwise.
+
+The render bridges take data and return nothing: the app layer decides *what* is true,
+this file decides how it looks. Two rules they exist to hold:
+
+- A surface with no data says so. It never falls back to the numbers this file was
+  prototyped with — those read as this student's marks, which is the most confident lie
+  the interface can tell.
+- Which Insights view is shown is a data question (`__masteryInsightsReady`), not a tap
+  affordance. It used to toggle on a second tap, which showed a populated chart to a
+  student who had nothing in it.
+
+`src/curriculum.js` is the single source for the board, the stages, the class-level
+mapping and the syllabus codes. Nothing else should hardcode "CAIE", a stage name or a
+four-digit code.
 
 Switches whose state belongs to the app carry `data-managed`, and the generic `.sw`
 handler skips them. Two handlers on one switch race: whichever runs second reads a

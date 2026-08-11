@@ -21,13 +21,22 @@ export function tierForType(type) {
   return type === 'pyq' || type === 'sample_paper' ? 'tier_2' : 'tier_1';
 }
 
+// Cambridge names its own material: a "past paper" is a real Cambridge exam
+// from a previous series, and a "specimen paper" is the board's own published
+// example. The stored enum values are unchanged — pyq and sample_paper are what
+// the schema calls them — because renaming an enum for a label is how a
+// migration ends up being about vocabulary.
 export const PAPER_TYPES = [
-  { value: 'unit_test', label: 'Unit test' },
+  { value: 'unit_test', label: 'Class test' },
   { value: 'mid_term', label: 'Mid-term' },
-  { value: 'final_exam', label: 'Final exam' },
-  { value: 'pyq', label: 'Previous year paper' },
-  { value: 'sample_paper', label: 'Sample paper' },
+  { value: 'final_exam', label: 'End-of-year exam' },
+  { value: 'pyq', label: 'Cambridge past paper' },
+  { value: 'sample_paper', label: 'Specimen paper' },
 ];
+
+export function paperTypeLabel(type) {
+  return PAPER_TYPES.find((t) => t.value === type)?.label ?? type;
+}
 
 function requireOnline(action) {
   if (!navigator.onLine) {
@@ -265,6 +274,54 @@ export async function lossByCause(studentId) {
     const totals = {};
     for (const row of data) totals[row.cause] = (totals[row.cause] || 0) + Number(row.marks_lost);
     return totals;
+  });
+}
+
+/**
+ * Attempts whose transcription came back unsure and hasn't been confirmed yet.
+ *
+ * Read from the base table on purpose, which is the one place that is correct:
+ * hard rule 3 keeps unsure rows out of *aggregation*, and this is the surface
+ * that exists to show them. Counting these from the analytics view would hide
+ * exactly the rows the student needs to look at.
+ */
+export async function needsCheck(studentId) {
+  return readThrough(`needscheck:${studentId}`, async () => {
+    const { data, error } = await sb
+      .from('student_attempt')
+      .select('id,paper_id,question_label')
+      .eq('student_id', studentId)
+      .eq('extraction_confidence', 'unsure')
+      .is('student_confirmed_at', null);
+    if (error) throw error;
+    const papers = new Set(data.map((a) => a.paper_id));
+    return { count: data.length, papers: papers.size };
+  });
+}
+
+/** Pages OCR could not read — hard rule 4's surface. */
+export async function unreadablePages(studentId) {
+  return readThrough(`unreadable:${studentId}`, async () => {
+    const { data, error } = await sb
+      .from('page_unreadable')
+      .select('id,paper_id,page_number,reason')
+      .eq('student_id', studentId)
+      .order('page_number');
+    if (error) throw error;
+    return data;
+  });
+}
+
+/** The student's subjects, with their Cambridge syllabus codes. */
+export async function listSubjects(studentId) {
+  return readThrough(`subjects:${studentId}`, async () => {
+    const { data, error } = await sb
+      .from('student_subject')
+      .select('subject,syllabus_code')
+      .eq('student_id', studentId)
+      .order('subject');
+    if (error) throw error;
+    return data;
   });
 }
 
