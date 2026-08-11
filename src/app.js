@@ -328,6 +328,9 @@ function showOnboarding() {
   overlay.hidden = false;
   document.querySelector('.app')?.setAttribute('aria-hidden', 'true');
   startOnboarding(overlay, {
+    // Passed so a guardian who arrived by clicking the emailed link is not sent
+    // back to the beginning of a flow they have already half-completed.
+    session: ctx.session,
     // The rows just created are handed straight over rather than re-fetched.
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just

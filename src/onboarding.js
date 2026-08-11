@@ -27,10 +27,12 @@ function firm() { window.__masteryHaptic?.firm?.(); }
 
 const SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
 
-export function startOnboarding(root, { onComplete }) {
+export function startOnboarding(root, { onComplete, session = null }) {
   const state = {
-    step: 'landing',
-    contact: '',
+    // A live session with no guardian row means the emailed link was clicked;
+    // pick the flow up at the only thing still missing.
+    step: session ? 'nameOnly' : 'landing',
+    contact: session?.user?.email ?? session?.user?.phone ?? '',
     parentName: '',
     studentAge: null,
     verification: null,
@@ -106,12 +108,29 @@ export function startOnboarding(root, { onComplete }) {
     return shell(h(`
       ${err(error)}
       <div class="searchwrap"><div class="search">
-        <input id="ob-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code">
+        <input id="ob-code" placeholder="6-digit code, or paste the link" autocomplete="one-time-code">
       </div></div>
-      <div class="subnote">Sent to ${esc(state.contact)}.</div>
+      <div class="subnote">Sent to ${esc(state.contact)}. If the email contains a link rather than a
+        code, paste the whole link here — that works too, and it still works after your mail app has
+        already opened it.</div>
       <div class="btn primary press" id="ob-verify" style="margin:18px">Continue</div>
       <div class="btn plain press" id="ob-resend">Send it again</div>
-    `), { title: 'Enter your code' });
+    `), { title: 'Check your email' });
+  }
+
+  // Someone who clicked the emailed link arrives already signed in, but with no
+  // guardian row and none of the details this flow collected. Rather than send
+  // them back to the start, ask only for what is missing.
+  function nameOnly(error) {
+    return shell(h(`
+      ${err(error)}
+      <div class="subnote" style="margin-bottom:4px">Signed in as ${esc(state.contact)}.</div>
+      <div class="searchwrap"><div class="search">
+        <input id="ob-name-only" value="${esc(state.parentName)}" placeholder="Your full name" autocomplete="name">
+      </div></div>
+      <div class="subnote">So the student knows whose account this is.</div>
+      <div class="btn primary press" id="ob-name-go" style="margin:18px">Continue</div>
+    `), { title: 'One detail' });
   }
 
   // ── step 3 · age gate and verification ───────────────────────────────────
@@ -286,6 +305,7 @@ export function startOnboarding(root, { onComplete }) {
       case 'studentDead':  html = studentDeadEnd(); break;
       case 'account':      html = account(error); break;
       case 'otp':          html = otp(error); break;
+      case 'nameOnly':     html = nameOnly(error); break;
       case 'age':          html = ageGate(); break;
       case 'adult':        html = adultPath(); break;
       case 'verify':       html = verifyStep(error, state.busy); break;
@@ -343,6 +363,23 @@ export function startOnboarding(root, { onComplete }) {
         state.guardian = data;
         go(data.verified_at ? 'consent' : 'age');
       } catch (e) { state.error = e.message || 'That code did not work.'; render(); }
+    });
+
+    on('#ob-name-go', 'click', async () => {
+      const name = root.querySelector('#ob-name-only')?.value.trim() ?? '';
+      if (!name) { state.error = 'We need your name.'; return render(); }
+      firm();
+      try {
+        const session = await currentSession();
+        const { data, error } = await sb.from('guardian').upsert(
+          { auth_user_id: session.user.id, name, contact: state.contact },
+          { onConflict: 'auth_user_id' },
+        ).select().single();
+        if (error) throw error;
+        state.guardian = data;
+        state.parentName = name;
+        go(data.verified_at ? 'consent' : 'age');
+      } catch (e) { state.error = e.message || 'That could not be saved.'; render(); }
     });
 
     on('[data-age]', 'click', (e) => {
