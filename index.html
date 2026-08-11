@@ -571,9 +571,9 @@
 
     <!-- ══════════════ 0 · HOME ══════════════ -->
     <div class="view on" id="v0">
-      <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
+      <div class="greet"><div class="d" id="homeDay">Tuesday</div><h1 id="homeName">Maya</h1></div>
 
-      <div class="hgrid">
+      <div class="hgrid" id="homeGrid">
       <div class="card insight press">
         <div class="chips"><span class="chip n">14 papers</span><span class="chip conf-likely">Likely</span></div>
         <div class="line">You're losing most marks to <em>unstated assumptions</em> in derivation questions — not to the physics itself.</div>
@@ -595,8 +595,8 @@
       </div>
       </div>
 
-      <div class="sectitle">Recent scans</div>
-      <div class="list">
+      <div class="sectitle" id="homeRecentTitle">Recent papers</div>
+      <div class="list" id="homeRecent">
         <div class="row press"><div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span class="tier t2">Scheme-verified</span><span>6 Aug</span></div></div><div class="lost">7<small>marks lost</small></div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="row press"><div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span class="tier uns">2 unsure</span><span>4 Aug</span></div></div><div class="lost">11<small>marks lost</small></div>
@@ -613,8 +613,8 @@
 
     <!-- ══════════════ 1 · INSIGHTS ══════════════ -->
     <div class="view" id="v1">
-      <div class="greet"><h1>Insights</h1><div class="sub">Everything across your 14 scanned papers.</div></div>
-      <div class="filterbar">
+      <div class="greet"><h1>Insights</h1><div class="sub" id="insSub">Everything across your 14 scanned papers.</div></div>
+      <div class="filterbar" id="insFilters">
         <div class="fchip active">Physics <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
         <div class="fchip">Last 3 months <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
         <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
@@ -622,7 +622,7 @@
       </div>
 
       <div class="igrid">
-      <section class="isec">
+      <section class="isec" id="secCheap">
       <div class="sectitle tight">Cheap marks</div>
       <div class="list">
         <div class="cheap press"><div class="rank">1</div><div class="b"><div class="t1">Write the formula before substituting</div><div class="t2">17 questions · every scheme awards it separately</div></div><div class="gain">14<small>marks</small></div></div>
@@ -632,9 +632,9 @@
       <div class="subnote">Ranked by marks recovered per unit of effort, not by how often each appears.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secCause">
       <div class="sectitle">Marks lost by cause</div>
-      <div class="card causecard">
+      <div class="card causecard" id="causeCard">
         <div class="causebar">
           <i style="flex:23;background:#4C7DF0"></i><i style="flex:19;background:#3FA9A0"></i><i style="flex:16;background:#8A6FD1"></i>
           <i style="flex:14;background:#C98A3E"></i><i style="flex:11;background:#C46B8A"></i><i style="flex:10;background:#7C9455"></i><i style="flex:7;background:#78808F"></i>
@@ -652,7 +652,7 @@
       <div class="subnote">Different kinds of problem, coloured categorically — no cause ranks worse than another.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secConcept">
       <div class="sectitle">Concept mastery</div>
       <div class="card mapcard">
         <div class="maprow"><span class="ch">Kinematics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
@@ -664,7 +664,7 @@
       </div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secTrend">
       <div class="sectitle">Trend</div>
       <div class="card trendcard press">
         <div class="hd"><span class="k">Marks lost per paper · Physics</span><span class="v">↓ 6 since March</span></div>
@@ -680,7 +680,7 @@
       <div class="subnote">Plotted against papers, not dates. Nothing here compares you to anyone else.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secQType">
       <div class="sectitle">By question type</div>
       <div class="list">
         <div class="qt"><div class="hd"><span class="n">2-mark short answer</span><span class="r"><b>91%</b> retained</span></div><div class="track"><i data-w="91"></i></div></div>
@@ -699,11 +699,10 @@
       <div class="estate">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M7 16v-3M12 16V8M17 16v-5"/></svg></div>
         <h4>Not enough papers yet</h4>
-        <p>Patterns need about four papers before they mean anything. With two, anything shown here would be noise dressed as insight.</p>
-        <div class="prog"><div class="tr"><i></i></div><span>2 of 4</span></div>
-        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Scan a paper</div>
+        <p id="insEmptyBody">Patterns need about four papers before they mean anything. With fewer, anything shown here would be noise dressed as insight.</p>
+        <div class="prog"><div class="tr"><i id="insProgFill"></i></div><span id="insProgLabel">0 of 4</span></div>
+        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add a paper</div>
       </div>
-      <div class="subnote" style="text-align:center;margin-top:14px">Tap Insights again to preview the populated state → <span style="color:var(--blue);font-weight:600;cursor:pointer" onclick="pick(1)">full Insights</span></div>
     </div>
 
     <!-- ══════════════ 2 · SCAN ══════════════ -->
@@ -718,7 +717,7 @@
         <div class="frame">
           <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
         </div>
-        <div class="scanhint">Fits Physics · Unit Test — align all four corners</div>
+        <div class="scanhint" id="scanHint">Pick the pages you've already photographed</div>
 
         <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
           <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
@@ -749,7 +748,7 @@
         </div>
       </div>
 
-      <div class="scanbelow">
+      <div class="scanbelow" id="scanBelow">
         <div class="sectitle tight">Processing</div>
         <div class="card proc press" onclick="openReview()">
           <div class="hd">Reading page 3 of 6</div>
@@ -839,12 +838,11 @@
     <!-- ══════════════ 3 · LIBRARY ══════════════ -->
     <div class="view" id="v3">
       <div class="greet"><h1>Library</h1></div>
-      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input placeholder="Search questions, chapters, concepts"></div></div>
-      <div class="filterbar">
-        <div class="fchip">All subjects <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input id="libSearch" placeholder="Search your papers"></div></div>
+      <div class="filterbar" id="libFilters">
+        <div class="fchip" data-filter="date">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip" data-filter="type">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip" data-filter="tier">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 22px 10px;">
         <span id="libraryCount" style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
@@ -864,7 +862,7 @@
           <div class="b"><div class="t1">Physics · PYQ 2023</div><div class="t2"><span>Full paper</span><span>·</span><span>26 Jul</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
           <div class="lost">18<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
       </div>
-      <div class="subnote">Search matches question text and concepts, not just paper titles.</div>
+      <div class="subnote">Search matches what a paper is and when it was taken. Question text becomes searchable once a paper has been read.</div>
     </div>
 
     <!-- ══════════════ 4 · SETTINGS ══════════════ -->
@@ -874,19 +872,19 @@
 
       <div class="sectitle">Profile</div>
       <div class="list">
-        <div class="srow" onclick="openSheet('board')">
+        <div class="srow" id="set-board">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
-          <div class="lbl">Board</div><div class="aux">CBSE</div>
+          <div class="lbl">Board</div><div class="aux" id="set-board-aux">Cambridge (CAIE)</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
-        <div class="srow" onclick="openSheet('class')">
+        <div class="srow" id="set-class">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
-          <div class="lbl">Class</div><div class="aux" id="set-class-aux">11</div>
+          <div class="lbl">Stage</div><div class="aux" id="set-class-aux">AS Level</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
-        <div class="srow">
+        <div class="srow" id="set-subjects">
           <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
+          <div class="lbl">Subjects</div><div class="aux" id="set-subjects-aux">—</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
       </div>
@@ -959,7 +957,7 @@
       <div id="shExtras"></div>
       <div class="acts">
         <div class="btn primary press" id="shPrimary" onclick="confirmSheet()">Change to Class 12</div>
-        <div class="btn ghost press" id="shGhost" onclick="closeSheet()">Talk to support instead</div>
+        <div class="btn ghost press" id="shGhost" onclick="ghostSheet()" style="display:none">Talk to support instead</div>
         <div class="btn plain" onclick="closeSheet()">Cancel</div>
       </div>
     </div>
@@ -1060,7 +1058,7 @@ const hapticFirm = ()=>haptic(18);   // consequential: warning-sheet primary, sa
 const PILL_R=26;
 const railQuery=matchMedia('(min-width:768px)');
 const isRail=()=>railQuery.matches;
-let offsets=[],current=0,insightsFull=true;
+let offsets=[],current=0,insightsReady=false;
 const $id=id=>document.getElementById(id);
 
 function measureTabs(){
@@ -1114,11 +1112,10 @@ function layoutTabs(){
 seed('tab',0);
 const TITLES=['Home','Insights','Scan','Library','Settings'];
 function pick(i){
-  if(i===1&&current===1) insightsFull=!insightsFull;
   document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('on',idx===i));
   document.getElementById('v0').classList.toggle('on',i===0);
-  document.getElementById('v1').classList.toggle('on',i===1&&insightsFull);
-  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsFull);
+  document.getElementById('v1').classList.toggle('on',i===1&&insightsReady);
+  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsReady);
   document.getElementById('v2').classList.toggle('on',i===2);
   document.getElementById('v3').classList.toggle('on',i===3);
   document.getElementById('v4').classList.toggle('on',i===4);
@@ -1136,7 +1133,7 @@ function pick(i){
     const a=Math.abs(Math.max(-.055,Math.min(.055,v*.011)));
     applyPill(o, vertical?1-a*.5:1+a, vertical?1+a:1-a*.5);
   }});
-  if(i===1&&insightsFull) animateInsights();
+  if(i===1&&insightsReady) animateInsights();
   if(i===2&&!wasScan) initScan();
 }
 function animateInsights(){
@@ -1204,20 +1201,9 @@ function flipTheme(){
 }
 
 /* ── warning sheet ── */
-const COPY={
-  class:{title:'Change class to 12?',
-    body:"This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class 11.",
-    items:[['Archived papers keep their old scope.','They\'re labelled "analysed under Class 11" and are never re-mapped, so nothing is orphaned.'],
-      ['They can\'t be re-verified.','Class 11 papers won\'t reach Tier 2 against the Class 12 scheme.'],
-      ['Insights split at the change.','Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.']],
-    primary:'Change to Class 12',primaryClass:'primary'},
-  board:{title:'Board changes go through support',
-    body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
-    items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
-      ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
-      ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
-    primary:'Contact support',primaryClass:'ghost'}
-};
+/* The stage and board sheets used to carry their copy here as a demo. They are
+   real now: the copy depends on which stage the student is actually in, so
+   src/app.js supplies it through __masteryOpenSheet below. */
 seed('sheet',1);
 // The sheet is shared between the board/class warnings and the lightweight
 // link/upload confirmations, so it tracks whether its primary action is
@@ -1230,17 +1216,6 @@ function confirmSheet(){
 function confirmSave(){
   hapticFirm();
   closeReview();
-}
-function openSheet(k){
-  sheetConsequential=true;
-  const c=COPY[k];
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML=c.items.map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
 }
 function closeSheet(){
   document.getElementById('scrim').classList.remove('on');
@@ -1259,7 +1234,12 @@ seed('drafts',1);
 seed('review',1);
 let draftDismissed=false, dragStartY=null, dragCurrentY=0;
 
+/* There is no local draft store yet, so the toast has nothing truthful to
+   resume. The app layer sets this when there is; until then the toast and its
+   icon stay out of the way rather than advertising a draft that isn't there. */
+window.__masteryDrafts=[];
 function initScan(){
+  if(!window.__masteryDrafts.length) return;
   if(!draftDismissed){
     spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
       document.getElementById('draftToast').style.transform=`translateY(${-140*p}%)`;
@@ -1325,21 +1305,6 @@ function cycleField(row,options,marksResolved){
    opens the OS picker instead. The ring-squash animation is gone with it — it
    implied a photo had been taken when what actually happens is a file chooser.
    The press spring and the selection tick (wired in src/app.js) carry it. */
-function openSheetGeneric(kind){
-  // reuses the warning-sheet mechanics for a lightweight confirmation
-  sheetConsequential=false;
-  const c = kind==='link'
-    ? {title:'Paste a link',body:'Add a school-shared PDF or drive link. It gets added as the next page in this paper.',items:[],primary:'Paste from clipboard',primaryClass:'primary'}
-    : {title:'Upload from Files or Gallery',body:'Pick one or more pages to add to this paper. You can reorder them before submitting.',items:[],primary:'Choose files',primaryClass:'primary'};
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML='';
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
-
 /* ── haptics: selection ── */
 // Bound to the tabs themselves, not to pick(), so programmatic navigation
 // (the "Scan new paper" button, the empty-state link) stays silent.
@@ -1392,6 +1357,16 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
 
 window.__masteryHaptic = { tick: hapticTick, firm: hapticFirm };
 
+/* Which Insights view is truthful is a data question, so the app layer owns it.
+   It used to be a tap-to-preview toggle, which meant tapping Insights twice
+   showed a populated chart to a student who had nothing in it. */
+window.__masteryInsightsReady = function(ready){
+  const next=!!ready;
+  if(next===insightsReady) return;
+  insightsReady=next;
+  if(current===1) pick(1);
+};
+
 // Press springs are attached at boot, so markup rendered later (onboarding,
 // sheet choices) needs them bound too.
 window.__masteryRebindPress = function(scope){
@@ -1415,7 +1390,7 @@ window.__masteryOpenDisclosure = function(d){
 
 /* Generic sheet. Same spring, scrim and geometry as the board/class warning —
    the app layer supplies copy, an optional input, and optional choice rows. */
-let sheetConfirm=null, sheetChoice=null;
+let sheetConfirm=null, sheetChoice=null, sheetGhost=null;
 window.__masteryOpenSheet = function(cfg){
   sheetConsequential = cfg.primaryClass === 'primary' && !cfg.choices;
   sheetConfirm = cfg.onConfirm || null;
@@ -1445,7 +1420,13 @@ window.__masteryOpenSheet = function(cfg){
   const prim=document.getElementById('shPrimary');
   prim.style.display = cfg.choices ? 'none' : '';
   if(!cfg.choices){ prim.textContent=cfg.primary||'Confirm'; prim.className='btn '+(cfg.primaryClass||'primary')+' press'; }
-  document.getElementById('shGhost').style.display = cfg.choices ? 'none' : '';
+  // The secondary action is opt-in. It used to be shown for every sheet with a
+  // primary button, still carrying the board sheet's "Talk to support instead"
+  // — which appeared under "Delete everything" and offered the wrong exit.
+  const ghost=document.getElementById('shGhost');
+  ghost.style.display = cfg.ghost ? '' : 'none';
+  if(cfg.ghost) ghost.textContent=cfg.ghost;
+  sheetGhost = cfg.onGhost || null;
 
   document.getElementById('scrim').classList.add('on');
   spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
@@ -1459,6 +1440,193 @@ confirmSheet = function(){
   __baseConfirmSheet();
   if(fn) fn();
 };
+function ghostSheet(){
+  const fn = sheetGhost; sheetGhost=null;
+  closeSheet();
+  if(fn) fn();
+}
+
+/* Shared render furniture. The app layer supplies data; the markup and the
+   classes stay here so a rendered row and a hand-written one are the same row. */
+const __esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const __chev = '<svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>';
+const __thumb = '<div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>';
+const __warnIcon = '<div class="ic"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.5v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>';
+const __fmtDate = d => new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+
+/* Categorical, never a ramp — the values are CLAUDE.md's, not a new palette. */
+const CAUSE = {
+  conceptual_gap:  ['Conceptual gap',  '#4C7DF0'],
+  procedural_slip: ['Procedural slip', '#3FA9A0'],
+  misread_question:['Misread question','#8A6FD1'],
+  incomplete:      ['Incomplete',      '#C98A3E'],
+  presentation:    ['Presentation',    '#C46B8A'],
+  keyword_miss:    ['Keyword miss',    '#7C9455'],
+  timed_out:       ['Timed out',       '#78808F'],
+};
+
+/* Every headline carries its sample size, per the copy rules. */
+function __sample(papers,questions){
+  const q = questions ? `${questions} question${questions===1?'':'s'} · ` : '';
+  return `${q}${papers} paper${papers===1?'':'s'}`;
+}
+
+function __attention(title,sub){
+  return `<div class="card attention press">${__warnIcon}
+    <div class="b"><div class="t1">${__esc(title)}</div><div class="t2">${__esc(sub)}</div></div>${__chev}</div>`;
+}
+
+/**
+ * Home. Nothing here invents a headline: until the model has actually read a
+ * paper there is no insight to state, and a plausible-sounding one would be the
+ * exact failure mode hard rule 4 exists to prevent.
+ */
+window.__masteryRenderHome = function(m){
+  const day=document.getElementById('homeDay'), name=document.getElementById('homeName');
+  if(day) day.textContent=new Date().toLocaleDateString('en-IN',{weekday:'long'});
+  if(name) name.textContent=m.name||'';
+
+  const grid=document.getElementById('homeGrid');
+  if(grid){
+    const cards=[];
+    const papers=m.papers||0, questions=m.questions||0;
+
+    if(!papers){
+      cards.push(`<div class="card insight press">
+        <div class="line">Add a marked paper and we'll show you where the marks went.</div>
+        <div class="subnote" style="margin:14px 0 0">Photograph every page, including the ones your teacher wrote on
+          — the red pen is most of what we read.</div></div>`);
+    } else if(!questions){
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,0))}</span></div>
+        <div class="line">Your pages are stored and readable offline. Nothing has been read out of them yet.</div>
+        <div class="subnote" style="margin:14px 0 0">Extraction isn't switched on yet, so there are no marks or
+          explanations to show. We'd rather say that than show you a guess.</div></div>`);
+    } else if(!m.ready){
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,questions))}</span></div>
+        <div class="line">Not enough yet to call a pattern.</div>
+        <div class="subnote" style="margin:14px 0 0">Patterns need about four papers. Everything you've added is in
+          Library and stays readable.</div></div>`);
+    } else {
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,questions))}</span></div>
+        <div class="line">Your papers are analysed. The breakdown by cause is in Insights.</div></div>`);
+    }
+
+    if(m.needsCheck) cards.push(__attention(
+      `${m.needsCheck} answer${m.needsCheck===1?'':'s'} need${m.needsCheck===1?'s':''} a quick check`,
+      `Across ${m.needsCheckPapers||1} paper${(m.needsCheckPapers||1)===1?'':'s'} · marked Unsure`));
+
+    if(m.unreadable) cards.push(__attention(
+      `${m.unreadable} page${m.unreadable===1?'':'s'} couldn't be read`,
+      'Retake the photo or type the answers in'));
+
+    grid.innerHTML=cards.join('');
+    window.__masteryRebindPress(grid);
+  }
+
+  const list=document.getElementById('homeRecent');
+  const title=document.getElementById('homeRecentTitle');
+  if(list){
+    const recent=(m.recent||[]).slice(0,3);
+    if(title) title.style.display=recent.length?'':'none';
+    list.style.display=recent.length?'':'none';
+    list.innerHTML=recent.map(p=>`<div class="row press">
+      <div class="b"><div class="t1">${__esc(p.title)}</div>
+        <div class="t2">${p.tier==='tier_2'
+          ? '<span class="tier t2">Scheme-matched</span>'
+          : '<span class="tier t1">Teacher\'s marks</span>'}<span>${__esc(__fmtDate(p.date_taken))}</span></div></div>${__chev}</div>`).join('');
+    window.__masteryRebindPress(list);
+  }
+};
+
+/**
+ * Insights. Sections whose data does not exist are removed rather than filled
+ * with something illustrative — a chart built on nothing is the most confident
+ * lie the interface can tell.
+ */
+window.__masteryRenderInsights = function(m){
+  const papers=m.papers||0, questions=m.questions||0;
+
+  const prog=document.getElementById('insProgFill');
+  const plabel=document.getElementById('insProgLabel');
+  const body=document.getElementById('insEmptyBody');
+  if(prog) prog.style.width=Math.min(100,(papers/4)*100).toFixed(0)+'%';
+  if(plabel) plabel.textContent=`${papers} of 4`;
+  if(body) body.textContent = papers
+    ? `Patterns need about four papers before they mean anything. With ${papers}, anything shown here would be noise dressed as insight.`
+    : 'Patterns need about four papers before they mean anything. Add your first and this fills in.';
+
+  const sub=document.getElementById('insSub');
+  if(sub) sub.textContent=`Everything across ${__sample(papers,questions)}.`;
+
+  const causes=m.causes||{};
+  const entries=Object.entries(causes).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const causeSec=document.getElementById('secCause');
+  const causeCard=document.getElementById('causeCard');
+  if(causeSec) causeSec.style.display=entries.length?'':'none';
+  if(causeCard&&entries.length){
+    causeCard.innerHTML=`<div class="causebar">${entries.map(([c,v])=>
+      `<i style="flex:${v};background:${CAUSE[c]?CAUSE[c][1]:'#78808F'}"></i>`).join('')}</div>
+      <div class="causegrid">${entries.map(([c,v])=>
+        `<div class="cz"><span class="sw2" style="background:${CAUSE[c]?CAUSE[c][1]:'#78808F'}"></span>
+          <span class="n">${__esc(CAUSE[c]?CAUSE[c][0]:c)}</span><span class="v">${v}</span></div>`).join('')}</div>`;
+  }
+
+  // Cheap marks, concept mastery, trend and question type still hold the
+  // illustrative numbers this file was built with. Each stays hidden until its
+  // own data is passed in — a section that shows six other students' figures to
+  // this one is worse than a section that isn't there.
+  [['secCheap','cheap'],['secConcept','concepts'],['secTrend','trend'],['secQType','questionTypes']]
+    .forEach(([id,key])=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display=(m[key]&&m[key].length)?'':'none';
+    });
+
+  const filters=document.getElementById('insFilters');
+  if(filters) filters.style.display=m.hasAnalysis?'':'none';
+
+  window.__masteryInsightsReady(!!m.ready);
+};
+
+/**
+ * Scan. States what has actually happened to the pages rather than animating a
+ * pipeline that isn't running.
+ */
+window.__masteryRenderScan = function(m){
+  const below=document.getElementById('scanBelow');
+  if(!below) return;
+  const blocks=[];
+
+  if(m.unreadable&&m.unreadable.length){
+    blocks.push(`<div class="sectitle tight">Needs your eyes first</div>
+      <div class="list">${m.unreadable.map(u=>`<div class="row press">
+        <div class="b"><div class="t1">Page ${u.page_number} couldn't be read</div>
+          <div class="t2">${__esc(u.reason)}</div>
+          <div class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></div></div>${__chev}</div>`).join('')}</div>
+      <div class="subnote">Nothing is ever dropped silently. A page we couldn't read is shown, not skipped.</div>`);
+  }
+
+  if(m.recent&&m.recent.length){
+    blocks.push(`<div class="sectitle${blocks.length?'':' tight'}">Recently added</div>
+      <div class="list">${m.recent.map(p=>`<div class="row press">${__thumb}
+        <div class="b"><div class="t1">${__esc(p.title)}</div>
+          <div class="t2"><span>${__esc(__fmtDate(p.date_taken))}</span><span>·</span><span>${p.pages} page${p.pages===1?'':'s'}</span></div>
+          <div class="t2" style="margin-top:6px"><span class="tier ${p.read?'t2':'uns'}">${p.read?'Read':'Stored, not read yet'}</span></div></div>${__chev}</div>`).join('')}</div>
+      <div class="subnote">Pages upload to your account and stay readable offline. Reading them isn't switched on yet,
+        so nothing here claims a mark or an explanation.</div>`);
+  } else {
+    blocks.push(`<div class="estate" style="padding-top:8px">
+      <h4>No pages yet</h4>
+      <p>Use the button above to pick pages from your camera roll or files. Shoot them with your phone's own camera
+        app — it is better than anything we could build into a web page.</p></div>`);
+  }
+
+  below.innerHTML=blocks.join('');
+  window.__masteryRebindPress(below);
+};
 
 window.__masteryRenderLibrary = function(papers, opts){
   const list=document.getElementById('libraryList');
@@ -1466,7 +1634,9 @@ window.__masteryRenderLibrary = function(papers, opts){
   if(!list) return;
   if(count) count.textContent = `${papers.length} paper${papers.length===1?'':'s'}` + (opts&&opts.stale?' · offline copy':'');
   if(!papers.length){
-    list.innerHTML=`<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
+    list.innerHTML = (opts&&opts.filtered)
+      ? `<div class="srow noicon"><div class="lbl">No papers match those filters<small>Clear one to widen it again</small></div></div>`
+      : `<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
     return;
   }
   const TYPE={unit_test:'Unit test',mid_term:'Mid-term',final_exam:'Final exam',pyq:'PYQ',sample_paper:'Sample paper'};

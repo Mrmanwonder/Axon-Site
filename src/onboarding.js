@@ -17,6 +17,10 @@ import { sb, sendOtp, verifyOtp, currentSession } from './supabase.js';
 import { getVerificationAdapter } from './verification.js';
 import { listPurposes, recordConsent } from './consent.js';
 import { PAPER_TYPES } from './papers.js';
+import {
+  BOARD, BOARD_LABEL, STAGES, classLabel,
+  subjectsForClass, syllabusCode, stageForClass,
+} from './curriculum.js';
 
 const h = (s) => s; // tagging helper for readability
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -24,8 +28,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
 
 function tick() { window.__masteryHaptic?.tick?.(); }
 function firm() { window.__masteryHaptic?.firm?.(); }
-
-const SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
 
 export function startOnboarding(root, { onComplete, session = null }) {
   const state = {
@@ -40,6 +42,12 @@ export function startOnboarding(root, { onComplete, session = null }) {
     consent: {},
     plan: null,
     student: null,
+    // Cambridge profile, held here so the subject list can re-render when the
+    // stage changes: IGCSE and A Level are different syllabuses, not the same
+    // subjects at a harder level.
+    studentName: '',
+    classLevel: 11,
+    subjects: new Set(),
   };
 
   const go = (step) => { state.step = step; render(); };
@@ -64,6 +72,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
   function landing() {
     return shell(h(`
       <div class="card insight press" style="margin-top:18px">
+        <div class="chips"><span class="chip n">Cambridge · IGCSE, AS and A Level</span></div>
         <div class="line">See exactly where the marks went — and what to do differently next time.</div>
         <div class="subnote" style="margin:14px 0 0">A parent sets this up. Indian law requires a
           parent's verified consent before we can process anything belonging to a student under 18.</div>
@@ -234,24 +243,40 @@ export function startOnboarding(root, { onComplete, session = null }) {
   }
 
   // ── step 6 · student profile ─────────────────────────────────────────────
+  // Stage first, because it decides the syllabus: Physics is 0625 at IGCSE and
+  // 9702 at A Level, with different papers and different mark schemes. Picking
+  // the subject without the stage would name a syllabus we can't identify.
   function studentStep(error) {
-    const chosen = new Set(state.student?.subjects ?? []);
+    const stage = stageForClass(state.classLevel);
+    const offered = subjectsForClass(state.classLevel);
     return shell(h(`
       ${err(error)}
       <div class="searchwrap"><div class="search">
-        <input id="ob-sname" placeholder="Student's first name" autocomplete="off">
+        <input id="ob-sname" value="${esc(state.studentName)}" placeholder="Student's first name" autocomplete="off">
       </div></div>
-      <div class="sectitle">Class</div>
-      <div class="list"><div class="srow noicon"><div class="lbl">Class</div>
-        <div class="seg" id="ob-class">
-          ${[9, 10, 11, 12].map((c, i) => `<button data-class="${c}"${i === 2 ? ' class="on"' : ''}>${c}</button>`).join('')}
-        </div></div>
-        <div class="srow noicon"><div class="lbl">Board</div><span class="aux">CBSE</span></div>
+      <div class="sectitle">Stage</div>
+      <div style="padding:0 18px 12px">
+        <div class="seg" id="ob-stage" style="width:100%">
+          ${STAGES.map(s => `<button data-stage="${esc(s.stage)}" style="flex:1"${s.stage === stage.stage ? ' class="on"' : ''}>${esc(s.label)}</button>`).join('')}
+        </div>
+      </div>
+      ${stage.classLevels.length > 1 ? `
+        <div style="padding:0 18px 12px">
+          <div class="seg" id="ob-class" style="width:100%">
+            ${stage.classLevels.map(c => `<button data-class="${c}" style="flex:1"${c === state.classLevel ? ' class="on"' : ''}>${esc(classLabel(c).split(' · ')[1])}</button>`).join('')}
+          </div>
+        </div>` : ''}
+      <div class="list">
+        <div class="srow noicon"><div class="lbl">Year<small>Cambridge year group</small></div><span class="aux">${esc(classLabel(state.classLevel))}</span></div>
+        <div class="srow noicon"><div class="lbl">Board</div><span class="aux">${esc(BOARD_LABEL)}</span></div>
       </div>
       <div class="sectitle">Subjects</div>
-      <div class="filterbar" id="ob-subjects" style="position:static">
-        ${SUBJECTS.map(s => `<div class="fchip${chosen.has(s) ? ' active' : ''}" data-subject="${esc(s)}">${esc(s)}</div>`).join('')}
+      <div class="filterbar" id="ob-subjects" style="position:static;flex-wrap:wrap;overflow:visible;padding-right:18px">
+        ${offered.map(s => `<div class="fchip${state.subjects.has(s.subject) ? ' active' : ''}" data-subject="${esc(s.subject)}">${esc(s.subject)} <span style="opacity:.6">${esc(s.code)}</span></div>`).join('')}
       </div>
+      <div class="subnote">The four-digit code is the Cambridge syllabus for ${esc(stage.label)}. It's what lets a
+        past paper reach the right mark scheme — IGCSE Physics and A Level Physics are different syllabuses,
+        not the same one twice.</div>
       <div class="subnote">Nothing else is collected — no school, no address, no photograph.</div>
       <div class="btn primary press" id="ob-student-go" style="margin:18px">Create profile</div>
     `), { title: 'The student' });
@@ -280,15 +305,15 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       <div class="card insight press">
         <div class="line">What kind of paper is this?</div>
-        <div class="subnote" style="margin:10px 0 0">This one matters: a board paper can be matched to the
-          official marking scheme. A school test is explained from your teacher's marks instead.</div>
+        <div class="subnote" style="margin:10px 0 0">This one matters: a Cambridge past or specimen paper can be
+          matched to the published mark scheme. A school test is explained from your teacher's marks instead.</div>
       </div>
       <div class="list" style="margin-top:14px">
         ${PAPER_TYPES.map(t => `
           <div class="method press" data-type="${esc(t.value)}">
             <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></div>
             <div class="b"><div class="t1">${esc(t.label)}</div>
-              <div class="t2">${t.value === 'pyq' || t.value === 'sample_paper' ? 'Matched to the official scheme where we have it' : 'Explained from your teacher\'s marks'}</div></div>
+              <div class="t2">${t.value === 'pyq' || t.value === 'sample_paper' ? 'Matched to the Cambridge mark scheme where we have it' : 'Explained from your teacher\'s marks'}</div></div>
           </div>`).join('')}
       </div>
       <div class="subnote">We'll only ask this the first time.</div>
@@ -437,20 +462,45 @@ export function startOnboarding(root, { onComplete, session = null }) {
       go('student');
     });
 
+    // Keep the typed name across the re-render the stage change forces.
+    on('#ob-sname', 'input', (e) => { state.studentName = e.currentTarget.value; });
+
+    // Changing stage swaps the whole subject catalogue, so anything already
+    // picked is dropped rather than carried into a syllabus that may not offer
+    // it — a subject silently surviving the switch would carry the wrong code.
+    const setClass = (next, clearSubjects) => {
+      if (next === state.classLevel) return;
+      state.studentName = root.querySelector('#ob-sname')?.value ?? state.studentName;
+      state.classLevel = next;
+      if (clearSubjects) state.subjects = new Set();
+      render();
+    };
+
+    on('#ob-stage button', 'click', (e) => {
+      tick();
+      const stage = STAGES.find((s) => s.stage === e.currentTarget.dataset.stage);
+      setClass(stage.classLevels[0], true);
+    });
+
+    // Year 10 to Year 11 is the same IGCSE syllabus, so the subjects stand.
     on('#ob-class button', 'click', (e) => {
       tick();
-      root.querySelectorAll('#ob-class button').forEach(b => b.classList.toggle('on', b === e.currentTarget));
+      setClass(Number(e.currentTarget.dataset.class), false);
     });
 
     on('#ob-subjects .fchip', 'click', (e) => {
       tick();
+      const subject = e.currentTarget.dataset.subject;
+      if (state.subjects.has(subject)) state.subjects.delete(subject);
+      else state.subjects.add(subject);
       e.currentTarget.classList.toggle('active');
     });
 
     on('#ob-student-go', 'click', async () => {
       const first = root.querySelector('#ob-sname')?.value.trim() ?? '';
-      const cls = Number(root.querySelector('#ob-class button.on')?.dataset.class ?? 11);
-      const subjects = [...root.querySelectorAll('#ob-subjects .fchip.active')].map(c => c.dataset.subject);
+      const cls = state.classLevel;
+      const subjects = [...state.subjects];
+      state.studentName = first;
       if (!first) { state.error = 'What should we call the student?'; return render(); }
       if (!subjects.length) { state.error = 'Pick at least one subject.'; return render(); }
       firm();
@@ -458,12 +508,19 @@ export function startOnboarding(root, { onComplete, session = null }) {
         const { data, error } = await sb.from('student').insert({
           guardian_id: state.guardian.id,
           first_name: first,
+          board: BOARD,
           class_level: cls,
           age_band: state.studentAge ?? 'under_18',
         }).select().single();
         if (error) throw error;
-        await sb.from('student_subject').insert(subjects.map(s => ({ student_id: data.id, subject: s })));
-        state.student = { ...data, subjects };
+        const rows = subjects.map(s => ({
+          student_id: data.id,
+          subject: s,
+          syllabus_code: syllabusCode(s, cls),
+        }));
+        const { error: subErr } = await sb.from('student_subject').insert(rows);
+        if (subErr) throw subErr;
+        state.student = { ...data, subjects: rows };
         go('firstRun');
       } catch (e) {
         // The consent gate raises 42501 here if consent is somehow missing.
