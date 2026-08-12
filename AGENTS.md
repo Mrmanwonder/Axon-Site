@@ -78,6 +78,22 @@ eventually gets broken:
   the transaction timestamp, so rows written together are indistinguishable by time.
 - Consent state is always read authoritatively, never cached optimistically.
 
+## The avatar
+
+`src/avatar.js` holds ten ShaderGradient presets with the library's own colour
+values, rendered as layered CSS gradients rather than the real thing — ShaderGradient
+is three.js, and a WebGL context and render loop for a settings-row decoration does
+not survive the 60fps floor. Nothing animates.
+
+`auto: false` on Halo and Mandarin is load-bearing, not an oversight. Both are
+essentially made of red, red is reserved for the sign-out row, and an avatar derived
+onto a student who never chose it would put a red disc a few rows above the red Sign
+out. They stay pickable — a student choosing red is not the interface spending it —
+but the app never hands one out unasked. Don't fold them back into the derived set.
+
+There is one avatar and one `avatar_seed`, on `student`. The guardian never opens the
+app, so there is no second face to keep in sync.
+
 ## Before changing the nav or the glass
 
 Read `README.md` first, then the `generateLensMap()` and `spring()` functions.

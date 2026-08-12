@@ -340,6 +340,28 @@
   .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
   .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
   .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
+  /* The card is now a control (it renames), so it needs the hint and the ring
+     that every other control has. Cursor only on pointers; the press spring
+     already covers touch. */
+  .sprofile[role="button"]{cursor:pointer;}
+  .sprofile .n .pen{width:13px;height:13px;margin-left:7px;vertical-align:-1px;fill:none;
+    stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* Avatar picker. Chip-strip geometry, borrowed from .filterbar so the scroll
+     behaviour and gutters match the filters the student already knows. */
+  .avstrip{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
+    padding:12px var(--gutter);scroll-snap-type:x proximity;}
+  .avstrip::-webkit-scrollbar{display:none;}
+  .avstrip::after{content:"";flex:0 0 calc(var(--gutter) - 10px);}
+  .avsw{flex:0 0 auto;width:44px;height:44px;border-radius:50%;cursor:pointer;
+    border:2px solid transparent;background-clip:padding-box;scroll-snap-align:center;
+    position:relative;padding:0;-webkit-appearance:none;appearance:none;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
+  .avsw:hover{border-color:var(--hairline);}
+  .avsw:active{border-color:var(--nav-rim);}
+  .avsw[aria-pressed="true"]{border-color:var(--blue);}
+  .avsw:disabled{opacity:.4;cursor:default;}
+  .avsw:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
   .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
   .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);cursor:pointer;transition:background .22s ease,color .22s ease;}
   .seg button.on{background:var(--surface);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600;}
@@ -870,7 +892,13 @@
     <!-- ══════════════ 4 · SETTINGS ══════════════ -->
     <div class="view" id="v4">
       <div class="greet"><h1>Settings</h1></div>
-      <div class="card sprofile press"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman</div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
+      <div class="card sprofile press" id="profileCard" role="button" tabindex="0" aria-label="Change display name"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman<svg class="pen" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg></div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
+
+      <div class="sectitle">Your look</div>
+      <div class="list" style="padding-bottom:2px">
+        <div class="srow noicon"><div class="lbl">Avatar<small>Ten gradients. Pick one, or leave it — you already have one.</small></div></div>
+        <div class="avstrip" id="avatarStrip" role="radiogroup" aria-label="Avatar gradient"></div>
+      </div>
 
       <div class="sectitle">Profile</div>
       <div class="list">
@@ -879,7 +907,7 @@
           <div class="lbl">Board</div><div class="aux">CBSE</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
-        <div class="srow" onclick="openSheet('class')">
+        <div class="srow" id="set-class" role="button" tabindex="0">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
           <div class="lbl">Class</div><div class="aux" id="set-class-aux">11</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
@@ -927,6 +955,11 @@
         <div class="srow noicon" id="set-export"><div class="lbl">Download your data<small>Everything we hold, as one file</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="srow noicon" id="set-delete-data"><div class="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="srow noicon" id="set-delete-account"><div class="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <!-- Statements, not settings. These carry no switch and no chevron
+             because there is nothing to opt out of and nowhere to go: offering
+             a control would imply the opposite is on the table. -->
+        <div class="srow noicon"><div class="lbl">No targeted advertising<small>We don't run ads and we don't sell or share anything with advertisers.</small></div></div>
+        <div class="srow noicon"><div class="lbl">No behavioural tracking<small>Nothing profiles how the student uses the app. No analytics, no event tracking.</small></div></div>
       </div>
       <div class="note">No targeted advertising. There's nothing to opt out of because it was never built in.</div>
 
@@ -1204,13 +1237,10 @@ function flipTheme(){
 }
 
 /* ── warning sheet ── */
+// The class warning now lives in src/app.js, where it is built from the real
+// class levels rather than a hardcoded 11 → 12. Board stays here: it is the
+// same copy for everyone because the answer is always "talk to support".
 const COPY={
-  class:{title:'Change class to 12?',
-    body:"This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class 11.",
-    items:[['Archived papers keep their old scope.','They\'re labelled "analysed under Class 11" and are never re-mapped, so nothing is orphaned.'],
-      ['They can\'t be re-verified.','Class 11 papers won\'t reach Tier 2 against the Class 12 scheme.'],
-      ['Insights split at the change.','Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.']],
-    primary:'Change to Class 12',primaryClass:'primary'},
   board:{title:'Board changes go through support',
     body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
     items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],

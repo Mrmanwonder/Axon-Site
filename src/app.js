@@ -6,6 +6,7 @@ import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
 import { createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType, PAPER_TYPES } from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+import { PRESETS, presetFor, backgroundFor, paintAvatar } from './avatar.js';
 
 const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
 
@@ -201,12 +202,192 @@ async function wireSettings() {
   });
 
   if (ctx.guardian) {
-    const nameEl = $('#profileName'), mailEl = $('#profileContact'), picEl = $('#profilePic');
-    if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
-    if (mailEl) mailEl.textContent = ctx.guardian.contact;
-    if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
-    const cls = $('#set-class-aux'); if (cls && ctx.student) cls.textContent = String(ctx.student.class_level);
+    paintProfile();
+    renderAvatarStrip();
+    wireRename();
+    wireClassChange();
   }
+}
+
+// ── profile ────────────────────────────────────────────────────────────────
+//
+// One face, not two. The guardian is the account holder but never opens the
+// app — everything they do arrives by email — so the avatar and the name in
+// Settings are the student's, and there is only ever one of each to keep in
+// sync.
+
+/** The label the avatar and the heading are drawn from. */
+const profileLabel = () => ctx.student?.first_name ?? ctx.guardian?.name ?? '?';
+
+function paintProfile() {
+  const nameEl = $('#profileName'), mailEl = $('#profileContact'), picEl = $('#profilePic');
+  // Keep the pencil: the name is a control, and replacing textContent would
+  // strip the only thing that says so.
+  if (nameEl) nameEl.firstChild
+    ? (nameEl.firstChild.nodeValue = profileLabel())
+    : nameEl.prepend(document.createTextNode(profileLabel()));
+  if (mailEl) mailEl.textContent = ctx.guardian?.contact ?? '';
+  paintAvatar(picEl, ctx.student, profileLabel());
+  const cls = $('#set-class-aux');
+  if (cls && ctx.student) cls.textContent = String(ctx.student.class_level);
+}
+
+/**
+ * The ten gradients.
+ *
+ * Applied on tap and persisted immediately — this is a preference, not a
+ * consequential change, so it does not earn a confirmation sheet. Selection is
+ * a radio group rather than a list of buttons because exactly one is always in
+ * effect, including before anything has been chosen.
+ */
+function renderAvatarStrip() {
+  const strip = $('#avatarStrip');
+  if (!strip || !ctx.student) return;
+  const current = presetFor(ctx.student);
+
+  strip.innerHTML = PRESETS.map((p) => `
+    <button type="button" class="avsw press" role="radio" data-seed="${p.key}"
+            aria-checked="${p.key === current.key}" aria-pressed="${p.key === current.key}"
+            aria-label="${p.title}" title="${p.title}"
+            style="background:${backgroundFor(p)}"></button>`).join('');
+
+  strip.querySelectorAll('[data-seed]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const seed = el.dataset.seed;
+      if (seed === presetFor(ctx.student).key) return;
+      tick();
+
+      const previous = ctx.student.avatar_seed;
+      // Paint first. The face is the feedback, and waiting for a round trip to
+      // show it would make a free choice feel like a transaction.
+      ctx.student = { ...ctx.student, avatar_seed: seed };
+      paintProfile();
+      markAvatarSelection(strip, seed);
+
+      const { error } = await sb.from('student')
+        .update({ avatar_seed: seed }).eq('id', ctx.student.id);
+      if (error) {
+        ctx.student = { ...ctx.student, avatar_seed: previous };
+        paintProfile();
+        markAvatarSelection(strip, presetFor(ctx.student).key);
+        toast('That could not be saved. Still your old one for now.', 'warn');
+      }
+    });
+  });
+  window.__masteryRebindPress?.(strip);
+}
+
+function markAvatarSelection(strip, key) {
+  strip.querySelectorAll('[data-seed]').forEach((el) => {
+    const on = el.dataset.seed === key;
+    el.setAttribute('aria-checked', String(on));
+    el.setAttribute('aria-pressed', String(on));
+  });
+}
+
+/**
+ * Rename.
+ *
+ * The student is the authority on their own name, so this saves on confirm
+ * with no verification and no review — the same standing the disagree flow
+ * gives them over a transcription.
+ */
+function wireRename() {
+  const card = $('#profileCard');
+  if (!card || !ctx.student) return;
+
+  const open = () => {
+    tick();
+    window.__masteryOpenSheet?.({
+      title: 'What should we call you?',
+      body: 'This is the name shown at the top of Settings. It is not on any paper and nobody else sees it.',
+      items: [],
+      input: { id: 'sh-name', placeholder: profileLabel() },
+      primary: 'Save',
+      primaryClass: 'primary',
+      onConfirm: async () => {
+        const next = document.querySelector('#sh-name')?.value.trim();
+        // An empty box means they changed their mind, not that they want to be
+        // called nothing. The column refuses blank anyway.
+        if (!next || next === ctx.student.first_name) return;
+
+        const previous = ctx.student.first_name;
+        ctx.student = { ...ctx.student, first_name: next };
+        paintProfile();
+
+        const { error } = await sb.from('student')
+          .update({ first_name: next }).eq('id', ctx.student.id);
+        if (error) {
+          ctx.student = { ...ctx.student, first_name: previous };
+          paintProfile();
+          toast('That could not be saved.', 'warn');
+        }
+      },
+    });
+  };
+
+  card.addEventListener('click', open);
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  });
+}
+
+/**
+ * Changing class.
+ *
+ * Two steps, because the consequence is real: class decides which papers can
+ * reach Tier 2, and everything already analysed stays pinned to the old scope.
+ * Pick the target first, then read what it costs — a warning that arrives
+ * before the choice is one nobody has a reason to read yet.
+ *
+ * Board is deliberately not here. index.html already decided board changes go
+ * through support rather than being self-serve, and that stands.
+ */
+function wireClassChange() {
+  const row = $('#set-class');
+  if (!row || !ctx.student) return;
+
+  const open = () => {
+    tick();
+    const from = ctx.student.class_level;
+    window.__masteryOpenSheet?.({
+      title: 'Which class?',
+      body: `Currently Class ${from}. Changing this re-scopes which papers can reach scheme-verified analysis.`,
+      items: [],
+      choices: [9, 10, 11, 12].filter((c) => c !== from)
+        .map((c) => ({ label: `Class ${c}`, value: String(c) })),
+      onChoice: (value) => confirmClassChange(from, Number(value)),
+    });
+  };
+
+  row.addEventListener('click', open);
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  });
+}
+
+function confirmClassChange(from, to) {
+  // Opened on the next frame: the choice sheet is still springing shut, and
+  // reusing the same element mid-animation makes it jump.
+  requestAnimationFrame(() => window.__masteryOpenSheet?.({
+    title: `Change to Class ${to}?`,
+    body: `This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class ${from}.`,
+    items: [
+      ['Archived papers keep their old scope.', `They're labelled "analysed under Class ${from}" and are never re-mapped, so nothing is orphaned.`],
+      ['They can\'t be re-verified.', `Class ${from} papers won't reach Tier 2 against the Class ${to} scheme.`],
+      ['Insights split at the change.', 'Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.'],
+    ],
+    primary: `Change to Class ${to}`,
+    primaryClass: 'primary',
+    onConfirm: async () => {
+      const { error } = await sb.from('student')
+        .update({ class_level: to }).eq('id', ctx.student.id);
+      if (error) return toast(error.message || 'That could not be saved.', 'warn');
+      ctx.student = { ...ctx.student, class_level: to };
+      paintProfile();
+      toast(`Now Class ${to}. Papers from before stay as they were.`);
+    },
+  }));
 }
 
 // ── ingestion ──────────────────────────────────────────────────────────────
