@@ -2,7 +2,7 @@
 //
 // The order is legally load-bearing, not a UX preference:
 //   landing → parent account → verify → consent → payment → student profile →
-//   student first run → first upload
+//   the student's first four screens → an empty Home
 //
 // Two constraints it exists to satisfy:
 //   · No student personal data is written before a consent_event grants every
@@ -11,12 +11,18 @@
 //   · Payment comes after consent, never before, so paying cannot become
 //     pressure on a consent decision.
 //
+// The flow has two halves with deliberately different personalities, and they
+// are not blended. Steps 1-6 belong to the parent and are efficient and dense:
+// the goal is to be finished. Steps 7-8 belong to the student and are paced the
+// opposite way — one idea per screen, one forward action. The seam is at
+// `FIRST_RUN` below, and it is intentional that the two do not look alike.
+//
 // Rendered with index.html's own components — it is the design system.
 
 import { sb, sendOtp, verifyOtp, currentSession } from './supabase.js';
 import { getVerificationAdapter } from './verification.js';
 import { listPurposes, recordConsent } from './consent.js';
-import { PAPER_TYPES } from './papers.js';
+import { LANGUAGES, noticeStrings, purposeLabel, noticeIsComplete } from './notice.js';
 
 const h = (s) => s; // tagging helper for readability
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -38,8 +44,13 @@ export function startOnboarding(root, { onComplete, session = null }) {
     verification: null,
     guardian: null,
     consent: {},
+    // Which language the notice is being read in at the moment of the decision.
+    // Not persisted as a preference: it is a property of this consent event,
+    // not a setting, and the app itself is English-only for now.
+    noticeLang: 'en',
     plan: null,
     student: null,
+    firstRunIndex: 0,
   };
 
   const go = (step) => { state.step = step; render(); };
@@ -68,8 +79,8 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="subnote" style="margin:14px 0 0">A parent sets this up. Indian law requires a
           parent's verified consent before we can process anything belonging to a student under 18.</div>
       </div>
-      <div class="btn primary press" id="ob-start" style="margin:18px">I'm a parent — set this up</div>
-      <div class="btn plain press" id="ob-student">I'm the student</div>
+      <div class="btn primary press" id="ob-start" role="button" tabindex="0" style="margin:18px">I'm a parent — set this up</div>
+      <div class="btn plain press" id="ob-student" role="button" tabindex="0">I'm the student</div>
     `), { title: 'Mastery', sub: 'Understand your graded papers.' });
   }
 
@@ -80,7 +91,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <h4>Ask a parent to set this up</h4>
         <p>Because you're under 18, a parent or guardian has to create the account and give consent
            first. Once they've done that, this device is yours to use.</p>
-        <div class="btn ghost press" id="ob-back">Back</div>
+        <div class="btn ghost press" id="ob-back" role="button" tabindex="0">Back</div>
       </div>`), { title: 'Nearly there' });
   }
 
@@ -100,7 +111,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         </div>
       </div>
       <div class="subnote">Nothing about the student is collected yet. Nothing is processed until you've consented.</div>
-      <div class="btn primary press" id="ob-send" style="margin:18px">Send me a code</div>
+      <div class="btn primary press" id="ob-send" role="button" tabindex="0" style="margin:18px">Send me a code</div>
     `), { title: 'Create your account' });
   }
 
@@ -113,8 +124,8 @@ export function startOnboarding(root, { onComplete, session = null }) {
       <div class="subnote">Sent to ${esc(state.contact)}. If the email contains a link rather than a
         code, paste the whole link here — that works too, and it still works after your mail app has
         already opened it.</div>
-      <div class="btn primary press" id="ob-verify" style="margin:18px">Continue</div>
-      <div class="btn plain press" id="ob-resend">Send it again</div>
+      <div class="btn primary press" id="ob-verify" role="button" tabindex="0" style="margin:18px">Continue</div>
+      <div class="btn plain press" id="ob-resend" role="button" tabindex="0">Send it again</div>
     `), { title: 'Check your email' });
   }
 
@@ -129,7 +140,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <input id="ob-name-only" value="${esc(state.parentName)}" placeholder="Your full name" autocomplete="name">
       </div></div>
       <div class="subnote">So the student knows whose account this is.</div>
-      <div class="btn primary press" id="ob-name-go" style="margin:18px">Continue</div>
+      <div class="btn primary press" id="ob-name-go" role="button" tabindex="0" style="margin:18px">Continue</div>
     `), { title: 'One detail' });
   }
 
@@ -138,11 +149,11 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       <div class="sectitle tight">How old is the student?</div>
       <div class="list">
-        <div class="method press" data-age="under_18">
+        <div class="method press" data-age="under_18" role="button" tabindex="0">
           <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
           <div class="b"><div class="t1">Under 18</div><div class="t2">You'll verify and consent on their behalf</div></div>
         </div>
-        <div class="method press" data-age="18_plus">
+        <div class="method press" data-age="18_plus" role="button" tabindex="0">
           <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.4 3.1-5.5 7-5.5s7 2.1 7 5.5"/></svg></div>
           <div class="b"><div class="t1">18 or older</div><div class="t2">They can hold their own account</div></div>
         </div>
@@ -158,7 +169,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <h4>They can sign up themselves</h4>
         <p>Over 18, no parental consent is needed, so the student holds their own account. That path
            isn't built yet — it's the next thing we're adding.</p>
-        <div class="btn ghost press" id="ob-back">Back</div>
+        <div class="btn ghost press" id="ob-back" role="button" tabindex="0">Back</div>
       </div>`), { title: 'Good news' });
   }
 
@@ -177,53 +188,80 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="srow noicon"><div class="lbl">When it happened<small>Timestamp and method</small></div><span class="tier t2">Kept</span></div>
         <div class="srow noicon"><div class="lbl">Your documents<small>Aadhaar, licence, anything scanned</small></div><span class="tier t1">Never stored</span></div>
       </div>
-      <div class="btn primary press" id="ob-verify-go" style="margin:18px">${busy ? 'Verifying…' : esc(adapter.label)}</div>
+      <div class="btn primary press" id="ob-verify-go" role="button" tabindex="0"
+           ${busy ? 'aria-disabled="true" aria-busy="true"' : ''} style="margin:18px">${busy ? 'Verifying…' : esc(adapter.label)}</div>
     `), { title: 'Verify it\'s you' });
   }
 
   // ── step 4 · itemised consent ────────────────────────────────────────────
+  //
+  // Itemised, never a single checkbox: the Act requires consent to be specific
+  // to each purpose, and one box covering six of them is not that. Optional
+  // purposes start off and are never pre-ticked.
+  //
+  // The notice is readable in English and Hindi because a notice the parent
+  // cannot read has not informed them, and consent that isn't informed isn't
+  // consent. The language applies to the whole screen — chrome and purpose
+  // labels together — since a half-translated notice is arguably worse than an
+  // untranslated one.
   async function consentStep(error) {
     const purposes = await listPurposes();
     for (const p of purposes) {
       // Required default on; optional default OFF and never pre-ticked.
       if (!(p.purpose in state.consent)) state.consent[p.purpose] = p.is_required;
     }
+    const lang = state.noticeLang;
+    const t = noticeStrings(lang);
+    const label = (p) => purposeLabel(p.purpose, p.label, lang);
+
     const row = (p) => h(`
       <div class="srow noicon">
-        <div class="lbl">${esc(p.label)}<small>${p.is_required ? 'Required — the app can\'t work without this' : 'Optional'}</small></div>
+        <div class="lbl">${esc(label(p))}<small>${esc(p.is_required ? t.requiredNote : t.optionalNote)}</small></div>
         ${p.is_required
-          ? '<span class="locked">Required</span>'
-          : `<div class="sw ob-sw${state.consent[p.purpose] ? ' on' : ''}" data-purpose="${esc(p.purpose)}">
+          ? `<span class="locked">${esc(t.requiredTag)}</span>`
+          : `<div class="sw ob-sw${state.consent[p.purpose] ? ' on' : ''}" data-purpose="${esc(p.purpose)}"
+                  role="switch" aria-checked="${state.consent[p.purpose]}" tabindex="0"
+                  aria-label="${esc(label(p))}">
                <div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div>`}
       </div>`);
 
+    // A purpose seeded in SQL but not yet translated would otherwise show in
+    // English inside an otherwise-Hindi notice with nothing to say why.
+    const partial = !noticeIsComplete(purposes, lang);
+
     return shell(h(`
       ${err(error)}
-      <div class="sectitle tight">What we need to do</div>
-      <div class="list">${purposes.filter(p => p.is_required).map(row).join('')}</div>
-      <div class="sectitle">Optional — off unless you turn it on</div>
-      <div class="list">${purposes.filter(p => !p.is_required).map(row).join('')}</div>
-      <div class="sectitle">What we never do</div>
-      <div class="list">
-        <div class="srow noicon"><div class="lbl">Advertising of any kind</div><span class="tier t1">Never</span></div>
-        <div class="srow noicon"><div class="lbl">Behavioural tracking</div><span class="tier t1">Never</span></div>
-        <div class="srow noicon"><div class="lbl">Selling data to anyone</div><span class="tier t1">Never</span></div>
-        <div class="srow noicon"><div class="lbl">Ranking against other students</div><span class="tier t1">Never</span></div>
+      <div class="srow noicon" lang="${lang}">
+        <div class="lbl">${esc(t.langLabel)}</div>
+        <div class="seg" id="ob-lang">
+          ${LANGUAGES.map(l => `<button data-lang="${esc(l.code)}" lang="${esc(l.code)}"${l.code === lang ? ' class="on"' : ''}>${esc(l.label)}</button>`).join('')}
+        </div>
       </div>
-      <div class="subnote">You can withdraw any optional consent later in Settings — one tap, no email required.</div>
-      <div class="btn primary press" id="ob-consent-go" style="margin:18px">Give consent</div>
-    `), { title: 'What you\'re agreeing to' });
+      <div lang="${lang}">
+        <div class="sectitle tight">${esc(t.requiredSection)}</div>
+        <div class="list">${purposes.filter(p => p.is_required).map(row).join('')}</div>
+        <div class="sectitle">${esc(t.optionalSection)}</div>
+        <div class="list">${purposes.filter(p => !p.is_required).map(row).join('')}</div>
+        <div class="sectitle">${esc(t.neverSection)}</div>
+        <div class="list">
+          ${t.neverItems.map(item => `<div class="srow noicon"><div class="lbl">${esc(item)}</div><span class="tier t1">${esc(t.never)}</span></div>`).join('')}
+        </div>
+        ${partial ? '<div class="subnote">Some items are shown in English — we have not translated them yet.</div>' : ''}
+        <div class="subnote">${esc(t.withdrawNote)}</div>
+        <div class="btn primary press" id="ob-consent-go" role="button" tabindex="0" style="margin:18px">${esc(t.action)}</div>
+      </div>
+    `), { title: t.title });
   }
 
   // ── step 5 · plan, after consent ─────────────────────────────────────────
   function planStep() {
     return shell(h(`
       <div class="list">
-        <div class="method press" data-plan="trial">
+        <div class="method press" data-plan="trial" role="button" tabindex="0">
           <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
           <div class="b"><div class="t1">Start a free trial</div><div class="t2">Full access. No card needed now.</div></div>
         </div>
-        <div class="method press" data-plan="paid">
+        <div class="method press" data-plan="paid" role="button" tabindex="0">
           <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 9.5h18M3 7.5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div>
           <div class="b"><div class="t1">Subscribe now</div><div class="t2">Billing isn't wired up yet</div></div>
         </div>
@@ -250,49 +288,84 @@ export function startOnboarding(root, { onComplete, session = null }) {
       </div>
       <div class="sectitle">Subjects</div>
       <div class="filterbar" id="ob-subjects" style="position:static">
-        ${SUBJECTS.map(s => `<div class="fchip${chosen.has(s) ? ' active' : ''}" data-subject="${esc(s)}">${esc(s)}</div>`).join('')}
+        ${SUBJECTS.map(s => `<div class="fchip${chosen.has(s) ? ' active' : ''}" data-subject="${esc(s)}" role="checkbox" aria-checked="${chosen.has(s)}" tabindex="0">${esc(s)}</div>`).join('')}
       </div>
       <div class="subnote">Nothing else is collected — no school, no address, no photograph.</div>
-      <div class="btn primary press" id="ob-student-go" style="margin:18px">Create profile</div>
+      <div class="btn primary press" id="ob-student-go" role="button" tabindex="0" style="margin:18px">Create profile</div>
     `), { title: 'The student' });
   }
 
-  // ── step 7 · student first run ───────────────────────────────────────────
-  function firstRun() {
-    return shell(h(`
-      <div class="card insight press">
-        <div class="line">This is yours, ${esc(state.student?.first_name || 'not your parent\'s')}.</div>
-      </div>
-      <div class="sectitle">How it works</div>
-      <div class="list">
-        <div class="srow noicon"><div class="lbl">You upload a marked paper<small>We read the questions, your answers, and your teacher's marks</small></div></div>
-        <div class="srow noicon"><div class="lbl">We never overrule your teacher<small>The marks shown are the marks they gave. We explain where they went.</small></div></div>
-        <div class="srow noicon"><div class="lbl">You can see the reasoning<small>Every insight shows what it was based on</small></div></div>
-        <div class="srow noicon"><div class="lbl">If we read something wrong, fix it<small>Your correction wins. No review, no arguing.</small></div></div>
-      </div>
-      <div class="btn primary press" id="ob-first-go" style="margin:18px">Upload my first paper</div>
-      <div class="btn plain press" id="ob-skip">Look around first</div>
-    `), { title: 'Hello' });
-  }
+  // ── steps 7-8 · the student's first minute ───────────────────────────────
+  //
+  // Everything above this line is the parent's, and it is dense on purpose: a
+  // parent wants to be finished, so those screens stack fields and put several
+  // decisions on one surface. From here the personality changes completely.
+  //
+  // These are the first four screens a fourteen-year-old sees, and what they
+  // need to come away believing is not a feature list — it is that this thing
+  // is on their side. So: one idea per screen, room around it, and a single
+  // forward action with nothing next to it to weigh up.
+  //
+  // The four ideas are load-bearing and ordered. Two of them (we never overrule
+  // your teacher, your correction wins) are the product's central promises, and
+  // a student who has not understood them will read a diagnosis as a second
+  // marking. They are stated here, before any paper exists, so they frame
+  // everything that comes after rather than arriving as a disclaimer.
+  //
+  // No step counter and no skip link — see the note on `.calm` in index.html.
+  const FIRST_RUN = [
+    {
+      // What this does with your papers.
+      icon: '<path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/>',
+      title: 'You add a paper. We read it.',
+      body: 'The questions, what you wrote, and your teacher\'s marks and remarks in red. '
+          + 'Then we work through where the marks went, question by question.',
+      action: 'Continue',
+    },
+    {
+      // It never overrules your teacher.
+      icon: '<path d="M20 6 9 17l-5-5"/>',
+      title: 'The marks stay your teacher\'s.',
+      body: 'We explain their marking. We never change it, and we\'ll never tell you that you '
+          + 'deserved more than you got. If a mark looks wrong to you, that is worth raising '
+          + 'with your teacher — they were the one reading your paper.',
+      action: 'Continue',
+    },
+    {
+      // You can see the reasoning behind anything it says.
+      icon: '<circle cx="12" cy="12" r="3.2"/><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/>',
+      title: 'Anything we say, you can open up.',
+      body: 'Every insight will show you what it was built from — what we read on the page, what '
+          + 'the marking scheme asks for, and how sure we are. Nothing arrives as a verdict '
+          + 'you just have to accept.',
+      action: 'Continue',
+    },
+    {
+      // You can correct it, and your correction wins.
+      icon: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M13.5 6.5 17 10"/>',
+      title: 'If we get something wrong, you fix it.',
+      body: 'Misread your handwriting, or named the wrong reason you lost a mark — tell us and it '
+          + 'changes on the spot. No form, no review, nobody checking up on you. You sat the '
+          + 'paper and we didn\'t.',
+      action: 'Take me in',
+    },
+  ];
 
-  // ── step 8 · guided first upload ─────────────────────────────────────────
-  function firstUpload() {
-    return shell(h(`
-      <div class="card insight press">
-        <div class="line">What kind of paper is this?</div>
-        <div class="subnote" style="margin:10px 0 0">This one matters: a board paper can be matched to the
-          official marking scheme. A school test is explained from your teacher's marks instead.</div>
-      </div>
-      <div class="list" style="margin-top:14px">
-        ${PAPER_TYPES.map(t => `
-          <div class="method press" data-type="${esc(t.value)}">
-            <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></div>
-            <div class="b"><div class="t1">${esc(t.label)}</div>
-              <div class="t2">${t.value === 'pyq' || t.value === 'sample_paper' ? 'Matched to the official scheme where we have it' : 'Explained from your teacher\'s marks'}</div></div>
-          </div>`).join('')}
-      </div>
-      <div class="subnote">We'll only ask this the first time.</div>
-    `), { title: 'Your first paper' });
+  function firstRun(i) {
+    const s = FIRST_RUN[i];
+    return h(`
+      <div class="view on calmview" style="position:relative;inset:auto;height:100%;">
+        <div class="calm">
+          <div class="top">
+            <div class="ic"><svg viewBox="0 0 24 24">${s.icon}</svg></div>
+            <h2>${esc(s.title)}</h2>
+            <p>${esc(s.body)}</p>
+          </div>
+          <div class="foot">
+            <div class="btn primary press" id="ob-calm-go" role="button" tabindex="0">${esc(s.action)}</div>
+          </div>
+        </div>
+      </div>`);
   }
 
   // ── render + wiring ──────────────────────────────────────────────────────
@@ -312,13 +385,15 @@ export function startOnboarding(root, { onComplete, session = null }) {
       case 'consent':      html = await consentStep(error); break;
       case 'plan':         html = planStep(); break;
       case 'student':      html = studentStep(error); break;
-      case 'firstRun':     html = firstRun(); break;
-      case 'firstUpload':  html = firstUpload(); break;
+      case 'firstRun':     html = firstRun(state.firstRunIndex); break;
       default:             html = landing();
     }
     root.innerHTML = html;
     wire();
     window.__masteryRebindPress?.(root);
+    // Everything here is rendered after boot, so the boot-time keyboard binding
+    // never sees it. Without this the whole flow is pointer-only.
+    window.__masteryRebindKeys?.(root);
   }
 
   function on(sel, ev, fn) {
@@ -388,7 +463,10 @@ export function startOnboarding(root, { onComplete, session = null }) {
       go(state.studentAge === '18_plus' ? 'adult' : 'verify');
     });
 
-    on('#ob-verify-go', 'click', async () => {
+    on('#ob-verify-go', 'click', async (e) => {
+      // CSS pointer-events stops a second pointer click, but not a second Enter
+      // press — and a double handoff would burn two verification references.
+      if (e.currentTarget.getAttribute('aria-disabled') === 'true') return;
       firm();
       state.busy = true; await render();
       try {
@@ -417,8 +495,18 @@ export function startOnboarding(root, { onComplete, session = null }) {
       const next = !state.consent[purpose];
       state.consent[purpose] = next;
       el.classList.toggle('on', next);
+      el.setAttribute('aria-checked', String(next));
       el.querySelector('.th').style.transform = `translateX(${next ? 22 : 0}px)`;
       tick();
+    });
+
+    // Switching the notice language re-renders it. The decisions already made
+    // are held in state, so nothing a parent has toggled is lost by reading the
+    // same notice in the other language.
+    on('#ob-lang button', 'click', (e) => {
+      tick();
+      state.noticeLang = e.currentTarget.dataset.lang;
+      render();
     });
 
     on('#ob-consent-go', 'click', async () => {
@@ -474,16 +562,18 @@ export function startOnboarding(root, { onComplete, session = null }) {
       }
     });
 
-    on('#ob-first-go', 'click', () => { tick(); go('firstUpload'); });
-    on('#ob-skip', 'click', () => { tick(); onComplete?.({ guardian: state.guardian, student: state.student }); });
-
-    on('[data-type]', 'click', (e) => {
+    // The four calm screens advance through one handler; the last one ends
+    // onboarding and hands over to an empty Home, which carries the only call
+    // to action a student with no papers can act on.
+    on('#ob-calm-go', 'click', () => {
+      const last = state.firstRunIndex === FIRST_RUN.length - 1;
+      if (!last) {
+        tick();
+        state.firstRunIndex += 1;
+        return render();
+      }
       firm();
-      onComplete?.({
-        guardian: state.guardian,
-        student: state.student,
-        firstPaperType: e.currentTarget.dataset.type,
-      });
+      onComplete?.({ guardian: state.guardian, student: state.student });
     });
   }
 
