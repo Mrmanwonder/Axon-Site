@@ -6,6 +6,7 @@ import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
 import { createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType, PAPER_TYPES } from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+import { decorateForSearch } from './search.js';
 
 const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
 
@@ -44,9 +45,15 @@ function setSwitch(el, on) {
   if (th) th.style.transform = `translateX(${on ? 22 : 0}px)`;
 }
 
+// The class is the look; aria-checked is what a screen reader actually reads
+// off a radiogroup. Setting one without the other leaves the control looking
+// selected and announcing nothing.
 function setSeg(container, value, attr) {
-  container?.querySelectorAll('button').forEach((b) =>
-    b.classList.toggle('on', b.dataset[attr] === String(value)));
+  container?.querySelectorAll('button').forEach((b) => {
+    const on = b.dataset[attr] === String(value);
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
 }
 
 // ── toast ──────────────────────────────────────────────────────────────────
@@ -65,16 +72,66 @@ function toast(message, tone = 'neutral') {
 
 // ── settings ───────────────────────────────────────────────────────────────
 
-async function wireSettings() {
-  const p = ctx.prefs;
+const savePref = async (patch) => {
+  ctx.prefs = await savePrefs(ctx.guardian?.id, patch);
+  applyPrefs(ctx.prefs);
+  paintDisplayPrefs();
+};
 
+/** Push current preferences onto the controls. Safe to call repeatedly. */
+function paintDisplayPrefs() {
+  const p = ctx.prefs;
   setSeg($('#segTheme'), p.theme, 'mode');
   setSeg($('#segText'), p.text_size, 'size');
   setSwitch($('#set-reducemotion'), p.reduce_motion);
   setSwitch($('#set-reasoning'), p.always_show_reasoning);
   setSwitch($('#set-paperready'), p.notify_paper_ready);
   setSwitch($('#set-correction'), p.notify_correction);
+}
 
+/**
+ * Appearance, text size, reduce motion and the notification switches.
+ *
+ * Wired before the auth gate, not after it: these are accessibility controls,
+ * and someone who needs larger text or less motion needs it on the onboarding
+ * screens too — which is exactly where they cannot sign in yet. savePrefs
+ * writes local-only without a guardian id, so the choice still survives and is
+ * reconciled to the server on the first successful save.
+ */
+let displayPrefsBound = false;
+export function wireDisplayPrefs() {
+  paintDisplayPrefs();
+  if (displayPrefsBound) return;
+  displayPrefsBound = true;
+  $('#segTheme')?.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    tick(); setSeg($('#segTheme'), b.dataset.mode, 'mode'); savePref({ theme: b.dataset.mode });
+  });
+
+  $('#segText')?.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    tick(); setSeg($('#segText'), b.dataset.size, 'size'); savePref({ text_size: b.dataset.size });
+  });
+
+  const toggle = (sel, key) => $(sel)?.addEventListener('click', () => {
+    const next = !$(sel).classList.contains('on');
+    setSwitch($(sel), next); tick(); savePref({ [key]: next });
+  });
+  toggle('#set-reducemotion', 'reduce_motion');
+  toggle('#set-reasoning', 'always_show_reasoning');
+  toggle('#set-paperready', 'notify_paper_ready');
+  toggle('#set-correction', 'notify_correction');
+
+  // The corner appearance button is the design system's; it applies the theme
+  // itself and calls this so the choice is persisted and the Appearance row
+  // agrees with it. One writer, so the two can't drift.
+  window.__masterySetTheme = (mode) => {
+    setSeg($('#segTheme'), mode, 'mode');
+    savePref({ theme: mode });
+  };
+}
+
+async function wireSettings() {
   // Consent-bearing switches read their state from the ledger, never from a
   // cached preference, so what the toggle shows is what was actually recorded.
   if (ctx.guardian) {
@@ -83,29 +140,7 @@ async function wireSettings() {
     setSwitch($('#set-improve'), ctx.consent.improve_extraction === true);
   }
 
-  const pref = async (patch) => {
-    ctx.prefs = await savePrefs(ctx.guardian?.id, patch);
-    applyPrefs(ctx.prefs);
-  };
-
-  $('#segTheme')?.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    tick(); setSeg($('#segTheme'), b.dataset.mode, 'mode'); pref({ theme: b.dataset.mode });
-  });
-
-  $('#segText')?.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    tick(); setSeg($('#segText'), b.dataset.size, 'size'); pref({ text_size: b.dataset.size });
-  });
-
-  const toggle = (sel, key) => $(sel)?.addEventListener('click', () => {
-    const next = !$(sel).classList.contains('on');
-    setSwitch($(sel), next); tick(); pref({ [key]: next });
-  });
-  toggle('#set-reducemotion', 'reduce_motion');
-  toggle('#set-reasoning', 'always_show_reasoning');
-  toggle('#set-paperready', 'notify_paper_ready');
-  toggle('#set-correction', 'notify_correction');
+  const pref = savePref;
 
   // Turning an optional purpose off is a withdrawal, recorded as its own event.
   const consentToggle = (sel, purpose) => $(sel)?.addEventListener('click', async () => {
@@ -316,7 +351,12 @@ async function refreshLibrary() {
   if (!ctx.student) return;
   try {
     const { data, stale } = await listPapers(ctx.student.id);
-    window.__masteryRenderLibrary?.(data, { stale });
+    // Search text is attached at render rather than queried per keystroke:
+    // filtering in memory keeps typing at 60fps on a budget phone, and the
+    // cached index means search still works on a paper already scanned when
+    // there is no connection.
+    const papers = await decorateForSearch(ctx.student.id, data ?? []);
+    window.__masteryRenderLibrary?.(papers, { stale });
   } catch { /* the cached view stays on screen */ }
 }
 
@@ -352,6 +392,7 @@ async function startApp() {
   if (ctx.guardian) {
     ctx.prefs = await loadPrefs(ctx.guardian.id);
     applyPrefs(ctx.prefs);
+    wireDisplayPrefs();
   }
   await wireSettings();
   wireIngestion();
@@ -362,6 +403,9 @@ async function startApp() {
 
 async function boot() {
   applyPrefs(ctx.prefs);
+  // Before the auth gate: text size and reduce motion have to work on the
+  // onboarding screens, which is precisely where there is no session yet.
+  wireDisplayPrefs();
 
   ctx.session = await currentSession();
   if (!ctx.session) return showOnboarding();
