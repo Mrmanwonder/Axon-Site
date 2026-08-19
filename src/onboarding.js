@@ -63,13 +63,13 @@ export function startOnboarding(root, { onComplete, session = null }) {
   // than into a flow they cannot legally complete.
   function landing() {
     return shell(h(`
-      <div class="card insight press" style="margin-top:18px">
+      <div class="card insight" style="margin-top:18px">
         <div class="line">See exactly where the marks went — and what to do differently next time.</div>
         <div class="subnote" style="margin:14px 0 0">A parent sets this up. Indian law requires a
           parent's verified consent before we can process anything belonging to a student under 18.</div>
       </div>
-      <div class="btn primary press" id="ob-start" style="margin:18px">I'm a parent — set this up</div>
-      <div class="btn plain press" id="ob-student">I'm the student</div>
+      <button type="button" class="btn primary press" id="ob-start" style="margin:18px">I'm a parent — set this up</button>
+      <button type="button" class="btn plain press" id="ob-student">I'm the student</button>
     `), { title: 'Mastery', sub: 'Understand your graded papers.' });
   }
 
@@ -77,10 +77,10 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       <div class="estate">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 15.5v.4M12 7v5"/><circle cx="12" cy="12" r="9"/></svg></div>
-        <h4>Ask a parent to set this up</h4>
+        <h2>Ask a parent to set this up</h2>
         <p>Because you're under 18, a parent or guardian has to create the account and give consent
            first. Once they've done that, this device is yours to use.</p>
-        <div class="btn ghost press" id="ob-back">Back</div>
+        <button type="button" class="btn ghost press" id="ob-back">Back</button>
       </div>`), { title: 'Nearly there' });
   }
 
@@ -92,15 +92,15 @@ export function startOnboarding(root, { onComplete, session = null }) {
       <div class="list">
         <div class="srow noicon"><div class="lbl">Your name<small>So the student knows whose account this is</small></div></div>
         <div class="searchwrap" style="padding:0 18px 12px">
-          <div class="search"><input id="ob-name" value="${esc(state.parentName)}" placeholder="Full name" autocomplete="name"></div>
+          <div class="search"><input id="ob-name" value="${esc(state.parentName)}" aria-label="Your full name" placeholder="Full name" autocomplete="name"></div>
         </div>
         <div class="srow noicon"><div class="lbl">Email or phone<small>We'll send a one-time code — no password to remember</small></div></div>
         <div class="searchwrap" style="padding:0 18px 14px">
-          <div class="search"><input id="ob-contact" value="${esc(state.contact)}" placeholder="you@example.com or +91…" autocomplete="email"></div>
+          <div class="search"><input id="ob-contact" value="${esc(state.contact)}" aria-label="Email address or phone number" placeholder="you@example.com or +91…" autocomplete="email"></div>
         </div>
       </div>
       <div class="subnote">Nothing about the student is collected yet. Nothing is processed until you've consented.</div>
-      <div class="btn primary press" id="ob-send" style="margin:18px">Send me a code</div>
+      <button type="button" class="btn primary press" id="ob-send" style="margin:18px">Send me a code</button>
     `), { title: 'Create your account' });
   }
 
@@ -108,13 +108,13 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       ${err(error)}
       <div class="searchwrap"><div class="search">
-        <input id="ob-code" placeholder="6-digit code, or paste the link" autocomplete="one-time-code">
+        <input id="ob-code" aria-label="One-time code, or the link from the email" placeholder="6-digit code, or paste the link" autocomplete="one-time-code" inputmode="numeric">
       </div></div>
       <div class="subnote">Sent to ${esc(state.contact)}. If the email contains a link rather than a
         code, paste the whole link here — that works too, and it still works after your mail app has
         already opened it.</div>
-      <div class="btn primary press" id="ob-verify" style="margin:18px">Continue</div>
-      <div class="btn plain press" id="ob-resend">Send it again</div>
+      <button type="button" class="btn primary press" id="ob-verify" style="margin:18px">Continue</button>
+      <button type="button" class="btn plain press" id="ob-resend">Send it again</button>
     `), { title: 'Check your email' });
   }
 
@@ -126,10 +126,10 @@ export function startOnboarding(root, { onComplete, session = null }) {
       ${err(error)}
       <div class="subnote" style="margin-bottom:4px">Signed in as ${esc(state.contact)}.</div>
       <div class="searchwrap"><div class="search">
-        <input id="ob-name-only" value="${esc(state.parentName)}" placeholder="Your full name" autocomplete="name">
+        <input id="ob-name-only" value="${esc(state.parentName)}" aria-label="Your full name" placeholder="Your full name" autocomplete="name">
       </div></div>
       <div class="subnote">So the student knows whose account this is.</div>
-      <div class="btn primary press" id="ob-name-go" style="margin:18px">Continue</div>
+      <button type="button" class="btn primary press" id="ob-name-go" style="margin:18px">Continue</button>
     `), { title: 'One detail' });
   }
 
@@ -138,14 +138,14 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       <div class="sectitle tight">How old is the student?</div>
       <div class="list">
-        <div class="method press" data-age="under_18">
-          <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
-          <div class="b"><div class="t1">Under 18</div><div class="t2">You'll verify and consent on their behalf</div></div>
-        </div>
-        <div class="method press" data-age="18_plus">
-          <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.4 3.1-5.5 7-5.5s7 2.1 7 5.5"/></svg></div>
-          <div class="b"><div class="t1">18 or older</div><div class="t2">They can hold their own account</div></div>
-        </div>
+        <button type="button" class="method press" data-age="under_18">
+          <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></span>
+          <span class="b"><span class="t1">Under 18</span><span class="t2">You'll verify and consent on their behalf</span></span>
+        </button>
+        <button type="button" class="method press" data-age="18_plus">
+          <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.4 3.1-5.5 7-5.5s7 2.1 7 5.5"/></svg></span>
+          <span class="b"><span class="t1">18 or older</span><span class="t2">They can hold their own account</span></span>
+        </button>
       </div>
       <div class="subnote">This decides which consent path applies. We don't ask for a date of birth.</div>
     `), { title: 'One question first' });
@@ -155,10 +155,10 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       <div class="estate">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></div>
-        <h4>They can sign up themselves</h4>
+        <h2>They can sign up themselves</h2>
         <p>Over 18, no parental consent is needed, so the student holds their own account. That path
            isn't built yet — it's the next thing we're adding.</p>
-        <div class="btn ghost press" id="ob-back">Back</div>
+        <button type="button" class="btn ghost press" id="ob-back">Back</button>
       </div>`), { title: 'Good news' });
   }
 
@@ -166,7 +166,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
     const adapter = getVerificationAdapter();
     return shell(h(`
       ${err(error)}
-      <div class="card insight press">
+      <div class="card insight">
         <div class="chips"><span class="chip n">Required by law</span></div>
         <div class="line">${esc(adapter.label)}</div>
         <div class="subnote" style="margin:12px 0 0">${esc(adapter.description)}</div>
@@ -177,7 +177,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="srow noicon"><div class="lbl">When it happened<small>Timestamp and method</small></div><span class="tier t2">Kept</span></div>
         <div class="srow noicon"><div class="lbl">Your documents<small>Aadhaar, licence, anything scanned</small></div><span class="tier t1">Never stored</span></div>
       </div>
-      <div class="btn primary press" id="ob-verify-go" style="margin:18px">${busy ? 'Verifying…' : esc(adapter.label)}</div>
+      <button type="button" class="btn primary press" id="ob-verify-go" style="margin:18px"${busy ? ' disabled' : ''}>${busy ? 'Verifying…' : esc(adapter.label)}</button>
     `), { title: 'Verify it\'s you' });
   }
 
@@ -193,8 +193,9 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="lbl">${esc(p.label)}<small>${p.is_required ? 'Required — the app can\'t work without this' : 'Optional'}</small></div>
         ${p.is_required
           ? '<span class="locked">Required</span>'
-          : `<div class="sw ob-sw${state.consent[p.purpose] ? ' on' : ''}" data-purpose="${esc(p.purpose)}">
-               <div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div>`}
+          : `<button type="button" class="sw ob-sw${state.consent[p.purpose] ? ' on' : ''}" role="switch"
+               aria-checked="${!!state.consent[p.purpose]}" aria-label="${esc(p.label)}" data-purpose="${esc(p.purpose)}">
+               <span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button>`}
       </div>`);
 
     return shell(h(`
@@ -211,7 +212,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="srow noicon"><div class="lbl">Ranking against other students</div><span class="tier t1">Never</span></div>
       </div>
       <div class="subnote">You can withdraw any optional consent later in Settings — one tap, no email required.</div>
-      <div class="btn primary press" id="ob-consent-go" style="margin:18px">Give consent</div>
+      <button type="button" class="btn primary press" id="ob-consent-go" style="margin:18px">Give consent</button>
     `), { title: 'What you\'re agreeing to' });
   }
 
@@ -219,14 +220,14 @@ export function startOnboarding(root, { onComplete, session = null }) {
   function planStep() {
     return shell(h(`
       <div class="list">
-        <div class="method press" data-plan="trial">
-          <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
-          <div class="b"><div class="t1">Start a free trial</div><div class="t2">Full access. No card needed now.</div></div>
-        </div>
-        <div class="method press" data-plan="paid">
-          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 9.5h18M3 7.5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div>
-          <div class="b"><div class="t1">Subscribe now</div><div class="t2">Billing isn't wired up yet</div></div>
-        </div>
+        <button type="button" class="method press" data-plan="trial">
+          <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></span>
+          <span class="b"><span class="t1">Start a free trial</span><span class="t2">Full access. No card needed now.</span></span>
+        </button>
+        <button type="button" class="method press" data-plan="paid">
+          <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5h18M3 7.5h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
+          <span class="b"><span class="t1">Subscribe now</span><span class="t2">Billing isn't wired up yet</span></span>
+        </button>
       </div>
       <div class="subnote">Payment details are never visible to the student profile. We asked for consent
         before this step on purpose — paying shouldn't feel like pressure to agree.</div>
@@ -239,28 +240,28 @@ export function startOnboarding(root, { onComplete, session = null }) {
     return shell(h(`
       ${err(error)}
       <div class="searchwrap"><div class="search">
-        <input id="ob-sname" placeholder="Student's first name" autocomplete="off">
+        <input id="ob-sname" aria-label="Student's first name" placeholder="Student's first name" autocomplete="off">
       </div></div>
       <div class="sectitle">Class</div>
-      <div class="list"><div class="srow noicon"><div class="lbl">Class</div>
-        <div class="seg" id="ob-class">
-          ${[9, 10, 11, 12].map((c, i) => `<button data-class="${c}"${i === 2 ? ' class="on"' : ''}>${c}</button>`).join('')}
+      <div class="list"><div class="srow noicon"><div class="lbl" id="ob-class-lbl">Class</div>
+        <div class="seg" id="ob-class" role="radiogroup" aria-labelledby="ob-class-lbl">
+          ${[9, 10, 11, 12].map((c, i) => `<button type="button" role="radio" aria-checked="${i === 2}" aria-label="Class ${c}" data-class="${c}"${i === 2 ? ' class="on"' : ''}>${c}</button>`).join('')}
         </div></div>
         <div class="srow noicon"><div class="lbl">Board</div><span class="aux">CBSE</span></div>
       </div>
       <div class="sectitle">Subjects</div>
       <div class="filterbar" id="ob-subjects" style="position:static">
-        ${SUBJECTS.map(s => `<div class="fchip${chosen.has(s) ? ' active' : ''}" data-subject="${esc(s)}">${esc(s)}</div>`).join('')}
+        ${SUBJECTS.map(s => `<button type="button" class="fchip${chosen.has(s) ? ' active' : ''}" aria-pressed="${chosen.has(s)}" data-subject="${esc(s)}">${esc(s)}</button>`).join('')}
       </div>
       <div class="subnote">Nothing else is collected — no school, no address, no photograph.</div>
-      <div class="btn primary press" id="ob-student-go" style="margin:18px">Create profile</div>
+      <button type="button" class="btn primary press" id="ob-student-go" style="margin:18px">Create profile</button>
     `), { title: 'The student' });
   }
 
   // ── step 7 · student first run ───────────────────────────────────────────
   function firstRun() {
     return shell(h(`
-      <div class="card insight press">
+      <div class="card insight">
         <div class="line">This is yours, ${esc(state.student?.first_name || 'not your parent\'s')}.</div>
       </div>
       <div class="sectitle">How it works</div>
@@ -270,26 +271,26 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="srow noicon"><div class="lbl">You can see the reasoning<small>Every insight shows what it was based on</small></div></div>
         <div class="srow noicon"><div class="lbl">If we read something wrong, fix it<small>Your correction wins. No review, no arguing.</small></div></div>
       </div>
-      <div class="btn primary press" id="ob-first-go" style="margin:18px">Upload my first paper</div>
-      <div class="btn plain press" id="ob-skip">Look around first</div>
+      <button type="button" class="btn primary press" id="ob-first-go" style="margin:18px">Upload my first paper</button>
+      <button type="button" class="btn plain press" id="ob-skip">Look around first</button>
     `), { title: 'Hello' });
   }
 
   // ── step 8 · guided first upload ─────────────────────────────────────────
   function firstUpload() {
     return shell(h(`
-      <div class="card insight press">
+      <div class="card insight">
         <div class="line">What kind of paper is this?</div>
         <div class="subnote" style="margin:10px 0 0">This one matters: a board paper can be matched to the
           official marking scheme. A school test is explained from your teacher's marks instead.</div>
       </div>
       <div class="list" style="margin-top:14px">
         ${PAPER_TYPES.map(t => `
-          <div class="method press" data-type="${esc(t.value)}">
-            <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></div>
-            <div class="b"><div class="t1">${esc(t.label)}</div>
-              <div class="t2">${t.value === 'pyq' || t.value === 'sample_paper' ? 'Matched to the official scheme where we have it' : 'Explained from your teacher\'s marks'}</div></div>
-          </div>`).join('')}
+          <button type="button" class="method press" data-type="${esc(t.value)}">
+            <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></span>
+            <span class="b"><span class="t1">${esc(t.label)}</span>
+              <span class="t2">${t.value === 'pyq' || t.value === 'sample_paper' ? 'Matched to the official scheme where we have it' : 'Explained from your teacher\'s marks'}</span></span>
+          </button>`).join('')}
       </div>
       <div class="subnote">We'll only ask this the first time.</div>
     `), { title: 'Your first paper' });
@@ -416,8 +417,9 @@ export function startOnboarding(root, { onComplete, session = null }) {
       const purpose = el.dataset.purpose;
       const next = !state.consent[purpose];
       state.consent[purpose] = next;
-      el.classList.toggle('on', next);
-      el.querySelector('.th').style.transform = `translateX(${next ? 22 : 0}px)`;
+      // The design system's switch: same spring as Settings, and it keeps
+      // aria-checked in step, which is the half a screen reader reads.
+      window.__masterySwitch?.(el, next);
       tick();
     });
 
@@ -439,12 +441,19 @@ export function startOnboarding(root, { onComplete, session = null }) {
 
     on('#ob-class button', 'click', (e) => {
       tick();
-      root.querySelectorAll('#ob-class button').forEach(b => b.classList.toggle('on', b === e.currentTarget));
+      root.querySelectorAll('#ob-class button').forEach((b) => {
+        const on = b === e.currentTarget;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
     });
 
+    // Subjects are the one genuinely multi-select filter in the app, so they
+    // are toggles carrying aria-pressed rather than a single-value chooser.
     on('#ob-subjects .fchip', 'click', (e) => {
       tick();
-      e.currentTarget.classList.toggle('active');
+      const on = e.currentTarget.classList.toggle('active');
+      e.currentTarget.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 
     on('#ob-student-go', 'click', async () => {

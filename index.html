@@ -22,6 +22,47 @@
 
   *{box-sizing:border-box;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;}
 
+  /* ── the interactive primitive ──
+     Every control in the app is a real <button> or a real <input>. Keyboard
+     activation, the disabled semantics and a focusable box come from the
+     element rather than from a keydown handler bolted onto a div — a handler
+     has to be re-applied to every row rendered after boot, and one that gets
+     missed is a control the keyboard cannot reach. This strips the UA styling
+     so a button carries no visual weight of its own; the classes below still
+     own the entire appearance. */
+  button{font:inherit;color:inherit;background:none;border:0;margin:0;padding:0;
+    text-align:left;letter-spacing:inherit;-webkit-appearance:none;appearance:none;}
+  button:enabled{cursor:pointer;}
+
+  /* Disabled is a real state, not a missing one: dimmed, still announced, and
+     inert to hover and press. Amber and red are not spent on it — it is not a
+     warning, it is an absence. */
+  button:disabled,[aria-disabled="true"]{opacity:.42;cursor:default;}
+
+  /* Half the layout classes here set `display`, which beats the UA rule for
+     [hidden]. Filtering a row out or hiding a dead sheet button silently
+     failed without this. */
+  [hidden]{display:none !important;}
+
+  /* A <button> sizes to its content even at display:flex, where the <div> it
+     replaced filled its container. Anything that used to be a full-width row
+     or CTA has to be told to stretch again. `stretch` subtracts the element's
+     own margins, which plain 100% does not — several of these carry an 18px
+     margin and would otherwise overflow by exactly that much. The 100% first
+     is the floor for anything too old for either keyword. */
+  .btn,.scanbtn,.row,.srow,.cheap,.method,.sh-choice,.attention,.proc,.disclose .toggle{
+    width:100%;
+    width:-webkit-fill-available;
+    width:stretch;
+  }
+
+  /* A button only takes phrasing content, so row internals are spans rather
+     than divs. These give them back the block layout the divs had. */
+  .row .b,.row .t1,.cheap .b,.cheap .t1,.cheap .t2,.method .b,.method .t1,.method .t2,
+  .attention .b,.attention .t1,.attention .t2,.srow .lbl,.lost,.draft .b,.draft .t1,.draft .t2,
+  .drafttoast .b,.drafttoast .t1,.drafttoast .t2,.srow .lbl small,
+  .proc .hd,.proc .sub,.skel,.thumb,.rvcrop{display:block;}
+
   /* ── responsive scale: one continuous ramp, not two designs ── */
   :root{
     --spring:cubic-bezier(.32,.72,0,1);
@@ -51,7 +92,11 @@
     transition:background .4s ease,color .4s ease;}
   [data-theme="dark"]{
     --bg:#000;--surface:#151517;--surface-sunk:#0E0E10;--hairline:rgba(255,255,255,.075);
-    --label:#F5F5F7;--label-2:rgba(235,235,245,.6);--label-3:rgba(235,235,245,.32);
+    /* label-2 and label-3 carry real text — secondary rows, sample sizes,
+       every subnote — so they are set by measured contrast against --surface,
+       not by eye. .60/.32 measured 6.2:1 and 2.7:1; the second failed badly.
+       .70/.52 measure 8.0:1 and 5.0:1, and stay three visibly distinct steps. */
+    --label:#F5F5F7;--label-2:rgba(235,235,245,.70);--label-3:rgba(235,235,245,.52);
     --blue:#3A86FF;--green:#30D158;--amber:#FF9F0A;--red:#FF6B57;--statusfg:#fff;
     --nav-bg:rgba(38,38,42,.52);--nav-border:rgba(255,255,255,.16);--nav-rim:rgba(255,255,255,.30);
     --nav-shadow:0 16px 40px rgba(0,0,0,.6);--nav-pill:rgba(255,255,255,.16);--nav-pill-rim:rgba(255,255,255,.30);
@@ -60,8 +105,16 @@
   }
   [data-theme="light"]{
     --bg:#F4F4F7;--surface:#FFFFFF;--surface-sunk:#EDEDF1;--hairline:rgba(60,60,67,.11);
-    --label:#0C0C10;--label-2:rgba(60,60,67,.68);--label-3:rgba(60,60,67,.4);
-    --blue:#2C74E8;--green:#249B49;--amber:#C77A06;--red:#D8462F;--statusfg:#0C0C10;
+    /* Same measurement, taken against the worst of the three light surfaces
+       (the sunk one, not white). .68/.40 measured 4.3:1 and 2.2:1; .85/.75
+       measure 6.2:1 and 4.7:1, and stay three visibly separate steps. Light
+       mode was the further out of the two, and it is the one actually read on
+       a phone in daylight. */
+    --label:#0C0C10;--label-2:rgba(60,60,67,.85);--label-3:rgba(60,60,67,.75);
+    /* Green, amber and red are all used as *text* on a tinted chip in light
+       mode, where the original values sat between 3.0:1 and 4.4:1. Darkened
+       to the nearest shade of the same hue that clears 4.5:1. */
+    --blue:#2C74E8;--green:#1A7A38;--amber:#9A5D00;--red:#C3392A;--statusfg:#0C0C10;
     --nav-bg:rgba(255,255,255,.62);--nav-border:rgba(255,255,255,.85);--nav-rim:rgba(255,255,255,.95);
     --nav-shadow:0 10px 30px rgba(28,28,40,.16),0 2px 8px rgba(28,28,40,.08);
     --nav-pill:rgba(120,120,130,.13);--nav-pill-rim:rgba(255,255,255,.9);
@@ -110,17 +163,27 @@
   .lost{font-size:15.5px;font-weight:600;letter-spacing:-.02em;text-align:right;}
   .lost small{display:block;font-size:11px;font-weight:500;color:var(--label-3);margin-top:2px;}
 
-  .tier{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;}
+  /* State chips. Non-interactive by construction — spans, no cursor, no press,
+     no hover. If one ever needs to be tappable it becomes a .fchip instead. */
+  .tier{display:inline-block;font-size:11px;font-weight:600;padding:1.5px 6px;border-radius:6px;
+    border:1px solid transparent;}
   .tier.t2{background:rgba(48,209,88,.16);color:var(--green);}
   .tier.t1{background:var(--surface-sunk);color:var(--label-2);}
-  .tier.uns{background:rgba(255,159,10,.16);color:var(--amber);}
+  /* Unsure, so it carries the dashed outline that means unsure everywhere else. */
+  .tier.uns{background:transparent;color:var(--amber);border-style:dashed;border-color:var(--amber);}
 
   /* filter bar */
   .filterbar{position:sticky;top:var(--view-top);z-index:12;padding:10px 0 10px var(--gutter);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;background:var(--bg);}
   .filterbar::-webkit-scrollbar{display:none;}
   .filterbar::after{content:"";flex:0 0 var(--gutter);}
-  .fchip{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:14px;background:var(--surface);border:.5px solid var(--hairline);font-size:13.5px;font-weight:500;color:var(--label-2);letter-spacing:-.01em;cursor:pointer;}
-  .fchip.active{background:var(--blue);border-color:transparent;color:#fff;font-weight:600;}
+  /* Filter chips. Two kinds, distinguished by the caret: a chip with one opens
+     the choice sheet and holds a single value; a chip without one is a
+     multi-select toggle and carries aria-pressed. Both are real buttons. */
+  .fchip{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:14px;background:var(--surface);border:.5px solid var(--hairline);font-size:13.5px;font-weight:500;color:var(--label-2);letter-spacing:-.01em;
+    transition:background .12s ease,color .12s ease,border-color .12s ease;}
+  .fchip.active,.fchip[aria-pressed="true"]{background:var(--blue);border-color:transparent;color:#fff;font-weight:600;}
+  .fchip:enabled:active{background:var(--surface-sunk);}
+  .fchip.active:enabled:active,.fchip[aria-pressed="true"]:enabled:active{background:var(--blue);filter:brightness(.93);}
   .fchip svg{width:9px;height:9px;opacity:.55;}
 
   /* search */
@@ -129,6 +192,16 @@
   .search svg{width:16px;height:16px;fill:none;stroke:var(--label-3);stroke-width:2;stroke-linecap:round;}
   .search input{flex:1;background:none;border:none;outline:none;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
   .search input::placeholder{color:var(--label-3);}
+  .search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;}
+  /* Clear appears only when there is something to clear, so it is never a dead
+     control. Escape in the field does the same thing. */
+  .searchclear{display:none;width:20px;height:20px;border-radius:10px;flex-shrink:0;
+    background:var(--surface-sunk);align-items:center;justify-content:center;}
+  .search.filled .searchclear{display:flex;}
+  .searchclear svg{width:9px;height:9px;stroke:var(--label-2);stroke-width:2.4;}
+  /* Result count is a live region: a debounced search that silently rewrites
+     the list tells a screen reader nothing happened. */
+  .searchstatus{margin:8px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;color:var(--label-3);}
 
   /* cheap marks */
   .cheap{display:flex;align-items:flex-start;gap:13px;padding:16px 18px;position:relative;will-change:transform;}
@@ -145,7 +218,10 @@
   .causebar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin-bottom:16px;}
   .causebar i{display:block;height:100%;border-radius:2px;}
   .causegrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;}
-  .cz{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  /* The legend reads the bar; it does not filter it. Filtering Insights by
+     cause is not a pattern this design has, so the row does not pretend to be
+     one — no cursor, no press, no hover. */
+  .cz{display:flex;align-items:center;gap:8px;}
   .cz .sw2{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
   .cz .n{flex:1;font-size:13px;color:var(--label-2);letter-spacing:-.01em;}
   .cz .v{font-size:13px;font-weight:600;color:var(--label);}
@@ -156,7 +232,7 @@
   .maprow:last-of-type{margin-bottom:0;}
   .maprow .ch{width:104px;font-size:12.5px;color:var(--label-2);letter-spacing:-.01em;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .maprow .cells{flex:1;display:flex;gap:4px;}
-  .maprow .cells i{flex:1;height:22px;border-radius:5px;cursor:pointer;}
+  .maprow .cells i{flex:1;height:22px;border-radius:5px;}
   .maplegend{display:flex;align-items:center;gap:7px;margin-top:15px;padding-top:13px;border-top:.5px solid var(--hairline);font-size:11.5px;color:var(--label-3);}
   .maplegend .ramp{flex:1;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--m1),var(--m5));}
 
@@ -182,7 +258,7 @@
   .estate{margin:18px var(--gutter);padding:28px 22px;border-radius:var(--r-card);background:var(--surface);border:.5px solid var(--hairline);text-align:center;}
   .estate .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
   .estate .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-  .estate h4{margin:0 0 7px;font-size:18px;font-weight:700;letter-spacing:-.025em;}
+  .estate h2{margin:0 0 7px;font-size:18px;font-weight:700;letter-spacing:-.025em;}
   .estate p{margin:0 0 18px;font-size:14px;line-height:1.5;color:var(--label-2);}
   .estate .prog{display:flex;align-items:center;gap:9px;margin-bottom:18px;}
   .estate .prog .tr{flex:1;height:6px;border-radius:3px;background:var(--surface-sunk);overflow:hidden;}
@@ -275,7 +351,7 @@
   .rvhead{padding-top:calc(var(--top-inset) + 10px);height:calc(var(--top-inset) + 48px);display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:16px;flex-shrink:0;border-bottom:.5px solid var(--hairline);}
   .rvback{width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;background:var(--surface-sunk);cursor:pointer;will-change:transform;}
   .rvback svg{width:16px;height:16px;}
-  .rvtitle{font-size:15px;font-weight:600;letter-spacing:-.015em;}
+  .rvtitle{margin:0;font-size:15px;font-weight:600;letter-spacing:-.015em;}
   .rvsave{font-size:15px;font-weight:600;color:var(--blue);cursor:pointer;will-change:transform;}
   .rvscroll{flex:1;overflow-y:auto;padding-bottom:40px;scrollbar-width:none;}
   .rvscroll::-webkit-scrollbar{display:none;}
@@ -301,18 +377,29 @@
   /* ── Home-only: insight card / attention / scan cta ── */
   .insight{margin-top:18px;padding:clamp(17px,4.6vw,22px) clamp(17px,4.6vw,22px) 6px;}
   .chips{display:flex;gap:7px;margin-bottom:12px;}
-  .chip{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;letter-spacing:.005em;}
+  /* Confidence is form, not colour — it has to survive greyscale, a
+     colourblind reader and a screenshot pasted into a group chat. Solid fill,
+     light fill with a border, dashed outline. Nothing here is hue-encoded. */
+  .chip{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:8px;letter-spacing:.005em;
+    border:1px solid transparent;}
   .chip.n{background:var(--surface-sunk);color:var(--label-2);}
-  .chip.conf-likely{background:rgba(255,159,10,.16);color:var(--amber);}
-  .chip.conf-confirmed{background:rgba(48,209,88,.16);color:var(--green);}
+  .chip.conf-confirmed{background:var(--label-2);color:var(--bg);}
+  .chip.conf-likely{background:var(--surface-sunk);color:var(--label);border-color:var(--label-3);}
+  .chip.conf-unsure{background:transparent;color:var(--label);border-style:dashed;border-color:var(--label-3);}
   .insight .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.32;}
   .insight .line em{font-style:normal;color:var(--blue);}
   .disclose{margin-top:14px;border-top:.5px solid var(--hairline);}
-  .disclose .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;cursor:pointer;font-size:14px;font-weight:500;color:var(--label-2);}
-  .disclose .toggle .car{width:11px;height:11px;transition:transform .32s var(--spring);opacity:.5;}
+  .disclose .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;font-size:14px;font-weight:500;color:var(--label-2);width:100%;}
+  .disclose .toggle .car{width:11px;height:11px;transition:transform .2s var(--spring);opacity:.5;}
   .disclose.open .toggle .car{transform:rotate(90deg);}
-  .disclose .panel{overflow:hidden;height:0;transition:height .38s var(--spring);}
-  .disclose .inner{padding-bottom:16px;}
+  /* Disclosure is a 200ms move, and only transform and opacity move. The
+     panel's height is set by JS with no transition on it — animating height
+     is a layout animation, which is the one thing the motion rules forbid, and
+     it is also what drops frames on the budget Androids most of this runs on. */
+  .disclose .panel{overflow:hidden;height:0;}
+  .disclose .inner{padding-bottom:16px;opacity:0;transform:translateY(-6px);
+    transition:opacity .2s ease,transform .2s var(--spring);}
+  .disclose.open .inner{opacity:1;transform:none;}
   .dgroup{margin-bottom:13px;}
   .dgroup:last-child{margin-bottom:0;}
   .dgroup .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);margin-bottom:4px;}
@@ -341,10 +428,10 @@
   .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
   .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
   .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
-  .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);cursor:pointer;transition:background .22s ease,color .22s ease;}
+  .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);text-align:center;transition:background .12s ease,color .12s ease;}
   .seg button.on{background:var(--surface);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600;}
   [data-theme="dark"] .seg button.on{background:#3A3A3E;}
-  .sw{width:56px;height:34px;position:relative;flex-shrink:0;cursor:pointer;}
+  .sw{display:block;width:56px;height:34px;position:relative;flex-shrink:0;}
   .sw .tr{position:absolute;inset:0;border-radius:17px;background:#3A3A3E;transition:background .32s ease;}
   [data-theme="light"] .sw .tr{background:#D9D9DE;}
   .sw.on .tr{background:var(--green);}
@@ -362,13 +449,20 @@
   /* ── warning sheet ── */
   .scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .3s ease;}
   .scrim.on{opacity:1;pointer-events:auto;}
+  /* A sheet is a modal. `inert` on everything behind it takes care of focus and
+     the accessibility tree; the scroll behind it has to be stopped separately,
+     or a drag on the scrim scrolls the view underneath. Applied by the dialog
+     controller to whichever scrollers are actually behind the open dialog, so
+     a sheet raised over the review screen locks the review screen too, while
+     the review screen itself still scrolls when it is the topmost thing. */
+  .scrolllock{overflow:hidden !important;}
   .sheet{position:absolute;left:8px;right:8px;bottom:max(8px,var(--bot-inset));z-index:51;background:var(--sheet-bg);border-radius:32px;padding:24px 22px 18px;transform:translateY(115%);will-change:transform;box-shadow:0 -10px 50px rgba(0,0,0,.4);border:.5px solid var(--hairline);
     /* never taller than the shell — a landscape phone has ~390px to work with */
     max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;}
   .sheet::-webkit-scrollbar{display:none;}
   .sheet .warnic{width:44px;height:44px;border-radius:14px;background:rgba(255,159,10,.16);display:flex;align-items:center;justify-content:center;margin-bottom:15px;}
   .sheet .warnic svg{width:22px;height:22px;fill:none;stroke:var(--amber);stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
-  .sheet h4{margin:0 0 7px;font-size:21px;font-weight:700;letter-spacing:-.028em;line-height:1.2;}
+  .sheet h2{margin:0 0 7px;font-size:21px;font-weight:700;letter-spacing:-.028em;line-height:1.2;}
   .sheet .body{font-size:14.5px;line-height:1.5;color:var(--label-2);}
   .sheet ul{margin:14px 0 0;padding:0;list-style:none;}
   .sheet li{display:flex;gap:10px;font-size:14px;line-height:1.45;color:var(--label-2);padding:8px 0;border-top:.5px solid var(--hairline);}
@@ -474,25 +568,40 @@
      don't get stuck in a hover state after a tap. Only genuinely interactive
      rows respond — the [onclick] attribute selector keeps read-only settings
      rows from advertising themselves as tappable. */
+  /* Hover. Every selector is a button and carries :enabled, so a disabled
+     control never lights up under the cursor. */
   @media (hover:hover) and (pointer:fine){
-    .row,.cheap{cursor:pointer;}
-    .row:hover,.cheap:hover,.method:hover,.srow[onclick]:hover{background:var(--surface-sunk);}
-    .srow[onclick]{cursor:pointer;}
-    .fchip:hover:not(.active){border-color:var(--label-3);color:var(--label);}
-    .fchip.active:hover{filter:brightness(1.08);}
-    .btn:hover,.scanbtn:hover{filter:brightness(1.07);}
-    .tab:hover svg{stroke:var(--nav-icon-on);}
-    .tab:hover .lbl{color:var(--nav-icon-on);}
-    .themebtn:hover{color:var(--label);}
-    .sidebtn:hover,.draftsicon:hover,.shutter:hover{background:rgba(255,255,255,.24);}
-    .rvback:hover,.disclose .toggle:hover{color:var(--label);}
-    .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
+    button.row:enabled:hover,button.cheap:enabled:hover,
+    button.method:enabled:hover,button.srow:enabled:hover{background:var(--surface-sunk);}
+    .fchip:enabled:hover:not(.active):not([aria-pressed="true"]){border-color:var(--label-3);color:var(--label);}
+    .fchip.active:enabled:hover,.fchip[aria-pressed="true"]:enabled:hover{filter:brightness(1.08);}
+    .btn:enabled:hover,.scanbtn:enabled:hover{filter:brightness(1.07);}
+    .tab:enabled:hover svg{stroke:var(--nav-icon-on);}
+    .tab:enabled:hover .lbl{color:var(--nav-icon-on);}
+    .themebtn:enabled:hover{color:var(--label);}
+    .sidebtn:enabled:hover,.draftsicon:enabled:hover,.shutter:enabled:hover{background:rgba(255,255,255,.24);}
+    .rvback:enabled:hover,.rvsave:enabled:hover,.disclose .toggle:enabled:hover{color:var(--label);}
+    .sh-choice:enabled:hover,.go:enabled:hover,.searchclear:enabled:hover{filter:brightness(1.07);}
+    .seg button:enabled:hover:not(.on){color:var(--label);}
   }
 
-  /* Visible only for keyboard users; the design's press states cover pointers. */
-  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px;}
+  /* Active. The press spring covers a pointer that moves; this covers a finger
+     that doesn't, and a keyboard, which never fires pointerdown at all. */
+  button.row:enabled:active,button.cheap:enabled:active,
+  button.method:enabled:active,button.srow:enabled:active{background:var(--surface-sunk);}
+  .btn:enabled:active,.scanbtn:enabled:active,.sh-choice:enabled:active,
+  .go:enabled:active,.seg button:enabled:active{filter:brightness(.93);}
+  .sidebtn:enabled:active,.shutter:enabled:active,.draftsicon:enabled:active{background:rgba(255,255,255,.3);}
+
+  /* Focus-visible. Keyboard only — the press states cover pointers. Never the
+     browser default outline, which is invisible on the dark surface. */
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+  /* .list clips its children, so a ring drawn outside the button is cut off on
+     the first and last row. Inside the button it always survives. */
+  .list :focus-visible,.seg :focus-visible{outline-offset:-3px;}
   .tab:focus-visible{outline-offset:-4px;}
   .search input:focus-visible{outline:none;}
+  .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
 
   ::selection{background:rgba(58,134,255,.32);color:#fff;}
 
@@ -545,7 +654,7 @@
     padding:13px 14px;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
 
   /* Stop single-word orphans in the headlines now that widths vary. */
-  .greet h1,.insight .line,.estate h4,.sheet h4,.proc .hd{text-wrap:balance;}
+  .greet h1,.insight .line,.estate h2,.sheet h2,.proc .hd{text-wrap:balance;}
 
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
 </style>
@@ -563,23 +672,26 @@
 
 <div class="app" id="app" style="--m1:rgba(58,134,255,.12);--m5:#3A86FF;">
 
-    <div class="themebtn" onclick="flipTheme()" id="themebtn" role="button" tabindex="0" aria-label="Switch appearance">
-      <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.6 12H2.4M21.6 12h-2.2M6.8 6.8 5.2 5.2M18.8 18.8l-1.6-1.6M17.2 6.8l1.6-1.6M5.2 18.8l1.6-1.6"/></svg>
-      <svg class="ic-moon" viewBox="0 0 24 24"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.6 8.6 0 1 0 10.2 10.2Z"/></svg>
-    </div>
+    <button type="button" class="themebtn" id="themebtn" aria-label="Switch to light appearance">
+      <svg class="ic-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.6 12H2.4M21.6 12h-2.2M6.8 6.8 5.2 5.2M18.8 18.8l-1.6-1.6M17.2 6.8l1.6-1.6M5.2 18.8l1.6-1.6"/></svg>
+      <svg class="ic-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.6 8.6 0 1 0 10.2 10.2Z"/></svg>
+    </button>
     <div class="header" id="hdr"><div class="plate"></div><div class="t"><span id="hdrTitle">Home</span></div></div>
 
     <!-- ══════════════ 0 · HOME ══════════════ -->
-    <div class="view on" id="v0">
+    <div class="view on" id="v0" role="tabpanel" aria-labelledby="tab-0" tabindex="-1">
       <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
 
       <div class="hgrid">
-      <div class="card insight press">
+      <!-- Not a button: the card is read, and the only thing in it you can
+           operate is the disclosure. A press spring here would advertise a tap
+           that does nothing. -->
+      <div class="card insight">
         <div class="chips"><span class="chip n">14 papers</span><span class="chip conf-likely">Likely</span></div>
         <div class="line">You're losing most marks to <em>unstated assumptions</em> in derivation questions — not to the physics itself.</div>
         <div class="disclose" id="disc">
-          <div class="toggle" onclick="toggleDisc()"><span>Show reasoning</span>
-            <svg class="car" viewBox="0 0 7 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+          <button type="button" class="toggle" id="discToggle" aria-expanded="false" aria-controls="discPanel"><span>Show reasoning</span>
+            <svg class="car" viewBox="0 0 7 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
           <div class="panel" id="discPanel"><div class="inner">
             <div class="dgroup"><div class="k">What we read</div><div class="v">Across 14 papers, 9 of 23 derivation answers reached the correct final expression but skipped a stated starting condition.</div></div>
             <div class="dgroup"><div class="k">What the scheme asks</div><div class="v">CBSE marking allocates 1 mark to stating assumptions before the derivation begins, awarded independently of the result.</div></div>
@@ -588,73 +700,78 @@
         </div>
       </div>
 
-      <div class="card attention press">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.5v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
-        <div class="b"><div class="t1">3 answers need a quick check</div><div class="t2">Across 2 papers · marked Unsure</div></div>
-        <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-      </div>
+      <button type="button" class="card attention press" data-go="unsure">
+        <span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 16.5v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></span>
+        <span class="b"><span class="t1">3 answers need a quick check</span><span class="t2">Across 2 papers · marked Unsure</span></span>
+        <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+      </button>
       </div>
 
-      <div class="sectitle">Recent scans</div>
+      <h2 class="sectitle">Recent scans</h2>
       <div class="list">
-        <div class="row press"><div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span class="tier t2">Scheme-verified</span><span>6 Aug</span></div></div><div class="lost">7<small>marks lost</small></div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="row press"><div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span class="tier uns">2 unsure</span><span>4 Aug</span></div></div><div class="lost">11<small>marks lost</small></div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="row press"><div class="b"><div class="t1">Physics · Optics Revision</div><div class="t2"><span class="tier t1">Extracted</span><span>1 Aug</span></div></div><div class="lost">4<small>marks lost</small></div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <button type="button" class="row press" data-review><span class="b"><span class="t1">Physics · Unit Test 4</span><span class="t2"><span class="tier t2">Scheme-verified</span><span>6 Aug</span></span></span><span class="lost">7<small>marks lost</small></span>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="row press" data-review><span class="b"><span class="t1">Maths · Ch. 6 Practice</span><span class="t2"><span class="tier uns">2 unsure</span><span>4 Aug</span></span></span><span class="lost">11<small>marks lost</small></span>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="row press" data-review><span class="b"><span class="t1">Physics · Optics Revision</span><span class="t2"><span class="tier t1">Extracted</span><span>1 Aug</span></span></span><span class="lost">4<small>marks lost</small></span>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
       </div>
 
-      <div class="scanbtn press" id="uploadBtn" role="button" tabindex="0">
-        <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+      <button type="button" class="scanbtn press" id="uploadBtn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
         Add a paper
-      </div>
+      </button>
     </div>
 
     <!-- ══════════════ 1 · INSIGHTS ══════════════ -->
-    <div class="view" id="v1">
-      <div class="greet"><h1>Insights</h1><div class="sub">Everything across your 14 scanned papers.</div></div>
-      <div class="filterbar">
-        <div class="fchip active">Physics <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Last 3 months <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+    <div class="view" id="v1" role="tabpanel" aria-labelledby="tab-1" tabindex="-1">
+      <div class="greet"><h1>Insights</h1><div class="sub" id="insightScope">Everything across your 14 scanned papers.</div></div>
+      <div class="filterbar" role="group" aria-label="Filter insights">
+        <button type="button" class="fchip active" data-filter="subject" data-scope="insights" aria-haspopup="dialog" aria-expanded="false"><span data-fval>Physics</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip active" data-filter="period" data-scope="insights" aria-haspopup="dialog" aria-expanded="false"><span data-fval>Last 3 months</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip" data-filter="type" data-scope="insights" aria-haspopup="dialog" aria-expanded="false"><span data-fval>All types</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip" data-filter="tier" data-scope="insights" aria-haspopup="dialog" aria-expanded="false"><span data-fval>Any tier</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
       </div>
 
       <div class="igrid">
       <section class="isec">
-      <div class="sectitle tight">Cheap marks</div>
+      <h2 class="sectitle tight">Cheap marks</h2>
       <div class="list">
-        <div class="cheap press"><div class="rank">1</div><div class="b"><div class="t1">Write the formula before substituting</div><div class="t2">17 questions · every scheme awards it separately</div></div><div class="gain">14<small>marks</small></div></div>
-        <div class="cheap press"><div class="rank">2</div><div class="b"><div class="t1">State assumptions at the start of a derivation</div><div class="t2">9 questions · 1 mark each, result-independent</div></div><div class="gain">9<small>marks</small></div></div>
-        <div class="cheap press"><div class="rank">3</div><div class="b"><div class="t1">Carry units through to the final answer</div><div class="t2">11 questions · usually the last half-mark</div></div><div class="gain">6<small>marks</small></div></div>
+        <div class="cheap"><div class="rank">1</div><div class="b"><div class="t1">Write the formula before substituting</div><div class="t2">17 questions · every scheme awards it separately</div></div><div class="gain">14<small>marks</small></div></div>
+        <div class="cheap"><div class="rank">2</div><div class="b"><div class="t1">State assumptions at the start of a derivation</div><div class="t2">9 questions · 1 mark each, result-independent</div></div><div class="gain">9<small>marks</small></div></div>
+        <div class="cheap"><div class="rank">3</div><div class="b"><div class="t1">Carry units through to the final answer</div><div class="t2">11 questions · usually the last half-mark</div></div><div class="gain">6<small>marks</small></div></div>
       </div>
       <div class="subnote">Ranked by marks recovered per unit of effort, not by how often each appears.</div>
       </section>
 
       <section class="isec">
-      <div class="sectitle">Marks lost by cause</div>
+      <h2 class="sectitle">Marks lost by cause</h2>
       <div class="card causecard">
-        <div class="causebar">
+        <div class="causebar" role="img" aria-label="Marks lost by cause: conceptual gap 23, procedural slip 19, misread question 16, incomplete 14, presentation 11, keyword miss 10, timed out 7.">
           <i style="flex:23;background:#4C7DF0"></i><i style="flex:19;background:#3FA9A0"></i><i style="flex:16;background:#8A6FD1"></i>
           <i style="flex:14;background:#C98A3E"></i><i style="flex:11;background:#C46B8A"></i><i style="flex:10;background:#7C9455"></i><i style="flex:7;background:#78808F"></i>
         </div>
         <div class="causegrid">
-          <div class="cz"><span class="sw2" style="background:#4C7DF0"></span><span class="n">Conceptual gap</span><span class="v">23</span></div>
-          <div class="cz"><span class="sw2" style="background:#3FA9A0"></span><span class="n">Procedural slip</span><span class="v">19</span></div>
-          <div class="cz"><span class="sw2" style="background:#8A6FD1"></span><span class="n">Misread question</span><span class="v">16</span></div>
-          <div class="cz"><span class="sw2" style="background:#C98A3E"></span><span class="n">Incomplete</span><span class="v">14</span></div>
-          <div class="cz"><span class="sw2" style="background:#C46B8A"></span><span class="n">Presentation</span><span class="v">11</span></div>
-          <div class="cz"><span class="sw2" style="background:#7C9455"></span><span class="n">Keyword miss</span><span class="v">10</span></div>
-          <div class="cz"><span class="sw2" style="background:#78808F"></span><span class="n">Timed out</span><span class="v">7</span></div>
+          <div class="cz"><span class="sw2" style="background:#4C7DF0" aria-hidden="true"></span><span class="n">Conceptual gap</span><span class="v">23</span></div>
+          <div class="cz"><span class="sw2" style="background:#3FA9A0" aria-hidden="true"></span><span class="n">Procedural slip</span><span class="v">19</span></div>
+          <div class="cz"><span class="sw2" style="background:#8A6FD1" aria-hidden="true"></span><span class="n">Misread question</span><span class="v">16</span></div>
+          <div class="cz"><span class="sw2" style="background:#C98A3E" aria-hidden="true"></span><span class="n">Incomplete</span><span class="v">14</span></div>
+          <div class="cz"><span class="sw2" style="background:#C46B8A" aria-hidden="true"></span><span class="n">Presentation</span><span class="v">11</span></div>
+          <div class="cz"><span class="sw2" style="background:#7C9455" aria-hidden="true"></span><span class="n">Keyword miss</span><span class="v">10</span></div>
+          <div class="cz"><span class="sw2" style="background:#78808F" aria-hidden="true"></span><span class="n">Timed out</span><span class="v">7</span></div>
         </div>
       </div>
       <div class="subnote">Different kinds of problem, coloured categorically — no cause ranks worse than another.</div>
       </section>
 
       <section class="isec">
-      <div class="sectitle">Concept mastery</div>
-      <div class="card mapcard">
+      <h2 class="sectitle">Concept mastery</h2>
+      <!-- OPEN: the cells carry their value only as blue opacity. That survives
+           greyscale as a lightness ramp, but there is nothing for a screen
+           reader to read, and the honest per-cell wording depends on what the
+           scale actually means once this is backed by real data. Labelled at
+           the grid level for now rather than inventing five step names. -->
+      <div class="card mapcard" role="img" aria-label="Concept mastery by chapter, on a scale from less practised to mastered. Chapters shown: Kinematics, Laws of Motion, Work and Energy, Rotational, Optics.">
         <div class="maprow"><span class="ch">Kinematics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
         <div class="maprow"><span class="ch">Laws of Motion</span><span class="cells"><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.25)"></i></span></div>
         <div class="maprow"><span class="ch">Work &amp; Energy</span><span class="cells"><i style="background:rgba(58,134,255,.25)"></i><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.25)"></i><i style="background:rgba(58,134,255,.12)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
@@ -665,10 +782,14 @@
       </section>
 
       <section class="isec">
-      <div class="sectitle">Trend</div>
-      <div class="card trendcard press">
+      <h2 class="sectitle">Trend</h2>
+      <!-- Not a button. The chart has no detail screen behind it, so it does
+           not get a press spring pretending it does. -->
+      <div class="card trendcard">
         <div class="hd"><span class="k">Marks lost per paper · Physics</span><span class="v">↓ 6 since March</span></div>
-        <svg viewBox="0 0 288 92" preserveAspectRatio="none" height="92">
+        <!-- The heading above states the figure in text, so the plot itself is
+             decorative rather than a second, unreadable copy of it. -->
+        <svg viewBox="0 0 288 92" preserveAspectRatio="none" height="92" aria-hidden="true">
           <line x1="0" y1="8" x2="288" y2="8" stroke="var(--hairline)" stroke-width="1"/>
           <line x1="0" y1="46" x2="288" y2="46" stroke="var(--hairline)" stroke-width="1"/>
           <line x1="0" y1="84" x2="288" y2="84" stroke="var(--hairline)" stroke-width="1"/>
@@ -681,33 +802,40 @@
       </section>
 
       <section class="isec">
-      <div class="sectitle">By question type</div>
+      <h2 class="sectitle">By question type</h2>
+      <!-- Each track duplicates a figure already written out beside it, so the
+           bars are hidden rather than read twice. -->
       <div class="list">
-        <div class="qt"><div class="hd"><span class="n">2-mark short answer</span><span class="r"><b>91%</b> retained</span></div><div class="track"><i data-w="91"></i></div></div>
-        <div class="qt"><div class="hd"><span class="n">MCQ</span><span class="r"><b>88%</b> retained</span></div><div class="track"><i data-w="88"></i></div></div>
-        <div class="qt"><div class="hd"><span class="n">Numerical</span><span class="r"><b>74%</b> retained</span></div><div class="track"><i data-w="74"></i></div></div>
-        <div class="qt"><div class="hd"><span class="n">Diagram-based</span><span class="r"><b>69%</b> retained</span></div><div class="track"><i data-w="69"></i></div></div>
-        <div class="qt"><div class="hd"><span class="n">5-mark long answer</span><span class="r"><b>52%</b> retained</span></div><div class="track"><i data-w="52"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">2-mark short answer</span><span class="r"><b>91%</b> retained</span></div><div class="track" aria-hidden="true"><i data-w="91"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">MCQ</span><span class="r"><b>88%</b> retained</span></div><div class="track" aria-hidden="true"><i data-w="88"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">Numerical</span><span class="r"><b>74%</b> retained</span></div><div class="track" aria-hidden="true"><i data-w="74"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">Diagram-based</span><span class="r"><b>69%</b> retained</span></div><div class="track" aria-hidden="true"><i data-w="69"></i></div></div>
+        <div class="qt"><div class="hd"><span class="n">5-mark long answer</span><span class="r"><b>52%</b> retained</span></div><div class="track" aria-hidden="true"><i data-w="52"></i></div></div>
       </div>
       <div class="subnote">Nearly all marks held on 2-markers, half lost on every 5-marker — a pattern the cause and concept views both miss.</div>
       </section>
       </div>
     </div>
 
-    <div class="view" id="v1b">
+    <!-- The honest half of Insights. A filter that narrows the scope below the
+         four papers a pattern needs lands here rather than on a chart drawn
+         from two data points. -->
+    <div class="view" id="v1b" role="tabpanel" aria-labelledby="tab-1" tabindex="-1">
       <div class="greet"><h1>Insights</h1></div>
       <div class="estate">
-        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M7 16v-3M12 16V8M17 16v-5"/></svg></div>
-        <h4>Not enough papers yet</h4>
-        <p>Patterns need about four papers before they mean anything. With two, anything shown here would be noise dressed as insight.</p>
-        <div class="prog"><div class="tr"><i></i></div><span>2 of 4</span></div>
-        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Scan a paper</div>
+        <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16"/><path d="M7 16v-3M12 16V8M17 16v-5"/></svg></div>
+        <h2 id="scopeEmptyTitle">Not enough papers yet</h2>
+        <p id="scopeEmptyBody">Patterns need about four papers before they mean anything. With two, anything shown here would be noise dressed as insight.</p>
+        <div class="prog"><div class="tr" role="img" aria-labelledby="scopeEmptyCount"><i id="scopeEmptyBar"></i></div><span id="scopeEmptyCount">2 of 4</span></div>
+        <button type="button" class="btn primary press" data-go="scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Scan a paper</button>
       </div>
-      <div class="subnote" style="text-align:center;margin-top:14px">Tap Insights again to preview the populated state → <span style="color:var(--blue);font-weight:600;cursor:pointer" onclick="pick(1)">full Insights</span></div>
+      <div class="subnote" style="text-align:center;margin-top:14px" id="scopeEmptyReset" hidden>That's this filter, not your whole library —
+        <button type="button" class="btn plain press" style="display:inline;padding:0;color:var(--blue);font-weight:600" data-clearfilters="insights">show every paper</button>
+      </div>
     </div>
 
     <!-- ══════════════ 2 · SCAN ══════════════ -->
-    <div class="view" id="v2">
+    <div class="view" id="v2" role="tabpanel" aria-labelledby="tab-2" tabindex="-1">
 
       <!-- viewfinder: opens immediately, covers most of the viewport -->
       <div class="scanhero">
@@ -720,260 +848,305 @@
         </div>
         <div class="scanhint">Fits Physics · Unit Test — align all four corners</div>
 
-        <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
-          <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
-          <span class="badge"></span>
-        </div>
+        <button type="button" class="draftsicon press" id="draftsIcon" aria-label="Drafts, 1 unfinished">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
+          <span class="badge" aria-hidden="true"></span>
+        </button>
 
         <!-- No in-app camera in v1: the phone's own camera app is better than
              anything achievable in a PWA, so the shutter opens the OS picker,
              which offers camera or gallery. -->
         <div class="scanctrls">
-          <div class="sidebtn press" data-action="link" role="button" tabindex="0" aria-label="Add a link">
-            <svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
-          </div>
-          <div class="shutter press" data-action="upload" role="button" tabindex="0" aria-label="Add pages"><div class="ring"></div></div>
-          <div class="sidebtn press" data-action="upload" role="button" tabindex="0" aria-label="Upload from files">
-            <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
-          </div>
+          <button type="button" class="sidebtn press" data-action="link" aria-label="Add a link">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
+          </button>
+          <button type="button" class="shutter press" data-action="upload" aria-label="Add pages"><span class="ring" aria-hidden="true"></span></button>
+          <button type="button" class="sidebtn press" data-action="upload" aria-label="Upload from files">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
+          </button>
         </div>
 
-        <!-- swipeable resume-draft toast -->
-        <div class="drafttoast" id="draftToast">
-          <div class="dh"></div>
+        <!-- Swipeable resume-draft toast. Swipe is the shortcut, not the only
+             way out: the Dismiss button does the same thing for a keyboard. -->
+        <div class="drafttoast" id="draftToast" role="region" aria-label="Unfinished draft">
+          <div class="dh" aria-hidden="true"></div>
           <div class="row2">
-            <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
             <div class="b"><div class="t1">Resume draft</div><div class="t2">Physics booklet · 8 of ~16 pages added</div></div>
-            <div class="go press" onclick="closeDraftToast(true)">Resume</div>
+            <button type="button" class="go press" id="draftResume">Resume</button>
+            <button type="button" class="sidebtn press" id="draftDismiss" aria-label="Dismiss draft reminder"
+              style="width:32px;height:32px;border-radius:16px">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
           </div>
         </div>
       </div>
 
       <div class="scanbelow">
-        <div class="sectitle tight">Processing</div>
-        <div class="card proc press" onclick="openReview()">
-          <div class="hd">Reading page 3 of 6</div>
-          <div class="sub">Physics · PYQ 2023 · started 40s ago</div>
-          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Pages uploaded</span></div>
-          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Layout detected · 14 questions found</span></div>
-          <div class="pline now"><span class="st now"></span><span class="lb">Reading handwriting</span></div>
-          <div class="pline"><span class="st wait"></span><span class="lb">Matching to marking scheme</span></div>
-          <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><div class="skel" style="width:82%"></div><div class="skel" style="width:64%"></div><div class="skel" style="width:73%"></div></div>
-        </div>
-        <div class="subnote">Progress names the actual step. Tap to open this paper's full review.</div>
+        <h2 class="sectitle tight">Processing</h2>
+        <button type="button" class="card proc press" data-review aria-describedby="procNote">
+          <span class="hd">Reading page 3 of 6</span>
+          <span class="sub">Physics · PYQ 2023 · started 40s ago</span>
+          <span class="pline"><span class="st done"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Pages uploaded</span></span>
+          <span class="pline"><span class="st done"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Layout detected · 14 questions found</span></span>
+          <span class="pline now"><span class="st now"></span><span class="lb">Reading handwriting</span></span>
+          <span class="pline"><span class="st wait"></span><span class="lb">Matching to marking scheme</span></span>
+          <span style="margin-top:14px;display:flex;flex-direction:column;gap:8px" aria-hidden="true"><span class="skel" style="width:82%"></span><span class="skel" style="width:64%"></span><span class="skel" style="width:73%"></span></span>
+        </button>
+        <div class="subnote" id="procNote">Progress names the actual step. Opens this paper's full review.</div>
 
-        <div class="sectitle">Needs your eyes first</div>
+        <h2 class="sectitle">Needs your eyes first</h2>
         <div class="list">
-          <div class="row press" onclick="openReview()"><div class="thumb" style="background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3)"><div class="ln" style="top:14px;background:var(--amber)"></div><div class="ln" style="top:24px;right:18px;background:var(--amber)"></div></div>
-            <div class="b"><div class="t1">Page 5 couldn't be read</div><div class="t2">Glare across the lower half</div><div class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></div></div>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-          <div class="row press" onclick="openReview()"><div class="b"><div class="t1">Q7 — final answer unclear</div><div class="t2">We read "42.6", low confidence</div><div class="t2" style="margin-top:6px"><span class="tier uns">Unsure</span></div></div>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+          <button type="button" class="row press" data-review><span class="thumb" style="background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3)" aria-hidden="true"><span class="ln" style="top:14px;background:var(--amber)"></span><span class="ln" style="top:24px;right:18px;background:var(--amber)"></span></span>
+            <span class="b"><span class="t1">Page 5 couldn't be read</span><span class="t2">Glare across the lower half</span><span class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></span></span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+          <button type="button" class="row press" data-review><span class="b"><span class="t1">Q7 — final answer unclear</span><span class="t2">We read "42.6", low confidence</span><span class="t2" style="margin-top:6px"><span class="tier uns">Unsure</span></span></span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
         </div>
         <div class="subnote">Unsure items come first. Nothing is ever dropped silently.</div>
       </div>
     </div>
 
     <!-- ══════════════ FULLSCREEN PAPER REVIEW ══════════════ -->
-    <div class="reviewsheet" id="reviewsheet">
+    <div class="reviewsheet" id="reviewsheet" role="dialog" aria-modal="true" aria-labelledby="rvTitle">
       <div class="rvhead">
-        <div class="rvback press" onclick="closeReview()"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></div>
-        <div class="rvtitle">Physics · PYQ 2023</div>
-        <div class="rvsave press" onclick="closeReview()">Save</div>
+        <button type="button" class="rvback press" data-close-dialog aria-label="Back to Scan"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg></button>
+        <h2 class="rvtitle" id="rvTitle">Physics · PYQ 2023</h2>
+        <button type="button" class="rvsave press" data-close-dialog>Save</button>
       </div>
       <div class="rvscroll">
-        <div class="rvcrop">
-          <div class="ln" style="top:20px"></div><div class="ln" style="top:34px;right:60px"></div><div class="ln" style="top:48px"></div>
-          <div class="ln" style="top:62px;right:30px"></div><div class="ln" style="top:82px"></div><div class="ln" style="top:96px;right:90px"></div>
+        <div class="rvcrop" role="img" aria-label="Crop of page 3 of 6">
+          <span class="ln" style="top:20px"></span><span class="ln" style="top:34px;right:60px"></span><span class="ln" style="top:48px"></span>
+          <span class="ln" style="top:62px;right:30px"></span><span class="ln" style="top:82px"></span><span class="ln" style="top:96px;right:90px"></span>
           <span class="rvzoom">Page 3 of 6</span>
         </div>
 
-        <div class="sectitle tight">Detected automatically</div>
+        <h2 class="sectitle tight">Detected automatically</h2>
+        <!-- Each row is a select. It opens the choice sheet rather than cycling
+             the value on tap: cycling has no way back, gives a keyboard no way
+             to see the options, and hides how many there are. -->
         <div class="list">
-          <div class="row press" onclick="cycleField(this,['Physics','Chemistry','Mathematics','Biology'])">
-            <div class="b"><div class="t1">Subject</div></div>
+          <button type="button" class="row press" data-field="subject" aria-haspopup="dialog" aria-expanded="false">
+            <span class="b"><span class="t1">Subject</span></span>
             <span class="fval">Physics</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-          <div class="row press" onclick="cycleField(this,['Rotational Motion','Kinematics','Optics','Work & Energy'])">
-            <div class="b"><div class="t1">Chapter</div></div>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+          </button>
+          <button type="button" class="row press" data-field="chapter" aria-haspopup="dialog" aria-expanded="false">
+            <span class="b"><span class="t1">Chapter</span></span>
             <span class="fval">Rotational Motion</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-          <div class="row press" onclick="cycleField(this,['10 Aug 2026','9 Aug 2026','8 Aug 2026'])">
-            <div class="b"><div class="t1">Date taken</div></div>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+          </button>
+          <button type="button" class="row press" data-field="date" aria-haspopup="dialog" aria-expanded="false">
+            <span class="b"><span class="t1">Date taken</span></span>
             <span class="fval">10 Aug 2026</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+          </button>
         </div>
 
-        <div class="sectitle">Couldn't tell — your call</div>
+        <h2 class="sectitle">Couldn't tell — your call</h2>
         <div class="list">
-          <div class="row press" id="ttRow" onclick="cycleField(this,['PYQ','Sample paper','Unit test','Mid-term'],true)">
-            <div class="b"><div class="t1">Test type</div><div class="t2">This decides whether a scheme match is attempted</div></div>
-            <span class="fval" style="color:var(--label-3)">Tap to set</span><span class="tier uns" style="margin-left:6px">Needs input</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
+          <button type="button" class="row press" id="ttRow" data-field="testtype" aria-haspopup="dialog" aria-expanded="false">
+            <span class="b"><span class="t1">Test type</span><span class="t2">This decides whether a scheme match is attempted</span></span>
+            <span class="fval" style="color:var(--label-3)">Not set</span><span class="tier uns" style="margin-left:6px">Needs input</span>
+            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+          </button>
         </div>
         <div class="subnote">Everything here stays editable, even after it's auto-filled — nothing is locked just because we were confident.</div>
 
-        <div style="margin:20px var(--gutter) 4px"><div class="btn primary press" onclick="confirmSave()">Confirm &amp; save to Library</div></div>
+        <div style="margin:20px var(--gutter) 4px"><button type="button" class="btn primary press" id="rvConfirm">Confirm &amp; save to Library</button></div>
       </div>
     </div>
 
     <!-- ══════════════ DRAFTS PANEL ══════════════ -->
-    <div class="scrim" id="draftsScrim" onclick="closeDrafts()"></div>
-    <div class="sheet" id="draftsSheet">
-      <h4 style="margin-bottom:14px">Drafts</h4>
+    <div class="scrim" id="draftsScrim" data-close-dialog></div>
+    <div class="sheet" id="draftsSheet" role="dialog" aria-modal="true" aria-labelledby="draftsTitle">
+      <h2 id="draftsTitle" style="margin-bottom:14px">Drafts</h2>
       <div class="list">
-        <div class="row press">
-          <div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>
-          <div class="b"><div class="t1">Physics booklet</div><div class="t2">8 of ~16 pages · saved locally</div></div>
-          <div class="go press" style="color:var(--blue);font-weight:600;font-size:14px" onclick="closeDrafts();closeDraftToast(true)">Resume</div>
+        <!-- The row is not itself a button: it already contains one, and a
+             button inside a button is neither valid nor reachable. -->
+        <div class="row">
+          <span class="thumb" aria-hidden="true"><span class="ln" style="top:8px"></span><span class="ln" style="top:16px;right:16px"></span><span class="ln" style="top:24px"></span></span>
+          <span class="b"><span class="t1">Physics booklet</span><span class="t2">8 of ~16 pages · saved locally</span></span>
+          <button type="button" class="go press" style="color:var(--blue);font-weight:600;font-size:14px;background:none;padding:0" id="draftsResume">Resume</button>
         </div>
       </div>
       <div class="subnote">Drafts stay on this device even if a booklet capture gets interrupted — nothing is lost, nothing re-uploads.</div>
-      <div class="acts"><div class="btn plain press" onclick="closeDrafts()">Close</div></div>
+      <div class="acts"><button type="button" class="btn plain press" data-close-dialog>Close</button></div>
     </div>
 
     <!-- ══════════════ 3 · LIBRARY ══════════════ -->
-    <div class="view" id="v3">
+    <div class="view" id="v3" role="tabpanel" aria-labelledby="tab-3" tabindex="-1">
       <div class="greet"><h1>Library</h1></div>
-      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input placeholder="Search questions, chapters, concepts"></div></div>
-      <div class="filterbar">
-        <div class="fchip">All subjects <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+      <div class="searchwrap"><div class="search" id="libSearchWrap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg>
+        <input id="libSearch" type="search" autocomplete="off" enterkeyhint="search"
+          aria-label="Search questions, chapters and concepts"
+          aria-describedby="libSearchStatus"
+          placeholder="Search questions, chapters, concepts">
+        <button type="button" class="searchclear" id="libSearchClear" aria-label="Clear search">
+          <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div></div>
+      <div class="filterbar" role="group" aria-label="Filter library">
+        <button type="button" class="fchip" data-filter="subject" data-scope="library" aria-haspopup="dialog" aria-expanded="false"><span data-fval>All subjects</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip" data-filter="period" data-scope="library" aria-haspopup="dialog" aria-expanded="false"><span data-fval>Any date</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip" data-filter="type" data-scope="library" aria-haspopup="dialog" aria-expanded="false"><span data-fval>All types</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
+        <button type="button" class="fchip" data-filter="tier" data-scope="library" aria-haspopup="dialog" aria-expanded="false"><span data-fval>Any tier</span> <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg></button>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 22px 10px;">
-        <span id="libraryCount" style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
-        <span style="font-size:13.5px;color:var(--blue);font-weight:500;cursor:pointer">Most recent ▾</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 22px 10px;">
+        <span id="libraryCount" role="status" aria-live="polite" style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
+        <button type="button" id="librarySort" aria-haspopup="dialog" aria-expanded="false"
+          style="font-size:13.5px;color:var(--blue);font-weight:500;flex-shrink:0"><span data-fval>Most recent</span> ▾</button>
       </div>
+      <!-- data-search carries what the row is *about* — the question text, the
+           chapter and the concepts — so search reaches past the title even on
+           this hardcoded set. Real rows get the same attribute from the query
+           in src/search.js. -->
       <div class="list" id="libraryList">
-        <div class="row press"><div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:15px;right:16px"></div><div class="ln" style="top:24px"></div><div class="ln" style="top:31px"></div><div class="ln" style="top:40px;right:20px"></div></div>
-          <div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span>Rotational Motion</span><span>·</span><span>6 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
-          <div class="lost">7<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="row press"><div class="thumb"><div class="ln" style="top:10px"></div><div class="ln" style="top:19px;right:18px"></div><div class="ln" style="top:28px"></div><div class="ln" style="top:37px;right:22px"></div></div>
-          <div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span>Application of Derivatives</span></div><div class="t2" style="margin-top:2px"><span>4 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier uns">2 unsure</span></div></div>
-          <div class="lost">11<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="row press"><div class="thumb"><div class="ln" style="top:9px"></div><div class="ln" style="top:18px"></div><div class="ln" style="top:27px;right:14px"></div><div class="ln" style="top:36px"></div><div class="ln" style="top:45px;right:24px"></div></div>
-          <div class="b"><div class="t1">Physics · Optics Revision</div><div class="t2"><span>Ray Optics</span><span>·</span><span>1 Aug</span></div><div class="t2" style="margin-top:6px"><span class="tier t1">Extracted</span></div></div>
-          <div class="lost">4<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="row press"><div class="thumb"><div class="ln" style="top:12px"></div><div class="ln" style="top:21px;right:20px"></div><div class="ln" style="top:30px"></div></div>
-          <div class="b"><div class="t1">Physics · PYQ 2023</div><div class="t2"><span>Full paper</span><span>·</span><span>26 Jul</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
-          <div class="lost">18<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <button type="button" class="row press" data-review data-subject="Physics" data-type="unit_test" data-tier="t2" data-date="2026-08-06" data-lost="7"
+          data-search="Rotational Motion moment of inertia torque angular momentum flywheel derive the moment of inertia of a uniform disc about its central axis">
+          <span class="thumb" aria-hidden="true"><span class="ln" style="top:8px"></span><span class="ln" style="top:15px;right:16px"></span><span class="ln" style="top:24px"></span><span class="ln" style="top:31px"></span><span class="ln" style="top:40px;right:20px"></span></span>
+          <span class="b"><span class="t1">Physics · Unit Test 4</span><span class="t2"><span>Rotational Motion</span><span>·</span><span>6 Aug</span></span><span class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></span></span>
+          <span class="lost">7<small>lost</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="row press" data-review data-subject="Maths" data-type="unit_test" data-tier="uns" data-date="2026-08-04" data-lost="11"
+          data-search="Application of Derivatives maxima minima rate of change tangent normal find the maximum volume of an open box cut from a square sheet">
+          <span class="thumb" aria-hidden="true"><span class="ln" style="top:10px"></span><span class="ln" style="top:19px;right:18px"></span><span class="ln" style="top:28px"></span><span class="ln" style="top:37px;right:22px"></span></span>
+          <span class="b"><span class="t1">Maths · Ch. 6 Practice</span><span class="t2"><span>Application of Derivatives</span></span><span class="t2" style="margin-top:2px"><span>4 Aug</span></span><span class="t2" style="margin-top:6px"><span class="tier uns">2 unsure</span></span></span>
+          <span class="lost">11<small>lost</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="row press" data-review data-subject="Physics" data-type="unit_test" data-tier="t1" data-date="2026-08-01" data-lost="4"
+          data-search="Ray Optics refraction total internal reflection lens maker formula prism dispersion trace the path of a ray through a glass prism">
+          <span class="thumb" aria-hidden="true"><span class="ln" style="top:9px"></span><span class="ln" style="top:18px"></span><span class="ln" style="top:27px;right:14px"></span><span class="ln" style="top:36px"></span><span class="ln" style="top:45px;right:24px"></span></span>
+          <span class="b"><span class="t1">Physics · Optics Revision</span><span class="t2"><span>Ray Optics</span><span>·</span><span>1 Aug</span></span><span class="t2" style="margin-top:6px"><span class="tier t1">Extracted</span></span></span>
+          <span class="lost">4<small>lost</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="row press" data-review data-subject="Physics" data-type="pyq" data-tier="t2" data-date="2026-07-26" data-lost="18"
+          data-search="Full paper electrostatics current electricity magnetism alternating current semiconductor state Gauss law and derive the field of a uniformly charged sphere">
+          <span class="thumb" aria-hidden="true"><span class="ln" style="top:12px"></span><span class="ln" style="top:21px;right:20px"></span><span class="ln" style="top:30px"></span></span>
+          <span class="b"><span class="t1">Physics · PYQ 2023</span><span class="t2"><span>Full paper</span><span>·</span><span>26 Jul</span></span><span class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></span></span>
+          <span class="lost">18<small>lost</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
       </div>
-      <div class="subnote">Search matches question text and concepts, not just paper titles.</div>
+      <div class="subnote" id="libSearchStatus">Search matches question text, chapters and concepts, not just paper titles.</div>
     </div>
 
     <!-- ══════════════ 4 · SETTINGS ══════════════ -->
-    <div class="view" id="v4">
+    <div class="view" id="v4" role="tabpanel" aria-labelledby="tab-4" tabindex="-1">
       <div class="greet"><h1>Settings</h1></div>
-      <div class="card sprofile press"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman</div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
+      <!-- Read-only. It shows who this is; it is not a way in to anything. -->
+      <div class="card sprofile"><div class="pic" id="profilePic" aria-hidden="true">M</div><div><div class="n" id="profileName">Maya Rahman</div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
 
-      <div class="sectitle">Profile</div>
+      <h2 class="sectitle">Profile</h2>
       <div class="list">
-        <div class="srow" onclick="openSheet('board')">
-          <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
-          <div class="lbl">Board</div><div class="aux">CBSE</div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-        </div>
-        <div class="srow" onclick="openSheet('class')">
-          <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
-          <div class="lbl">Class</div><div class="aux" id="set-class-aux">11</div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-        </div>
+        <button type="button" class="srow" data-sheet="board" aria-haspopup="dialog" aria-expanded="false">
+          <span class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)" aria-hidden="true"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></span>
+          <span class="lbl">Board</span><span class="aux">CBSE</span>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+        </button>
+        <button type="button" class="srow" data-sheet="class" aria-haspopup="dialog" aria-expanded="false">
+          <span class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></span>
+          <span class="lbl">Class</span><span class="aux" id="set-class-aux">11</span>
+          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+        </button>
+        <!-- OPEN: no subjects editor exists, so this states the value rather
+             than carrying a chevron to nowhere. -->
         <div class="srow">
-          <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
+          <span class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
           <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
-          <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
       </div>
       <div class="note">Removing a subject archives its analysis rather than deleting it.</div>
 
-      <div class="sectitle">Notifications</div>
+      <h2 class="sectitle">Notifications</h2>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">Paper ready<small>Extraction finished and ready to review</small></div><div class="sw on" id="set-paperready" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
-        <div class="srow noicon"><div class="lbl">Correction needed<small>An item came back Unsure</small></div><div class="sw on" id="set-correction" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
-        <div class="srow noicon"><div class="lbl">Weekly digest to the parent<small>Consent — turning this off is recorded as a withdrawal</small></div><div class="sw" id="set-digest" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-paperready">Paper ready<small>Extraction finished and ready to review</small></div><button type="button" class="sw on" id="set-paperready" data-managed="1" role="switch" aria-checked="true" aria-labelledby="lbl-paperready"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-correction">Correction needed<small>An item came back Unsure</small></div><button type="button" class="sw on" id="set-correction" data-managed="1" role="switch" aria-checked="true" aria-labelledby="lbl-correction"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-digest">Weekly digest to the parent<small>Consent — turning this off is recorded as a withdrawal</small></div><button type="button" class="sw" id="set-digest" data-managed="1" role="switch" aria-checked="false" aria-labelledby="lbl-digest"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
       </div>
       <div class="note">Notifications report state. There are no streak reminders or return nudges.</div>
 
-      <div class="sectitle">AI transparency</div>
+      <h2 class="sectitle">AI transparency</h2>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">Always show reasoning<small>Expand every disclosure panel by default</small></div><div class="sw" id="set-reasoning" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
-        <div class="srow noicon"><div class="lbl">Help improve extraction<small>Consent — uses anonymised corrections. Off unless you turn it on.</small></div><div class="sw" id="set-improve" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-reasoning">Always show reasoning<small>Expand every disclosure panel by default</small></div><button type="button" class="sw" id="set-reasoning" data-managed="1" role="switch" aria-checked="false" aria-labelledby="lbl-reasoning"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-improve">Help improve extraction<small>Consent — uses anonymised corrections. Off unless you turn it on.</small></div><button type="button" class="sw" id="set-improve" data-managed="1" role="switch" aria-checked="false" aria-labelledby="lbl-improve"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
         <div class="srow noicon"><div class="lbl">Confidence indicators<small>Confirmed, Likely and Unsure labels</small></div><div class="locked">Always on</div></div>
       </div>
 
-      <div class="sectitle">Display &amp; accessibility</div>
+      <h2 class="sectitle">Display &amp; accessibility</h2>
       <div class="list">
-        <div class="srow noicon"><div class="lbl">Appearance</div>
-          <div class="seg" id="segTheme">
-            <button data-mode="light" onclick="setTheme('light',this)">Light</button>
-            <button data-mode="dark" class="on" onclick="setTheme('dark',this)">Dark</button>
-            <button data-mode="system" onclick="setTheme('system',this)">System</button>
+        <div class="srow noicon"><div class="lbl" id="lbl-appearance">Appearance</div>
+          <div class="seg" id="segTheme" role="radiogroup" aria-labelledby="lbl-appearance">
+            <button type="button" role="radio" aria-checked="false" data-mode="light">Light</button>
+            <button type="button" role="radio" aria-checked="true" data-mode="dark" class="on">Dark</button>
+            <button type="button" role="radio" aria-checked="false" data-mode="system">System</button>
           </div>
         </div>
-        <div class="srow noicon"><div class="lbl">Text size</div><div class="seg" id="segText"><button data-size="s">S</button><button data-size="m" class="on">M</button><button data-size="l">L</button></div></div>
-        <div class="srow noicon"><div class="lbl">Reduce motion<small>Stillness here without changing your whole phone</small></div><div class="sw" id="set-reducemotion" data-managed="1" role="switch" tabindex="0"><div class="tr"></div><div class="th"><span class="gI"></span></div><span class="gO"></span></div></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-textsize">Text size</div><div class="seg" id="segText" role="radiogroup" aria-labelledby="lbl-textsize">
+          <button type="button" role="radio" aria-checked="false" data-size="s" aria-label="Small">S</button>
+          <button type="button" role="radio" aria-checked="true" data-size="m" class="on" aria-label="Medium">M</button>
+          <button type="button" role="radio" aria-checked="false" data-size="l" aria-label="Large">L</button>
+        </div></div>
+        <div class="srow noicon"><div class="lbl" id="lbl-reducemotion">Reduce motion<small>Stillness here without changing your whole phone</small></div><button type="button" class="sw" id="set-reducemotion" data-managed="1" role="switch" aria-checked="false" aria-labelledby="lbl-reducemotion"><span class="tr"></span><span class="th"><span class="gI"></span></span><span class="gO"></span></button></div>
         <div class="srow noicon"><div class="lbl">Language<small>Interface only — content follows the paper</small></div><div class="aux">English</div></div>
       </div>
 
-      <div class="sectitle">Privacy &amp; data</div>
+      <h2 class="sectitle">Privacy &amp; data</h2>
       <div class="list">
-        <div class="srow noicon" id="set-collect"><div class="lbl">What we collect</div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon" id="set-export"><div class="lbl">Download your data<small>Everything we hold, as one file</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon" id="set-delete-data"><div class="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon" id="set-delete-account"><div class="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <button type="button" class="srow noicon" id="set-collect" aria-haspopup="dialog" aria-expanded="false"><span class="lbl">What we collect</span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="srow noicon" id="set-export"><span class="lbl">Download your data<small>Everything we hold, as one file</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="srow noicon" id="set-delete-data" aria-haspopup="dialog" aria-expanded="false"><span class="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
+        <button type="button" class="srow noicon" id="set-delete-account" aria-haspopup="dialog" aria-expanded="false"><span class="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></span><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg></button>
       </div>
       <div class="note">No targeted advertising. There's nothing to opt out of because it was never built in.</div>
 
-      <div class="sectitle">Account &amp; billing</div>
+      <h2 class="sectitle">Account &amp; billing</h2>
+      <!-- OPEN: "Request a change" had no destination, so it is stated rather
+           than offered. The parent surface is where this belongs. -->
       <div class="list">
         <div class="srow noicon"><div class="lbl">Plan<small>Managed by Imran Rahman</small></div><div class="locked">Read only</div></div>
-        <div class="srow noicon"><div class="lbl" style="color:var(--blue)">Request a change</div></div>
         <div class="srow noicon"><div class="lbl">Guardian contact<small>imran.r@gmail.com</small></div><div class="locked">Read only</div></div>
       </div>
+      <div class="note">Changes to the plan go through the guardian's own surface, not this one.</div>
 
-      <div class="sectitle">Help &amp; support</div>
+      <h2 class="sectitle">Help &amp; support</h2>
+      <!-- OPEN: neither of these has a screen behind it yet. Stated without a
+           chevron rather than offered as navigation that dead-ends. -->
       <div class="list">
-        <div class="srow noicon"><div class="lbl">FAQ<small>How marks and schemes work</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        <div class="srow noicon"><div class="lbl">Report a problem<small>Attaches this screen's context</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <div class="srow noicon"><div class="lbl">FAQ<small>How marks and schemes work</small></div></div>
+        <div class="srow noicon"><div class="lbl">Report a problem<small>Attaches this screen's context</small></div></div>
       </div>
 
       <div style="margin-top:14px"></div>
       <!-- The single sanctioned use of red in the interface. -->
-      <div class="list"><div class="srow noicon" id="set-signout"><div class="lbl" style="color:var(--red)">Sign out</div></div></div>
+      <div class="list"><button type="button" class="srow noicon" id="set-signout"><span class="lbl" style="color:var(--red)">Sign out</span></button></div>
       <div class="sfoot">Mastery 2.4.1 · Build 3120</div>
     </div>
 
     <!-- ══════════════ WARNING SHEET ══════════════ -->
-    <div class="scrim" id="scrim" onclick="closeSheet()"></div>
-    <div class="sheet" id="sheet">
-      <div class="warnic"><svg viewBox="0 0 24 24"><path d="M12 8.5v5M12 17v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
-      <h4 id="shTitle">Change class to 12?</h4>
+    <div class="scrim" id="scrim" data-close-dialog></div>
+    <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle" aria-describedby="shBody">
+      <div class="warnic" id="shIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5v5M12 17v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>
+      <h2 id="shTitle">Change class to 12?</h2>
       <div class="body" id="shBody"></div>
       <ul id="shList"></ul>
       <div id="shExtras"></div>
       <div class="acts">
-        <div class="btn primary press" id="shPrimary" onclick="confirmSheet()">Change to Class 12</div>
-        <div class="btn ghost press" id="shGhost" onclick="closeSheet()">Talk to support instead</div>
-        <div class="btn plain" onclick="closeSheet()">Cancel</div>
+        <button type="button" class="btn primary press" id="shPrimary">Change to Class 12</button>
+        <button type="button" class="btn ghost press" id="shGhost" data-close-dialog>Talk to support instead</button>
+        <button type="button" class="btn plain press" id="shCancel" data-close-dialog>Cancel</button>
       </div>
     </div>
 
     <!-- ══════════════ NAV ══════════════ -->
     <div class="tabdock">
       <div class="tabbar" id="tabbar">
-        <div class="refractlayer" id="refractlayer">
-          <div class="pill" id="pill"></div>
-          <div role="tab" tabindex="0" class="tab on" onclick="pick(0)" aria-label="Home"><svg class="solid" viewBox="0 0 24 24"><path d="M3.6 10.3 12 3.2l8.4 7.1c.3.3.5.7.5 1.1v8a1.6 1.6 0 0 1-1.6 1.6h-4.2v-5.6a1 1 0 0 0-1-1h-4.2a1 1 0 0 0-1 1V21H4.7a1.6 1.6 0 0 1-1.6-1.6v-8c0-.4.2-.8.5-1.1Z"/></svg><span class="lbl">Home</span></div>
-          <div role="tab" tabindex="0" class="tab" onclick="pick(1)" aria-label="Insights"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M6.5 16V9.5M11 16V5M15.5 16v-4M20 16v-8"/></svg><span class="lbl">Insights</span></div>
-          <div role="tab" tabindex="0" class="tab" onclick="pick(2)" aria-label="Scan"><svg viewBox="0 0 24 24"><path d="M3 8.6V6.4A1.9 1.9 0 0 1 4.9 4.5H7M17 4.5h2.1A1.9 1.9 0 0 1 21 6.4v2.2M21 15.4v2.2a1.9 1.9 0 0 1-1.9 1.9H17M7 19.5H4.9A1.9 1.9 0 0 1 3 17.6v-2.2"/><path d="M7 12h10"/></svg><span class="lbl">Scan</span></div>
-          <div role="tab" tabindex="0" class="tab" onclick="pick(3)" aria-label="Library"><svg viewBox="0 0 24 24"><path d="M5 4.5h14v15H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg><span class="dot"></span><span class="lbl">Library</span></div>
-          <div role="tab" tabindex="0" class="tab" onclick="pick(4)" aria-label="Settings"><div class="pfp">M</div><span class="lbl">Settings</span></div>
+        <!-- Roving tabindex, per the ARIA tabs pattern: one stop for the whole
+             bar, then arrows move within it. Five separate tab stops would put
+             the nav between the reader and the page on every screen. -->
+        <div class="refractlayer" id="refractlayer" role="tablist" aria-label="Sections">
+          <div class="pill" id="pill" aria-hidden="true"></div>
+          <button type="button" role="tab" id="tab-0" aria-controls="v0" aria-selected="true" tabindex="0" class="tab on" aria-label="Home"><svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 10.3 12 3.2l8.4 7.1c.3.3.5.7.5 1.1v8a1.6 1.6 0 0 1-1.6 1.6h-4.2v-5.6a1 1 0 0 0-1-1h-4.2a1 1 0 0 0-1 1V21H4.7a1.6 1.6 0 0 1-1.6-1.6v-8c0-.4.2-.8.5-1.1Z"/></svg><span class="lbl">Home</span></button>
+          <button type="button" role="tab" id="tab-1" aria-controls="v1" aria-selected="false" tabindex="-1" class="tab" aria-label="Insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5h16"/><path d="M6.5 16V9.5M11 16V5M15.5 16v-4M20 16v-8"/></svg><span class="lbl">Insights</span></button>
+          <button type="button" role="tab" id="tab-2" aria-controls="v2" aria-selected="false" tabindex="-1" class="tab" aria-label="Scan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.6V6.4A1.9 1.9 0 0 1 4.9 4.5H7M17 4.5h2.1A1.9 1.9 0 0 1 21 6.4v2.2M21 15.4v2.2a1.9 1.9 0 0 1-1.9 1.9H17M7 19.5H4.9A1.9 1.9 0 0 1 3 17.6v-2.2"/><path d="M7 12h10"/></svg><span class="lbl">Scan</span></button>
+          <button type="button" role="tab" id="tab-3" aria-controls="v3" aria-selected="false" tabindex="-1" class="tab" aria-label="Library, 1 new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h14v15H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg><span class="dot" aria-hidden="true"></span><span class="lbl">Library</span></button>
+          <button type="button" role="tab" id="tab-4" aria-controls="v4" aria-selected="false" tabindex="-1" class="tab" aria-label="Settings"><span class="pfp" aria-hidden="true">M</span><span class="lbl">Settings</span></button>
         </div>
         <div class="lensglow" id="lensglow"></div>
         <div class="rim"></div>
@@ -1028,12 +1201,32 @@ function spring(key,{to,stiffness=200,damping=25,onUpdate}){
 }
 const seed=(k,p)=>loops.set(k,{raf:0,state:{pos:p,vel:0}});
 
-document.querySelectorAll('.press').forEach((el,i)=>{
-  const key='p'+i;seed(key,1);
-  const go=v=>spring(key,{to:v,stiffness:320,damping:27,onUpdate:p=>el.style.transform=`scale(${p.toFixed(4)})`});
-  el.addEventListener('pointerdown',()=>go(.988));
-  ['pointerup','pointerleave','pointercancel'].forEach(e=>el.addEventListener(e,()=>go(1)));
-});
+/* ── press spring ──
+   Delegated on the document rather than bound per element at boot. Rows are
+   rendered after boot all over this app — the library, the onboarding steps,
+   the sheet's choices — and a per-element binding has to be remembered every
+   time. One that gets forgotten is a control that feels dead under the finger.
+
+   Disabled controls are skipped: a press animation on something that will not
+   respond is a lie told in 120ms. */
+const pressKeys=new WeakMap(); let pressSeq=0;
+function pressTo(el,v){
+  if(!pressKeys.has(el)){ pressKeys.set(el,'press'+(pressSeq++)); seed(pressKeys.get(el),1); }
+  spring(pressKeys.get(el),{to:v,stiffness:320,damping:27,
+    onUpdate:p=>el.style.transform=`scale(${p.toFixed(4)})`});
+}
+const isDisabled=el=>el.disabled||el.getAttribute('aria-disabled')==='true';
+function pressTarget(e){
+  const el=e.target.closest?.('.press');
+  return el&&!isDisabled(el)?el:null;
+}
+document.addEventListener('pointerdown',e=>{const el=pressTarget(e); if(el)pressTo(el,.988);},true);
+['pointerup','pointercancel'].forEach(t=>document.addEventListener(t,
+  e=>{const el=pressTarget(e); if(el)pressTo(el,1);},true));
+document.addEventListener('pointerout',e=>{
+  const el=pressTarget(e);
+  if(el&&!el.contains(e.relatedTarget)) pressTo(el,1);
+},true);
 
 /* ── haptics ──
    Weight matched to consequence, per Apple's own pattern: a light tick for
@@ -1060,7 +1253,7 @@ const hapticFirm = ()=>haptic(18);   // consequential: warning-sheet primary, sa
 const PILL_R=26;
 const railQuery=matchMedia('(min-width:768px)');
 const isRail=()=>railQuery.matches;
-let offsets=[],current=0,insightsFull=true;
+let offsets=[],current=0;
 const $id=id=>document.getElementById(id);
 
 function measureTabs(){
@@ -1113,139 +1306,347 @@ function layoutTabs(){
 }
 seed('tab',0);
 const TITLES=['Home','Insights','Scan','Library','Settings'];
-function pick(i){
-  if(i===1&&current===1) insightsFull=!insightsFull;
-  document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('on',idx===i));
-  document.getElementById('v0').classList.toggle('on',i===0);
-  document.getElementById('v1').classList.toggle('on',i===1&&insightsFull);
-  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsFull);
-  document.getElementById('v2').classList.toggle('on',i===2);
-  document.getElementById('v3').classList.toggle('on',i===3);
-  document.getElementById('v4').classList.toggle('on',i===4);
-  document.getElementById('hdrTitle').textContent=TITLES[i];
-  document.getElementById('hdr').classList.remove('stuck');
+const VIEW_OF=i=>i===1?(insightsPopulated()?'v1':'v1b'):'v'+i;
+
+function pick(i,{focusPanel=false}={}){
+  const tabs=[...document.querySelectorAll('.tab')];
+  tabs.forEach((t,idx)=>{
+    const on=idx===i;
+    t.classList.toggle('on',on);
+    t.setAttribute('aria-selected',on?'true':'false');
+    // Roving tabindex: the bar is one stop, arrows move inside it. Five stops
+    // would put the whole nav between a keyboard and the page, every screen.
+    t.tabIndex=on?0:-1;
+    t.setAttribute('aria-controls',idx===1?VIEW_OF(1):'v'+idx);
+  });
+  const shown=VIEW_OF(i);
+  ['v0','v1','v1b','v2','v3','v4'].forEach(id=>$id(id).classList.toggle('on',id===shown));
+  $id('hdrTitle').textContent=TITLES[i];
+  $id('hdr').classList.remove('stuck');
   const wasScan=current===2;
   current=i;
   measureTabs();
-  if(!offsets[i]) return;
-  paintLens(offsets[i]);
-  const vertical=isRail();
-  spring('tab',{to:i,stiffness:210,damping:24,onUpdate:(p,v)=>{
-    const o=lerpOffset(p);
-    // squash-stretch along the axis of travel: X in the tab bar, Y in the rail
-    const a=Math.abs(Math.max(-.055,Math.min(.055,v*.011)));
-    applyPill(o, vertical?1-a*.5:1+a, vertical?1+a:1-a*.5);
-  }});
-  if(i===1&&insightsFull) animateInsights();
+  if(offsets[i]){
+    paintLens(offsets[i]);
+    const vertical=isRail();
+    spring('tab',{to:i,stiffness:210,damping:24,onUpdate:(p,v)=>{
+      const o=lerpOffset(p);
+      // squash-stretch along the axis of travel: X in the tab bar, Y in the rail
+      const a=Math.abs(Math.max(-.055,Math.min(.055,v*.011)));
+      applyPill(o, vertical?1-a*.5:1+a, vertical?1+a:1-a*.5);
+    }});
+  }
+  if(i===1&&shown==='v1') animateInsights();
   if(i===2&&!wasScan) initScan();
+  if(focusPanel) $id(shown).focus({preventScroll:true});
 }
 function animateInsights(){
   setTimeout(()=>{
-    const tl=document.getElementById('trendline'); if(tl) tl.style.strokeDashoffset=0;
+    const tl=$id('trendline'); if(tl) tl.style.strokeDashoffset=0;
     document.querySelectorAll('.qt .track i').forEach((el,i)=>setTimeout(()=>el.style.width=el.dataset.w+'%',80*i));
   },150);
 }
+
+/* Selection tick lives on the tab, not in pick(), so programmatic navigation
+   (the Add-a-paper button, the empty state's link) stays silent. */
+document.querySelectorAll('.tab').forEach((t,i)=>t.addEventListener('click',()=>{
+  hapticTick(); pick(i);
+}));
+
+/* Arrows move within the bar and select as they go, which is the ARIA tabs
+   pattern for a tablist whose panels are cheap to show. Home and End jump to
+   the ends; the direction follows the current layout, not the markup order. */
+$id('refractlayer').addEventListener('keydown',e=>{
+  const tabs=[...document.querySelectorAll('.tab')];
+  const i=tabs.indexOf(document.activeElement);
+  if(i<0) return;
+  const fwd=isRail()?'ArrowDown':'ArrowRight', back=isRail()?'ArrowUp':'ArrowLeft';
+  let next=null;
+  if(e.key===fwd) next=(i+1)%tabs.length;
+  else if(e.key===back) next=(i+tabs.length-1)%tabs.length;
+  else if(e.key==='Home') next=0;
+  else if(e.key==='End') next=tabs.length-1;
+  else return;
+  e.preventDefault();
+  hapticTick(); pick(next); tabs[next].focus();
+});
 
 /* ── switches ── */
 /* Switches whose state belongs to the app layer carry data-managed and are
    skipped here. Two handlers on one switch race: whichever ran second read a
    class the first had already flipped, so a grant was recorded as a withdrawal.
    The app owns the state; this file still owns the physics, published below. */
+function paintSwitch(sw,on){
+  sw.classList.toggle('on',!!on);
+  sw.setAttribute('aria-checked',on?'true':'false');
+}
 document.querySelectorAll('.sw:not([data-managed])').forEach((sw,i)=>{
   const th=sw.querySelector('.th'); const key='sw'+i;
   let on=sw.classList.contains('on')||sw.dataset.on==='1';
   const place=p=>th.style.transform=`translateX(${p*22}px)`;
-  seed(key,on?1:0); place(on?1:0);
-  sw.addEventListener('click',()=>{on=!on;sw.classList.toggle('on',on);
+  seed(key,on?1:0); place(on?1:0); paintSwitch(sw,on);
+  sw.addEventListener('click',()=>{on=!on;paintSwitch(sw,on);
     hapticTick();
     spring(key,{to:on?1:0,stiffness:280,damping:26,onUpdate:place});});
 });
 
 /* Same spring for app-managed switches, so a settings toggle feels identical to
-   a demo one. State is the caller's business; this only animates. */
+   a demo one. State is the caller's business; this only animates — and keeps
+   aria-checked in step, which is the half a screen reader actually reads. */
 let __swKey=0;
 const __swKeys=new WeakMap();
 window.__masterySwitch=function(el,on){
   if(!el) return;
   if(!__swKeys.has(el)){ __swKeys.set(el,'msw'+(__swKey++)); seed(__swKeys.get(el), on?1:0); }
   const key=__swKeys.get(el), th=el.querySelector('.th');
-  el.classList.toggle('on',!!on);
+  paintSwitch(el,on);
   spring(key,{to:on?1:0,stiffness:280,damping:26,
     onUpdate:p=>{ if(th) th.style.transform=`translateX(${p*22}px)`; }});
 };
 
-/* ── disclosure ── */
-function toggleDisc(){
-  const d=document.getElementById('disc'),p=document.getElementById('discPanel');
-  const open=d.classList.toggle('open');
+/* ── disclosure ──
+   200ms, transform and opacity only. The panel's height is assigned with no
+   transition on it: animating height is a layout animation, which the motion
+   rules forbid and which is exactly what drops frames on a budget Android. */
+function setDisclosure(d,open){
+  const p=d.querySelector('.panel'), btn=d.querySelector('.toggle');
+  if(!p) return;
+  d.classList.toggle('open',open);
   p.style.height=open?p.firstElementChild.offsetHeight+'px':'0px';
+  btn?.setAttribute('aria-expanded',open?'true':'false');
 }
+document.addEventListener('click',e=>{
+  const btn=e.target.closest?.('.disclose .toggle');
+  if(!btn) return;
+  const d=btn.closest('.disclose');
+  setDisclosure(d,!d.classList.contains('open'));
+});
 
 /* ── theme ── */
 function applyTheme(resolved){
   document.documentElement.dataset.theme=resolved;
   document.body.dataset.page=resolved;
   // the icon swap is handled in CSS off [data-theme]; keep the label accurate
-  document.getElementById('themebtn').setAttribute('aria-label',
+  $id('themebtn').setAttribute('aria-label',
     resolved==='dark'?'Switch to light appearance':'Switch to dark appearance');
   // keep the browser/OS chrome in step with the app surface
-  const mc=document.getElementById('themeColor');
+  const mc=$id('themeColor');
   if(mc) mc.setAttribute('content',resolved==='dark'?'#000000':'#F4F4F7');
 }
-function setTheme(mode,btn){
-  if(btn) document.querySelectorAll('#segTheme button').forEach(b=>b.classList.toggle('on',b===btn));
-  const resolved=mode==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):mode;
-  applyTheme(resolved);
+function setTheme(mode){
+  document.querySelectorAll('#segTheme button').forEach(b=>{
+    const on=b.dataset.mode===mode;
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-checked',on?'true':'false');
+  });
+  applyTheme(mode==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):mode);
 }
-function flipTheme(){
+$id('themebtn').addEventListener('click',()=>{
   const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
-  applyTheme(next);
-  document.querySelectorAll('#segTheme button').forEach(b=>b.classList.toggle('on',b.dataset.mode===next));
+  setTheme(next);
+  // Persisted by the app layer when there is one; on the prototype it is just
+  // applied. Either way the corner button and the Appearance row agree.
+  window.__masterySetTheme?.(next);
+});
+
+/* ══════════════ DIALOGS ══════════════
+   One controller for every modal surface: the warning/choice sheet, the drafts
+   sheet, the full-screen review. Each has to trap focus, close on Escape, put
+   focus back where it came from, stop the page behind it scrolling, and answer
+   the Android back button. Handled separately, each of them got a different
+   subset of that right.
+
+   History: opening pushes exactly one entry, so Back closes the sheet rather
+   than leaving the app. Closing from the UI pops that entry instead of pushing
+   a new one, so the stack is the same depth after a sheet as before it — the
+   back button never has to be pressed twice to undo one sheet. */
+const FOCUSABLE='a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),'+
+  'textarea:not(:disabled),[tabindex]:not([tabindex="-1"])';
+const dialogStack=[];
+
+function syncInert(){
+  const top=dialogStack.length?dialogStack[dialogStack.length-1].el:null;
+  document.querySelectorAll('.app > *').forEach(el=>{
+    // The scrim stays live: it has nothing focusable in it, so it cannot break
+    // the trap, and it is how a pointer dismisses the sheet.
+    el.inert = !!top && !(el===top||el.contains(top)||el.classList.contains('scrim'));
+  });
+}
+function openDialog(el,{onClose,trigger}={}){
+  if(!el||dialogStack.some(d=>d.el===el)) return;
+  if(!el.hasAttribute('tabindex')) el.tabIndex=-1;
+  const locked=[...document.querySelectorAll('.view,.rvscroll')].filter(s=>!el.contains(s));
+  const returnTo=trigger||document.activeElement;
+  // The modules open sheets without naming a trigger. Falling back to whatever
+  // had focus keeps aria-expanded honest on those too, rather than leaving a
+  // Settings row permanently claiming its sheet is closed.
+  const expands=trigger||(returnTo?.hasAttribute?.('aria-expanded')?returnTo:null);
+  const entry={el,onClose,trigger:expands,returnTo,locked};
+  dialogStack.push(entry);
+  locked.forEach(s=>s.classList.add('scrolllock'));
+  syncInert();
+  expands?.setAttribute('aria-expanded','true');
+  history.pushState({masteryDialog:dialogStack.length},'');
+  entry.hasHistory=true;
+  requestAnimationFrame(()=>{
+    (el.querySelector('[data-autofocus]')||el.querySelector(FOCUSABLE)||el).focus({preventScroll:true});
+  });
+}
+function finishClose(i){
+  const entry=dialogStack[i];
+  if(!entry) return;
+  dialogStack.splice(i,1);
+  entry.locked.forEach(s=>s.classList.remove('scrolllock'));
+  syncInert();
+  entry.trigger?.setAttribute('aria-expanded','false');
+  entry.onClose?.();
+  const back=entry.returnTo;
+  if(back&&document.contains(back)&&!back.closest('[inert]')) back.focus({preventScroll:true});
+}
+function closeDialog(el){
+  const i=el?dialogStack.findIndex(d=>d.el===el):dialogStack.length-1;
+  if(i<0) return;
+  const entry=dialogStack[i];
+  // Pop our own history entry and let popstate finish the close, so closing by
+  // button and closing by Back take exactly the same path.
+  if(entry.hasHistory&&!entry.popped){ entry.popped=true; history.back(); return; }
+  finishClose(i);
+}
+addEventListener('popstate',()=>{
+  if(!dialogStack.length) return;
+  const i=dialogStack.length-1;
+  dialogStack[i].popped=true;
+  finishClose(i);
+});
+addEventListener('keydown',e=>{
+  if(!dialogStack.length) return;
+  if(e.key==='Escape'){ e.preventDefault(); closeDialog(); return; }
+  if(e.key!=='Tab') return;
+  const dlg=dialogStack[dialogStack.length-1].el;
+  const items=[...dlg.querySelectorAll(FOCUSABLE)].filter(el=>el.offsetWidth||el.offsetHeight);
+  if(!items.length) return;
+  const first=items[0], last=items[items.length-1];
+  if(e.shiftKey&&document.activeElement===first){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey&&document.activeElement===last){ e.preventDefault(); first.focus(); }
+});
+document.addEventListener('click',e=>{
+  const t=e.target.closest?.('[data-close-dialog]');
+  if(t) closeDialog(t.closest('[role="dialog"]')||undefined);
+});
+
+/* ── the sheet ──
+   Shared by the board/class warnings, the erasure consequence sheets and every
+   select in the app. It tracks whether its primary action is actually
+   consequential, so only that earns the firmer pulse. */
+seed('sheet',1);
+seed('drafts',1);
+let sheetConsequential=false, sheetConfirm=null, sheetChoice=null;
+
+const slideSheet=(id,key,to)=>spring(key,{to,stiffness:to?260:230,damping:to?30:26,
+  onUpdate:p=>$id(id).style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+
+function showSheet(trigger){
+  $id('scrim').classList.add('on');
+  slideSheet('sheet','sheet',0);
+  openDialog($id('sheet'),{trigger,onClose:()=>{
+    $id('scrim').classList.remove('on');
+    slideSheet('sheet','sheet',1);
+  }});
 }
 
-/* ── warning sheet ── */
 const COPY={
   class:{title:'Change class to 12?',
     body:"This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class 11.",
     items:[['Archived papers keep their old scope.','They\'re labelled "analysed under Class 11" and are never re-mapped, so nothing is orphaned.'],
       ['They can\'t be re-verified.','Class 11 papers won\'t reach Tier 2 against the Class 12 scheme.'],
       ['Insights split at the change.','Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.']],
-    primary:'Change to Class 12',primaryClass:'primary'},
+    primary:'Change to Class 12',primaryClass:'primary',ghost:'Talk to support instead'},
   board:{title:'Board changes go through support',
     body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
     items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
       ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
       ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
-    primary:'Contact support',primaryClass:'ghost'}
+    primary:'Contact support',primaryClass:'ghost',ghost:null},
+  collect:{title:'What we collect',
+    body:'Everything held about this account, and why. Nothing outside this list is gathered, and none of it is used to build a profile or to advertise.',
+    items:[['The pages you upload.','Stored privately. Only this account can read them.'],
+      ['What we read from them.','Questions, your answers, and your teacher\'s marks and remarks.'],
+      ['What we worked out.','Where marks went and what to do next — always with the reasoning attached.'],
+      ['The guardian\'s consent record.','A dated ledger of what was agreed. It is the evidence consent was properly obtained.'],
+      ['Never: behaviour, location or contacts.','There is no analytics or advertising code in this app to opt out of.']],
+    primary:'Done',primaryClass:'ghost',ghost:null,cancel:false},
 };
-seed('sheet',1);
-// The sheet is shared between the board/class warnings and the lightweight
-// link/upload confirmations, so it tracks whether its primary action is
-// actually consequential — only then does confirming earn a firmer pulse.
-let sheetConsequential=false;
-function confirmSheet(){
+
+function renderSheet(cfg,trigger){
+  sheetConsequential = cfg.primaryClass==='primary' && !cfg.choices;
+  sheetConfirm = cfg.onConfirm || null;
+  sheetChoice  = cfg.onChoice  || null;
+
+  $id('shIcon').style.display = cfg.quiet ? 'none' : '';
+  $id('shTitle').textContent = cfg.title || '';
+  $id('shBody').textContent  = cfg.body  || '';
+  $id('shList').innerHTML =
+    (cfg.items||[]).map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
+
+  const extras=$id('shExtras');
+  extras.innerHTML='';
+  if(cfg.input){
+    extras.innerHTML=`<div class="sh-input"><input id="${cfg.input.id}" type="${cfg.input.type||'text'}"
+      aria-label="${cfg.input.label||cfg.title||''}" placeholder="${cfg.input.placeholder||''}" data-autofocus></div>`;
+  }
+  if(cfg.choices){
+    // A select. A list of real buttons inside the dialog, so Tab, the arrow
+    // keys, Enter and Escape all work without a custom widget — and the value
+    // in force is announced by aria-current rather than merely coloured.
+    extras.innerHTML=`<div class="sh-choices" role="group" aria-label="${escapeHtml(cfg.title||'Choose')}">${
+      cfg.choices.map(c=>{
+        const cur=String(c.value)===String(cfg.value);
+        return `<button type="button" class="sh-choice press" data-choice="${escapeHtml(String(c.value))}"`+
+               `${cur?' aria-current="true" data-autofocus':''}>${escapeHtml(c.label)}</button>`;
+      }).join('')}</div>`;
+    extras.querySelectorAll('[data-choice]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        hapticTick(); const v=el.dataset.choice;
+        const fn=sheetChoice; closeDialog($id('sheet')); fn&&fn(v);
+      });
+    });
+    extras.addEventListener('keydown',e=>{
+      if(e.key!=='ArrowDown'&&e.key!=='ArrowUp') return;
+      const items=[...extras.querySelectorAll('[data-choice]')];
+      const i=items.indexOf(document.activeElement);
+      if(i<0) return;
+      e.preventDefault();
+      items[(i+(e.key==='ArrowDown'?1:items.length-1))%items.length].focus();
+    });
+  }
+
+  // Choices are the action, so a primary button would be a second way to do the
+  // same thing. Hidden rather than left on screen as a dead control.
+  const prim=$id('shPrimary'), ghost=$id('shGhost');
+  prim.hidden = !!cfg.choices;
+  if(!cfg.choices){ prim.textContent=cfg.primary||'Confirm'; prim.className='btn '+(cfg.primaryClass||'primary')+' press'; }
+  ghost.hidden = !!cfg.choices || !cfg.ghost;
+  if(!ghost.hidden) ghost.textContent=cfg.ghost;
+  const cancel=$id('shCancel');
+  cancel.hidden = cfg.cancel===false;
+  cancel.textContent = cfg.choices ? 'Close' : (cfg.cancel||'Cancel');
+
+  showSheet(trigger);
+}
+$id('shPrimary').addEventListener('click',()=>{
   if(sheetConsequential) hapticFirm();
-  closeSheet();
-}
-function confirmSave(){
-  hapticFirm();
-  closeReview();
-}
-function openSheet(k){
-  sheetConsequential=true;
-  const c=COPY[k];
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML=c.items.map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
-function closeSheet(){
-  document.getElementById('scrim').classList.remove('on');
-  spring('sheet',{to:1,stiffness:260,damping:30,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
+  const fn=sheetConfirm; sheetConfirm=null;
+  closeDialog($id('sheet'));
+  fn?.();
+});
+window.__masteryOpenSheet=cfg=>renderSheet(cfg,cfg.trigger);
+
+/* Published for the modules, per the bridge in AGENTS.md. Presses are
+   delegated now, so there is nothing left to rebind — the export stays so the
+   modules keep one contract to call. */
+window.__masteryRebindPress=function(){};
+window.__masteryHaptic={ tick:hapticTick, firm:hapticFirm };
+window.__masteryOpenDisclosure=d=>setDisclosure(d,true);
 
 /* ── scan: draft toast (swipeable), drafts panel, fullscreen review ── */
 /* Spring position is normalised so 0 = shown (translateY 0) and
@@ -1255,30 +1656,34 @@ function closeSheet(){
    the toast permanently off-screen. Seeded at 1 to match the CSS start
    position, so the first initScan() animates it in rather than popping it. */
 seed('draftToast',1);
-seed('drafts',1);
-seed('review',1);
 let draftDismissed=false, dragStartY=null, dragCurrentY=0;
 
 function initScan(){
   if(!draftDismissed){
     spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
-      document.getElementById('draftToast').style.transform=`translateY(${-140*p}%)`;
+      $id('draftToast').style.transform=`translateY(${-140*p}%)`;
     }});
-    document.getElementById('draftsIcon').classList.remove('show');
+    $id('draftsIcon').classList.remove('show');
   }
 }
 function closeDraftToast(resume){
   spring('draftToast',{to:1,stiffness:260,damping:28,onUpdate:p=>{
-    const y=-140*p;
-    document.getElementById('draftToast').style.transform=`translateY(${y}%)`;
-  },});
+    $id('draftToast').style.transform=`translateY(${-140*p}%)`;
+  }});
   draftDismissed=true;
-  setTimeout(()=>document.getElementById('draftsIcon').classList.add('show'),180);
-  if(resume){ openReview(); }
+  setTimeout(()=>$id('draftsIcon').classList.add('show'),180);
+  if(resume) openReview();
 }
-// swipe up to dismiss
-const toastEl=document.getElementById('draftToast');
-toastEl.addEventListener('pointerdown',e=>{dragStartY=e.clientY;dragCurrentY=0;toastEl.setPointerCapture(e.pointerId);});
+$id('draftResume').addEventListener('click',()=>closeDraftToast(true));
+$id('draftDismiss').addEventListener('click',()=>closeDraftToast(false));
+
+// Swipe up to dismiss. A shortcut, never the only way out — the Dismiss button
+// beside it does the same thing for a finger that missed and for a keyboard.
+const toastEl=$id('draftToast');
+toastEl.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button')) return;
+  dragStartY=e.clientY;dragCurrentY=0;toastEl.setPointerCapture(e.pointerId);
+});
 toastEl.addEventListener('pointermove',e=>{
   if(dragStartY===null)return;
   dragCurrentY=Math.min(0,e.clientY-dragStartY);
@@ -1296,88 +1701,291 @@ toastEl.addEventListener('pointerup',()=>{
   dragStartY=null;
 });
 
-function openDrafts(){
-  document.getElementById('draftsScrim').classList.add('on');
-  spring('drafts',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('draftsSheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
+function openDrafts(trigger){
+  $id('draftsScrim').classList.add('on');
+  slideSheet('draftsSheet','drafts',0);
+  openDialog($id('draftsSheet'),{trigger,onClose:()=>{
+    $id('draftsScrim').classList.remove('on');
+    slideSheet('draftsSheet','drafts',1);
+  }});
 }
-function closeDrafts(){
-  document.getElementById('draftsScrim').classList.remove('on');
-  spring('drafts',{to:1,stiffness:260,damping:30,onUpdate:p=>document.getElementById('draftsSheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
+$id('draftsIcon').addEventListener('click',e=>openDrafts(e.currentTarget));
+$id('draftsResume').addEventListener('click',()=>{
+  closeDialog($id('draftsSheet'));
+  closeDraftToast(true);
+});
 
-function openReview(){
-  document.getElementById('reviewsheet').classList.add('open');
+function openReview(trigger){
+  const el=$id('reviewsheet');
+  el.classList.add('open');
+  openDialog(el,{trigger,onClose:()=>el.classList.remove('open')});
 }
-function closeReview(){
-  document.getElementById('reviewsheet').classList.remove('open');
-}
-function cycleField(row,options,marksResolved){
-  const span=row.querySelector('.fval');
-  const cur=options.indexOf(span.textContent);
-  const next=options[(cur+1+options.length)%options.length];
-  span.textContent=next; span.style.color='var(--label)';
-  if(marksResolved){
-    const tag=row.querySelector('.tier');
-    tag.textContent='Set by you'; tag.className='tier t2';
-  }
-}
-/* The shutter no longer simulates a capture: v1 has no in-app camera, so it
-   opens the OS picker instead. The ring-squash animation is gone with it — it
-   implied a photo had been taken when what actually happens is a file chooser.
-   The press spring and the selection tick (wired in src/app.js) carry it. */
-function openSheetGeneric(kind){
-  // reuses the warning-sheet mechanics for a lightweight confirmation
-  sheetConsequential=false;
-  const c = kind==='link'
-    ? {title:'Paste a link',body:'Add a school-shared PDF or drive link. It gets added as the next page in this paper.',items:[],primary:'Paste from clipboard',primaryClass:'primary'}
-    : {title:'Upload from Files or Gallery',body:'Pick one or more pages to add to this paper. You can reorder them before submitting.',items:[],primary:'Choose files',primaryClass:'primary'};
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML='';
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
+$id('rvConfirm').addEventListener('click',()=>{
+  hapticFirm();
+  closeDialog($id('reviewsheet'));
+});
 
-/* ── haptics: selection ── */
-// Bound to the tabs themselves, not to pick(), so programmatic navigation
-// (the "Scan new paper" button, the empty-state link) stays silent.
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',hapticTick));
+/* Review fields are selects, not cycles. Cycling had no way back, gave a
+   keyboard no way to see the options, and hid how many there were. */
+const FIELD_OPTIONS={
+  subject :{title:'Subject',    options:['Physics','Chemistry','Mathematics','Biology']},
+  chapter :{title:'Chapter',    options:['Rotational Motion','Kinematics','Optics','Work & Energy']},
+  date    :{title:'Date taken', options:['10 Aug 2026','9 Aug 2026','8 Aug 2026']},
+  testtype:{title:'Test type',  options:['PYQ','Sample paper','Unit test','Mid-term'],resolves:true},
+};
+document.addEventListener('click',e=>{
+  const row=e.target.closest?.('[data-field]');
+  if(!row) return;
+  const spec=FIELD_OPTIONS[row.dataset.field];
+  if(!spec) return;
+  const val=row.querySelector('.fval');
+  renderSheet({
+    title:spec.title, quiet:true,
+    body:'Everything here stays editable, even after it was filled in automatically.',
+    choices:spec.options.map(o=>({label:o,value:o})),
+    value:val.textContent,
+    onChoice:v=>{
+      val.textContent=v; val.style.color='var(--label)';
+      if(spec.resolves){
+        const tag=row.querySelector('.tier');
+        if(tag){ tag.textContent='Set by you'; tag.className='tier t2'; }
+      }
+    },
+  },row);
+});
 
-/* ── keyboard ──
-   The nav and the appearance toggle are divs, so they need the activation
-   behaviour a <button> would have given them for free. Arrow keys move along
-   the nav in whichever direction it's currently laid out. */
-document.querySelectorAll('.tab,.themebtn').forEach(el=>{
-  el.addEventListener('keydown',e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+/* ══════════════ FILTERS, SEARCH, SORT ══════════════ */
+const FILTER_SPEC={
+  subject:{title:'Subject',options:[['all','All subjects'],['Physics','Physics'],['Maths','Maths'],['Chemistry','Chemistry'],['Biology','Biology']]},
+  period :{title:'Period', options:[['all','Any date'],['30','Last 30 days'],['90','Last 3 months'],['365','This year']]},
+  type   :{title:'Paper type',options:[['all','All types'],['unit_test','Unit test'],['mid_term','Mid-term'],['final_exam','Final exam'],['pyq','Previous year paper'],['sample_paper','Sample paper']]},
+  tier   :{title:'Tier',   options:[['all','Any tier'],['t2','Scheme-verified'],['t1',"Teacher's marks"]]},
+};
+const filters={
+  insights:{subject:'Physics',period:'90',type:'all',tier:'all'},
+  library :{subject:'all',period:'all',type:'all',tier:'all'},
+};
+const SORTS=[['recent','Most recent'],['oldest','Oldest first'],['lost','Most marks lost']];
+let librarySort='recent';
+
+const labelFor=(spec,value)=>(spec.options.find(([v])=>v===value)||spec.options[0])[1];
+
+function paintChips(scope){
+  document.querySelectorAll(`.fchip[data-scope="${scope}"]`).forEach(chip=>{
+    const key=chip.dataset.filter, spec=FILTER_SPEC[key], value=filters[scope][key];
+    chip.querySelector('[data-fval]').textContent=labelFor(spec,value);
+    // Active means "narrowing something", which is the only thing the colour
+    // is claiming. An unset filter is not a selected one.
+    chip.classList.toggle('active',value!=='all');
   });
+}
+
+function rowMatchesFilter(row,f){
+  if(f.subject!=='all'&&row.dataset.subject!==f.subject) return false;
+  if(f.type!=='all'&&row.dataset.type!==f.type) return false;
+  if(f.tier!=='all'){
+    // "2 unsure" rows are Tier 1 papers flagged for a check; they belong to
+    // the teacher's-marks bucket rather than to a tier of their own.
+    const tier=row.dataset.tier==='t2'?'t2':'t1';
+    if(tier!==f.tier) return false;
+  }
+  if(f.period!=='all'){
+    const days=Number(f.period), d=Date.parse(row.dataset.date||'');
+    if(Number.isFinite(d)&&(Date.now()-d)/86400000>days) return false;
+  }
+  return true;
+}
+
+const libraryRows=()=>[...document.querySelectorAll('#libraryList .row')];
+function haystack(row){
+  return ((row.dataset.search||'')+' '+row.textContent).toLowerCase();
+}
+
+let searchTerm='';
+function applyLibrary(){
+  const f=filters.library;
+  const terms=searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows=libraryRows();
+  let shown=0;
+  rows.forEach(row=>{
+    const hay=haystack(row);
+    const ok=rowMatchesFilter(row,f)&&terms.every(t=>hay.includes(t));
+    row.hidden=!ok;
+    if(ok) shown++;
+  });
+
+  // Sort by reordering the surviving rows. Marks lost is the student's own
+  // paper against their own paper — never against anyone else's.
+  const dir={recent:(a,b)=>b.dataset.date.localeCompare(a.dataset.date),
+             oldest:(a,b)=>a.dataset.date.localeCompare(b.dataset.date),
+             lost:(a,b)=>Number(b.dataset.lost||0)-Number(a.dataset.lost||0)}[librarySort];
+  const list=$id('libraryList');
+  if(dir) rows.slice().sort(dir).forEach(r=>list.appendChild(r));
+
+  $id('libraryCount').textContent=`${shown} paper${shown===1?'':'s'}`+
+    (shown!==rows.length?` of ${rows.length}`:'');
+  paintLibraryEmpty(shown,terms.length>0);
+}
+
+/* An empty result says what was searched. "No results" leaves the student
+   guessing whether the search ran, whether it was the filter, or whether the
+   library is simply empty. */
+function paintLibraryEmpty(shown,searching){
+  let el=$id('libraryEmpty');
+  if(shown){ el?.remove(); return; }
+  if(!el){
+    el=document.createElement('div');
+    el.id='libraryEmpty'; el.className='estate';
+    $id('libraryList').after(el);
+  }
+  const q=searchTerm.trim();
+  el.innerHTML=`
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg></div>
+    <h2>${q?`Nothing matches “${escapeHtml(q)}”`:'Nothing matches these filters'}</h2>
+    <p>${q
+      ? 'We searched question text, chapters and concepts as well as paper titles.'
+      : 'Every paper is still here — the filters above are just narrower than your library.'}</p>
+    <button type="button" class="btn ghost press" data-clearfilters="library">Clear ${q?'search and filters':'the filters'}</button>`;
+}
+const escapeHtml=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Insights is prototype data, so its chips scope it rather than recomputing
+   it — and when a scope holds no papers at all, it says so instead of showing
+   fourteen papers' worth of chart under a "Chemistry" chip. The ≥4-paper
+   readiness rule belongs to student_analytics_readiness, once extraction
+   actually produces attempts to count. */
+function insightsPapers(){
+  return libraryRows().filter(r=>rowMatchesFilter(r,filters.insights));
+}
+function insightsPopulated(){ return insightsPapers().length>0; }
+
+function applyInsights(){
+  const f=filters.insights, n=insightsPapers().length;
+  const named=[f.subject!=='all'?f.subject:null,
+               f.period!=='all'?labelFor(FILTER_SPEC.period,f.period).toLowerCase():null,
+               f.type!=='all'?labelFor(FILTER_SPEC.type,f.type).toLowerCase():null,
+               f.tier!=='all'?labelFor(FILTER_SPEC.tier,f.tier).toLowerCase():null].filter(Boolean);
+  const scope=named.length?named.join(' · '):'everything';
+  // Names the scope but asserts no sample size: these figures are prototype
+  // data, not counted from the library, and a number we cannot source is
+  // exactly what this project does not put in front of a student. The card
+  // chips carry the real sample size once the analytics views feed them.
+  const el=$id('insightScope');
+  if(el) el.textContent = named.length
+    ? scope[0].toUpperCase()+scope.slice(1)+'.'
+    : 'Everything across your scanned papers.';
+  if(!n){
+    $id('scopeEmptyTitle').textContent='No papers in this scope';
+    $id('scopeEmptyBody').textContent=
+      `Nothing in your library matches ${scope}. Patterns are only drawn from papers that are actually there.`;
+    $id('scopeEmptyCount').textContent='0 papers';
+    $id('scopeEmptyBar').style.width='0%';
+    $id('scopeEmptyReset').hidden=false;
+  }
+  if(current===1) pick(1);
+}
+
+document.addEventListener('click',e=>{
+  const chip=e.target.closest?.('.fchip[data-filter]');
+  if(!chip) return;
+  const scope=chip.dataset.scope, key=chip.dataset.filter, spec=FILTER_SPEC[key];
+  renderSheet({
+    title:spec.title, quiet:true,
+    body:'Pick one. Filters narrow what you are looking at; they never change what was recorded.',
+    choices:spec.options.map(([value,label])=>({label,value})),
+    value:filters[scope][key],
+    onChoice:v=>{
+      filters[scope][key]=v;
+      paintChips(scope);
+      scope==='library'?applyLibrary():applyInsights();
+    },
+  },chip);
 });
-document.getElementById('refractlayer').addEventListener('keydown',e=>{
-  const fwd=isRail()?'ArrowDown':'ArrowRight', back=isRail()?'ArrowUp':'ArrowLeft';
-  if(e.key!==fwd&&e.key!==back) return;
-  e.preventDefault();
-  const tabs=[...document.querySelectorAll('.tab')];
-  const i=tabs.indexOf(document.activeElement);
-  if(i<0) return;
-  const next=tabs[(i+(e.key===fwd?1:tabs.length-1))%tabs.length];
-  next.focus(); next.click();
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest?.('[data-clearfilters]');
+  if(!btn) return;
+  const scope=btn.dataset.clearfilters;
+  Object.keys(filters[scope]).forEach(k=>filters[scope][k]='all');
+  paintChips(scope);
+  if(scope==='library'){
+    searchTerm=''; const input=$id('libSearch');
+    if(input){ input.value=''; $id('libSearchWrap').classList.remove('filled'); }
+    applyLibrary();
+    $id('libSearch')?.focus();
+  }else{
+    $id('scopeEmptyReset').hidden=true;
+    applyInsights();
+  }
 });
+
+$id('librarySort').addEventListener('click',e=>{
+  const trigger=e.currentTarget;
+  renderSheet({
+    title:'Sort papers', quiet:true,
+    body:'Order only. Nothing here is a ranking against anyone else.',
+    choices:SORTS.map(([value,label])=>({label,value})),
+    value:librarySort,
+    onChoice:v=>{
+      librarySort=v;
+      trigger.querySelector('[data-fval]').textContent=labelFor({options:SORTS},v);
+      applyLibrary();
+    },
+  },trigger);
+});
+
+/* Search. Debounced at 200ms so a fast typist gets one pass rather than one
+   per keystroke — this has to hold 60fps on a budget Android. */
+const libSearch=$id('libSearch'), libWrap=$id('libSearchWrap');
+let searchTimer=null;
+function onSearchInput(){
+  libWrap.classList.toggle('filled',libSearch.value.length>0);
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{
+    searchTerm=libSearch.value;
+    applyLibrary();
+  },200);
+}
+libSearch.addEventListener('input',onSearchInput);
+libSearch.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&libSearch.value){ e.stopPropagation(); libSearch.value=''; onSearchInput(); }
+});
+$id('libSearchClear').addEventListener('click',()=>{ libSearch.value=''; onSearchInput(); libSearch.focus(); });
+
+/* ── delegated navigation ── */
+document.addEventListener('click',e=>{
+  const rev=e.target.closest?.('[data-review]');
+  if(rev){ openReview(rev); return; }
+  // Both destinations are Scan: the unsure items and the capture controls
+  // live on the same screen.
+  const go=e.target.closest?.('[data-go]');
+  if(go){ pick(2,{focusPanel:true}); return; }
+  const sh=e.target.closest?.('[data-sheet]');
+  if(sh) renderSheet(COPY[sh.dataset.sheet],sh);
+});
+$id('set-collect')?.addEventListener('click',e=>renderSheet(COPY.collect,e.currentTarget));
 
 /* ── header collapse + boot ── */
-const hdr=document.getElementById('hdr');
+const hdr=$id('hdr');
 // Passive: scrolling is read-only, so it collapses the header and nothing else.
 document.querySelectorAll('.view').forEach(v=>v.addEventListener('scroll',
   ()=>hdr.classList.toggle('stuck',v.scrollTop>28),{passive:true}));
+
+paintChips('insights'); paintChips('library');
+applyInsights(); applyLibrary();
 
 layoutTabs();
 window.addEventListener('load',layoutTabs);
 window.addEventListener('resize',layoutTabs);
 // Crossing a breakpoint changes the pill's axis and dimensions, so the lens
-// map has to be rebuilt for the new geometry.
-railQuery.addEventListener('change',layoutTabs);
+// map has to be rebuilt for the new geometry, and the tablist's orientation
+// changes with it.
+const paintOrientation=()=>$id('refractlayer')
+  .setAttribute('aria-orientation',isRail()?'vertical':'horizontal');
+railQuery.addEventListener('change',()=>{layoutTabs();paintOrientation();});
 matchMedia('(min-width:1024px)').addEventListener('change',layoutTabs);
+paintOrientation();
 // Onest loading can change tab metrics in the labelled rail.
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
 
@@ -1390,101 +1998,36 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
    and the modules call them.
    ══════════════════════════════════════════════════════════════════════════ */
 
-window.__masteryHaptic = { tick: hapticTick, firm: hapticFirm };
-
-// Press springs are attached at boot, so markup rendered later (onboarding,
-// sheet choices) needs them bound too.
-window.__masteryRebindPress = function(scope){
-  (scope||document).querySelectorAll('.press').forEach(el=>{
-    if(el.dataset.pressBound) return;
-    el.dataset.pressBound='1';
-    const key='p-late-'+(Math.random().toString(36).slice(2));
-    seed(key,1);
-    const go=v=>spring(key,{to:v,stiffness:320,damping:27,onUpdate:p=>el.style.transform=`scale(${p.toFixed(4)})`});
-    el.addEventListener('pointerdown',()=>go(.988));
-    ['pointerup','pointerleave','pointercancel'].forEach(e=>el.addEventListener(e,()=>go(1)));
-  });
-};
-
-window.__masteryOpenDisclosure = function(d){
-  const p=d.querySelector('.panel');
-  if(!p||d.classList.contains('open')) return;
-  d.classList.add('open');
-  p.style.height=p.firstElementChild.offsetHeight+'px';
-};
-
-/* Generic sheet. Same spring, scrim and geometry as the board/class warning —
-   the app layer supplies copy, an optional input, and optional choice rows. */
-let sheetConfirm=null, sheetChoice=null;
-window.__masteryOpenSheet = function(cfg){
-  sheetConsequential = cfg.primaryClass === 'primary' && !cfg.choices;
-  sheetConfirm = cfg.onConfirm || null;
-  sheetChoice  = cfg.onChoice  || null;
-
-  document.getElementById('shTitle').textContent = cfg.title || '';
-  document.getElementById('shBody').textContent  = cfg.body  || '';
-  document.getElementById('shList').innerHTML =
-    (cfg.items||[]).map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
-
-  const extras=document.getElementById('shExtras');
-  extras.innerHTML='';
-  if(cfg.input){
-    extras.innerHTML=`<div class="sh-input"><input id="${cfg.input.id}" placeholder="${cfg.input.placeholder||''}"></div>`;
-  }
-  if(cfg.choices){
-    extras.innerHTML=`<div class="sh-choices">${cfg.choices.map(c=>
-      `<div class="sh-choice press" data-choice="${c.value}">${c.label}</div>`).join('')}</div>`;
-    extras.querySelectorAll('[data-choice]').forEach(el=>el.addEventListener('click',()=>{
-      hapticTick(); const v=el.dataset.choice; closeSheet(); sheetChoice&&sheetChoice(v);
-    }));
-    window.__masteryRebindPress(extras);
-  }
-
-  // Choices are the action, so the primary button would be a second way to do
-  // the same thing. Hide it rather than leave a dead control on screen.
-  const prim=document.getElementById('shPrimary');
-  prim.style.display = cfg.choices ? 'none' : '';
-  if(!cfg.choices){ prim.textContent=cfg.primary||'Confirm'; prim.className='btn '+(cfg.primaryClass||'primary')+' press'; }
-  document.getElementById('shGhost').style.display = cfg.choices ? 'none' : '';
-
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-};
-
-// confirmSheet() already fires the firm haptic for consequential actions; this
-// adds the app-supplied action on top.
-const __baseConfirmSheet = confirmSheet;
-confirmSheet = function(){
-  const fn = sheetConfirm; sheetConfirm=null;
-  __baseConfirmSheet();
-  if(fn) fn();
-};
-
 window.__masteryRenderLibrary = function(papers, opts){
-  const list=document.getElementById('libraryList');
-  const count=document.getElementById('libraryCount');
+  const list=$id('libraryList');
   if(!list) return;
-  if(count) count.textContent = `${papers.length} paper${papers.length===1?'':'s'}` + (opts&&opts.stale?' · offline copy':'');
   if(!papers.length){
     list.innerHTML=`<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
+    $id('libraryCount').textContent='No papers yet'+(opts&&opts.stale?' · offline copy':'');
+    $id('libraryEmpty')?.remove();
     return;
   }
   const TYPE={unit_test:'Unit test',mid_term:'Mid-term',final_exam:'Final exam',pyq:'PYQ',sample_paper:'Sample paper'};
   list.innerHTML = papers.map(p=>{
     const pages=(p.paper_page&&p.paper_page[0]&&p.paper_page[0].count)||0;
     const qs=(p.student_attempt&&p.student_attempt[0]&&p.student_attempt[0].count)||0;
-    const tier = p.tier==='tier_2'
+    const t2=p.tier==='tier_2';
+    const tier = t2
       ? '<span class="tier t2">Scheme-matched</span>'
       : '<span class="tier t1">Teacher\'s marks</span>';
-    return `<div class="row press">
-      <div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>
-      <div class="b"><div class="t1">${TYPE[p.type]||p.type}</div>
-        <div class="t2"><span>${new Date(p.date_taken).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span><span>·</span><span>${pages} page${pages===1?'':'s'}</span></div>
-        <div class="t2" style="margin-top:6px">${tier}${qs?'':'<span class="tier uns" style="margin-left:6px">Not read yet</span>'}</div></div>
-      <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-    </div>`;
+    return `<button type="button" class="row press" data-review
+      data-subject="${escapeHtml(p.subject||'')}" data-type="${escapeHtml(p.type||'')}"
+      data-tier="${t2?'t2':'t1'}" data-date="${escapeHtml(p.date_taken||'')}" data-lost="${Number(p.marks_lost)||0}"
+      data-search="${escapeHtml(p.search_text||'')}">
+      <span class="thumb" aria-hidden="true"><span class="ln" style="top:8px"></span><span class="ln" style="top:16px;right:16px"></span><span class="ln" style="top:24px"></span></span>
+      <span class="b"><span class="t1">${TYPE[p.type]||p.type}</span>
+        <span class="t2"><span>${new Date(p.date_taken).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span><span>·</span><span>${pages} page${pages===1?'':'s'}</span></span>
+        <span class="t2" style="margin-top:6px">${tier}${qs?'':'<span class="tier uns" style="margin-left:6px">Not read yet</span>'}</span></span>
+      <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5"/></svg>
+    </button>`;
   }).join('');
-  window.__masteryRebindPress(list);
+  applyLibrary();
+  applyInsights();
 };
 </script>
 
