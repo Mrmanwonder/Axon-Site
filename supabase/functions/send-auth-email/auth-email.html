@@ -1,0 +1,194 @@
+<!--
+  Mastery — auth email.
+
+  This one file is the source of truth for the sign-in email, and it is used two
+  ways:
+
+    · Pasted into Supabase → Authentication → Emails as the Magic Link template.
+      The {{ .Token }} / {{ .ConfirmationURL }} / {{ .Email }} placeholders are
+      Go template variables and Supabase fills them in.
+
+    · Read verbatim by supabase/functions/send-auth-email, which substitutes the
+      same placeholders itself. Nothing is duplicated, so the two cannot drift.
+
+  Constraints email imposes that the app does not:
+
+    · No external font. Onest is embedded in index.html as a base64 woff2, which
+      is not a thing an email can do, so this falls back to the system stack.
+      Tabular numerals are still requested, because the code must not jitter.
+    · Tables for layout, inline styles for anything load-bearing. Several clients
+      strip <style> entirely, so the inline values must already be a finished
+      design rather than a base to be corrected.
+    · Light is the inline base and dark is the media-query override — the reverse
+      of the app. Not a demotion: a client that strips <style> also tends to sit
+      a message on a white background, so light has to be the layer that survives
+      alone. Both palettes are the real tokens from index.html.
+    · Red does not appear. It is the sign-out colour and nothing else, here too.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Your Mastery sign-in code</title>
+<style>
+  /* Dark mode. The values are index.html's dark tokens, unchanged. */
+  @media (prefers-color-scheme: dark) {
+    .m-bg      { background:#000000 !important; }
+    .m-card    { background:#151517 !important; border-color:rgba(255,255,255,.075) !important; }
+    .m-sunk    { background:#0E0E10 !important; border-color:rgba(255,255,255,.075) !important; }
+    .m-label   { color:#F5F5F7 !important; }
+    .m-label-2 { color:rgba(235,235,245,.6) !important; }
+    .m-label-3 { color:rgba(235,235,245,.32) !important; }
+    .m-blue    { color:#3A86FF !important; }
+    .m-btn     { background:#3A86FF !important; }
+    .m-rule    { background:rgba(255,255,255,.075) !important; }
+    .m-amber   { color:#FF9F0A !important; }
+    .m-amber-bg{ background:rgba(255,159,10,.10) !important; }
+  }
+  /* Narrow phones: the design target is ~380px, same as the app. */
+  @media only screen and (max-width:420px) {
+    .m-pad   { padding-left:20px !important; padding-right:20px !important; }
+    .m-code  { font-size:34px !important; letter-spacing:.16em !important; }
+    .m-h1    { font-size:27px !important; }
+  }
+  a { text-decoration:none; }
+</style>
+</head>
+
+<body class="m-bg" style="margin:0;padding:0;width:100%;background:#F4F4F7;">
+
+  <!-- Preheader: the preview line. Kept short so it does not run into the body. -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
+    Your one-time code for Mastery. It expires in an hour.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         class="m-bg" style="background:#F4F4F7;">
+    <tr>
+      <td align="center" style="padding:32px 12px 40px;">
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:440px;width:100%;">
+
+          <!-- Wordmark -->
+          <tr>
+            <td style="padding:0 6px 18px;">
+              <span class="m-label" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;letter-spacing:-.02em;color:#0C0C10;">Mastery</span>
+            </td>
+          </tr>
+
+          <!-- The card. Radius, hairline and surface are the app's .card. -->
+          <tr>
+            <td class="m-card"
+                style="background:#FFFFFF;border:1px solid rgba(60,60,67,.11);border-radius:24px;">
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                <tr>
+                  <td class="m-pad" style="padding:30px 28px 0;">
+                    <h1 class="m-h1 m-label" data-slot="heading"
+                        style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:30px;line-height:1.08;font-weight:700;letter-spacing:-.036em;color:#0C0C10;">Your sign-in code</h1>
+                    <p class="m-label-2" data-slot="intro"
+                       style="margin:10px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:rgba(60,60,67,.68);">Enter this in Mastery to finish signing in. It works once, and expires in an hour.</p>
+                  </td>
+                </tr>
+
+                <!-- The code. Sunk surface, tabular figures, generous tracking so
+                     it reads digit by digit and survives being retyped by hand. -->
+                <tr>
+                  <td class="m-pad" style="padding:22px 28px 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           class="m-sunk"
+                           style="background:#EDEDF1;border:1px solid rgba(60,60,67,.11);border-radius:18px;">
+                      <tr>
+                        <td align="center" style="padding:22px 12px;">
+                          <div class="m-code m-label"
+                               style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:38px;line-height:1;font-weight:700;letter-spacing:.2em;text-align:center;color:#0C0C10;font-variant-numeric:tabular-nums;-webkit-font-feature-settings:'tnum';font-feature-settings:'tnum';">{{ .Token }}</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- or -->
+                <tr>
+                  <td class="m-pad" style="padding:22px 28px 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <!-- Two things about these rules. They need an explicit
+                             width, or they shrink to their content — nothing —
+                             and the label lands against the left edge. And the
+                             hairline has to be a div inside the cell rather than
+                             the cell's own background: a background painted on
+                             the cell fills the whole row height, which the "or"
+                             sets, and a 1px rule comes out 8px thick. -->
+                        <td width="50%" style="width:50%;">
+                          <div class="m-rule" style="height:1px;line-height:1px;font-size:0;background:rgba(60,60,67,.11);">&nbsp;</div>
+                        </td>
+                        <td class="m-label-3" style="padding:0 10px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.055em;color:rgba(60,60,67,.4);white-space:nowrap;">or</td>
+                        <td width="50%" style="width:50%;">
+                          <div class="m-rule" style="height:1px;line-height:1px;font-size:0;background:rgba(60,60,67,.11);">&nbsp;</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- The link. Second, not first: a mail app that prefetches links
+                     burns this one before it is clicked, and the code above is
+                     what still works when that happens. -->
+                <tr>
+                  <td class="m-pad" style="padding:18px 28px 0;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td class="m-btn" align="center"
+                            style="background:#2C74E8;border-radius:16px;">
+                          <a href="{{ .ConfirmationURL }}"
+                             style="display:block;padding:15px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15.5px;font-weight:600;letter-spacing:-.015em;color:#FFFFFF;text-decoration:none;">Sign in on this device</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p class="m-label-3"
+                       style="margin:10px 2px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:rgba(60,60,67,.4);">Open it on the device you want to be signed in on. If the button has already been used, or nothing happens, type the code instead — pasting the whole link into Mastery works too.</p>
+                  </td>
+                </tr>
+
+                <!-- Attention uses amber. -->
+                <tr>
+                  <td class="m-pad" style="padding:22px 28px 30px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                           class="m-amber-bg"
+                           style="background:rgba(199,122,6,.1);border-radius:14px;">
+                      <tr>
+                        <td style="padding:13px 15px;">
+                          <p class="m-amber"
+                             style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#C77A06;">Nobody from Mastery will ever ask you for this code. We do not phone, and we do not ask for it in chat.</p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="m-pad" style="padding:20px 8px 0;">
+              <p class="m-label-3"
+                 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:rgba(60,60,67,.4);">This was sent to {{ .Email }} because someone asked to sign in to Mastery. If that was not you, nothing has happened and no account has been changed — you can ignore this message.</p>
+              <p class="m-label-3"
+                 style="margin:12px 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.55;color:rgba(60,60,67,.4);">Mastery — see exactly where your marks go.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

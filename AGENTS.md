@@ -11,6 +11,13 @@ holds the Supabase client, vendored rather than pulled from a CDN so there is no
 third-party runtime dependency. The modules must be served over http; ES modules
 do not load from `file://`.
 
+`supabase/functions/` holds Edge Functions, deployed separately from the site — Netlify
+publishes `dist/` and never touches them. `send-auth-email/auth-email.html` is the
+sign-in email and the only copy of it: the function substitutes the same
+`{{ .Token }}`-style placeholders the dashboard would, so pasting the file into
+Authentication → Emails and running the hook produce the same message. Edit that file,
+not a copy in the dashboard.
+
 `supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
 test suites that run inside a rolled-back transaction and are safe against any
 database, production included.
@@ -20,8 +27,24 @@ database, production included.
 `index.html` owns the design system; `src/` owns data and flow. Rather than
 duplicating primitives, the inline script publishes them and the modules call them:
 `__masteryHaptic`, `__masterySwitch`, `__masteryOpenSheet`, `__masteryRebindPress`,
-`__masteryOpenDisclosure`, `__masteryRenderLibrary`. Add to that list rather than
-reimplementing a spring or a sheet in a module — the two will drift otherwise.
+`__masteryOpenDisclosure`, `__masteryInsightsReady`, `__masteryRenderHome`,
+`__masteryRenderInsights`, `__masteryRenderScan`, `__masteryRenderLibrary`. Add to that
+list rather than reimplementing a spring or a sheet in a module — the two will drift
+otherwise.
+
+The render bridges take data and return nothing: the app layer decides *what* is true,
+this file decides how it looks. Two rules they exist to hold:
+
+- A surface with no data says so. It never falls back to the numbers this file was
+  prototyped with — those read as this student's marks, which is the most confident lie
+  the interface can tell.
+- Which Insights view is shown is a data question (`__masteryInsightsReady`), not a tap
+  affordance. It used to toggle on a second tap, which showed a populated chart to a
+  student who had nothing in it.
+
+`src/curriculum.js` is the single source for the board, the stages, the class-level
+mapping and the syllabus codes. Nothing else should hardcode "CAIE", a stage name or a
+four-digit code.
 
 Switches whose state belongs to the app carry `data-managed`, and the generic `.sw`
 handler skips them. Two handlers on one switch race: whichever runs second reads a
@@ -71,6 +94,22 @@ eventually gets broken:
   the transaction timestamp, so rows written together are indistinguishable by time.
 - Consent state is always read authoritatively, never cached optimistically.
 
+## The avatar
+
+`src/avatar.js` holds ten ShaderGradient presets with the library's own colour
+values, rendered as layered CSS gradients rather than the real thing — ShaderGradient
+is three.js, and a WebGL context and render loop for a settings-row decoration does
+not survive the 60fps floor. Nothing animates.
+
+`auto: false` on Halo and Mandarin is load-bearing, not an oversight. Both are
+essentially made of red, red is reserved for the sign-out row, and an avatar derived
+onto a student who never chose it would put a red disc a few rows above the red Sign
+out. They stay pickable — a student choosing red is not the interface spending it —
+but the app never hands one out unasked. Don't fold them back into the derived set.
+
+There is one avatar and one `avatar_seed`, on `student`. The guardian never opens the
+app, so there is no second face to keep in sync.
+
 ## Before changing the nav or the glass
 
 Read `README.md` first, then the `generateLensMap()` and `spring()` functions.
@@ -95,6 +134,13 @@ meant to ramp continuously, not step.
 Percentage padding inside `.view` resolves against the app shell, not the view's own
 box, so `--rail-w` has to be subtracted explicitly in the centring calculation.
 This is easy to get wrong and looks almost right when you do.
+
+The onboarding overlay is the same trap one level down. `.obwrap` is absolute, so
+`inset:0` resolves against `#obroot`'s *padding* box — padding on `#obroot` cannot
+cap the column, and the overlay carries `--ob-side` per element instead, with
+`.obview` reaching the same width through `.view`'s own `--vmax`. `#obroot` also
+zeroes `--rail-w` and `--view-bottom`: there is no rail and no tab bar inside it,
+and leaving either set pushes the column off-centre or strands it above dead space.
 
 ## Colour
 

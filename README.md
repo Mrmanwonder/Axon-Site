@@ -1,8 +1,12 @@
 # Mastery
 
-A responsive web app that shows a student exactly where their marks go — built from
-the original single-file device-frame prototype, now a real site rather than a
-scaled-down phone mockup.
+A responsive web app that shows a Cambridge (CAIE) student exactly where their marks
+go — built from the original single-file device-frame prototype, now a real site rather
+than a scaled-down phone mockup.
+
+The curriculum is Cambridge only: IGCSE, AS and A Level. `src/curriculum.js` holds the
+stages, the class-level mapping and the syllabus codes, and is the one place to change
+if another board is ever added.
 
 `index.html` is the front end and the design system. `src/` holds ES modules for data
 and flow; `vendor/` holds the Supabase client. No bundler, no framework, no install.
@@ -15,11 +19,23 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 ## What works
 
-- **Auth** — email or phone OTP, no passwords, no social sign-in. Only the guardian
-  holds credentials; the student is a profile under that session.
+- **Auth** — passwordless: email or phone OTP, or Continue with Google / Continue with
+  Apple. Only the guardian holds credentials; the student is a profile under that
+  session. A provider sign-in skips nothing — see *Provider sign-in* below. The sign-in
+  email itself lives in this repo — see [The sign-in email](#the-sign-in-email).
 - **Onboarding** — the eight steps in order, with the legally load-bearing ones
   enforced: no student data before consent, consent itemised per purpose with optional
-  purposes off, payment after consent.
+  purposes off, payment after consent. The student profile collects a Cambridge stage
+  (IGCSE Year 10/11, AS, A Level) and subjects with their syllabus codes, and writes
+  both to the profile.
+- **The app shell reads from that profile** — Home, Insights, Scan, Library and the
+  Settings profile rows all render from the student's real rows. Where there is no data
+  yet, the surface says so rather than showing the numbers this file was prototyped with:
+  Insights stays on its empty state until there are four papers, and the sections that
+  need extracted attempts stay hidden until something computes them.
+- **Library filters and search** — over the columns a paper actually has: date, type and
+  tier. There is no subject filter because a paper carries no subject until something
+  reads one off the page.
 - **Guardian verification** — a swappable adapter. The development stub is wired;
   DigiLocker is the intended production adapter and needs a server-side token
   exchange. Only a reference and a timestamp are ever stored.
@@ -40,6 +56,47 @@ riskiest assumption in the product.
 Links are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over the
 bytes, so a server-side fetcher has to resolve them.
 
+## The sign-in email
+
+`supabase/functions/send-auth-email/auth-email.html` is the email, and it is the only
+copy of it. It carries the design system's real tokens — the card, the sunk surface,
+the hairline, the blue button, amber for the one line that needs attention, and no red
+anywhere. Light and dark are both defined, with light as the inline base because a
+client that strips `<style>` will also tend to sit the message on white.
+
+**The code comes before the link, deliberately.** Mail apps, scanners and link
+previews follow URLs before a person does, and whoever touches the token first spends
+it. That is what produces `otp_expired` on a link the guardian is clicking for the
+first time. A six-digit code cannot be consumed by a prefetch, so it is the primary
+path and the button is the convenience.
+
+There are two ways to put it in front of Supabase, and **one of them has to be done in
+the dashboard — neither is live until you do it.**
+
+**1. Paste it as the template.** Authentication → Emails → Magic Link, paste the file,
+save. `{{ .Token }}`, `{{ .ConfirmationURL }}` and `{{ .Email }}` are Go template
+variables Supabase fills in. Nothing else to configure. Note that a template without
+`{{ .Token }}` in it is why `signInWithOtp` sends a link and no code at all.
+
+**2. Send it yourself, via the hook.** `supabase/functions/send-auth-email` is a Send
+Email Hook: Supabase Auth calls it instead of sending, and it renders that same HTML
+file and hands it to Resend. This is the one that survives someone editing the
+dashboard, and it is also the only way past the built-in SMTP, which is rate-limited to
+a couple of messages an hour and only delivers to project members — worth knowing
+before concluding that auth is broken for a real user.
+
+```bash
+supabase secrets set RESEND_API_KEY=… AUTH_EMAIL_FROM='Mastery <hello@your-domain>'
+supabase functions deploy send-auth-email --no-verify-jwt
+# then Authentication → Hooks → Send Email → point it at the function, and
+supabase secrets set SEND_EMAIL_HOOK_SECRET=v1,whsec_…
+```
+
+`--no-verify-jwt` is required, not a shortcut: Auth authenticates with a Standard
+Webhooks signature rather than a user JWT, so a JWT check would reject every call. The
+signature is verified in the function before the body is parsed, which is what keeps an
+endpoint with no JWT check from being a way to mail a code to any address.
+
 ## Deploying
 
 `netlify.toml` copies `index.html`, `src/` and `vendor/` into `dist/` and publishes
@@ -48,6 +105,35 @@ specs, the blueprint and the design reference images stay out of the deployed si
 
 There is nothing to install — no `package.json`, no framework, no build step beyond
 the copy.
+
+### Provider sign-in
+
+Google and Apple are offered on the account step, above the typed path. Both are pure
+client-side redirects through Supabase (`signInWithOAuth`), so there is nothing to
+install and no secret in this repo — but each has to be switched on once, per project,
+in the Supabase dashboard:
+
+- **Google** — Authentication → Sign In / Providers → Google. Needs an OAuth client ID
+  and secret from the Google Cloud console, with Supabase's callback
+  (`<project>.supabase.co/auth/v1/callback`) as an authorised redirect URI.
+- **Apple** — the same panel. Needs a Services ID, and Apple requires the callback to
+  be an `https` URL, so this one cannot be exercised against `http://localhost`; use a
+  deploy preview.
+
+Add every origin the app is served from — production, deploy previews, `localhost` for
+Google — to Authentication → URL Configuration → Redirect URLs. The app asks to come
+back to `window.location.origin + pathname` rather than the project's Site URL, so a
+stale Site URL cannot strand anyone, but an origin missing from that allow-list will be
+refused by Supabase.
+
+Until a provider is enabled its button explains itself in amber and points at the email
+and phone path, rather than surfacing Supabase's developer-facing error.
+
+**A provider shortens no part of the flow.** It supplies a verified address and, usually,
+a name — so the guardian row lands with one glance instead of two fields. It does not
+stand in for guardian verification, and it cannot: DPDP consent is a parent's decision
+about a specific child, and no identity provider can assert it. The age gate,
+verification and itemised consent all still run, in order.
 
 The Supabase publishable key is committed in `src/config.js` on purpose. It carries no
 authority: every table has RLS with no policy for `anon`, so the key alone reaches

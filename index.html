@@ -340,6 +340,28 @@
   .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
   .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
   .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
+  /* The card is now a control (it renames), so it needs the hint and the ring
+     that every other control has. Cursor only on pointers; the press spring
+     already covers touch. */
+  .sprofile[role="button"]{cursor:pointer;}
+  .sprofile .n .pen{width:13px;height:13px;margin-left:7px;vertical-align:-1px;fill:none;
+    stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* Avatar picker. Chip-strip geometry, borrowed from .filterbar so the scroll
+     behaviour and gutters match the filters the student already knows. */
+  .avstrip{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
+    padding:12px var(--gutter);scroll-snap-type:x proximity;}
+  .avstrip::-webkit-scrollbar{display:none;}
+  .avstrip::after{content:"";flex:0 0 calc(var(--gutter) - 10px);}
+  .avsw{flex:0 0 auto;width:44px;height:44px;border-radius:50%;cursor:pointer;
+    border:2px solid transparent;background-clip:padding-box;scroll-snap-align:center;
+    position:relative;padding:0;-webkit-appearance:none;appearance:none;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
+  .avsw:hover{border-color:var(--hairline);}
+  .avsw:active{border-color:var(--nav-rim);}
+  .avsw[aria-pressed="true"]{border-color:var(--blue);}
+  .avsw:disabled{opacity:.4;cursor:default;}
+  .avsw:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
   .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
   .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);cursor:pointer;transition:background .22s ease,color .22s ease;}
   .seg button.on{background:var(--surface);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600;}
@@ -489,6 +511,20 @@
     .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
   }
 
+  /* ── disabled ──
+     The design system had no disabled state before onboarding needed one (the
+     verification button, while the adapter is mid-handoff). Deliberately built
+     from opacity and pointer-events alone: a greyed-out palette would mean a
+     new colour, and this project's whole position is that new colours are
+     decisions, not defaults. Reads correctly in both themes because it dims
+     whatever the button already was.
+
+     aria-disabled rather than the `disabled` attribute: these are divs, and a
+     div cannot carry it. Handlers must still check the attribute — CSS
+     pointer-events stops a click but not the Enter key. */
+  [aria-disabled="true"]{opacity:.45;pointer-events:none;cursor:default;}
+  .btn[aria-disabled="true"]{box-shadow:none;}
+
   /* Visible only for keyboard users; the design's press states cover pointers. */
   :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px;}
   .tab:focus-visible{outline-offset:-4px;}
@@ -531,10 +567,265 @@
   [data-theme="light"] #appToast .t1{color:var(--label);}
   @media (min-width:768px){#appToast{left:calc(var(--rail-w) + 16px);right:16px;max-width:520px;}}
 
-  /* ── onboarding overlay ── */
-  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;}
+  /* ══════════════ ONBOARDING OVERLAY ══════════════
+     Its own surface rather than a view inside the app: there is no tab bar, no
+     header plate, and no student data to show yet. It borrows the tokens, the
+     springs and the press states, and adds the pieces below, which exist
+     nowhere else in the interface.
+
+     Two defaults are deliberately refused here. A percentage progress bar,
+     because a percentage implies a precision the branching flow doesn't have —
+     the rail names the phase instead. And a celebration at the end, because
+     the thing just completed is a parent complying with a consent law, not a
+     win. The single acknowledgment lands on the student's first screen, after
+     the work, which is where this design puts delight. */
+  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;
+    /* .view subtracts the rail from its own centring and offsets itself by it
+       at ≥768. There is no rail inside the overlay, so zero it or the column
+       sits off-centre. --view-bottom is the tab bar's clearance, which is
+       likewise absent here. */
+    --rail-w:0px;--view-bottom:clamp(24px,6vh,44px);
+    --ob-wash:.26;--ob-wash-2:.19;
+    /* One measured column, capped like a .view. Padding on #obroot cannot do
+       this: .obwrap is absolute, and inset:0 resolves against the padding box,
+       so the wrap spans the padding and the cap is ignored. The gutter is
+       carried per-element instead, and .obview reaches the same number through
+       .view's own --vmax centring so the head and the body stay flush.
+       Collapses to 0 below the cap, so no breakpoint is needed. */
+    --ob-side:max(0px,calc((100% - 620px) / 2));}
   #obroot[hidden]{display:none;}
-  @media (min-width:768px){#obroot{padding-inline:max(0px,calc((100% - 620px) / 2));}}
+  [data-theme="light"] #obroot{--ob-wash:.13;--ob-wash-2:.10;}
+
+  .obwrap{position:absolute;inset:0;display:flex;flex-direction:column;}
+  /* One wash, painted once and never animated. A gradient this large is the
+     most expensive thing on a budget Android GPU and this one is decoration,
+     so it gets a static paint and no compositing layer of its own. */
+  .obwrap::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;
+    height:min(46vh,380px);pointer-events:none;
+    background:
+      radial-gradient(120% 82% at 14% -10%,rgba(58,134,255,var(--ob-wash)),transparent 62%),
+      radial-gradient(92% 64% at 98% 2%,rgba(138,111,209,var(--ob-wash-2)),transparent 66%);}
+
+  /* header: back affordance + phase rail */
+  .obhead{position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;gap:13px;
+    padding:calc(var(--top-inset) + 18px) calc(var(--text-gutter) + var(--ob-side)) 0;}
+  .obback{width:33px;height:33px;margin-left:-3px;border-radius:17px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;will-change:transform;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);}
+  .obback svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .obprog{flex:1;min-width:0;}
+  .obprog .segs{display:flex;gap:5px;}
+  .obprog .segs i{flex:1;height:3px;border-radius:2px;background:var(--surface-sunk);overflow:hidden;}
+  /* Animating width would be a layout animation. The fill is a full-width
+     child scaled on X instead, so the rail stays on the compositor. It is a
+     keyframe rather than a transition because each step replaces the markup,
+     and a transition has nothing to transition from. */
+  .obprog .segs i span{display:block;height:100%;border-radius:2px;background:var(--blue);transform:scaleX(0);}
+  .obprog .segs i.done span{transform:scaleX(1);background:var(--label-3);}
+  .obprog .segs i.now span{transform-origin:left center;animation:obfill .32s var(--spring) both;}
+  @keyframes obfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .obprog .ph{margin-top:8px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;
+    letter-spacing:.055em;color:var(--label-3);}
+
+  /* step body */
+  .obview{position:relative;z-index:1;inset:auto;flex:1;min-height:0;
+    --vmax:620px;padding-top:clamp(10px,3vw,16px);}
+
+  /* Step entrance. Transform and opacity only, on the 200ms disclosure budget —
+     a step change is a disclosure. Children rise in a short stagger that caps
+     at five waves; past that it stops reading as arrival and starts reading as
+     a loading state. */
+  @keyframes obstep{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .obview > *{animation:obstep .26s var(--spring) both;}
+  .obview > :nth-child(1){animation-delay:.01s;}
+  .obview > :nth-child(2){animation-delay:.05s;}
+  .obview > :nth-child(3){animation-delay:.09s;}
+  .obview > :nth-child(4){animation-delay:.13s;}
+  .obview > :nth-child(n+5){animation-delay:.17s;}
+  /* Every moving part here is a keyframe with fill-mode both, so collapsing the
+     duration is not enough on its own: the delay still holds content at
+     opacity 0 through its whole stagger, and even at 0.01s there is a frame
+     before the first tick where the element is painted invisible. Removed
+     outright instead — with no animation the elements sit at their own style,
+     which is already the finished state. */
+  [data-motion="reduce"] .obview > *,
+  [data-motion="reduce"] .obprog .segs i.now span,
+  [data-motion="reduce"] .obseal{animation:none !important;}
+  [data-motion="reduce"] .obprog .segs i.now span{transform:scaleX(1);}
+
+  /* landing hero */
+  .obhero{padding:clamp(16px,5vw,26px) var(--text-gutter) 0;}
+  .obwordmark{display:flex;align-items:center;gap:9px;margin-bottom:clamp(22px,7.5vw,36px);}
+  .obwordmark .g{width:23px;height:23px;border-radius:7px;flex-shrink:0;
+    background:linear-gradient(155deg,#5AA0FF,#2E74E8);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
+    display:flex;align-items:center;justify-content:center;}
+  .obwordmark .g svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .obwordmark .n{font-size:14.5px;font-weight:600;letter-spacing:-.012em;}
+  .obhero h1{margin:0;font-size:clamp(29px,8.4vw,40px);font-weight:700;letter-spacing:-.042em;line-height:1.06;}
+  .obhero h1 em{font-style:normal;color:var(--blue);}
+  .obhero .sub{margin-top:12px;font-size:clamp(14.5px,4vw,16.5px);line-height:1.48;color:var(--label-2);max-width:30em;}
+
+  /* The seven cause hues, named. Categorical and equal-weight, exactly as they
+     are in the app — no bar lengths and no counts, because there is no student
+     data at this point and a chart shape here would be inventing some. */
+  .obspec{display:flex;flex-wrap:wrap;gap:6px;margin:0 var(--text-gutter);}
+  .obspec span{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 9px;border-radius:12px;
+    background:var(--surface);border:.5px solid var(--hairline);
+    font-size:12px;font-weight:500;color:var(--label-2);letter-spacing:-.005em;}
+  .obspec span::before{content:"";width:7px;height:7px;border-radius:2.5px;background:var(--c);flex-shrink:0;}
+
+  /* A labelled field. The account step used to borrow a settings row for the
+     label and the Library's search box for the input, which is most of why it
+     read as a preferences screen rather than a welcome. */
+  .obfields{margin:0 var(--gutter);display:flex;flex-direction:column;gap:11px;}
+  .obfield{background:var(--surface);border:.5px solid var(--hairline);border-radius:17px;
+    padding:12px 15px 13px;transition:border-color .12s ease;}
+  [data-theme="light"] .obfield{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obfield:focus-within{border-color:var(--blue);}
+  .obfield .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obfield input{display:block;width:100%;margin-top:5px;padding:0;background:none;border:none;outline:none;
+    font-family:inherit;font-size:16.5px;font-weight:500;color:var(--label);letter-spacing:-.02em;}
+  .obfield input::placeholder{color:var(--label-3);font-weight:400;letter-spacing:-.01em;}
+  .obfield .hint{margin-top:7px;font-size:12px;line-height:1.45;color:var(--label-3);}
+  /* The code field accepts a 6-digit code or a whole pasted link, so it cannot
+     be six boxes. Tabular figures and wide tracking give it the same
+     at-a-glance shape without breaking the paste. */
+  .obfield.obcode{text-align:center;}
+  .obfield.obcode input{font-size:clamp(21px,6vw,25px);font-weight:600;letter-spacing:.2em;text-align:center;}
+  .obfield.obcode input::placeholder{font-size:14.5px;font-weight:400;letter-spacing:-.01em;}
+
+  /* Provider sign-in, above the typed path on the account step.
+     Both buttons sit on our own neutral surface rather than each brand's button
+     colour: two saturated slabs stacked above the fields would outrank the
+     step's own primary action, and a black Apple button beside a white Google
+     one is two design languages arguing. Google's mark keeps its four colours,
+     which its brand terms require and which are not our palette making a
+     claim; Apple's is currentColor, which resolves to exactly the black-on-light
+     and white-on-dark pair Apple specifies. */
+  .obalt{margin:0 var(--gutter) 13px;display:flex;flex-direction:column;gap:9px;}
+  .obalt .btn{padding:14px;border-radius:18px;font-size:15.5px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label);}
+  [data-theme="light"] .obalt .btn{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obalt .btn svg{width:18px;height:18px;flex-shrink:0;}
+  .obalt .btn .apl{fill:currentColor;}
+  /* A hairline with "or" through it, not a heading. Neither path is the
+     recommended one — whichever the parent already has is the fast one. */
+  .obor{margin:0 var(--gutter) 13px;display:flex;align-items:center;gap:11px;
+    font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obor::before,.obor::after{content:"";flex:1;height:.5px;background:var(--hairline);}
+
+  /* A statement panel: the app talking, where .card is the app reporting. */
+  .obpanel{margin:0 var(--gutter);padding:clamp(17px,4.6vw,21px);border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .obpanel{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obpanel.tint{background:rgba(58,134,255,.09);border-color:rgba(58,134,255,.22);box-shadow:none;}
+  .obpanel .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.34;text-wrap:balance;}
+  .obpanel .line em{font-style:normal;color:var(--blue);}
+  .obpanel .body{margin-top:11px;font-size:13.5px;line-height:1.52;color:var(--label-2);}
+
+  /* One action group per step, so the primary button lands in the same place
+     every time and the spacing stops coming from a per-screen inline margin. */
+  .obfoot{margin:24px var(--gutter) 4px;display:flex;flex-direction:column;gap:2px;}
+  .obfoot .btn.primary{padding:16px;border-radius:19px;}
+
+  /* The only acknowledgment in the flow, and it lands after the work rather
+     than during it — 320ms, the recompute budget, spent once. */
+  .obseal{width:46px;height:46px;border-radius:16px;margin-bottom:16px;
+    background:rgba(48,209,88,.16);display:flex;align-items:center;justify-content:center;
+    animation:obseal .32s var(--spring) both;}
+  .obseal svg{width:23px;height:23px;fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  @keyframes obseal{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:none}}
+
+  /* Choice rows carry a chevron in the flow. In Scan a .method row is the whole
+     screen so it needs no affordance; inside a sequence of steps the interface
+     has to say which taps move you forward. */
+  #obroot .method .chev{opacity:.28;}
+  #obroot .list + .subnote{margin-top:11px;}
+  /* Cause hues stay on the landing motif, where they mean causes. Everywhere
+     else in the flow an icon is blue for accent, amber for attention or green
+     for something already settled — spending the cause palette on decoration
+     would weaken the one place it carries meaning.
+
+     The names are ic-* rather than bare letters because .method's own text
+     column is .b: a tone called "b" inherits flex:1 from it and the 38px icon
+     tile stretches across the row. */
+  #obroot .ic-b{background:rgba(58,134,255,.16);}
+  #obroot .ic-b svg{stroke:var(--blue);}
+  #obroot .ic-g{background:rgba(48,209,88,.16);}
+  #obroot .ic-g svg{stroke:var(--green);}
+  #obroot .ic-a{background:rgba(255,159,10,.16);}
+  #obroot .ic-a svg{stroke:var(--amber);}
+  #obroot .ic-n{background:var(--surface-sunk);}
+  #obroot .ic-n svg{stroke:var(--label-3);}
+  /* Headline to first block: .greet's 2px is tuned for a view that opens on a
+     dense card, not for a step that opens on a field or a statement. */
+  #obroot .greet{padding-bottom:14px;}
+  /* Subject chips wrap rather than scroll: a picker you can scroll past is a
+     picker where a subject gets missed. It is static here, so it also drops the
+     opaque strip the sticky version needs — that would cut across the wash. */
+  #obroot .filterbar{flex-wrap:wrap;overflow:visible;background:none;padding-right:var(--gutter);}
+  #obroot .filterbar::after{display:none;}
+  /* The dead ends carry their back affordance in the header, so the paragraph
+     is the last thing in the card and its button gap is spare. */
+  #obroot .estate p:last-child{margin-bottom:0;}
+  /* .chip.n's sunk grey turns muddy on the tinted panel. */
+  #obroot .obpanel.tint .chip.n{background:rgba(58,134,255,.16);color:var(--blue);}
+
+  @media (hover:hover) and (pointer:fine){
+    .obback:hover{color:var(--label);}
+    #obroot .method:hover .chev{opacity:.6;}
+  }
+  /* The global reduce-motion rule collapses transitions but not animations, and
+     every moving part of the flow is a keyframe. The OS setting alone has to be
+     enough — [data-motion] only covers the in-app toggle. */
+  @media (prefers-reduced-motion:reduce){
+    .obview > *,.obprog .segs i.now span,.obseal{animation:none !important;}
+    .obprog .segs i.now span{transform:scaleX(1);}
+  }
+
+  /* ── onboarding: the student half ──
+     Steps 1-6 are the parent's, and they are dense on purpose — a parent wants
+     to finish that, not savour it. Steps 7-8 are the student's first minute in
+     the app and are paced the opposite way: one idea per screen, one forward
+     action, and enough empty space that the four screens don't read as a queue
+     of tasks to get through.
+
+     There is deliberately no step indicator. "Nothing competing with the
+     forward action" rules out a second thing to look at, and a 1-of-4 counter
+     turns four calm screens into a progress bar — which is the gamified
+     pattern this project has already decided against.
+
+     Composed entirely from existing tokens: the h1 scale, the estate icon
+     treatment, the body size and the standard gutters. No new scale, no new
+     hue, no new radius. */
+  .view.calmview{padding-top:var(--top-inset);padding-bottom:0;}
+  .calm{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;
+    padding:0 var(--text-gutter);}
+  .calm .top{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(24px,7vh,56px) 0;}
+  .calm .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);
+    display:flex;align-items:center;justify-content:center;margin-bottom:clamp(20px,4vh,30px);}
+  .calm .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .calm h2{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.036em;
+    line-height:1.1;text-wrap:balance;}
+  .calm p{margin:15px 0 0;font-size:var(--fs-body,15px);line-height:1.55;color:var(--label-2);
+    max-width:34ch;}
+  .calm .foot{flex:0 0 auto;padding-bottom:max(clamp(18px,4vh,34px),var(--bot-inset));}
+  .calm .foot .btn{margin:0;}
+  .calm .foot .btn.plain{margin-top:4px;}
+
+  /* ── Devanagari ──
+     The consent notice is available in Hindi because a notice a parent cannot
+     read has not informed them. Onest carries no Devanagari, so those
+     codepoints fall through to whatever face the device ships — Onest still
+     wins for the latin digits and punctuation inside the same string.
+
+     Deliberately not a webfont: choosing one is a design-system decision that
+     hasn't been taken, and this text has to render with no network. The metrics
+     will not match Onest exactly. Legibility of a legal notice beats matching. */
+  [lang="hi"]{font-family:'Onest',"Noto Sans Devanagari","Noto Sans","Nirmala UI",
+    "Mangal",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;}
 
   /* Sheet extras used by the generic sheet opener. */
   .sheet .sh-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
@@ -571,9 +862,9 @@
 
     <!-- ══════════════ 0 · HOME ══════════════ -->
     <div class="view on" id="v0">
-      <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
+      <div class="greet"><div class="d" id="homeDay">Tuesday</div><h1 id="homeName">Maya</h1></div>
 
-      <div class="hgrid">
+      <div class="hgrid" id="homeGrid">
       <div class="card insight press">
         <div class="chips"><span class="chip n">14 papers</span><span class="chip conf-likely">Likely</span></div>
         <div class="line">You're losing most marks to <em>unstated assumptions</em> in derivation questions — not to the physics itself.</div>
@@ -595,8 +886,8 @@
       </div>
       </div>
 
-      <div class="sectitle">Recent scans</div>
-      <div class="list">
+      <div class="sectitle" id="homeRecentTitle">Recent papers</div>
+      <div class="list" id="homeRecent">
         <div class="row press"><div class="b"><div class="t1">Physics · Unit Test 4</div><div class="t2"><span class="tier t2">Scheme-verified</span><span>6 Aug</span></div></div><div class="lost">7<small>marks lost</small></div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="row press"><div class="b"><div class="t1">Maths · Ch. 6 Practice</div><div class="t2"><span class="tier uns">2 unsure</span><span>4 Aug</span></div></div><div class="lost">11<small>marks lost</small></div>
@@ -611,10 +902,25 @@
       </div>
     </div>
 
+    <!-- Empty Home — where the student lands the moment onboarding ends, and
+         wherever they have no papers yet. One action and nothing else: there is
+         genuinely nothing to report until a paper exists, and a dashboard of
+         zeroes would be a chart built on no data. Mirrors v1b, which does the
+         same job for Insights below the four-paper threshold. -->
+    <div class="view" id="v0b">
+      <div class="greet"><h1 id="v0bGreet">Hello</h1></div>
+      <div class="estate">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></div>
+        <h4>No papers yet</h4>
+        <p>Add a marked paper and we'll show you where the marks went. Until there's one to read, there's nothing here we could honestly tell you.</p>
+        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add your first paper</div>
+      </div>
+    </div>
+
     <!-- ══════════════ 1 · INSIGHTS ══════════════ -->
     <div class="view" id="v1">
-      <div class="greet"><h1>Insights</h1><div class="sub">Everything across your 14 scanned papers.</div></div>
-      <div class="filterbar">
+      <div class="greet"><h1>Insights</h1><div class="sub" id="insSub">Everything across your 14 scanned papers.</div></div>
+      <div class="filterbar" id="insFilters">
         <div class="fchip active">Physics <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
         <div class="fchip">Last 3 months <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
         <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
@@ -622,7 +928,7 @@
       </div>
 
       <div class="igrid">
-      <section class="isec">
+      <section class="isec" id="secCheap">
       <div class="sectitle tight">Cheap marks</div>
       <div class="list">
         <div class="cheap press"><div class="rank">1</div><div class="b"><div class="t1">Write the formula before substituting</div><div class="t2">17 questions · every scheme awards it separately</div></div><div class="gain">14<small>marks</small></div></div>
@@ -632,9 +938,9 @@
       <div class="subnote">Ranked by marks recovered per unit of effort, not by how often each appears.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secCause">
       <div class="sectitle">Marks lost by cause</div>
-      <div class="card causecard">
+      <div class="card causecard" id="causeCard">
         <div class="causebar">
           <i style="flex:23;background:#4C7DF0"></i><i style="flex:19;background:#3FA9A0"></i><i style="flex:16;background:#8A6FD1"></i>
           <i style="flex:14;background:#C98A3E"></i><i style="flex:11;background:#C46B8A"></i><i style="flex:10;background:#7C9455"></i><i style="flex:7;background:#78808F"></i>
@@ -652,7 +958,7 @@
       <div class="subnote">Different kinds of problem, coloured categorically — no cause ranks worse than another.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secConcept">
       <div class="sectitle">Concept mastery</div>
       <div class="card mapcard">
         <div class="maprow"><span class="ch">Kinematics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
@@ -664,7 +970,7 @@
       </div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secTrend">
       <div class="sectitle">Trend</div>
       <div class="card trendcard press">
         <div class="hd"><span class="k">Marks lost per paper · Physics</span><span class="v">↓ 6 since March</span></div>
@@ -680,7 +986,7 @@
       <div class="subnote">Plotted against papers, not dates. Nothing here compares you to anyone else.</div>
       </section>
 
-      <section class="isec">
+      <section class="isec" id="secQType">
       <div class="sectitle">By question type</div>
       <div class="list">
         <div class="qt"><div class="hd"><span class="n">2-mark short answer</span><span class="r"><b>91%</b> retained</span></div><div class="track"><i data-w="91"></i></div></div>
@@ -699,11 +1005,10 @@
       <div class="estate">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 19.5h16"/><path d="M7 16v-3M12 16V8M17 16v-5"/></svg></div>
         <h4>Not enough papers yet</h4>
-        <p>Patterns need about four papers before they mean anything. With two, anything shown here would be noise dressed as insight.</p>
-        <div class="prog"><div class="tr"><i></i></div><span>2 of 4</span></div>
-        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Scan a paper</div>
+        <p id="insEmptyBody">Patterns need about four papers before they mean anything. With fewer, anything shown here would be noise dressed as insight.</p>
+        <div class="prog"><div class="tr"><i id="insProgFill"></i></div><span id="insProgLabel">0 of 4</span></div>
+        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add a paper</div>
       </div>
-      <div class="subnote" style="text-align:center;margin-top:14px">Tap Insights again to preview the populated state → <span style="color:var(--blue);font-weight:600;cursor:pointer" onclick="pick(1)">full Insights</span></div>
     </div>
 
     <!-- ══════════════ 2 · SCAN ══════════════ -->
@@ -718,7 +1023,7 @@
         <div class="frame">
           <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
         </div>
-        <div class="scanhint">Fits Physics · Unit Test — align all four corners</div>
+        <div class="scanhint" id="scanHint">Pick the pages you've already photographed</div>
 
         <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
           <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
@@ -749,7 +1054,7 @@
         </div>
       </div>
 
-      <div class="scanbelow">
+      <div class="scanbelow" id="scanBelow">
         <div class="sectitle tight">Processing</div>
         <div class="card proc press" onclick="openReview()">
           <div class="hd">Reading page 3 of 6</div>
@@ -839,12 +1144,11 @@
     <!-- ══════════════ 3 · LIBRARY ══════════════ -->
     <div class="view" id="v3">
       <div class="greet"><h1>Library</h1></div>
-      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input placeholder="Search questions, chapters, concepts"></div></div>
-      <div class="filterbar">
-        <div class="fchip">All subjects <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
-        <div class="fchip">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+      <div class="searchwrap"><div class="search"><svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.9"/><path d="M15.9 15.9 21 21"/></svg><input id="libSearch" placeholder="Search your papers"></div></div>
+      <div class="filterbar" id="libFilters">
+        <div class="fchip" data-filter="date">Any date <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip" data-filter="type">All types <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
+        <div class="fchip" data-filter="tier">Any tier <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 22px 10px;">
         <span id="libraryCount" style="font-size:12.5px;color:var(--label-3);font-weight:500">14 papers</span>
@@ -864,29 +1168,35 @@
           <div class="b"><div class="t1">Physics · PYQ 2023</div><div class="t2"><span>Full paper</span><span>·</span><span>26 Jul</span></div><div class="t2" style="margin-top:6px"><span class="tier t2">Scheme-verified</span></div></div>
           <div class="lost">18<small>lost</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
       </div>
-      <div class="subnote">Search matches question text and concepts, not just paper titles.</div>
+      <div class="subnote">Search matches what a paper is and when it was taken. Question text becomes searchable once a paper has been read.</div>
     </div>
 
     <!-- ══════════════ 4 · SETTINGS ══════════════ -->
     <div class="view" id="v4">
       <div class="greet"><h1>Settings</h1></div>
-      <div class="card sprofile press"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman</div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
+      <div class="card sprofile press" id="profileCard" role="button" tabindex="0" aria-label="Change display name"><div class="pic" id="profilePic">M</div><div><div class="n" id="profileName">Maya Rahman<svg class="pen" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg></div><div class="e" id="profileContact">maya.rahman@school.edu</div></div></div>
+
+      <div class="sectitle">Your look</div>
+      <div class="list" style="padding-bottom:2px">
+        <div class="srow noicon"><div class="lbl">Avatar<small>Ten gradients. Pick one, or leave it — you already have one.</small></div></div>
+        <div class="avstrip" id="avatarStrip" role="radiogroup" aria-label="Avatar gradient"></div>
+      </div>
 
       <div class="sectitle">Profile</div>
       <div class="list">
-        <div class="srow" onclick="openSheet('board')">
+        <div class="srow" id="set-board" role="button" tabindex="0">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
-          <div class="lbl">Board</div><div class="aux">CBSE</div>
+          <div class="lbl">Board</div><div class="aux" id="set-board-aux">Cambridge (CAIE)</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
-        <div class="srow" onclick="openSheet('class')">
+        <div class="srow" id="set-class" role="button" tabindex="0">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M6.5 10.5V16c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-5.5"/></svg></div>
-          <div class="lbl">Class</div><div class="aux" id="set-class-aux">11</div>
+          <div class="lbl">Stage</div><div class="aux" id="set-class-aux">AS Level</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
-        <div class="srow">
+        <div class="srow" id="set-subjects" role="button" tabindex="0">
           <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
+          <div class="lbl">Subjects</div><div class="aux" id="set-subjects-aux">—</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
       </div>
@@ -927,6 +1237,11 @@
         <div class="srow noicon" id="set-export"><div class="lbl">Download your data<small>Everything we hold, as one file</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="srow noicon" id="set-delete-data"><div class="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
         <div class="srow noicon" id="set-delete-account"><div class="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div><svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
+        <!-- Statements, not settings. These carry no switch and no chevron
+             because there is nothing to opt out of and nowhere to go: offering
+             a control would imply the opposite is on the table. -->
+        <div class="srow noicon"><div class="lbl">No targeted advertising<small>We don't run ads and we don't sell or share anything with advertisers.</small></div></div>
+        <div class="srow noicon"><div class="lbl">No behavioural tracking<small>Nothing profiles how the student uses the app. No analytics, no event tracking.</small></div></div>
       </div>
       <div class="note">No targeted advertising. There's nothing to opt out of because it was never built in.</div>
 
@@ -959,7 +1274,7 @@
       <div id="shExtras"></div>
       <div class="acts">
         <div class="btn primary press" id="shPrimary" onclick="confirmSheet()">Change to Class 12</div>
-        <div class="btn ghost press" id="shGhost" onclick="closeSheet()">Talk to support instead</div>
+        <div class="btn ghost press" id="shGhost" onclick="ghostSheet()" style="display:none">Talk to support instead</div>
         <div class="btn plain" onclick="closeSheet()">Cancel</div>
       </div>
     </div>
@@ -1060,7 +1375,7 @@ const hapticFirm = ()=>haptic(18);   // consequential: warning-sheet primary, sa
 const PILL_R=26;
 const railQuery=matchMedia('(min-width:768px)');
 const isRail=()=>railQuery.matches;
-let offsets=[],current=0,insightsFull=true;
+let offsets=[],current=0,insightsReady=false,homeEmpty=false;
 const $id=id=>document.getElementById(id);
 
 function measureTabs(){
@@ -1114,11 +1429,11 @@ function layoutTabs(){
 seed('tab',0);
 const TITLES=['Home','Insights','Scan','Library','Settings'];
 function pick(i){
-  if(i===1&&current===1) insightsFull=!insightsFull;
   document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('on',idx===i));
-  document.getElementById('v0').classList.toggle('on',i===0);
-  document.getElementById('v1').classList.toggle('on',i===1&&insightsFull);
-  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsFull);
+  document.getElementById('v0').classList.toggle('on',i===0&&!homeEmpty);
+  document.getElementById('v0b').classList.toggle('on',i===0&&homeEmpty);
+  document.getElementById('v1').classList.toggle('on',i===1&&insightsReady);
+  document.getElementById('v1b').classList.toggle('on',i===1&&!insightsReady);
   document.getElementById('v2').classList.toggle('on',i===2);
   document.getElementById('v3').classList.toggle('on',i===3);
   document.getElementById('v4').classList.toggle('on',i===4);
@@ -1136,7 +1451,7 @@ function pick(i){
     const a=Math.abs(Math.max(-.055,Math.min(.055,v*.011)));
     applyPill(o, vertical?1-a*.5:1+a, vertical?1+a:1-a*.5);
   }});
-  if(i===1&&insightsFull) animateInsights();
+  if(i===1&&insightsReady) animateInsights();
   if(i===2&&!wasScan) initScan();
 }
 function animateInsights(){
@@ -1204,20 +1519,10 @@ function flipTheme(){
 }
 
 /* ── warning sheet ── */
-const COPY={
-  class:{title:'Change class to 12?',
-    body:"This re-scopes which papers can reach scheme-verified analysis. Everything you've already analysed stays readable, but it stays pinned to Class 11.",
-    items:[['Archived papers keep their old scope.','They\'re labelled "analysed under Class 11" and are never re-mapped, so nothing is orphaned.'],
-      ['They can\'t be re-verified.','Class 11 papers won\'t reach Tier 2 against the Class 12 scheme.'],
-      ['Insights split at the change.','Patterns are computed within a scope, so your trend restarts rather than blending two syllabi.']],
-    primary:'Change to Class 12',primaryClass:'primary'},
-  board:{title:'Board changes go through support',
-    body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
-    items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
-      ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
-      ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
-    primary:'Contact support',primaryClass:'ghost'}
-};
+/* The stage and board sheets used to carry their copy here as a demo. They are
+   real now: the copy depends on which board and stage the student is actually
+   in (Cambridge for a new profile, CBSE for one grandfathered from before the
+   switch), so src/app.js supplies it through __masteryOpenSheet below. */
 seed('sheet',1);
 // The sheet is shared between the board/class warnings and the lightweight
 // link/upload confirmations, so it tracks whether its primary action is
@@ -1230,17 +1535,6 @@ function confirmSheet(){
 function confirmSave(){
   hapticFirm();
   closeReview();
-}
-function openSheet(k){
-  sheetConsequential=true;
-  const c=COPY[k];
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML=c.items.map(([b,rest])=>`<li><span class="d"></span><span><b>${b}</b> ${rest}</span></li>`).join('');
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
 }
 function closeSheet(){
   document.getElementById('scrim').classList.remove('on');
@@ -1259,7 +1553,12 @@ seed('drafts',1);
 seed('review',1);
 let draftDismissed=false, dragStartY=null, dragCurrentY=0;
 
+/* There is no local draft store yet, so the toast has nothing truthful to
+   resume. The app layer sets this when there is; until then the toast and its
+   icon stay out of the way rather than advertising a draft that isn't there. */
+window.__masteryDrafts=[];
 function initScan(){
+  if(!window.__masteryDrafts.length) return;
   if(!draftDismissed){
     spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
       document.getElementById('draftToast').style.transform=`translateY(${-140*p}%)`;
@@ -1325,21 +1624,6 @@ function cycleField(row,options,marksResolved){
    opens the OS picker instead. The ring-squash animation is gone with it — it
    implied a photo had been taken when what actually happens is a file chooser.
    The press spring and the selection tick (wired in src/app.js) carry it. */
-function openSheetGeneric(kind){
-  // reuses the warning-sheet mechanics for a lightweight confirmation
-  sheetConsequential=false;
-  const c = kind==='link'
-    ? {title:'Paste a link',body:'Add a school-shared PDF or drive link. It gets added as the next page in this paper.',items:[],primary:'Paste from clipboard',primaryClass:'primary'}
-    : {title:'Upload from Files or Gallery',body:'Pick one or more pages to add to this paper. You can reorder them before submitting.',items:[],primary:'Choose files',primaryClass:'primary'};
-  document.getElementById('shTitle').textContent=c.title;
-  document.getElementById('shBody').textContent=c.body;
-  document.getElementById('shList').innerHTML='';
-  const prim=document.getElementById('shPrimary');
-  prim.textContent=c.primary; prim.className='btn '+c.primaryClass+' press';
-  document.getElementById('scrim').classList.add('on');
-  spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
-}
-
 /* ── haptics: selection ── */
 // Bound to the tabs themselves, not to pick(), so programmatic navigation
 // (the "Scan new paper" button, the empty-state link) stays silent.
@@ -1392,6 +1676,16 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
 
 window.__masteryHaptic = { tick: hapticTick, firm: hapticFirm };
 
+/* Which Insights view is truthful is a data question, so the app layer owns it.
+   It used to be a tap-to-preview toggle, which meant tapping Insights twice
+   showed a populated chart to a student who had nothing in it. */
+window.__masteryInsightsReady = function(ready){
+  const next=!!ready;
+  if(next===insightsReady) return;
+  insightsReady=next;
+  if(current===1) pick(1);
+};
+
 // Press springs are attached at boot, so markup rendered later (onboarding,
 // sheet choices) needs them bound too.
 window.__masteryRebindPress = function(scope){
@@ -1406,6 +1700,32 @@ window.__masteryRebindPress = function(scope){
   });
 };
 
+// Enter/Space activation for anything rendered after boot. The nav and the
+// appearance toggle get this at boot from the `.tab,.themebtn` binding above;
+// onboarding's buttons are divs created later, so they need the same treatment
+// or the whole flow is unreachable from a keyboard.
+window.__masteryRebindKeys = function(scope){
+  (scope||document).querySelectorAll('[role="button"],[role="switch"]').forEach(el=>{
+    if(el.dataset.keyBound) return;
+    el.dataset.keyBound='1';
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+    });
+  });
+};
+
+// Which Home the student sees. Home is the one tab that can be legitimately
+// empty for a brand-new account, and an empty dashboard of zeroes would be a
+// chart built on no data — so it swaps for a single call to action instead.
+window.__masteryHomeEmpty = function(empty, name){
+  homeEmpty = !!empty;
+  if(name) document.getElementById('v0bGreet').textContent = name;
+  if(current===0){
+    document.getElementById('v0').classList.toggle('on',!homeEmpty);
+    document.getElementById('v0b').classList.toggle('on',homeEmpty);
+  }
+};
+
 window.__masteryOpenDisclosure = function(d){
   const p=d.querySelector('.panel');
   if(!p||d.classList.contains('open')) return;
@@ -1415,7 +1735,7 @@ window.__masteryOpenDisclosure = function(d){
 
 /* Generic sheet. Same spring, scrim and geometry as the board/class warning —
    the app layer supplies copy, an optional input, and optional choice rows. */
-let sheetConfirm=null, sheetChoice=null;
+let sheetConfirm=null, sheetChoice=null, sheetGhost=null;
 window.__masteryOpenSheet = function(cfg){
   sheetConsequential = cfg.primaryClass === 'primary' && !cfg.choices;
   sheetConfirm = cfg.onConfirm || null;
@@ -1445,7 +1765,13 @@ window.__masteryOpenSheet = function(cfg){
   const prim=document.getElementById('shPrimary');
   prim.style.display = cfg.choices ? 'none' : '';
   if(!cfg.choices){ prim.textContent=cfg.primary||'Confirm'; prim.className='btn '+(cfg.primaryClass||'primary')+' press'; }
-  document.getElementById('shGhost').style.display = cfg.choices ? 'none' : '';
+  // The secondary action is opt-in. It used to be shown for every sheet with a
+  // primary button, still carrying the board sheet's "Talk to support instead"
+  // — which appeared under "Delete everything" and offered the wrong exit.
+  const ghost=document.getElementById('shGhost');
+  ghost.style.display = cfg.ghost ? '' : 'none';
+  if(cfg.ghost) ghost.textContent=cfg.ghost;
+  sheetGhost = cfg.onGhost || null;
 
   document.getElementById('scrim').classList.add('on');
   spring('sheet',{to:0,stiffness:230,damping:26,onUpdate:p=>document.getElementById('sheet').style.transform=`translateY(${(p*115).toFixed(2)}%)`});
@@ -1459,6 +1785,193 @@ confirmSheet = function(){
   __baseConfirmSheet();
   if(fn) fn();
 };
+function ghostSheet(){
+  const fn = sheetGhost; sheetGhost=null;
+  closeSheet();
+  if(fn) fn();
+}
+
+/* Shared render furniture. The app layer supplies data; the markup and the
+   classes stay here so a rendered row and a hand-written one are the same row. */
+const __esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const __chev = '<svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>';
+const __thumb = '<div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>';
+const __warnIcon = '<div class="ic"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.5v.4"/><path d="M10.3 3.9 2.6 17.4A2 2 0 0 0 4.3 20.4h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg></div>';
+const __fmtDate = d => new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+
+/* Categorical, never a ramp — the values are CLAUDE.md's, not a new palette. */
+const CAUSE = {
+  conceptual_gap:  ['Conceptual gap',  '#4C7DF0'],
+  procedural_slip: ['Procedural slip', '#3FA9A0'],
+  misread_question:['Misread question','#8A6FD1'],
+  incomplete:      ['Incomplete',      '#C98A3E'],
+  presentation:    ['Presentation',    '#C46B8A'],
+  keyword_miss:    ['Keyword miss',    '#7C9455'],
+  timed_out:       ['Timed out',       '#78808F'],
+};
+
+/* Every headline carries its sample size, per the copy rules. */
+function __sample(papers,questions){
+  const q = questions ? `${questions} question${questions===1?'':'s'} · ` : '';
+  return `${q}${papers} paper${papers===1?'':'s'}`;
+}
+
+function __attention(title,sub){
+  return `<div class="card attention press">${__warnIcon}
+    <div class="b"><div class="t1">${__esc(title)}</div><div class="t2">${__esc(sub)}</div></div>${__chev}</div>`;
+}
+
+/**
+ * Home. Nothing here invents a headline: until the model has actually read a
+ * paper there is no insight to state, and a plausible-sounding one would be the
+ * exact failure mode hard rule 4 exists to prevent.
+ */
+window.__masteryRenderHome = function(m){
+  const day=document.getElementById('homeDay'), name=document.getElementById('homeName');
+  if(day) day.textContent=new Date().toLocaleDateString('en-IN',{weekday:'long'});
+  if(name) name.textContent=m.name||'';
+
+  const grid=document.getElementById('homeGrid');
+  if(grid){
+    const cards=[];
+    const papers=m.papers||0, questions=m.questions||0;
+
+    if(!papers){
+      cards.push(`<div class="card insight press">
+        <div class="line">Add a marked paper and we'll show you where the marks went.</div>
+        <div class="subnote" style="margin:14px 0 0">Photograph every page, including the ones your teacher wrote on
+          — the red pen is most of what we read.</div></div>`);
+    } else if(!questions){
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,0))}</span></div>
+        <div class="line">Your pages are stored and readable offline. Nothing has been read out of them yet.</div>
+        <div class="subnote" style="margin:14px 0 0">Extraction isn't switched on yet, so there are no marks or
+          explanations to show. We'd rather say that than show you a guess.</div></div>`);
+    } else if(!m.ready){
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,questions))}</span></div>
+        <div class="line">Not enough yet to call a pattern.</div>
+        <div class="subnote" style="margin:14px 0 0">Patterns need about four papers. Everything you've added is in
+          Library and stays readable.</div></div>`);
+    } else {
+      cards.push(`<div class="card insight press">
+        <div class="chips"><span class="chip n">${__esc(__sample(papers,questions))}</span></div>
+        <div class="line">Your papers are analysed. The breakdown by cause is in Insights.</div></div>`);
+    }
+
+    if(m.needsCheck) cards.push(__attention(
+      `${m.needsCheck} answer${m.needsCheck===1?'':'s'} need${m.needsCheck===1?'s':''} a quick check`,
+      `Across ${m.needsCheckPapers||1} paper${(m.needsCheckPapers||1)===1?'':'s'} · marked Unsure`));
+
+    if(m.unreadable) cards.push(__attention(
+      `${m.unreadable} page${m.unreadable===1?'':'s'} couldn't be read`,
+      'Retake the photo or type the answers in'));
+
+    grid.innerHTML=cards.join('');
+    window.__masteryRebindPress(grid);
+  }
+
+  const list=document.getElementById('homeRecent');
+  const title=document.getElementById('homeRecentTitle');
+  if(list){
+    const recent=(m.recent||[]).slice(0,3);
+    if(title) title.style.display=recent.length?'':'none';
+    list.style.display=recent.length?'':'none';
+    list.innerHTML=recent.map(p=>`<div class="row press">
+      <div class="b"><div class="t1">${__esc(p.title)}</div>
+        <div class="t2">${p.tier==='tier_2'
+          ? '<span class="tier t2">Scheme-matched</span>'
+          : '<span class="tier t1">Teacher\'s marks</span>'}<span>${__esc(__fmtDate(p.date_taken))}</span></div></div>${__chev}</div>`).join('');
+    window.__masteryRebindPress(list);
+  }
+};
+
+/**
+ * Insights. Sections whose data does not exist are removed rather than filled
+ * with something illustrative — a chart built on nothing is the most confident
+ * lie the interface can tell.
+ */
+window.__masteryRenderInsights = function(m){
+  const papers=m.papers||0, questions=m.questions||0;
+
+  const prog=document.getElementById('insProgFill');
+  const plabel=document.getElementById('insProgLabel');
+  const body=document.getElementById('insEmptyBody');
+  if(prog) prog.style.width=Math.min(100,(papers/4)*100).toFixed(0)+'%';
+  if(plabel) plabel.textContent=`${papers} of 4`;
+  if(body) body.textContent = papers
+    ? `Patterns need about four papers before they mean anything. With ${papers}, anything shown here would be noise dressed as insight.`
+    : 'Patterns need about four papers before they mean anything. Add your first and this fills in.';
+
+  const sub=document.getElementById('insSub');
+  if(sub) sub.textContent=`Everything across ${__sample(papers,questions)}.`;
+
+  const causes=m.causes||{};
+  const entries=Object.entries(causes).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const causeSec=document.getElementById('secCause');
+  const causeCard=document.getElementById('causeCard');
+  if(causeSec) causeSec.style.display=entries.length?'':'none';
+  if(causeCard&&entries.length){
+    causeCard.innerHTML=`<div class="causebar">${entries.map(([c,v])=>
+      `<i style="flex:${v};background:${CAUSE[c]?CAUSE[c][1]:'#78808F'}"></i>`).join('')}</div>
+      <div class="causegrid">${entries.map(([c,v])=>
+        `<div class="cz"><span class="sw2" style="background:${CAUSE[c]?CAUSE[c][1]:'#78808F'}"></span>
+          <span class="n">${__esc(CAUSE[c]?CAUSE[c][0]:c)}</span><span class="v">${v}</span></div>`).join('')}</div>`;
+  }
+
+  // Cheap marks, concept mastery, trend and question type still hold the
+  // illustrative numbers this file was built with. Each stays hidden until its
+  // own data is passed in — a section that shows six other students' figures to
+  // this one is worse than a section that isn't there.
+  [['secCheap','cheap'],['secConcept','concepts'],['secTrend','trend'],['secQType','questionTypes']]
+    .forEach(([id,key])=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display=(m[key]&&m[key].length)?'':'none';
+    });
+
+  const filters=document.getElementById('insFilters');
+  if(filters) filters.style.display=m.hasAnalysis?'':'none';
+
+  window.__masteryInsightsReady(!!m.ready);
+};
+
+/**
+ * Scan. States what has actually happened to the pages rather than animating a
+ * pipeline that isn't running.
+ */
+window.__masteryRenderScan = function(m){
+  const below=document.getElementById('scanBelow');
+  if(!below) return;
+  const blocks=[];
+
+  if(m.unreadable&&m.unreadable.length){
+    blocks.push(`<div class="sectitle tight">Needs your eyes first</div>
+      <div class="list">${m.unreadable.map(u=>`<div class="row press">
+        <div class="b"><div class="t1">Page ${u.page_number} couldn't be read</div>
+          <div class="t2">${__esc(u.reason)}</div>
+          <div class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></div></div>${__chev}</div>`).join('')}</div>
+      <div class="subnote">Nothing is ever dropped silently. A page we couldn't read is shown, not skipped.</div>`);
+  }
+
+  if(m.recent&&m.recent.length){
+    blocks.push(`<div class="sectitle${blocks.length?'':' tight'}">Recently added</div>
+      <div class="list">${m.recent.map(p=>`<div class="row press">${__thumb}
+        <div class="b"><div class="t1">${__esc(p.title)}</div>
+          <div class="t2"><span>${__esc(__fmtDate(p.date_taken))}</span><span>·</span><span>${p.pages} page${p.pages===1?'':'s'}</span></div>
+          <div class="t2" style="margin-top:6px"><span class="tier ${p.read?'t2':'uns'}">${p.read?'Read':'Stored, not read yet'}</span></div></div>${__chev}</div>`).join('')}</div>
+      <div class="subnote">Pages upload to your account and stay readable offline. Reading them isn't switched on yet,
+        so nothing here claims a mark or an explanation.</div>`);
+  } else {
+    blocks.push(`<div class="estate" style="padding-top:8px">
+      <h4>No pages yet</h4>
+      <p>Use the button above to pick pages from your camera roll or files. Shoot them with your phone's own camera
+        app — it is better than anything we could build into a web page.</p></div>`);
+  }
+
+  below.innerHTML=blocks.join('');
+  window.__masteryRebindPress(below);
+};
 
 window.__masteryRenderLibrary = function(papers, opts){
   const list=document.getElementById('libraryList');
@@ -1466,7 +1979,9 @@ window.__masteryRenderLibrary = function(papers, opts){
   if(!list) return;
   if(count) count.textContent = `${papers.length} paper${papers.length===1?'':'s'}` + (opts&&opts.stale?' · offline copy':'');
   if(!papers.length){
-    list.innerHTML=`<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
+    list.innerHTML = (opts&&opts.filtered)
+      ? `<div class="srow noicon"><div class="lbl">No papers match those filters<small>Clear one to widen it again</small></div></div>`
+      : `<div class="srow noicon"><div class="lbl">Nothing here yet<small>Add a paper and it'll show up, readable even offline</small></div></div>`;
     return;
   }
   const TYPE={unit_test:'Unit test',mid_term:'Mid-term',final_exam:'Final exam',pyq:'PYQ',sample_paper:'Sample paper'};
