@@ -1,8 +1,12 @@
 # Mastery
 
-A responsive web app that shows a student exactly where their marks go — built from
-the original single-file device-frame prototype, now a real site rather than a
-scaled-down phone mockup.
+A responsive web app that shows a Cambridge (CAIE) student exactly where their marks
+go — built from the original single-file device-frame prototype, now a real site rather
+than a scaled-down phone mockup.
+
+The curriculum is Cambridge only: IGCSE, AS and A Level. `src/curriculum.js` holds the
+stages, the class-level mapping and the syllabus codes, and is the one place to change
+if another board is ever added.
 
 `index.html` is the front end and the design system. `src/` holds ES modules for data
 and flow; `vendor/` holds the Supabase client. No bundler, no framework, no install.
@@ -19,7 +23,17 @@ python3 -m http.server 8000   # then open http://localhost:8000
   holds credentials; the student is a profile under that session.
 - **Onboarding** — the eight steps in order, with the legally load-bearing ones
   enforced: no student data before consent, consent itemised per purpose with optional
-  purposes off, payment after consent.
+  purposes off, payment after consent. The student profile collects a Cambridge stage
+  (IGCSE Year 10/11, AS, A Level) and subjects with their syllabus codes, and writes
+  both to the profile.
+- **The app shell reads from that profile** — Home, Insights, Scan, Library and the
+  Settings profile rows all render from the student's real rows. Where there is no data
+  yet, the surface says so rather than showing the numbers this file was prototyped with:
+  Insights stays on its empty state until there are four papers, and the sections that
+  need extracted attempts stay hidden until something computes them.
+- **Library filters and search** — over the columns a paper actually has: date, type and
+  tier. There is no subject filter because a paper carries no subject until something
+  reads one off the page.
 - **Guardian verification** — a swappable adapter. The development stub is wired;
   DigiLocker is the intended production adapter and needs a server-side token
   exchange. Only a reference and a timestamp are ever stored.

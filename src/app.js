@@ -4,10 +4,21 @@ import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './su
 import { startOnboarding } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
-import { createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType, PAPER_TYPES } from './papers.js';
+import {
+  createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType,
+  paperTypeLabel, listSubjects, needsCheck, unreadablePages, lossByCause,
+  analyticsReadiness, PAPER_TYPES,
+} from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+import {
+  BOARD_LABEL, classLabel, classLabelShort, nextClassLevel,
+  subjectsForClass, syllabusCode, stageForClass, subjectLabel,
+} from './curriculum.js';
 
-const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
+const ctx = {
+  session: null, guardian: null, student: null, prefs: readLocal(), consent: {},
+  subjects: [],
+};
 
 const $ = (s) => document.querySelector(s);
 const tick = () => window.__masteryHaptic?.tick?.();
@@ -200,12 +211,133 @@ async function wireSettings() {
     });
   });
 
-  if (ctx.guardian) {
-    const nameEl = $('#profileName'), mailEl = $('#profileContact'), picEl = $('#profilePic');
-    if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
-    if (mailEl) mailEl.textContent = ctx.guardian.contact;
-    if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
-    const cls = $('#set-class-aux'); if (cls && ctx.student) cls.textContent = String(ctx.student.class_level);
+  renderProfile();
+  wireProfileRows();
+}
+
+// ── profile ────────────────────────────────────────────────────────────────
+
+function renderProfile() {
+  if (!ctx.guardian) return;
+  const nameEl = $('#profileName'), mailEl = $('#profileContact'), picEl = $('#profilePic');
+  if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
+  if (mailEl) mailEl.textContent = ctx.guardian.contact;
+  if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
+
+  const board = $('#set-board-aux');
+  if (board) board.textContent = ctx.student?.board === 'CBSE' ? 'CBSE' : BOARD_LABEL;
+
+  const cls = $('#set-class-aux');
+  if (cls && ctx.student) cls.textContent = classLabelShort(ctx.student.class_level);
+
+  const subs = $('#set-subjects-aux');
+  if (subs) {
+    subs.textContent = ctx.subjects.length
+      ? ctx.subjects.map((s) => s.subject).join(', ')
+      : 'None yet';
+  }
+}
+
+/**
+ * Moving up a stage is a real change of syllabus, not a bigger number: IGCSE
+ * Physics is 0625 and A Level Physics is 9702, with different papers and
+ * different mark schemes. Papers already analysed stay pinned to the stage they
+ * were analysed under, so the sheet says so before anything moves.
+ */
+let profileWired = false;
+function wireProfileRows() {
+  if (profileWired) return;
+  profileWired = true;
+
+  $('#set-class')?.addEventListener('click', () => {
+    if (!ctx.student) return;
+    const from = ctx.student.class_level;
+    const to = nextClassLevel(from);
+    tick();
+    if (!to) {
+      return window.__masteryOpenSheet?.({
+        title: 'Already at A Level',
+        body: `This profile is in ${classLabel(from)}, the last stage we cover. There is nowhere further to move it.`,
+        items: [],
+        primary: 'Close',
+        primaryClass: 'plain',
+      });
+    }
+    const carried = ctx.subjects
+      .filter((s) => subjectsForClass(to).some((o) => o.subject === s.subject));
+    const dropped = ctx.subjects.length - carried.length;
+    window.__masteryOpenSheet?.({
+      title: `Move to ${classLabel(to)}?`,
+      body: `This re-scopes which mark schemes a new paper can be matched against. Everything already in Library stays readable, pinned to ${classLabel(from)}.`,
+      items: [
+        ['Existing papers keep their stage.', `They stay analysed under ${classLabel(from)} and are never re-mapped, so nothing is orphaned.`],
+        ['Subjects take new syllabus codes.', dropped
+          ? `${carried.length} carry over to ${stageForClass(to).label} codes; ${dropped} isn't offered there and is removed from the profile.`
+          : `All ${carried.length} carry over, each re-pointed at its ${stageForClass(to).label} syllabus code.`],
+        ['Insights split at the change.', 'Patterns are computed within a stage, so the count restarts rather than blending two syllabuses.'],
+      ],
+      primary: `Move to ${classLabelShort(to)}`,
+      primaryClass: 'primary',
+      onConfirm: () => changeStage(to),
+    });
+  });
+
+  $('#set-board')?.addEventListener('click', () => {
+    tick();
+    window.__masteryOpenSheet?.({
+      title: 'Board changes go through support',
+      body: 'Moving between boards re-maps every concept your papers were analysed against, so it is not a self-serve change. Support migrates the account and confirms what carries over first.',
+      items: [
+        ['Nothing is deleted.', `Existing papers stay readable under ${ctx.student?.board === 'CBSE' ? 'CBSE' : BOARD_LABEL} and keep their original scheme references.`],
+        ['Scheme matching restarts.', 'Tier 2 depends on board-specific mark schemes, so matched papers revert to teacher-marks-only under a new board.'],
+        ['We only cover Cambridge today.', 'IGCSE, AS and A Level. Other boards are not built yet, so there is nothing to move to.'],
+      ],
+      primary: 'Close',
+      primaryClass: 'plain',
+    });
+  });
+
+  $('#set-subjects')?.addEventListener('click', () => {
+    if (!ctx.student) return;
+    tick();
+    const stage = stageForClass(ctx.student.class_level);
+    window.__masteryOpenSheet?.({
+      title: 'Subjects',
+      body: `${classLabel(ctx.student.class_level)} · ${BOARD_LABEL}. The four-digit code is the Cambridge syllabus a past paper is matched against.`,
+      items: ctx.subjects.length
+        ? ctx.subjects.map((s) => [subjectLabel(s.subject, s.syllabus_code), `${stage.label} syllabus.`])
+        : [['No subjects on this profile.', 'Add one from the student profile step to match past papers to a syllabus.']],
+      primary: 'Close',
+      primaryClass: 'plain',
+    });
+  });
+}
+
+async function changeStage(to) {
+  try {
+    const { data, error } = await sb.from('student')
+      .update({ class_level: to, updated_at: new Date().toISOString() })
+      .eq('id', ctx.student.id).select().single();
+    if (error) throw error;
+    ctx.student = data;
+
+    // Re-point every subject at its syllabus code in the new stage, and drop
+    // the ones that stage does not offer. A subject left carrying its old code
+    // would quietly match papers against the wrong mark scheme.
+    const remapped = ctx.subjects
+      .map((s) => ({ subject: s.subject, syllabus_code: syllabusCode(s.subject, to) }))
+      .filter((s) => s.syllabus_code);
+    await sb.from('student_subject').delete().eq('student_id', ctx.student.id);
+    if (remapped.length) {
+      const { error: subErr } = await sb.from('student_subject')
+        .insert(remapped.map((s) => ({ ...s, student_id: ctx.student.id })));
+      if (subErr) throw subErr;
+    }
+    ctx.subjects = remapped;
+    renderProfile();
+    toast(`Moved to ${classLabel(to)}.`);
+  } catch (e) {
+    toast(e.message || 'That change could not be saved.', 'warn');
   }
 }
 
@@ -248,9 +380,9 @@ async function ingestFiles(files) {
       });
       firm();
       toast(`Added ${files.length} page(s). ${tierForType(type) === 'tier_2'
-        ? 'We\'ll match it to the official scheme.'
+        ? 'We\'ll match it to the Cambridge mark scheme.'
         : 'We\'ll explain it from your teacher\'s marks.'}`);
-      await refreshLibrary();
+      await refreshShell();
     } catch (e) {
       toast(e.message || 'Upload failed.', 'warn');
     }
@@ -270,7 +402,7 @@ async function ingestLink(url) {
       await addLinkPage({ studentId: ctx.student.id, paperId: paper.id, url, pageNumber: 1 });
       firm();
       toast('Link saved. We\'ll fetch it and tell you when it\'s readable.');
-      await refreshLibrary();
+      await refreshShell();
     } catch (e) { toast(e.message || 'That link could not be added.', 'warn'); }
   };
   const t = takePendingType();
@@ -312,12 +444,155 @@ function wireIngestion() {
     }));
 }
 
+// ── library filters ────────────────────────────────────────────────────────
+// Only over columns a paper actually has. There is no subject filter because
+// there is no subject on a paper until something reads one off the page, and a
+// control that cannot do anything is worse than no control.
+
+const FILTERS = {
+  date: {
+    label: 'Any date',
+    options: [
+      { value: 'all', label: 'Any date' },
+      { value: '30', label: 'Last 30 days' },
+      { value: '90', label: 'Last 3 months' },
+      { value: '365', label: 'Last year' },
+    ],
+    match: (p, v) => v === 'all' ||
+      (Date.now() - new Date(p.date_taken).getTime()) / 86400000 <= Number(v),
+  },
+  type: {
+    label: 'All types',
+    options: [{ value: 'all', label: 'All types' }, ...PAPER_TYPES],
+    match: (p, v) => v === 'all' || p.type === v,
+  },
+  tier: {
+    label: 'Any tier',
+    options: [
+      { value: 'all', label: 'Any tier' },
+      { value: 'tier_2', label: 'Scheme-matched' },
+      { value: 'tier_1', label: "Teacher's marks" },
+    ],
+    match: (p, v) => v === 'all' || p.tier === v,
+  },
+};
+
+const libFilter = { date: 'all', type: 'all', tier: 'all' };
+let libSearch = '';
+let libPapers = [];
+
+function applyLibraryFilters(papers) {
+  const q = libSearch.trim().toLowerCase();
+  return papers.filter((p) =>
+    Object.entries(libFilter).every(([k, v]) => FILTERS[k].match(p, v)) &&
+    (!q || `${paperTypeLabel(p.type)} ${new Date(p.date_taken).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`
+      .toLowerCase().includes(q)));
+}
+
+function paintLibrary(stale) {
+  const filtered = libSearch.trim() !== '' ||
+    Object.values(libFilter).some((v) => v !== 'all');
+  window.__masteryRenderLibrary?.(applyLibraryFilters(libPapers), { stale, filtered });
+}
+
+let libraryWired = false;
+function wireLibrary() {
+  if (libraryWired) return;
+  libraryWired = true;
+
+  document.querySelectorAll('#libFilters [data-filter]').forEach((chip) => {
+    const key = chip.dataset.filter;
+    chip.addEventListener('click', () => {
+      tick();
+      window.__masteryOpenSheet?.({
+        title: FILTERS[key].label,
+        body: '',
+        items: [],
+        choices: FILTERS[key].options,
+        onChoice: (value) => {
+          libFilter[key] = value;
+          const opt = FILTERS[key].options.find((o) => o.value === value);
+          chip.classList.toggle('active', value !== 'all');
+          chip.childNodes[0].nodeValue = `${opt.label} `;
+          paintLibrary(false);
+        },
+      });
+    });
+  });
+
+  $('#libSearch')?.addEventListener('input', (e) => {
+    libSearch = e.target.value;
+    paintLibrary(false);
+  });
+}
+
 async function refreshLibrary() {
   if (!ctx.student) return;
   try {
     const { data, stale } = await listPapers(ctx.student.id);
-    window.__masteryRenderLibrary?.(data, { stale });
+    libPapers = data;
+    paintLibrary(stale);
+    return data;
   } catch { /* the cached view stays on screen */ }
+  return null;
+}
+
+// ── the shell, painted from real data ──────────────────────────────────────
+// Every surface reads from the same fetch, so Home, Scan, Library and Insights
+// cannot disagree about how many papers there are.
+
+/** A paper's display title. There is no subject on a paper until something
+ *  reads one off the page, so the type is the honest name for it. */
+function paperTitle(paper) {
+  return paperTypeLabel(paper.type);
+}
+
+async function refreshShell() {
+  if (!ctx.student) return;
+
+  const papers = (await refreshLibrary()) ?? [];
+  const [subjects, checks, unread, readiness, causes] = await Promise.all([
+    listSubjects(ctx.student.id).catch(() => ({ data: [] })),
+    needsCheck(ctx.student.id).catch(() => ({ data: { count: 0, papers: 0 } })),
+    unreadablePages(ctx.student.id).catch(() => ({ data: [] })),
+    analyticsReadiness(ctx.student.id).catch(() => ({ data: null })),
+    lossByCause(ctx.student.id).catch(() => ({ data: {} })),
+  ]);
+
+  ctx.subjects = subjects.data ?? [];
+  renderProfile();
+
+  const ready = readiness.data ?? { papers_counted: 0, questions_counted: 0, has_enough_data: false };
+  const questions = Number(ready.questions_counted ?? 0);
+
+  window.__masteryRenderHome?.({
+    name: ctx.student.first_name,
+    papers: papers.length,
+    questions,
+    ready: !!ready.has_enough_data,
+    needsCheck: checks.data?.count ?? 0,
+    needsCheckPapers: checks.data?.papers ?? 0,
+    unreadable: (unread.data ?? []).length,
+    recent: papers.map((p) => ({ title: paperTitle(p), tier: p.tier, date_taken: p.date_taken })),
+  });
+
+  window.__masteryRenderInsights?.({
+    papers: papers.length,
+    questions,
+    ready: !!ready.has_enough_data,
+    hasAnalysis: questions > 0,
+    causes: causes.data ?? {},
+  });
+
+  window.__masteryRenderScan?.({
+    unreadable: unread.data ?? [],
+    recent: papers.slice(0, 5).map((p) => ({
+      title: paperTitle(p),
+      date_taken: p.date_taken,
+      pages: p.paper_page?.[0]?.count ?? 0,
+      read: (p.student_attempt?.[0]?.count ?? 0) > 0,
+    })),
+  });
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
@@ -355,7 +630,8 @@ async function startApp() {
   }
   await wireSettings();
   wireIngestion();
-  await refreshLibrary();
+  wireLibrary();
+  await refreshShell();
   $('#obroot')?.setAttribute('hidden', '');
   document.querySelector('.app')?.removeAttribute('aria-hidden');
 }
@@ -401,4 +677,4 @@ boot().catch((e) => {
   toast(e.message || 'Something went wrong starting up.', 'warn');
 });
 
-window.__masteryApp = { ctx, boot, applyPrefs, toast, refreshLibrary };
+window.__masteryApp = { ctx, boot, applyPrefs, toast, refreshLibrary, refreshShell };

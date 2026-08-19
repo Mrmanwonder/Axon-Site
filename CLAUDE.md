@@ -4,9 +4,9 @@ Project context and hard constraints. Read this before writing code.
 
 ## What this is
 
-A study companion for CBSE students in classes 9–12. They upload graded exam papers;
-the app extracts questions, their answers, and the teacher's marks, then explains where
-marks were lost and what to do differently.
+A study companion for Cambridge (CAIE) students — IGCSE, AS and A Level. They upload
+graded exam papers; the app extracts questions, their answers, and the teacher's marks,
+then explains where marks were lost and what to do differently.
 
 Not a grading tool. Not a teacher product. The student is the only daily user.
 
@@ -89,8 +89,18 @@ concept            id, name, chapter_id
 Two tiers:
 - Tier 1 — school tests. No official scheme. `canonical_question_id` is null.
   Explanation is grounded in the teacher's marks and remarks.
-- Tier 2 — board PYQs and sample papers. Matched to a shared `canonical_question`
-  carrying the official scheme. Extracted and verified once, reused across all students.
+- Tier 2 — Cambridge past papers and specimen papers. Matched to a shared
+  `canonical_question` carrying the official scheme. Extracted and verified once, reused
+  across all students.
+
+`board` is CAIE for every new profile; CBSE remains in the enum only for accounts created
+before the switch. `class_level` stays 9–12 and carries the Cambridge stage: 9 and 10 are
+IGCSE (Years 10 and 11), 11 is AS Level, 12 is A Level. The stage is derived from it in
+`src/curriculum.js`, never stored twice.
+
+A Cambridge subject is identified by its four-digit syllabus code, not its name: Physics is
+0625 at IGCSE and 9702 at A Level, with different papers and different mark schemes. The
+code is collected at profile creation and re-mapped when a student changes stage.
 
 `cause` is a fixed enum: `conceptual_gap`, `procedural_slip`, `misread_question`,
 `incomplete`, `presentation`, `keyword_miss`, `timed_out`.
@@ -233,7 +243,9 @@ Ordered milestones. Do not start the next until the previous holds.
    remaining gap: pages reach storage, but nothing reads them yet.
 
 Explicitly not in v1: in-app camera, practice questions, peer comparison, predicted board
-scores, ICSE and state boards, parent dashboard beyond billing and consent.
+scores, onboarding new accounts onto CBSE, ICSE, or a state board, parent dashboard beyond
+billing and consent. Accounts created before the CAIE switch keep their CBSE scope — see
+the data model below — but CBSE is not offered to a new signup, and nothing here reopens it.
 
 Peer ranking and score prediction are engagement rocket fuel and mental-health hazards in
 this market. If they are ever built, they are opt-in and never default.
