@@ -137,13 +137,15 @@ const svg = (paths, cls = '') =>
 const chev = () =>
   `<svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">${ICONS.chev}</svg>`;
 
-export function startOnboarding(root, { onComplete, session = null, providerError = null }) {
+export function startOnboarding(root, { onComplete, session = null, providerError = null, authError = null }) {
   const state = {
     // A live session with no guardian row means the emailed link was clicked, or
     // Google or Apple sent us back signed in; pick the flow up at the only thing
-    // still missing. A refused provider round trip opens on the account step
-    // instead — landing would make the tap look like it did nothing.
-    step: session ? 'nameOnly' : providerError ? 'account' : 'landing',
+    // still missing. A refused provider round trip, or a failed link (the mirror
+    // image: no session, but a reason), opens on the account step instead —
+    // landing would make either look like it did nothing. The way out of a
+    // failed link is to ask for a new code, not to read the pitch again.
+    step: session ? 'nameOnly' : (providerError || authError) ? 'account' : 'landing',
     contact: session?.user?.email ?? session?.user?.phone ?? '',
     // Google and Apple both hand back a name, so on that path the one remaining
     // question arrives already answered and needs only a glance. Apple withholds
@@ -154,7 +156,7 @@ export function startOnboarding(root, { onComplete, session = null, providerErro
     // 'google', 'apple', or 'email'/'phone' for the OTP paths.
     provider: session?.user?.app_metadata?.provider ?? null,
     busyProvider: null,
-    error: providerError?.message ?? null,
+    error: session ? null : (providerError?.message ?? authError ?? null),
     studentAge: null,
     verification: null,
     guardian: null,
@@ -217,11 +219,12 @@ export function startOnboarding(root, { onComplete, session = null, providerErro
       : '';
   }
 
-  const field = ({ id, label, value = '', placeholder = '', hint = '', autocomplete = '', cls = '', type = 'text' }) => h(`
+  const field = ({ id, label, value = '', placeholder = '', hint = '', autocomplete = '', cls = '', type = 'text', inputmode = '' }) => h(`
     <div class="obfield ${cls}">
       <label class="k" for="${id}">${esc(label)}</label>
       <input id="${id}" type="${type}" value="${esc(value)}" placeholder="${esc(placeholder)}"
-             ${autocomplete ? `autocomplete="${autocomplete}"` : 'autocomplete="off"'}>
+             ${autocomplete ? `autocomplete="${autocomplete}"` : 'autocomplete="off"'}
+             ${inputmode ? `inputmode="${inputmode}"` : ''}>
       ${hint ? `<div class="hint">${esc(hint)}</div>` : ''}
     </div>`);
 
@@ -325,13 +328,13 @@ export function startOnboarding(root, { onComplete, session = null, providerErro
       ${err(error)}
       <div class="obfields">
         ${field({
-          id: 'ob-code', label: 'Your code', cls: 'obcode',
+          id: 'ob-code', label: 'Your code', cls: 'obcode', inputmode: 'numeric',
           placeholder: '6 digits, or paste the link', autocomplete: 'one-time-code',
         })}
       </div>
-      <div class="subnote">Sent to ${esc(state.contact)}. If the email contains a link rather than a
-        code, paste the whole link here — that works too, and it still works after your mail app has
-        already opened it.</div>
+      <div class="subnote">Sent to ${esc(state.contact)}. The code is good for an hour. The email also
+        has a button, and pasting that link in here works too — worth knowing, because mail apps often
+        open links before you do, which spends them.</div>
       <div class="obfoot">
         <div class="btn primary press" id="ob-verify" role="button" tabindex="0">Continue</div>
         <div class="btn plain press" id="ob-resend" role="button" tabindex="0">Send it again</div>

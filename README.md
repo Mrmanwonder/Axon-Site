@@ -21,7 +21,8 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 - **Auth** — passwordless: email or phone OTP, or Continue with Google / Continue with
   Apple. Only the guardian holds credentials; the student is a profile under that
-  session. A provider sign-in skips nothing — see *Provider sign-in* below.
+  session. A provider sign-in skips nothing — see *Provider sign-in* below. The sign-in
+  email itself lives in this repo — see [The sign-in email](#the-sign-in-email).
 - **Onboarding** — the eight steps in order, with the legally load-bearing ones
   enforced: no student data before consent, consent itemised per purpose with optional
   purposes off, payment after consent. The student profile collects a Cambridge stage
@@ -54,6 +55,47 @@ riskiest assumption in the product.
 
 Links are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over the
 bytes, so a server-side fetcher has to resolve them.
+
+## The sign-in email
+
+`supabase/functions/send-auth-email/auth-email.html` is the email, and it is the only
+copy of it. It carries the design system's real tokens — the card, the sunk surface,
+the hairline, the blue button, amber for the one line that needs attention, and no red
+anywhere. Light and dark are both defined, with light as the inline base because a
+client that strips `<style>` will also tend to sit the message on white.
+
+**The code comes before the link, deliberately.** Mail apps, scanners and link
+previews follow URLs before a person does, and whoever touches the token first spends
+it. That is what produces `otp_expired` on a link the guardian is clicking for the
+first time. A six-digit code cannot be consumed by a prefetch, so it is the primary
+path and the button is the convenience.
+
+There are two ways to put it in front of Supabase, and **one of them has to be done in
+the dashboard — neither is live until you do it.**
+
+**1. Paste it as the template.** Authentication → Emails → Magic Link, paste the file,
+save. `{{ .Token }}`, `{{ .ConfirmationURL }}` and `{{ .Email }}` are Go template
+variables Supabase fills in. Nothing else to configure. Note that a template without
+`{{ .Token }}` in it is why `signInWithOtp` sends a link and no code at all.
+
+**2. Send it yourself, via the hook.** `supabase/functions/send-auth-email` is a Send
+Email Hook: Supabase Auth calls it instead of sending, and it renders that same HTML
+file and hands it to Resend. This is the one that survives someone editing the
+dashboard, and it is also the only way past the built-in SMTP, which is rate-limited to
+a couple of messages an hour and only delivers to project members — worth knowing
+before concluding that auth is broken for a real user.
+
+```bash
+supabase secrets set RESEND_API_KEY=… AUTH_EMAIL_FROM='Mastery <hello@your-domain>'
+supabase functions deploy send-auth-email --no-verify-jwt
+# then Authentication → Hooks → Send Email → point it at the function, and
+supabase secrets set SEND_EMAIL_HOOK_SECRET=v1,whsec_…
+```
+
+`--no-verify-jwt` is required, not a shortcut: Auth authenticates with a Standard
+Webhooks signature rather than a user JWT, so a JWT check would reject every call. The
+signature is verified in the function before the body is parsed, which is what keeps an
+endpoint with no JWT check from being a way to mail a code to any address.
 
 ## Deploying
 

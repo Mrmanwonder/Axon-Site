@@ -11,6 +11,13 @@ holds the Supabase client, vendored rather than pulled from a CDN so there is no
 third-party runtime dependency. The modules must be served over http; ES modules
 do not load from `file://`.
 
+`supabase/functions/` holds Edge Functions, deployed separately from the site — Netlify
+publishes `dist/` and never touches them. `send-auth-email/auth-email.html` is the
+sign-in email and the only copy of it: the function substitutes the same
+`{{ .Token }}`-style placeholders the dashboard would, so pasting the file into
+Authentication → Emails and running the hook produce the same message. Edit that file,
+not a copy in the dashboard.
+
 `supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
 test suites that run inside a rolled-back transaction and are safe against any
 database, production included.
@@ -86,6 +93,22 @@ eventually gets broken:
 - `consent_event` is append-only. Order it by `seq`, never `created_at`: `now()` is
   the transaction timestamp, so rows written together are indistinguishable by time.
 - Consent state is always read authoritatively, never cached optimistically.
+
+## The avatar
+
+`src/avatar.js` holds ten ShaderGradient presets with the library's own colour
+values, rendered as layered CSS gradients rather than the real thing — ShaderGradient
+is three.js, and a WebGL context and render loop for a settings-row decoration does
+not survive the 60fps floor. Nothing animates.
+
+`auto: false` on Halo and Mandarin is load-bearing, not an oversight. Both are
+essentially made of red, red is reserved for the sign-out row, and an avatar derived
+onto a student who never chose it would put a red disc a few rows above the red Sign
+out. They stay pickable — a student choosing red is not the interface spending it —
+but the app never hands one out unasked. Don't fold them back into the derived set.
+
+There is one avatar and one `avatar_seed`, on `student`. The guardian never opens the
+app, so there is no second face to keep in sync.
 
 ## Before changing the nav or the glass
 

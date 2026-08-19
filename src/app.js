@@ -1,7 +1,8 @@
 // Application glue: auth gate, settings, ingestion, account actions.
 
 import {
-  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+  sb, currentSession, currentGuardian, signOut, onAuthChange,
+  takeProviderError, authRedirectError, clearAuthParamsFromUrl,
 } from './supabase.js';
 import { startOnboarding } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
@@ -16,6 +17,7 @@ import {
   BOARD_LABEL, classLabel, classLabelShort, nextClassLevel,
   subjectsForClass, syllabusCode, stageForClass, subjectLabel,
 } from './curriculum.js';
+import { PRESETS, presetFor, backgroundFor, paintAvatar } from './avatar.js';
 
 const ctx = {
   session: null, guardian: null, student: null, prefs: readLocal(), consent: {},
@@ -214,17 +216,31 @@ async function wireSettings() {
   });
 
   renderProfile();
+  renderAvatarStrip();
+  wireRename();
   wireProfileRows();
 }
 
 // ── profile ────────────────────────────────────────────────────────────────
+//
+// One face, not two. The guardian is the account holder but never opens the
+// app — everything they do arrives by email — so the avatar and the name in
+// Settings are the student's, and there is only ever one of each to keep in
+// sync.
+
+/** The label the avatar and the heading are drawn from. */
+const profileLabel = () => ctx.student?.first_name ?? ctx.guardian?.name ?? '?';
 
 function renderProfile() {
   if (!ctx.guardian) return;
   const nameEl = $('#profileName'), mailEl = $('#profileContact'), picEl = $('#profilePic');
-  if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
-  if (mailEl) mailEl.textContent = ctx.guardian.contact;
-  if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
+  // Keep the pencil: the name is a control, and replacing textContent would
+  // strip the only thing that says so.
+  if (nameEl) nameEl.firstChild
+    ? (nameEl.firstChild.nodeValue = profileLabel())
+    : nameEl.prepend(document.createTextNode(profileLabel()));
+  if (mailEl) mailEl.textContent = ctx.guardian.contact ?? '';
+  paintAvatar(picEl, ctx.student, profileLabel());
 
   const board = $('#set-board-aux');
   if (board) board.textContent = ctx.student?.board === 'CBSE' ? 'CBSE' : BOARD_LABEL;
@@ -241,17 +257,131 @@ function renderProfile() {
 }
 
 /**
+ * The ten gradients.
+ *
+ * Applied on tap and persisted immediately — this is a preference, not a
+ * consequential change, so it does not earn a confirmation sheet. Selection is
+ * a radio group rather than a list of buttons because exactly one is always in
+ * effect, including before anything has been chosen.
+ */
+function renderAvatarStrip() {
+  const strip = $('#avatarStrip');
+  if (!strip || !ctx.student) return;
+  const current = presetFor(ctx.student);
+
+  strip.innerHTML = PRESETS.map((p) => `
+    <button type="button" class="avsw press" role="radio" data-seed="${p.key}"
+            aria-checked="${p.key === current.key}" aria-pressed="${p.key === current.key}"
+            aria-label="${p.title}" title="${p.title}"
+            style="background:${backgroundFor(p)}"></button>`).join('');
+
+  strip.querySelectorAll('[data-seed]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const seed = el.dataset.seed;
+      if (seed === presetFor(ctx.student).key) return;
+      tick();
+
+      const previous = ctx.student.avatar_seed;
+      // Paint first. The face is the feedback, and waiting for a round trip to
+      // show it would make a free choice feel like a transaction.
+      ctx.student = { ...ctx.student, avatar_seed: seed };
+      renderProfile();
+      markAvatarSelection(strip, seed);
+
+      const { error } = await sb.from('student')
+        .update({ avatar_seed: seed }).eq('id', ctx.student.id);
+      if (error) {
+        ctx.student = { ...ctx.student, avatar_seed: previous };
+        renderProfile();
+        markAvatarSelection(strip, presetFor(ctx.student).key);
+        toast('That could not be saved. Still your old one for now.', 'warn');
+      }
+    });
+  });
+  window.__masteryRebindPress?.(strip);
+}
+
+function markAvatarSelection(strip, key) {
+  strip.querySelectorAll('[data-seed]').forEach((el) => {
+    const on = el.dataset.seed === key;
+    el.setAttribute('aria-checked', String(on));
+    el.setAttribute('aria-pressed', String(on));
+  });
+}
+
+/**
+ * Rename.
+ *
+ * The student is the authority on their own name, so this saves on confirm
+ * with no verification and no review — the same standing the disagree flow
+ * gives them over a transcription.
+ */
+function wireRename() {
+  const card = $('#profileCard');
+  if (!card || !ctx.student) return;
+
+  const open = () => {
+    tick();
+    window.__masteryOpenSheet?.({
+      title: 'What should we call you?',
+      body: 'This is the name shown at the top of Settings. It is not on any paper and nobody else sees it.',
+      items: [],
+      input: { id: 'sh-name', placeholder: profileLabel() },
+      primary: 'Save',
+      primaryClass: 'primary',
+      onConfirm: async () => {
+        const next = document.querySelector('#sh-name')?.value.trim();
+        // An empty box means they changed their mind, not that they want to be
+        // called nothing. The column refuses blank anyway.
+        if (!next || next === ctx.student.first_name) return;
+
+        const previous = ctx.student.first_name;
+        ctx.student = { ...ctx.student, first_name: next };
+        renderProfile();
+
+        const { error } = await sb.from('student')
+          .update({ first_name: next }).eq('id', ctx.student.id);
+        if (error) {
+          ctx.student = { ...ctx.student, first_name: previous };
+          renderProfile();
+          toast('That could not be saved.', 'warn');
+        }
+      },
+    });
+  };
+
+  card.addEventListener('click', open);
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  });
+}
+
+/**
  * Moving up a stage is a real change of syllabus, not a bigger number: IGCSE
  * Physics is 0625 and A Level Physics is 9702, with different papers and
  * different mark schemes. Papers already analysed stay pinned to the stage they
  * were analysed under, so the sheet says so before anything moves.
+ *
+ * Board is deliberately not handled by this row's neighbour here either:
+ * index.html already decided board changes go through support rather than
+ * being self-serve, and that stands.
  */
+// These rows are divs with role="button", so keyboard users get nothing for
+// free — the same reason wireRename() binds its own keydown just above.
+function onActivate(el, fn) {
+  if (!el) return;
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); }
+  });
+}
+
 let profileWired = false;
 function wireProfileRows() {
   if (profileWired) return;
   profileWired = true;
 
-  $('#set-class')?.addEventListener('click', () => {
+  onActivate($('#set-class'), () => {
     if (!ctx.student) return;
     const from = ctx.student.class_level;
     const to = nextClassLevel(from);
@@ -284,7 +414,7 @@ function wireProfileRows() {
     });
   });
 
-  $('#set-board')?.addEventListener('click', () => {
+  onActivate($('#set-board'), () => {
     tick();
     window.__masteryOpenSheet?.({
       title: 'Board changes go through support',
@@ -299,7 +429,7 @@ function wireProfileRows() {
     });
   });
 
-  $('#set-subjects')?.addEventListener('click', () => {
+  onActivate($('#set-subjects'), () => {
     if (!ctx.student) return;
     tick();
     const stage = stageForClass(ctx.student.class_level);
@@ -603,6 +733,10 @@ function showOnboarding(providerError = null) {
     // opens on the account step already saying so, rather than looking like the
     // tap did nothing.
     providerError,
+    // A link that failed redirects back here with the reason in the fragment.
+    // Without this it is discarded and the guardian sees the landing page again,
+    // with nothing to distinguish "that link is spent" from "nothing happened".
+    authError: authRedirectError(),
     // The rows just created are handed straight over rather than re-fetched.
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just
@@ -645,6 +779,9 @@ async function boot() {
   const providerError = takeProviderError();
 
   ctx.session = await currentSession();
+  // Read after getSession, so the client has finished with the fragment, and
+  // before any render — a reload should not replay an error already dealt with.
+  clearAuthParamsFromUrl();
   if (!ctx.session) return showOnboarding(providerError);
 
   ctx.guardian = await currentGuardian();
