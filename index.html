@@ -489,6 +489,20 @@
     .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
   }
 
+  /* ── disabled ──
+     The design system had no disabled state before onboarding needed one (the
+     verification button, while the adapter is mid-handoff). Deliberately built
+     from opacity and pointer-events alone: a greyed-out palette would mean a
+     new colour, and this project's whole position is that new colours are
+     decisions, not defaults. Reads correctly in both themes because it dims
+     whatever the button already was.
+
+     aria-disabled rather than the `disabled` attribute: these are divs, and a
+     div cannot carry it. Handlers must still check the attribute — CSS
+     pointer-events stops a click but not the Enter key. */
+  [aria-disabled="true"]{opacity:.45;pointer-events:none;cursor:default;}
+  .btn[aria-disabled="true"]{box-shadow:none;}
+
   /* Visible only for keyboard users; the design's press states cover pointers. */
   :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px;}
   .tab:focus-visible{outline-offset:-4px;}
@@ -535,6 +549,50 @@
   #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;}
   #obroot[hidden]{display:none;}
   @media (min-width:768px){#obroot{padding-inline:max(0px,calc((100% - 620px) / 2));}}
+
+  /* ── onboarding: the student half ──
+     Steps 1-6 are the parent's, and they are dense on purpose — a parent wants
+     to finish that, not savour it. Steps 7-8 are the student's first minute in
+     the app and are paced the opposite way: one idea per screen, one forward
+     action, and enough empty space that the four screens don't read as a queue
+     of tasks to get through.
+
+     There is deliberately no step indicator. "Nothing competing with the
+     forward action" rules out a second thing to look at, and a 1-of-4 counter
+     turns four calm screens into a progress bar — which is the gamified
+     pattern this project has already decided against.
+
+     Composed entirely from existing tokens: the h1 scale, the estate icon
+     treatment, the body size and the standard gutters. No new scale, no new
+     hue, no new radius. */
+  .view.calmview{padding-top:var(--top-inset);padding-bottom:0;}
+  .calm{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;
+    padding:0 var(--text-gutter);}
+  .calm .top{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(24px,7vh,56px) 0;}
+  .calm .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);
+    display:flex;align-items:center;justify-content:center;margin-bottom:clamp(20px,4vh,30px);}
+  .calm .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .calm h2{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.036em;
+    line-height:1.1;text-wrap:balance;}
+  .calm p{margin:15px 0 0;font-size:var(--fs-body,15px);line-height:1.55;color:var(--label-2);
+    max-width:34ch;}
+  .calm .foot{flex:0 0 auto;padding-bottom:max(clamp(18px,4vh,34px),var(--bot-inset));}
+  .calm .foot .btn{margin:0;}
+  .calm .foot .btn.plain{margin-top:4px;}
+
+  /* ── Devanagari ──
+     The consent notice is available in Hindi because a notice a parent cannot
+     read has not informed them. Onest carries no Devanagari, so those
+     codepoints fall through to whatever face the device ships — Onest still
+     wins for the latin digits and punctuation inside the same string.
+
+     Deliberately not a webfont: choosing one is a design-system decision that
+     hasn't been taken, and this text has to render with no network. The metrics
+     will not match Onest exactly. Legibility of a legal notice beats matching. */
+  [lang="hi"]{font-family:'Onest',"Noto Sans Devanagari","Noto Sans","Nirmala UI",
+    "Mangal",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;}
 
   /* Sheet extras used by the generic sheet opener. */
   .sheet .sh-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
@@ -608,6 +666,21 @@
       <div class="scanbtn press" id="uploadBtn" role="button" tabindex="0">
         <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
         Add a paper
+      </div>
+    </div>
+
+    <!-- Empty Home — where the student lands the moment onboarding ends, and
+         wherever they have no papers yet. One action and nothing else: there is
+         genuinely nothing to report until a paper exists, and a dashboard of
+         zeroes would be a chart built on no data. Mirrors v1b, which does the
+         same job for Insights below the four-paper threshold. -->
+    <div class="view" id="v0b">
+      <div class="greet"><h1 id="v0bGreet">Hello</h1></div>
+      <div class="estate">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg></div>
+        <h4>No papers yet</h4>
+        <p>Add a marked paper and we'll show you where the marks went. Until there's one to read, there's nothing here we could honestly tell you.</p>
+        <div class="btn primary press" onclick="pick(2)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add your first paper</div>
       </div>
     </div>
 
@@ -1058,7 +1131,7 @@ const hapticFirm = ()=>haptic(18);   // consequential: warning-sheet primary, sa
 const PILL_R=26;
 const railQuery=matchMedia('(min-width:768px)');
 const isRail=()=>railQuery.matches;
-let offsets=[],current=0,insightsReady=false;
+let offsets=[],current=0,insightsReady=false,homeEmpty=false;
 const $id=id=>document.getElementById(id);
 
 function measureTabs(){
@@ -1113,7 +1186,8 @@ seed('tab',0);
 const TITLES=['Home','Insights','Scan','Library','Settings'];
 function pick(i){
   document.querySelectorAll('.tab').forEach((t,idx)=>t.classList.toggle('on',idx===i));
-  document.getElementById('v0').classList.toggle('on',i===0);
+  document.getElementById('v0').classList.toggle('on',i===0&&!homeEmpty);
+  document.getElementById('v0b').classList.toggle('on',i===0&&homeEmpty);
   document.getElementById('v1').classList.toggle('on',i===1&&insightsReady);
   document.getElementById('v1b').classList.toggle('on',i===1&&!insightsReady);
   document.getElementById('v2').classList.toggle('on',i===2);
@@ -1379,6 +1453,32 @@ window.__masteryRebindPress = function(scope){
     el.addEventListener('pointerdown',()=>go(.988));
     ['pointerup','pointerleave','pointercancel'].forEach(e=>el.addEventListener(e,()=>go(1)));
   });
+};
+
+// Enter/Space activation for anything rendered after boot. The nav and the
+// appearance toggle get this at boot from the `.tab,.themebtn` binding above;
+// onboarding's buttons are divs created later, so they need the same treatment
+// or the whole flow is unreachable from a keyboard.
+window.__masteryRebindKeys = function(scope){
+  (scope||document).querySelectorAll('[role="button"],[role="switch"]').forEach(el=>{
+    if(el.dataset.keyBound) return;
+    el.dataset.keyBound='1';
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+    });
+  });
+};
+
+// Which Home the student sees. Home is the one tab that can be legitimately
+// empty for a brand-new account, and an empty dashboard of zeroes would be a
+// chart built on no data — so it swaps for a single call to action instead.
+window.__masteryHomeEmpty = function(empty, name){
+  homeEmpty = !!empty;
+  if(name) document.getElementById('v0bGreet').textContent = name;
+  if(current===0){
+    document.getElementById('v0').classList.toggle('on',!homeEmpty);
+    document.getElementById('v0b').classList.toggle('on',homeEmpty);
+  }
 };
 
 window.__masteryOpenDisclosure = function(d){

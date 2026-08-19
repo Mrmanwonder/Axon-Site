@@ -343,17 +343,6 @@ async function changeStage(to) {
 
 // ── ingestion ──────────────────────────────────────────────────────────────
 
-// Set once by onboarding step 8, which has already asked the guided question.
-// Consumed on the next ingest and cleared, so the second paper is asked about
-// rather than silently inheriting the first one's type — which would file a
-// board paper as a school test and cost it its marking scheme.
-let pendingType = null;
-function takePendingType() {
-  const t = pendingType;
-  pendingType = null;
-  return t;
-}
-
 function askPaperType(then) {
   window.__masteryOpenSheet?.({
     title: 'What kind of paper is this?',
@@ -387,8 +376,7 @@ async function ingestFiles(files) {
       toast(e.message || 'Upload failed.', 'warn');
     }
   };
-  const t = takePendingType();
-  t ? run(t) : askPaperType(run);
+  askPaperType(run);
 }
 
 async function ingestLink(url) {
@@ -405,8 +393,7 @@ async function ingestLink(url) {
       await refreshShell();
     } catch (e) { toast(e.message || 'That link could not be added.', 'warn'); }
   };
-  const t = takePendingType();
-  t ? run(t) : askPaperType(run);
+  askPaperType(run);
 }
 
 function wireIngestion() {
@@ -532,6 +519,10 @@ async function refreshLibrary() {
     const { data, stale } = await listPapers(ctx.student.id);
     libPapers = data;
     paintLibrary(stale);
+    // Home has nothing honest to show until a paper exists, so it swaps for a
+    // single call to action. Driven from the same read as the Library rather
+    // than a separate count — one source, so the two can't disagree.
+    window.__masteryHomeEmpty?.(data.length === 0, ctx.student.first_name);
     return data;
   } catch { /* the cached view stays on screen */ }
   return null;
@@ -610,14 +601,17 @@ function showOnboarding() {
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just
     // finished onboarding back to the start of it.
-    onComplete: async ({ guardian, student, firstPaperType }) => {
-      pendingType = firstPaperType ?? null;
+    // The student's four first-run screens end by handing over to Home, which
+    // is empty and carries one call to action. Onboarding deliberately does not
+    // open the file picker itself: landing straight in a system dialog is the
+    // opposite of the pacing those four screens just established, and the paper
+    // type still gets asked on the first upload by askPaperType().
+    onComplete: async ({ guardian, student }) => {
       if (guardian) ctx.guardian = guardian;
       if (student) ctx.student = student;
       overlay.hidden = true;
       document.querySelector('.app')?.removeAttribute('aria-hidden');
       await startApp();
-      if (firstPaperType) $('#fileInput')?.click();
     },
   });
 }
