@@ -112,6 +112,13 @@ Percentage padding inside `.view` resolves against the app shell, not the view's
 box, so `--rail-w` has to be subtracted explicitly in the centring calculation.
 This is easy to get wrong and looks almost right when you do.
 
+The onboarding overlay is the same trap one level down. `.obwrap` is absolute, so
+`inset:0` resolves against `#obroot`'s *padding* box — padding on `#obroot` cannot
+cap the column, and the overlay carries `--ob-side` per element instead, with
+`.obview` reaching the same width through `.view`'s own `--vmax`. `#obroot` also
+zeroes `--rail-w` and `--view-bottom`: there is no rail and no tab bar inside it,
+and leaving either set pushes the column off-centre or strands it above dead space.
+
 ## Colour
 
 Red appears in exactly one place: the sign-out row. Not errors, not warnings, not

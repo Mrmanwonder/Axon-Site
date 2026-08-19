@@ -19,8 +19,9 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 ## What works
 
-- **Auth** — email or phone OTP, no passwords, no social sign-in. Only the guardian
-  holds credentials; the student is a profile under that session.
+- **Auth** — passwordless: email or phone OTP, or Continue with Google / Continue with
+  Apple. Only the guardian holds credentials; the student is a profile under that
+  session. A provider sign-in skips nothing — see *Provider sign-in* below.
 - **Onboarding** — the eight steps in order, with the legally load-bearing ones
   enforced: no student data before consent, consent itemised per purpose with optional
   purposes off, payment after consent. The student profile collects a Cambridge stage
@@ -62,6 +63,35 @@ specs, the blueprint and the design reference images stay out of the deployed si
 
 There is nothing to install — no `package.json`, no framework, no build step beyond
 the copy.
+
+### Provider sign-in
+
+Google and Apple are offered on the account step, above the typed path. Both are pure
+client-side redirects through Supabase (`signInWithOAuth`), so there is nothing to
+install and no secret in this repo — but each has to be switched on once, per project,
+in the Supabase dashboard:
+
+- **Google** — Authentication → Sign In / Providers → Google. Needs an OAuth client ID
+  and secret from the Google Cloud console, with Supabase's callback
+  (`<project>.supabase.co/auth/v1/callback`) as an authorised redirect URI.
+- **Apple** — the same panel. Needs a Services ID, and Apple requires the callback to
+  be an `https` URL, so this one cannot be exercised against `http://localhost`; use a
+  deploy preview.
+
+Add every origin the app is served from — production, deploy previews, `localhost` for
+Google — to Authentication → URL Configuration → Redirect URLs. The app asks to come
+back to `window.location.origin + pathname` rather than the project's Site URL, so a
+stale Site URL cannot strand anyone, but an origin missing from that allow-list will be
+refused by Supabase.
+
+Until a provider is enabled its button explains itself in amber and points at the email
+and phone path, rather than surfacing Supabase's developer-facing error.
+
+**A provider shortens no part of the flow.** It supplies a verified address and, usually,
+a name — so the guardian row lands with one glance instead of two fields. It does not
+stand in for guardian verification, and it cannot: DPDP consent is a parent's decision
+about a specific child, and no identity provider can assert it. The age gate,
+verification and itemised consent all still run, in order.
 
 The Supabase publishable key is committed in `src/config.js` on purpose. It carries no
 authority: every table has RLS with no policy for `anon`, so the key alone reaches

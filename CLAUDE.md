@@ -54,7 +54,9 @@ corrupt everything downstream.
 - Web-first PWA. Mobile viewport is the design target (~380px); desktop is secondary.
 - `index.html` is the entire front end and the design system. `src/` holds ES modules for
   data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
-- Supabase: Postgres, auth, storage. Auth is email or phone OTP only.
+- Supabase: Postgres, auth, storage. Auth is passwordless: email or phone OTP, or
+  Google or Apple. A provider only vouches for the address — it shortens no part of the
+  flow, and the age gate, guardian verification and consent still happen in order.
 - Offline: past papers and their analysis must be readable offline. Scanning and
   extraction are online-only. Cache read paths; queue nothing that needs the model.
 - Performance floor: must hold 60fps on mid-tier Android. This is a real constraint, not
