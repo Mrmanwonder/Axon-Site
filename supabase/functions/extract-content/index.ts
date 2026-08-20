@@ -19,7 +19,11 @@ import { cropRegion, cropToPage } from '../_shared/crop.ts';
 
 interface Body { run_id: string; region_id: string }
 
-interface Valued { value: unknown; box: { x: number; y: number; w: number; h: number } | null }
+interface Valued {
+  value: unknown;
+  box: { x: number; y: number; w: number; h: number } | null;
+  page_index?: number;
+}
 interface ContentResult {
   question_text: Valued | null;
   student_answer: Valued | null;
@@ -42,9 +46,8 @@ interface ContentResult {
  */
 function provenanced(
   field: Valued | null | undefined,
-  crop: { width: number; height: number },
-  region: { x: number; y: number; w: number; h: number },
-  page: number,
+  crops: { width: number; height: number }[],
+  spans: { page: number; box: { x: number; y: number; w: number; h: number } }[],
 ): { value: unknown; box: Record<string, number> | null } {
   if (!field || field.value === null || field.value === undefined) return { value: null, box: null };
   const b = field.box;
@@ -52,13 +55,22 @@ function provenanced(
       b.w <= 0 || b.h <= 0) {
     return { value: null, box: null };
   }
+
+  // Which crop the box is on. An index pointing at an image that was not sent is
+  // a box we cannot place, and a box we cannot place is a value that does not
+  // exist — it is dropped rather than pinned to the first page and hoped for.
+  const index = Number.isInteger(field.page_index) ? field.page_index! : 0;
+  const crop = crops[index];
+  const span = spans[index];
+  if (!crop || !span) return { value: null, box: null };
+
   const inCrop = {
     x: (b.x / 1000) * crop.width,
     y: (b.y / 1000) * crop.height,
     w: (b.w / 1000) * crop.width,
     h: (b.h / 1000) * crop.height,
   };
-  return { value: field.value, box: { page, ...cropToPage(inCrop, region) } };
+  return { value: field.value, box: { page: span.page, ...cropToPage(inCrop, span.box) } };
 }
 
 Deno.serve(async (req) => {
@@ -89,12 +101,15 @@ Deno.serve(async (req) => {
 
   const { data: marks } = await sb
     .from('teacher_mark')
-    .select('shape, mark_class, box')
+    .select('shape, mark_class, box, page_number')
     .eq('region_id', region.id);
 
   // ── cut the crops ────────────────────────────────────────────────────────
 
   const crops: { data: string; media_type: string; width: number; height: number }[] = [];
+  // Kept in step with `crops`, so a page that failed to cut does not silently
+  // shift every later box onto the wrong page.
+  const cropSpans: typeof spans = [];
   let croppedAll = true;
 
   for (const span of spans) {
@@ -105,6 +120,7 @@ Deno.serve(async (req) => {
     const crop = await cropRegion(new Uint8Array(await file.arrayBuffer()), span.box);
     if (!crop) { croppedAll = false; continue; }
     crops.push(crop);
+    cropSpans.push(span);
   }
 
   if (!crops.length) {
@@ -137,7 +153,10 @@ Deno.serve(async (req) => {
         layerFallback: fallback,
         teacherMarks: (marks ?? []).map((m) => ({
           shape: m.mark_class === 'unknown' ? m.shape : m.mark_class.replace(/_/g, ' '),
-          where: describeWhere(m.box, spans[0].box),
+          // Described against the span the mark is actually on. On a question
+          // that runs across pages, measuring every mark against the first page
+          // would put half of them "near the bottom" of a page they are not on.
+          where: describeWhere(m.box, (spans.find((s) => s.page === m.page_number) ?? spans[0]).box),
         })),
       }),
       images: crops,
@@ -162,15 +181,11 @@ Deno.serve(async (req) => {
 
   // ── write only what has provenance ───────────────────────────────────────
 
-  const page = spans[0].page;
-  const crop = crops[0];
-  const box = spans[0].box;
-
-  const questionText = provenanced(result.question_text, crop, box, page);
-  const answer = provenanced(result.student_answer, crop, box, page);
-  const awarded = provenanced(result.marks_awarded, crop, box, page);
-  const available = provenanced(result.marks_available, crop, box, page);
-  const remark = provenanced(result.teacher_remark, crop, box, page);
+  const questionText = provenanced(result.question_text, crops, cropSpans);
+  const answer = provenanced(result.student_answer, crops, cropSpans);
+  const awarded = provenanced(result.marks_awarded, crops, cropSpans);
+  const available = provenanced(result.marks_available, crops, cropSpans);
+  const remark = provenanced(result.teacher_remark, crops, cropSpans);
 
   const numeric = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const awardedValue = numeric(awarded.value);
@@ -216,7 +231,7 @@ Deno.serve(async (req) => {
       paper_id: region.paper_id,
       student_id: region.student_id,
       region_id: region.id,
-      page_number: page,
+      page_number: awarded.box.page,
       box: awarded.box,
       shape: 'glyph',
       mark_class: 'marginal_number',
@@ -231,7 +246,7 @@ Deno.serve(async (req) => {
       paper_id: region.paper_id,
       student_id: region.student_id,
       region_id: region.id,
-      page_number: page,
+      page_number: remark.box.page,
       box: remark.box,
       shape: 'unknown',
       mark_class: 'comment',

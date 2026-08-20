@@ -18,11 +18,25 @@ const box = {
   },
 } as const;
 
+/**
+ * A value, the box it was read from, and which of the images given that box is
+ * on.
+ *
+ * `page_index` is not decoration. A question that runs across pages arrives as
+ * several crops in one request, and without it every box would be placed back on
+ * the first page — so a mark read at the top of page 2 would be shown to the
+ * student against a crop of page 1, and the provenance rule would be quietly
+ * producing the wrong pixels.
+ */
 const valueWithBox = (valueType: string) => ({
   type: ['object', 'null'],
   additionalProperties: false,
-  required: ['value', 'box'],
-  properties: { value: { type: [valueType, 'null'] }, box },
+  required: ['value', 'box', 'page_index'],
+  properties: {
+    value: { type: [valueType, 'null'] },
+    box,
+    page_index: { type: 'integer', minimum: 0 },
+  },
 });
 
 export const STRUCTURE_SCHEMA = {

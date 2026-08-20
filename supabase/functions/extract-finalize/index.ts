@@ -106,11 +106,21 @@ Deno.serve(async (req) => {
   // ── write the paper's own totals back ────────────────────────────────────
   // Our sums, kept beside the teacher's reported total rather than replacing it.
 
+  // The tier can only move while nothing is hanging off it. student_attempt
+  // carries a composite key back to (paper_id, tier), so changing the tier under
+  // a paper that already has committed attempts from an earlier run would fail
+  // the constraint — correctly, because those attempts were routed under the old
+  // tier and would silently start claiming a scheme they were never matched to.
+  const { count: committed } = await sb
+    .from('student_attempt')
+    .select('id', { count: 'exact', head: true })
+    .eq('paper_id', paper.id);
+
   await sb.from('paper').update({
     total_awarded: result.sum_awarded,
     total_available: result.sum_available > 0 ? result.sum_available : null,
     reconciled: result.reconciled,
-    tier: routing.tier,
+    ...(committed ? {} : { tier: routing.tier }),
   }).eq('id', paper.id);
 
   const timings = (run.stage_timings ?? {}) as Record<string, number>;
@@ -128,8 +138,10 @@ Deno.serve(async (req) => {
   return json({
     run_id: run.id,
     reconciliation: result,
-    tier: routing.tier,
-    tier_note: routing.note,
+    tier: committed ? paper.tier : routing.tier,
+    tier_note: committed
+      ? { ...routing.note, kept: 'this paper already has saved questions, so its tier stands' }
+      : routing.note,
     counts: { confident, unsure, unreadable, total: regions.length },
   });
 });
