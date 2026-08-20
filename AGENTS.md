@@ -81,6 +81,15 @@ walks the whole thing and is the only module that knows the order.
   downscaled page with a small model; the content pass reads handwriting with a
   frontier one. Both are environment-overridable, because the harness is what
   should settle that question.
+- **`src/app.js` imports the scanner dynamically, and that is load-bearing.**
+  The pipeline is sixteen modules and none of them are needed to read a paper
+  you scanned last week; as a static import they cost sixteen extra round-trips
+  on the critical path, measured at about 0.7s of extra boot on a throttled
+  mid-tier profile. `ensureScan()` is the only way in, for the Scan tab and for
+  an upload alike — the module holds its own state, and calling into it before
+  `initScanUI` has handed it the student drops the upload silently. Turning that
+  back into a top-level `import` would look like tidying and would cost the
+  performance floor.
 
 ## The four hard rules
 
