@@ -184,6 +184,40 @@ update public.question_region
    set student_confirmed_at = now()
  where id = 'aaaaaaaa-0000-4000-8000-000000000023';
 
+-- ── stage 8 · what the model may and may not write ─────────────────────────
+-- One table in the schema holds prose the model authored. It holds no mark, and
+-- it cannot cite a scheme it has no source for.
+
+do $$ begin begin
+  insert into public.region_explanation (region_id, run_id, student_id, tier, model_version, prompt_version,
+                                         scheme_source, scheme_version)
+  values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-000000000010',
+          'aaaaaaaa-0000-4000-8000-000000000002','tier_1','m','1.0.0','CBSE 2023','1');
+  perform public._t('a Tier 1 explanation cannot cite a scheme', false, 'insert succeeded');
+exception when check_violation then
+  perform public._t('a Tier 1 explanation cannot cite a scheme', true);
+end; end $$;
+
+do $$ begin begin
+  insert into public.region_explanation (region_id, run_id, student_id, tier, model_version, prompt_version, cause)
+  values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-000000000010',
+          'aaaaaaaa-0000-4000-8000-000000000002','tier_1','m','1.0.0','keyword_miss');
+  perform public._t('a named cause must say how many marks it accounts for', false, 'insert succeeded');
+exception when check_violation then
+  perform public._t('a named cause must say how many marks it accounts for', true);
+end; end $$;
+
+insert into public.region_explanation (region_id, run_id, student_id, tier, cause, marks_lost,
+                                       body, do_this_next, concepts, model_version, prompt_version)
+values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-000000000010',
+        'aaaaaaaa-0000-4000-8000-000000000002','tier_1','keyword_miss',1,
+        'The definition is right, but the mark scheme wants the words "net force" named explicitly.',
+        'Write the formula on its own line before you substitute into it.',
+        array['Newton''s second law'],'m','1.0.0');
+
+-- Q2 is a question the model could not construct a reason for. It leaves no row,
+-- which is the honest outcome — an empty slot rather than a shrug.
+
 -- ── commit ─────────────────────────────────────────────────────────────────
 
 do $$
@@ -229,6 +263,22 @@ do $$ begin begin
 exception when unique_violation then
   perform public._t('a run cannot be committed twice', true);
 end; end $$;
+
+select public._t('an explanation becomes a loss event at commit',
+  (select count(*) = 1 from public.mark_loss_event m
+     join public.question_region r on r.committed_attempt_id = m.attempt_id
+    where r.id = 'aaaaaaaa-0000-4000-8000-000000000021'
+      and m.cause = 'keyword_miss' and m.marks_lost = 1));
+
+select public._t('a question with no explanation leaves no loss event',
+  (select count(*) = 0 from public.mark_loss_event m
+     join public.question_region r on r.committed_attempt_id = m.attempt_id
+    where r.id = 'aaaaaaaa-0000-4000-8000-000000000022'));
+
+select public._t('the do-this-next line travelled with it',
+  (select m.do_this_next like 'Write the formula%' from public.mark_loss_event m
+     join public.question_region r on r.committed_attempt_id = m.attempt_id
+    where r.id = 'aaaaaaaa-0000-4000-8000-000000000021'));
 
 -- ── hard rule 3, through the pipeline ──────────────────────────────────────
 -- The unsure region was confirmed by the student before commit, so it is
@@ -301,6 +351,21 @@ end; end $$;
 
 insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
  values ('aaaaaaaa-0000-4000-8000-000000000001', null, 'extract_text', true, 'v1.0', 'in_app_itemised');
+
+insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
+ values ('aaaaaaaa-0000-4000-8000-000000000001', null, 'generate_explanations', false, 'v1.0', 'in_app_withdrawal');
+
+do $$ begin begin
+  insert into public.region_explanation (region_id, run_id, student_id, tier, model_version, prompt_version, body)
+  values ('aaaaaaaa-0000-4000-8000-000000000022','aaaaaaaa-0000-4000-8000-000000000010',
+          'aaaaaaaa-0000-4000-8000-000000000002','tier_1','m','1.0.0','anything at all');
+  perform public._t('withdrawing generate_explanations stops new explanations', false, 'insert succeeded');
+exception when insufficient_privilege then
+  perform public._t('withdrawing generate_explanations stops new explanations', true);
+end; end $$;
+
+insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
+ values ('aaaaaaaa-0000-4000-8000-000000000001', null, 'generate_explanations', true, 'v1.0', 'in_app_itemised');
 
 -- ── RLS ────────────────────────────────────────────────────────────────────
 

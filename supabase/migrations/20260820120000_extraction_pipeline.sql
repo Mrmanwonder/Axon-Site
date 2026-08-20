@@ -121,6 +121,11 @@ create table public.extraction_run (
   -- model works, and it is much harder to retrofit than to log.
   cost_paise       integer                  not null default 0 check (cost_paise >= 0),
 
+  -- How stage 7 routed this paper, and why. A Tier 2 candidate that found no
+  -- scheme falls back to Tier 1 and says so; an approximated scheme is a
+  -- fabricated authority and is worse than none.
+  tier_routing     jsonb                    not null default '{}'::jsonb,
+
   failure_reason   text,
   started_at       timestamptz              not null default now(),
   finished_at      timestamptz,
@@ -200,6 +205,11 @@ create table public.question_region (
   -- their own paper says.
   student_confirmed_at timestamptz,
   student_corrected    boolean not null default false,
+
+  -- Set only on a confident Tier 2 match. Hard rule 2 is enforced one table
+  -- over: student_attempt refuses a canonical question on a Tier 1 paper, so a
+  -- fallback to Tier 1 cannot drag a scheme reference along with it.
+  canonical_question_id uuid references public.canonical_question (id) on delete restrict,
 
   committed_attempt_id uuid,
   created_at           timestamptz not null default now(),
@@ -283,6 +293,86 @@ create table public.teacher_mark (
 comment on table public.teacher_mark is
   'One mark the teacher made, with the box it occupies. A circle or underline is retained even though it carries no number: it is the teacher pointing directly at what went wrong, which is the highest-value input the explanation stage gets.';
 
+-- ── region_explanation ─────────────────────────────────────────────────────
+-- Stage 8's output, held against the region until stage 10 turns it into a
+-- mark_loss_event. It cannot be written straight to mark_loss_event because that
+-- table hangs off an attempt, and an attempt does not exist until the student
+-- has reviewed the reading it would be built from.
+--
+-- This is the only table in the schema whose text the model authors. It holds no
+-- mark: marks_lost is arithmetic over two fact fields, and there is no column
+-- here that could carry an opinion about what the mark should have been.
+
+create table public.region_explanation (
+  id             uuid primary key default gen_random_uuid(),
+  region_id      uuid not null,
+  run_id         uuid not null,
+  student_id     uuid not null,
+
+  tier           public.paper_tier not null,
+  cause          public.loss_cause,
+  marks_lost     numeric(5,2) check (marks_lost > 0),
+  body           text,
+  do_this_next   text,
+  concepts       text[] not null default '{}',
+
+  -- Hard rule 2: scheme detail cannot be shown without naming where it came
+  -- from, so it cannot be stored without naming it either.
+  scheme_source  text,
+  scheme_version text,
+
+  model_version  text not null,
+  prompt_version text not null,
+  generated_at   timestamptz not null default now(),
+
+  unique (id, student_id),
+  unique (region_id),
+  foreign key (region_id, student_id) references public.question_region (id, student_id) on delete cascade,
+  foreign key (run_id, student_id)    references public.extraction_run (id, student_id) on delete cascade,
+
+  constraint tier_1_cites_no_scheme check (
+    tier = 'tier_2' or (scheme_source is null and scheme_version is null)),
+  constraint scheme_citation_is_complete check (
+    (scheme_source is null) = (scheme_version is null)),
+  -- An explanation that names a cause has to say how many marks it accounts for,
+  -- and one that accounts for marks has to name a cause. Half of either is a row
+  -- nothing downstream can use.
+  constraint cause_and_loss_travel_together check (
+    (cause is null) = (marks_lost is null))
+);
+
+comment on table public.region_explanation is
+  'Stage 8. The model''s only authored prose in the schema. Never contradicts marks_awarded — it explains the deduction, it does not evaluate it.';
+comment on column public.region_explanation.do_this_next is
+  'Must name something specific to this answer and performable during an exam. NULL when the model could not clear that bar; an empty slot is honest and generic advice is not.';
+
+alter table public.region_explanation enable row level security;
+create policy region_explanation_all_own on public.region_explanation for all to authenticated
+  using (exists (select 1 from public.student s
+         where s.id = region_explanation.student_id and s.guardian_id = private.current_guardian_id()))
+  with check (exists (select 1 from public.student s
+         where s.id = region_explanation.student_id and s.guardian_id = private.current_guardian_id()));
+
+-- Explaining is its own processing purpose, and withdrawing it has to stop new
+-- explanations rather than merely hide the ones already written.
+create or replace function private.enforce_explanation_consent_gate()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_guardian uuid;
+begin
+  select s.guardian_id into v_guardian from public.student s where s.id = new.student_id;
+  if v_guardian is null then
+    raise exception 'unknown student %', new.student_id using errcode = '23503';
+  end if;
+  if not private.consent_is_granted(v_guardian, new.student_id, 'generate_explanations') then
+    raise exception 'cannot write an explanation: generate_explanations consent is not currently granted'
+      using errcode = '42501';
+  end if;
+  return new;
+end; $$;
+
+create trigger region_explanation_consent_gate before insert on public.region_explanation
+  for each row execute function private.enforce_explanation_consent_gate();
+
 -- ── stage 10 · commit ──────────────────────────────────────────────────────
 -- Turning reviewed regions into attempts. Runs as the caller, so RLS applies
 -- exactly as it does to a direct insert; it exists to make the transition atomic
@@ -344,12 +434,17 @@ begin
     end if;
 
     insert into public.student_attempt (
-      student_id, paper_id, paper_tier, question_label, question_text,
+      student_id, paper_id, paper_tier, canonical_question_id,
+      question_label, question_text,
       student_answer, marks_awarded, max_marks, marks_source, teacher_remark,
       extraction_confidence,
       student_confirmed_at
     ) values (
       v_region.student_id, v_region.paper_id, v_paper.tier,
+      -- Only a Tier 2 paper may carry one. On a Tier 1 fallback this is null
+      -- whatever the region holds, so a stale match cannot survive the
+      -- downgrade and trip the constraint instead of being dropped.
+      case when v_paper.tier = 'tier_2' then v_region.canonical_question_id end,
       coalesce(v_region.question_label, 'Q' || (v_region.order_index + 1)),
       v_region.question_text, v_region.student_answer,
       v_region.marks_awarded, v_region.marks_available,
@@ -370,6 +465,22 @@ begin
     update public.question_region
        set committed_attempt_id = v_attempt, updated_at = now()
      where id = v_region.id;
+
+    -- Stage 8's output becomes a loss event now that there is an attempt for it
+    -- to hang off. Only where the model actually had something to say: a
+    -- question it could not explain leaves no row, which is the honest outcome
+    -- and keeps the empty slot empty rather than filling it with a shrug.
+    insert into public.mark_loss_event (
+      attempt_id, student_id, cause, marks_lost, ai_explanation, do_this_next, confidence
+    )
+    select v_attempt, e.student_id, e.cause, e.marks_lost, e.body, e.do_this_next,
+           case when v_region.confidence_tier = 'confident' then 'likely'::public.confidence
+                else 'unsure'::public.confidence end
+      from public.region_explanation e
+     where e.region_id = v_region.id
+       and e.cause is not null
+       and e.marks_lost is not null
+       and e.marks_lost <= v_region.marks_available - v_region.marks_awarded;
 
     v_committed := v_committed + 1;
   end loop;
@@ -446,3 +557,4 @@ create index question_region_review_idx on public.question_region (student_id)
   where needs_review and student_confirmed_at is null;
 create index teacher_mark_run_idx       on public.teacher_mark (run_id);
 create index teacher_mark_region_idx    on public.teacher_mark (region_id);
+create index region_explanation_run_idx on public.region_explanation (run_id);
