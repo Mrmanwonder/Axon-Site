@@ -388,6 +388,15 @@ exception when others then
   perform public._t('another guardian cannot commit this run', true, sqlerrm);
 end; end $$;
 
+-- The production monitor spans every account, so no signed-in session may reach
+-- it. RLS is not the boundary here — the absence of a grant is.
+do $$ begin begin
+  perform count(*) from private.pipeline_health;
+  perform public._t('no signed-in session can read the pipeline monitor', false, 'select succeeded');
+exception when insufficient_privilege then
+  perform public._t('no signed-in session can read the pipeline monitor', true);
+end; end $$;
+
 reset role;
 
 -- ── report ─────────────────────────────────────────────────────────────────
