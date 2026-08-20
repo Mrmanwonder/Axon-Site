@@ -67,6 +67,41 @@ export function glareScore(img) {
   return hit / total;
 }
 
+/**
+ * Glare measured only inside the page, for the live capture gate.
+ *
+ * A bright window behind the desk is not a reason to block the shutter; a bright
+ * patch on the answer is. Restricting the measure to the quad is what makes the
+ * difference between a gate that helps and one people learn to fight.
+ */
+export function glareInQuad(img, quad) {
+  const { data, width, height } = img;
+  let inside = 0, hit = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!insidePolygon(x + 0.5, y + 0.5, quad)) continue;
+      inside++;
+      const i = (y * width + x) * 4;
+      const max = Math.max(data[i], data[i + 1], data[i + 2]);
+      if (max < QUALITY.GLARE_V * 255) continue;
+      const min = Math.min(data[i], data[i + 1], data[i + 2]);
+      if ((max === 0 ? 0 : (max - min) / max) <= QUALITY.GLARE_S) hit++;
+    }
+  }
+  return inside ? hit / inside : 0;
+}
+
+function insidePolygon(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) &&
+        x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
 /** Long edge in pixels. Below the floor there is no honest route back to 300 DPI. */
 export function resolutionScore(width, height) {
   return Math.max(width, height);

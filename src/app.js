@@ -4,8 +4,9 @@ import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './su
 import { startOnboarding } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
-import { createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType, PAPER_TYPES } from './papers.js';
+import { createPaper, addLinkPage, parsePaperLink, listPapers, PAPER_TYPES } from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+import { acceptUploads, initScanUI, setPendingPaperType } from './scan/ui.js';
 
 const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
 
@@ -232,31 +233,23 @@ function askPaperType(then) {
   });
 }
 
+/**
+ * Uploaded pages join the scanning pipeline rather than bypassing it.
+ *
+ * Before capture existed this uploaded raw files straight to storage, which was
+ * right when nothing read them. Now that something does, an unconditioned page
+ * would skip stage 1 and stage 2 — no deskew, no illumination flattening, no
+ * red-layer separation — and arrive at the structure pass in materially worse
+ * shape than a captured one. Upload is a first-class path, so it takes the same
+ * road; it simply has no quad to warp by.
+ */
 async function ingestFiles(files) {
   if (!ctx.student) return toast('Create a student profile first.', 'warn');
   if (!files.length) return;
-  const run = async (type) => {
-    try {
-      toast('Uploading…');
-      const paper = await createPaper({
-        studentId: ctx.student.id, type,
-        dateTaken: new Date().toISOString().slice(0, 10),
-      });
-      await uploadPages({
-        studentId: ctx.student.id, paperId: paper.id, files,
-        onProgress: (n, total) => toast(`Uploading page ${n} of ${total}…`),
-      });
-      firm();
-      toast(`Added ${files.length} page(s). ${tierForType(type) === 'tier_2'
-        ? 'We\'ll match it to the official scheme.'
-        : 'We\'ll explain it from your teacher\'s marks.'}`);
-      await refreshLibrary();
-    } catch (e) {
-      toast(e.message || 'Upload failed.', 'warn');
-    }
-  };
   const t = takePendingType();
-  t ? run(t) : askPaperType(run);
+  if (t) setPendingPaperType(t);
+  await acceptUploads(files);
+  toast(`${files.length} page(s) added. Check the order, then read the paper.`);
 }
 
 async function ingestLink(url) {
@@ -355,6 +348,8 @@ async function startApp() {
   }
   await wireSettings();
   wireIngestion();
+  await initScanUI(ctx);
+  setPendingPaperType(pendingType);
   await refreshLibrary();
   $('#obroot')?.setAttribute('hidden', '');
   document.querySelector('.app')?.removeAttribute('aria-hidden');
