@@ -26,19 +26,74 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - **Settings** — appearance, text size, reduce motion, reasoning, and notification
   switches all persist. The weekly-digest and improve-extraction switches write to the
   consent ledger instead of preferences, so turning one off is a recorded withdrawal.
-- **Ingestion** — upload pages or a PDF to private storage, or paste a link. The paper
-  type is asked once because it decides Tier 1 vs Tier 2.
+- **Capture** — a live viewfinder with page-edge detection, auto-capture when the page
+  holds still, glare blocking, and a per-page quality verdict delivered while the paper
+  is still in front of the student. Pages accumulate in a reorderable tray and are
+  written to IndexedDB before anything uploads, so an interrupted booklet resumes at the
+  first page that has not landed.
+- **Ingestion** — upload from the gallery or files, or paste a link. Uploads take the
+  same road as captures rather than bypassing conditioning. The paper type is asked once
+  because it decides Tier 1 vs Tier 2.
+- **The pipeline** — the ten stages of `SCANNING_SYSTEM.md`: conditioning and red-layer
+  separation on device, then structure, content, mark attribution, reconciliation, tier
+  routing and explanation server-side, then review, then commit.
+- **Review** — required, not skippable, with unreadable and unsure questions first and
+  every field shown against its own crop.
 - **Data export and account deletion**, both from Settings.
 
 ## What does not work yet
 
-Extraction. Pages reach storage and are recorded, but nothing reads them, so no
-attempts or mark-loss events are produced yet. That is milestone 5, and CLAUDE.md
-wants the OCR accuracy harness (milestone 2) settled first — red-pen extraction is the
-riskiest assumption in the product.
+**The golden set.** Twenty real marked papers, hand-labelled — see `harness/README.md`.
+The harness runs and both gates are enforced, but until there are papers in it, nothing
+about the pipeline's accuracy is known rather than assumed. Neither gate has been met,
+because neither has been measured.
 
-Links are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over the
-bytes, so a server-side fetcher has to resolve them.
+**PDFs.** They reach storage but are not rasterised, so nothing reads them, and the app
+says so rather than accepting a file it cannot use. Photographs of the pages work.
+
+**Links** are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over
+the bytes, so a server-side fetcher has to resolve them.
+
+**The Tier 2 scheme library is empty.** Every paper falls back to Tier 1 and says so,
+which is the correct behaviour with no scheme held — an approximated scheme would be a
+fabricated authority and worse than none. Matching is by question text and deliberately
+strict; matching on the paper code would be far better and needs the code extracted at
+stage 3.
+
+**The container question is open.** `SCANNING_SYSTEM.md` §3 recommends wrapping the app
+in Capacitor and using the native document scanner for capture. What is built is the
+pure-web alternative that document names as the honest fallback. Nothing below stage 0
+depends on the answer.
+
+## The pipeline, in short
+
+Ten stages across three places. The device conditions each page and separates the
+teacher's red ink from the student's writing before anything is uploaded — mobile data
+is the binding constraint on time-to-result far more often than server compute is, and
+the red mask is a map of every teacher mark on the page for the price of no model calls
+at all. The server then finds the questions on downscaled proxies with a small model,
+reads each question from its own crop with a frontier one, binds the marks to the
+questions, and checks the arithmetic against the total the teacher wrote.
+
+That last check is what lets the system know when it is wrong. If the per-question
+marks sum to the reported total, the reading is very unlikely to be wrong in a way that
+matters; if they do not, it is wrong somewhere, and the size of the gap narrows where.
+Nothing anywhere adjusts a mark to close that gap.
+
+Every extracted value carries the box on the page it was read from, and a value without
+one cannot be stored. That is what makes the review screen possible: every field is
+shown against the pixels it came from, and the student decides.
+
+## Running the checks
+
+```bash
+psql -d mastery -f supabase/local/shim.sql     # then migrations/, then tests/
+deno test --allow-env supabase/functions/_shared/pipeline_test.ts
+node --test harness/metrics.test.mjs
+node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
+```
+
+No Supabase project and no API key needed for any of them.
 
 ## Deploying
 
@@ -48,6 +103,12 @@ specs, the blueprint and the design reference images stay out of the deployed si
 
 There is nothing to install — no `package.json`, no framework, no build step beyond
 the copy.
+
+The four edge functions in `supabase/functions/` deploy separately and need
+`ANTHROPIC_API_KEY` set on the project. `MASTERY_MODEL_STRUCTURE`,
+`MASTERY_MODEL_CONTENT` and `MASTERY_MODEL_EXPLANATION` override the models per stage;
+the defaults are a small model for finding boundaries and a frontier one for reading
+handwriting, which is the cost lever `SCANNING_SYSTEM.md` §15 names.
 
 The Supabase publishable key is committed in `src/config.js` on purpose. It carries no
 authority: every table has RLS with no policy for `anon`, so the key alone reaches

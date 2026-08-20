@@ -41,6 +41,56 @@ It is deliberately in `public` and callable by `authenticated`: the client has t
 able to call it. It takes no arguments and derives the account from `auth.uid()`, so
 there is nothing to tamper with. The advisor flags it; that flag is expected.
 
+## The scanning pipeline
+
+`SCANNING_SYSTEM.md` specifies it; this is where the code for it lives and the
+handful of things about that arrangement which are easy to get wrong.
+
+Ten stages in three places. `src/scan/` is stages 0 to 2 and the client half of
+9; `supabase/functions/` is 3 to 8 and 10; the student is 9. `src/scan/ui.js`
+walks the whole thing and is the only module that knows the order.
+
+- **Provenance is the load-bearing rule.** Every extracted value carries the box
+  on the page it was read from, and `question_region` has a CHECK making a value
+  without its box unstorable. This is the defence against a vision model
+  producing plausible fiction, and it is the only reason the review screen can
+  show a field against its own crop. If you add a field, add its box column and
+  its constraint in the same migration.
+- **`src/scan/contract.js` and `supabase/functions/_shared/contract.ts` are the
+  same file twice, deliberately.** The browser is served as static files and the
+  functions run on Deno; there is no build step that could bridge them, and
+  inventing one to share four constants would cost more than it saves. Change
+  both, or neither — the thresholds mean nothing if the two ends disagree.
+- **Nothing in the pipeline runs as `service_role`.** Every edge function builds
+  its Supabase client from the caller's own JWT, so RLS applies exactly as it
+  does to a direct insert. A pipeline running with the service role would be one
+  bug away from writing one student's marks onto another student's paper.
+- **The stage modules are pure and must stay that way.** `geometry`, `quality`,
+  `layers`, `conditioning`, `raster` touch no DOM beyond an optional canvas, which
+  is what lets them run on the main thread, in the worker, and in the harness
+  under Node. `src/scan/imagedata.js` exists solely so Node — where the metrics
+  are actually measured — is not the one place they cannot load.
+- **`device.js` falls back to the main thread when a module worker cannot be
+  constructed.** That path is not theoretical on the phones this is built for,
+  and a dropped frame is worth far less than a student who cannot scan at all.
+- **`TEACHER_INK` names the one red.** Stage 2 separates the layers by hue and
+  the design system reserves red for the teacher's pen and the sign-out row.
+  They were always the same rule; keep them one constant so a red error state
+  collides with it before it ships.
+- **Two models, on purpose.** The structure pass finds boundaries on a
+  downscaled page with a small model; the content pass reads handwriting with a
+  frontier one. Both are environment-overridable, because the harness is what
+  should settle that question.
+- **`src/app.js` imports the scanner dynamically, and that is load-bearing.**
+  The pipeline is sixteen modules and none of them are needed to read a paper
+  you scanned last week; as a static import they cost sixteen extra round-trips
+  on the critical path, measured at about 0.7s of extra boot on a throttled
+  mid-tier profile. `ensureScan()` is the only way in, for the Scan tab and for
+  an upload alike — the module holds its own state, and calling into it before
+  `initScanUI` has handed it the student drops the upload silently. Turning that
+  back into a top-level `import` would look like tidying and would cost the
+  performance floor.
+
 ## The four hard rules
 
 `CLAUDE.md` names four rules whose violation is a product failure. Each is enforced
@@ -122,6 +172,21 @@ one of those handlers, keep all of them on the same mapping.
 
 ## Verifying
 
-There's no test runner. Changes to layout, the lens or the haptics should be checked
-in a real browser at phone, landscape-phone, 768px and 1024px+ widths — the lens
-alignment and the sheet's height cap are the things that break silently.
+Three suites, all runnable without a Supabase project or an API key:
+
+```bash
+psql -d mastery -f supabase/local/shim.sql     # then apply migrations/, then tests/
+deno test --allow-env supabase/functions/_shared/pipeline_test.ts
+node --test harness/metrics.test.mjs
+node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
+```
+
+`supabase/local/shim.sql` stands up just enough of the platform — the two roles,
+`auth.users`, `auth.uid()`, `storage.objects` — to apply the migrations against a
+bare Postgres. It is a fixture, not a model of Supabase; anything that passes
+there still has to hold on the real thing.
+
+What none of that covers is the design system. Layout, the lens, the haptics and
+the viewfinder still have to be checked in a real browser at phone,
+landscape-phone, 768px and 1024px+ widths — the lens alignment and the sheet's
+height cap are the things that break silently.

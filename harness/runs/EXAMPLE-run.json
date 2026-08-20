@@ -1,0 +1,83 @@
+{
+  "_this_is_not_a_measurement": "Predictions matching harness/example/. Real runs are produced by harness/export.mjs from a real extraction_run.",
+  "pipeline_version": "1.0.0",
+  "models": {
+    "structure": "claude-haiku-4-5",
+    "content": "claude-opus-5"
+  },
+  "papers": [
+    {
+      "paper_id": "example-physics-unit-test",
+      "reconciled": true,
+      "reconcile_delta": 0,
+      "cost_paise": 310,
+      "questions": [
+        {
+          "label": "Q1",
+          "spans": [
+            {
+              "page": 1,
+              "box": {
+                "x": 118,
+                "y": 296,
+                "w": 2710,
+                "h": 628
+              }
+            }
+          ],
+          "marks_awarded": 4,
+          "marks_available": 5,
+          "student_answer": "Force equals mass times acceleration",
+          "region_type": "prose"
+        },
+        {
+          "label": "Q2",
+          "spans": [
+            {
+              "page": 1,
+              "box": {
+                "x": 122,
+                "y": 984,
+                "w": 2694,
+                "h": 892
+              }
+            }
+          ],
+          "marks_awarded": 3,
+          "marks_available": 5,
+          "student_answer": "v = u + at so v = 5 + 2 x 3 = 11 m/s",
+          "region_type": "math"
+        },
+        {
+          "label": "Q3",
+          "spans": [
+            {
+              "page": 1,
+              "box": {
+                "x": 120,
+                "y": 1942,
+                "w": 2700,
+                "h": 496
+              }
+            },
+            {
+              "page": 2,
+              "box": {
+                "x": 120,
+                "y": 204,
+                "w": 2700,
+                "h": 694
+              }
+            }
+          ],
+          "marks_awarded": 5,
+          "marks_available": 10,
+          "student_answer": null,
+          "region_type": "diagram"
+        }
+      ],
+      "corrections_count": 1,
+      "question_count": 3
+    }
+  ]
+}

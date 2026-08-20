@@ -10,6 +10,13 @@ marks were lost and what to do differently.
 
 Not a grading tool. Not a teacher product. The student is the only daily user.
 
+The ingestion pipeline — everything between a page of paper and a committed, explained
+question — is specified separately and in full by **`SCANNING_SYSTEM.md`**. It is the
+highest-risk subsystem in the product and every other feature is downstream of it. That
+document owns stages 0 to 10, the confidence model, the failure taxonomy and the accuracy
+gates; where it and this document disagree about the pipeline, it wins. The four hard
+rules below are the exception: they bind it too.
+
 ## Hard rules
 
 These four are load-bearing. Violating any of them is a product failure, not a style miss.
@@ -55,8 +62,9 @@ corrupt everything downstream.
 - `index.html` is the entire front end and the design system. `src/` holds ES modules for
   data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
 - Supabase: Postgres, auth, storage. Auth is email or phone OTP only.
-- Offline: past papers and their analysis must be readable offline. Scanning and
-  extraction are online-only. Cache read paths; queue nothing that needs the model.
+- Offline: past papers and their analysis must be readable offline. Capture works
+  offline and queues; extraction needs the network. Cache read paths; queue nothing
+  that needs the model to have already run.
 - Performance floor: must hold 60fps on mid-tier Android. This is a real constraint, not
   an aspiration — most users are on budget devices.
 
@@ -219,20 +227,26 @@ No behavioural tracking or targeted advertising. Ever.
 Ordered milestones. Do not start the next until the previous holds.
 
 1. **Question detail screen, hardcoded data, fully polished.** Exercises the whole design
-   language. Get this feeling right before anything is real.
-2. **OCR accuracy harness** — 20 real marked papers, measure extraction of questions,
-   student answers, and teacher's red-pen remarks separately. Red-pen extraction is the
-   riskiest assumption in the product. If it comes back poor, the product changes shape,
-   and it is far cheaper to learn that now.
-3. **Supabase schema + auth + onboarding**, per the account model above. — *built*
-4. **Upload-first ingestion.** No in-app camera in v1 — phone camera apps are better than
-   anything achievable in a PWA, and shipping a mediocre scanner undermines the core
-   quality claim. Build capture properly once extraction is proven. — *built*
-5. **End-to-end: one paper uploaded → extracted → explained.** Extraction is the
-   remaining gap: pages reach storage, but nothing reads them yet.
+   language. Get this feeling right before anything is real. — *built*
+2. **Supabase schema + auth + onboarding**, per the account model above. — *built*
+3. **Upload ingestion.** Pages and PDFs reach private storage. — *built*
+4. **The scanning pipeline**, specified in full by `SCANNING_SYSTEM.md` — which owns this
+   subsystem and supersedes anything here that disagrees with it. Ten stages, its own
+   build order, and its own gates. Capture is now in v1; the milestone below is what
+   replaced the earlier upload-only scope.
+5. **End-to-end: one paper captured → extracted → explained**, with the accuracy harness
+   measuring it rather than an assumption that it works.
 
-Explicitly not in v1: in-app camera, practice questions, peer comparison, predicted board
-scores, ICSE and state boards, parent dashboard beyond billing and consent.
+Explicitly not in v1: practice questions, peer comparison, predicted board scores, ICSE
+and state boards, parent dashboard beyond billing and consent.
+
+**Capture is in v1, as decided.** The earlier position — no in-app camera, because a
+phone's own camera app beats anything achievable in a PWA — has been reversed:
+`SCANNING_SYSTEM.md` §3 makes capture a stated differentiator, which means it has to be
+genuinely good rather than merely present. Upload stays a first-class path permanently,
+not a fallback. The container question that decision raises (Capacitor with a native
+document scanner, versus pure web) is still open and is recorded in `SCANNING_SYSTEM.md`;
+the pipeline is built so that only stage 0 changes when it is answered.
 
 Peer ranking and score prediction are engagement rocket fuel and mental-health hazards in
 this market. If they are ever built, they are opt-in and never default.
