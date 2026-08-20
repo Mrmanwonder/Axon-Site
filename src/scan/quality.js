@@ -113,14 +113,22 @@ const worst = (...verdicts) =>
 /**
  * Score one page and say plainly what is wrong with it.
  *
+ * `longEdge` is the page's real long edge, which is not always the long edge of
+ * the image handed in. Sharpness and glare are measured on a downscaled proxy —
+ * they do not need every pixel and it is far cheaper this way — but resolution
+ * is a fact about the page itself. Scoring the proxy's own width against
+ * thresholds meant for a full page is how every single capture came back
+ * "worth retaking": the proxy is 1400px, the warn threshold is 1600px, so the
+ * answer was always yes.
+ *
  * Reasons are written for the student, not for a log. "Tilt the page away from
  * the light" is actionable while the paper is in shot; "glare 0.043" is not.
  */
-export function scorePage(img) {
+export function scorePage(img, { longEdge = null } = {}) {
   const gray = toGray(img);
   const sharp = blurScore(gray, img.width, img.height);
   const glare = glareScore(img);
-  const longEdge = resolutionScore(img.width, img.height);
+  const pageLongEdge = longEdge ?? resolutionScore(img.width, img.height);
 
   const reasons = [];
   const blurVerdict = sharp < QUALITY.BLUR_FAIL ? 'fail' : sharp < QUALITY.BLUR_WARN ? 'warn' : 'ok';
@@ -131,15 +139,15 @@ export function scorePage(img) {
   if (glareVerdict === 'fail') reasons.push('Light is washing out part of the page. Tilt it away from the light and take it again.');
   else if (glareVerdict === 'warn') reasons.push('A little glare on the page. Tilt it slightly if a mark falls in the bright patch.');
 
-  const resVerdict = longEdge < QUALITY.RESOLUTION_FAIL ? 'fail'
-    : longEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
+  const resVerdict = pageLongEdge < QUALITY.RESOLUTION_FAIL ? 'fail'
+    : pageLongEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
   if (resVerdict === 'fail') reasons.push('Too far away to read. Fill more of the frame with the page.');
   else if (resVerdict === 'warn') reasons.push('Move a little closer so the page fills the frame.');
 
   return {
     verdict: worst(blurVerdict, glareVerdict, resVerdict),
     reasons,
-    signals: { sharpness: round(sharp), glare: round(glare), long_edge: longEdge },
+    signals: { sharpness: round(sharp), glare: round(glare), long_edge: pageLongEdge },
   };
 }
 

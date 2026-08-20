@@ -52,10 +52,22 @@ export const QUALITY = {
   GLARE_S: 0.12,
   GLARE_WARN: 0.010,
   GLARE_FAIL: 0.035,
-  // Long edge in pixels, after warping. Below FAIL there is no way back to 300
-  // DPI without inventing detail.
-  RESOLUTION_WARN: 1600,
-  RESOLUTION_FAIL: 1100,
+  // Long edge in pixels, after warping.
+  //
+  // These were 1600 and 1100, chosen to sit just under the 300 DPI conditioning
+  // target — and on a real phone every single capture came back flagged,
+  // because a page filling most of a 1920x1440 frame warps to about 1400px and
+  // no hand-held capture was ever going to clear 1600. A gate that fires on
+  // everything tells the student nothing and teaches them to ignore it.
+  //
+  // What replaces them is not a better guess: it is a placeholder with a job.
+  // The number that belongs here is the resolution below which extraction
+  // measurably gets worse, and §18's harness is the thing that can answer that.
+  // Until the golden set exists these are set where a red tick is still several
+  // pixels wide — about 128 DPI across A4 — so the flag means something when it
+  // does appear.
+  RESOLUTION_WARN: 1500,
+  RESOLUTION_FAIL: 1000,
 };
 
 export const PAGE_VERDICT = /** @type {const} */ (['ok', 'warn', 'fail']);

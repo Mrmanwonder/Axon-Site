@@ -845,13 +845,13 @@
         </div>
 
         <!-- Auto-capture assists; it never blocks. The shutter always fires. -->
-        <div class="autotoggle press on" id="autoToggle" role="button" tabindex="0" aria-pressed="true">Auto <span class="dot"></span></div>
+        <div class="autotoggle press on" id="autoToggle" role="button" tabindex="0" data-activates aria-pressed="true">Auto <span class="dot"></span></div>
 
         <div class="scanctrls">
           <div class="sidebtn press" data-action="link" role="button" tabindex="0" aria-label="Add a link">
             <svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
           </div>
-          <div class="shutter press" id="shutterBtn" role="button" tabindex="0" aria-label="Take this page"><div class="ring"></div></div>
+          <div class="shutter press" id="shutterBtn" role="button" tabindex="0" data-activates aria-label="Take this page"><div class="ring"></div></div>
           <div class="sidebtn press" data-action="upload" role="button" tabindex="0" aria-label="Upload from files">
             <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
           </div>
@@ -1423,11 +1423,20 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',hapticTi
    The nav and the appearance toggle are divs, so they need the activation
    behaviour a <button> would have given them for free. Arrow keys move along
    the nav in whichever direction it's currently laid out. */
-document.querySelectorAll('.tab,.themebtn').forEach(el=>{
-  el.addEventListener('keydown',e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+function bindActivation(scope){
+  (scope||document).querySelectorAll('.tab,.themebtn,[data-activates]').forEach(el=>{
+    if(el.dataset.keyBound) return;
+    el.dataset.keyBound='1';
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+    });
   });
-});
+}
+bindActivation();
+/* Anything rendered after boot — the review screen's chips, the tray — carries
+   data-activates and is bound the same way. A div that responds to a tap and
+   not to Enter is a control half the people who need it cannot use. */
+window.__masteryBindActivation = bindActivation;
 document.getElementById('refractlayer').addEventListener('keydown',e=>{
   const fwd=isRail()?'ArrowDown':'ArrowRight', back=isRail()?'ArrowUp':'ArrowLeft';
   if(e.key!==fwd&&e.key!==back) return;
@@ -1602,6 +1611,7 @@ window.__masteryRenderTray = function(pages, handlers){
     handlers && handlers.onPage && handlers.onPage(Number(el.dataset.page));
   }));
   window.__masteryRebindPress(scroll);
+  window.__masteryBindActivation(scroll);
 
   const done=document.getElementById('trayDone');
   if(done && handlers && handlers.onDone){ done.onclick = () => { hapticFirm(); handlers.onDone(); }; }
@@ -1719,8 +1729,8 @@ window.__masteryRenderReview = function(model, handlers){
        whole of hard rule 1. */
     const alts = (q.alternatives||[]).length ? `
       <div class="qfield"><div class="k">Which number did your teacher write?</div></div>
-      <div class="qalts">${
-        q.alternatives.map(a=>`<div class="qalt press${a===q.marksAwarded?' on':''}" data-mark="${a}">${num(a)}</div>`).join('')
+      <div class="qalts" role="radiogroup" aria-label="Which number did your teacher write?">${
+        q.alternatives.map(a=>`<div class="qalt press${a===q.marksAwarded?' on':''}" data-mark="${a}" data-activates role="radio" tabindex="0" aria-checked="${a===q.marksAwarded}">${num(a)}</div>`).join('')
       }</div>` : '';
 
     const cause = q.explanation && q.explanation.cause ? `
@@ -1746,10 +1756,10 @@ window.__masteryRenderReview = function(model, handlers){
       ${cause}
       <div class="qacts">
         ${q.confirmed ? '' : '<div class="qact accent press" data-act="confirm">That\'s right</div>'}
-        <div class="qact press" data-act="type">Fix this</div>
-        <div class="qact press" data-act="rescan">Rescan this page</div>
+        <div class="qact press" data-act="type" data-activates role="button" tabindex="0">Fix this</div>
+        <div class="qact press" data-act="rescan" data-activates role="button" tabindex="0">Rescan this page</div>
         ${q.explanation && q.explanation.cause && !q.causeRejected
-          ? '<div class="qact press" data-act="cause">Not why I lost it</div>' : ''}
+          ? '<div class="qact press" data-act="cause" data-activates role="button" tabindex="0">Not why I lost it</div>' : ''}
       </div>
     </div>`;
   };
@@ -1759,7 +1769,7 @@ window.__masteryRenderReview = function(model, handlers){
     (model.questions||[]).map(question).join('') +
     `<div class="subnote">Nothing here is locked because we were confident. If the mark itself
       looks wrong, that is a conversation with your teacher — we go by what they wrote.</div>` +
-    `<div style="margin:20px var(--gutter) 4px"><div class="btn primary press" id="rvConfirmAll">${
+    `<div style="margin:20px var(--gutter) 4px"><div class="btn primary press" id="rvConfirmAll" data-activates role="button" tabindex="0">${
       esc(model.saveLabel || 'Save to Library')}</div></div>`;
 
   body.querySelectorAll('[data-q]').forEach(card=>{
@@ -1774,6 +1784,7 @@ window.__masteryRenderReview = function(model, handlers){
     }));
   });
 
+  window.__masteryBindActivation(body);
   const confirmAll=document.getElementById('rvConfirmAll');
   if(confirmAll && handlers && handlers.onSave){
     confirmAll.onclick = () => { hapticFirm(); handlers.onSave(); };

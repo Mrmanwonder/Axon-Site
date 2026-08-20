@@ -18,9 +18,15 @@
 import { CAPTURE, QUALITY } from './contract.js';
 import { detectQuad, easeQuad, scaleQuad } from './edges.js';
 import { blurScore, glareInQuad, toGray } from './quality.js';
-import { quadDrift, quadFill } from './geometry.js';
+import { quadDrift, quadFill, quadSize } from './geometry.js';
 
 const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
+const DETECT_MAX_INTERVAL_MS = 320;
+// The share of the main thread the search is allowed to take. Finding the page
+// is not worth a viewfinder that stutters — on the phones this is built for, a
+// fixed cadence means the search sets the frame rate, and the frame rate is what
+// the student experiences as whether the app works.
+const DETECT_DUTY = 0.3;
 const PROXY_WIDTH = 240;
 
 /**
@@ -39,6 +45,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let quad = null;          // smoothed, in video coordinates
   let lastDetection = null; // raw, for stability comparison
   let steadySince = 0;
+  let consecutiveFinds = 0;
   let autoCapture = true;
   let armed = true;         // disarms after a shot so one steady page is one page
   let state = blankState();
@@ -50,6 +57,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     return {
       hasPage: false,
       fill: 0,
+      pageLongEdge: 0,
       sharpness: 0,
       glare: 0,
       steady: false,
@@ -61,11 +69,17 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   async function start() {
     if (running) return;
+    // Ask for as much sensor as the browser will give. A page fills perhaps two
+    // thirds of the frame's short axis, so a 1920x1440 request put roughly 1400
+    // pixels across the page — nowhere near the 300 DPI the conditioning stage
+    // targets, and the reason every capture came back flagged. The frames cost
+    // more to condition, which is a trade worth making: the pixels are the
+    // handwriting, and conditioning is work we can make cheaper.
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1440 },
+        width: { ideal: 3264 },
+        height: { ideal: 2448 },
       },
       audio: false,
     });
@@ -92,8 +106,20 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   function detect() {
     if (!running) return;
+    // Nothing to look at while the tab is in the background, and a camera search
+    // running behind another app is battery spent on nobody.
+    if (document.hidden) {
+      detectHandle = setTimeout(detect, DETECT_MAX_INTERVAL_MS);
+      return;
+    }
+    const started = performance.now();
     try { step(); } catch { /* a bad frame is not worth stopping the camera for */ }
-    detectHandle = setTimeout(detect, DETECT_INTERVAL_MS);
+    const cost = performance.now() - started;
+    // Back off in proportion to what the last search actually cost, so a slow
+    // phone searches less often rather than searching just as often and dropping
+    // frames to do it.
+    const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
+    detectHandle = setTimeout(detect, wait);
   }
 
   function step() {
@@ -111,6 +137,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!found) {
       lastDetection = null;
       steadySince = 0;
+      consecutiveFinds = 0;
       quad = null;
       publish(next);
       return;
@@ -120,6 +147,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.fill = quadFill(found, pw, ph);
     next.sharpness = blurScore(toGray(frame), pw, ph);
     next.glare = glareInQuad(frame, found);
+    consecutiveFinds++;
+
+    // How big the page will be once it is warped flat, in the camera's own
+    // pixels. This is the number the quality gate will judge the page on, so it
+    // is the number the advice should come from — telling someone to move closer
+    // because the page covers less than a third of a *frame* is advice about the
+    // wrong thing, and it is wrong whenever the frame is mostly desk.
+    const size = quadSize(found);
+    next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
 
     // Steady means the corners have stopped moving, not that the phone has.
     const drift = quadDrift(lastDetection, found, pw, ph);
@@ -138,9 +174,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (next.glare > QUALITY.GLARE_WARN) {
       next.blocking = 'glare';
       next.hint = 'Light is bouncing off the page — tilt it slightly away from the light';
+    } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
+      next.blocking = 'distance';
+      next.hint = 'A little closer — we need to be able to read the marking';
     } else if (next.fill < CAPTURE.MIN_FILL) {
       next.blocking = 'distance';
-      next.hint = 'Move closer so the page fills the frame';
+      next.hint = 'Move closer so the page fills more of the frame';
     } else if (next.sharpness < QUALITY.BLUR_WARN) {
       next.blocking = 'focus';
       next.hint = 'Hold still — the page is not sharp yet';
@@ -152,7 +191,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     publish(next);
 
-    if (autoCapture && armed && !next.blocking && next.steady) {
+    // Auto-capture wants the page to have been *found* several times running,
+    // not merely to be sitting still. The two are different: a detector that
+    // latches onto something large and wrong is very stable indeed, which is how
+    // the first build of this ended up photographing a floor. A real page held
+    // over a desk clears this in under half a second; a phone being carried
+    // never does.
+    if (autoCapture && armed && !next.blocking && next.steady && consecutiveFinds >= 4) {
       armed = false;
       shoot(true);
     }

@@ -17,7 +17,11 @@ self.onmessage = async (event) => {
   const { id, source, quad, pageNumber } = event.data;
   try {
     const conditioned = await conditionPage(source, { quad, pageNumber });
-    const layers = separateLayers(conditioned.image);
+    // No content layer. It is a full extra pass over the page to build a
+  // red-suppressed copy, and nothing downstream reads it: what gets uploaded
+  // is the conditioned page, and the server crops its regions from that. It
+  // was costing about two seconds a page to produce and discard.
+  const layers = separateLayers(conditioned.image, { withContentLayer: false });
 
     self.postMessage({
       id,

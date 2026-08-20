@@ -73,6 +73,14 @@ export function maskPage(img) {
  * Recursion is not an option: a single long underline on an eight-megapixel page
  * is tens of thousands of pixels deep, and the stack that flood fill would need
  * is exactly the stack a mid-tier phone does not have.
+ *
+ * Nothing per-pixel is retained. An earlier version pushed every pixel of every
+ * component into an array, which on a page with real ink meant millions of array
+ * slots built and thrown away per page — and, in the viewfinder, twelve times a
+ * second. Everything the callers need is either accumulated as the fill runs or
+ * recovered afterwards from the label map over one component's own bounding box.
+ *
+ * @returns {{components: Array, labels: Int32Array}}
  */
 export function connectedComponents(mask, width, height, minPx = RED.MIN_COMPONENT_PX) {
   const n = width * height;
@@ -89,7 +97,10 @@ export function connectedComponents(mask, width, height, minPx = RED.MIN_COMPONE
 
     let minX = width, minY = height, maxX = 0, maxY = 0, area = 0;
     let sumX = 0, sumY = 0;
-    const pixels = [];
+    // Extremes of x+y and x-y, which on a rotated rectangle are its corners.
+    // Tracked here so the viewfinder never needs the pixel list at all.
+    let minSum = Infinity, maxSum = -Infinity, minDiff = Infinity, maxDiff = -Infinity;
+    let tl = null, tr = null, br = null, bl = null;
 
     while (top > 0) {
       const p = stack[--top];
@@ -97,7 +108,12 @@ export function connectedComponents(mask, width, height, minPx = RED.MIN_COMPONE
       area++; sumX += x; sumY += y;
       if (x < minX) minX = x; if (x > maxX) maxX = x;
       if (y < minY) minY = y; if (y > maxY) maxY = y;
-      pixels.push(p);
+
+      const sum = x + y, diff = x - y;
+      if (sum < minSum) { minSum = sum; tl = { x, y }; }
+      if (sum > maxSum) { maxSum = sum; br = { x, y }; }
+      if (diff > maxDiff) { maxDiff = diff; tr = { x, y }; }
+      if (diff < minDiff) { minDiff = diff; bl = { x, y }; }
 
       for (let dy = -1; dy <= 1; dy++) {
         const ny = y + dy;
@@ -117,11 +133,11 @@ export function connectedComponents(mask, width, height, minPx = RED.MIN_COMPONE
       box: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 },
       area,
       centroid: { x: sumX / area, y: sumY / area },
-      pixels,
+      corners: { tl, tr, br, bl },
     });
   }
 
-  return components.filter(Boolean);
+  return { components: components.filter(Boolean), labels };
 }
 
 /**
@@ -135,32 +151,34 @@ export function connectedComponents(mask, width, height, minPx = RED.MIN_COMPONE
  * decide, the answer is `unknown` — an honest gap the review step can surface,
  * rather than a plausible label nothing downstream can question.
  */
-export function measureComponent(comp, pageWidth, pageHeight) {
-  const { box, area, pixels } = comp;
+export function measureComponent(comp, labels, pageWidth, pageHeight) {
+  const { box, area, id } = comp;
   const fill = area / (box.w * box.h);
   const aspect = Math.max(box.w, box.h) / Math.max(1, Math.min(box.w, box.h));
 
   // Local copy of the component, padded by one so the background flood has a
-  // guaranteed route around the outside of the shape.
+  // guaranteed route around the outside of the shape. Read back out of the label
+  // map over this component's own box, which is far less work than carrying
+  // every pixel of every component through the fill.
   const lw = box.w + 2, lh = box.h + 2;
   const local = new Uint8Array(lw * lh);
-  for (const p of pixels) {
-    const x = (p % pageWidth) - box.x + 1;
-    const y = ((p / pageWidth) | 0) - box.y + 1;
-    local[y * lw + x] = 1;
+  const quad = [0, 0, 0, 0];
+  const midX = box.x + box.w / 2, midY = box.y + box.h / 2;
+
+  for (let y = 0; y < box.h; y++) {
+    const row = (box.y + y) * pageWidth;
+    for (let x = 0; x < box.w; x++) {
+      if (labels[row + box.x + x] !== id) continue;
+      local[(y + 1) * lw + (x + 1)] = 1;
+      // Ink distribution across the four quadrants of the bounding box. A cross
+      // reaches all four corners; a tick leaves the top-left comparatively
+      // empty. Reported rather than resolved — the device measures, stage 5
+      // decides what it means.
+      quad[((box.y + y) < midY ? 0 : 2) + ((box.x + x) < midX ? 0 : 1)]++;
+    }
   }
 
   const holes = countHoles(local, lw, lh);
-
-  // Ink distribution across the four quadrants of the bounding box. A cross
-  // reaches all four corners; a tick leaves the top-left comparatively empty.
-  // Reported rather than resolved, for the same reason as above.
-  const quad = [0, 0, 0, 0];
-  const midX = box.x + box.w / 2, midY = box.y + box.h / 2;
-  for (const p of pixels) {
-    const x = p % pageWidth, y = (p / pageWidth) | 0;
-    quad[(y < midY ? 0 : 2) + (x < midX ? 0 : 1)]++;
-  }
 
   // Mean stroke width, as area over the longer axis. A digit is thick relative
   // to its size; an underline is one stroke wide however long it runs.
@@ -319,11 +337,14 @@ export function separateLayers(img, { withContentLayer = true } = {}) {
     fallback = LAYER_FALLBACK.STUDENT_WROTE_RED;
   }
 
-  const raw = fallback === LAYER_FALLBACK.STUDENT_WROTE_RED
-    ? [] // the mask is meaningless here; do not hand stage 5 a map of the answer
+  // On a page the student wrote in red the mask is meaningless, and handing
+  // stage 5 a map of the answer would be worse than handing it nothing.
+  const labelled = fallback === LAYER_FALLBACK.STUDENT_WROTE_RED
+    ? { components: [], labels: null }
     : connectedComponents(red, width, height);
-  const components = raw.map((c) => measureComponent(c, width, height))
-    .map(({ pixels, ...rest }) => rest); // drop the pixel lists; only geometry travels
+  const components = labelled.components
+    .map((c) => measureComponent(c, labelled.labels, width, height))
+    .map(({ corners, ...rest }) => rest); // only geometry travels onward
 
   return {
     teacher: {
