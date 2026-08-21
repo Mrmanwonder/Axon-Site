@@ -55,7 +55,9 @@ export async function processPage(source, { quad = null, pageNumber = 1 } = {}) 
 
 async function processOnThisThread(source, { quad, pageNumber }) {
   const conditioned = await conditionPage(source, { quad, pageNumber });
-  const layers = separateLayers(conditioned.image);
+  // No content layer — see the note in worker.js. A full pass over the page to
+  // build something nothing downstream reads.
+  const layers = separateLayers(conditioned.image, { withContentLayer: false });
   return {
     ok: true,
     blob: conditioned.blob,

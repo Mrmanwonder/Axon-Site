@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>probe</title><pre id="o">…</pre>
+<script type="module">
+import { syntheticPage } from './page.js';
+import { conditionPage } from '../src/scan/conditioning.js';
+const o = document.getElementById('o');
+const log = [];
+const say = t => { log.push(t); o.textContent = log.join('\n'); };
+window.onerror = (m) => { say('WINDOW ERROR: ' + m); window.__probe = { error: String(m) }; };
+try {
+  let t = performance.now();
+  const page = syntheticPage(1240, 1754);
+  say(`build ${(performance.now()-t).toFixed(0)}ms`);
+  const src = document.createElement('canvas');
+  src.width = page.width; src.height = page.height;
+  src.getContext('2d').putImageData(new ImageData(page.data, page.width, page.height), 0, 0);
+  const bitmap = await createImageBitmap(src);
+  t = performance.now();
+  const r = await conditionPage(bitmap, { pageNumber: 1 });
+  say(`conditionPage ${(performance.now()-t).toFixed(0)}ms  ${(r.meta.bytes/1024).toFixed(0)}KB q${r.meta.jpeg_quality} retention ${r.meta.red_retention} dims ${r.width}x${r.height}`);
+  window.__probe = { ok: true, meta: r.meta };
+} catch (e) {
+  say('THROWN: ' + e.message + '\n' + e.stack);
+  window.__probe = { error: e.message };
+}
+</script>

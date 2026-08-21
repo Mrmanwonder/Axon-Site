@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>quad detection on real frames</title>
+<style>
+  body{background:#111;color:#eee;font:12px/1.4 system-ui;margin:0;padding:12px}
+  .row{display:flex;flex-wrap:wrap;gap:12px}
+  figure{margin:0}
+  figcaption{white-space:pre;font-size:11px;color:#bbb;margin-top:4px}
+  canvas{background:#000;display:block}
+</style>
+<body>
+<div class="row" id="row"></div>
+<script type="module">
+import { detectQuad } from '../src/scan/edges.js';
+import { paperScore } from '../src/scan/quad.js';
+import { blurScore, glareInQuad, toGray, scorePage } from '../src/scan/quality.js';
+import { quadFill } from '../src/scan/geometry.js';
+
+const PROXY_W = 240;
+
+// The live-feed area of a 1440x3216 screenshot, so the detector sees what it saw.
+const FEED = { x: 0, y: 110, w: 1440, h: 1075 };
+
+const files = [
+  ['fixtures/viewfinder-a.jpg', FEED],
+  ['fixtures/viewfinder-b.jpg', FEED],
+  ['fixtures/page-tilted.jpg', null],
+  ['fixtures/page-straight.jpg', null],
+  ['fixtures/page-angled.jpg', null],
+  ['fixtures/page-clean.jpg', null],
+  ['fixtures/page-skew.jpg', null],
+];
+
+const results = [];
+
+for (const [src, crop] of files) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+
+  const sw = crop ? crop.w : img.naturalWidth;
+  const sh = crop ? crop.h : img.naturalHeight;
+  const ph = Math.round(PROXY_W * sh / sw);
+
+  const c = document.createElement('canvas');
+  c.width = PROXY_W; c.height = ph;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (crop) ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, 0, 0, PROXY_W, ph);
+  else ctx.drawImage(img, 0, 0, PROXY_W, ph);
+  const frame = ctx.getImageData(0, 0, PROXY_W, ph);
+
+  const t0 = performance.now();
+  const quad = detectQuad(frame);
+  const ms = performance.now() - t0;
+
+  // Draw at 2x so it is legible.
+  const view = document.createElement('canvas');
+  view.width = PROXY_W * 2; view.height = ph * 2;
+  const vctx = view.getContext('2d');
+  vctx.imageSmoothingEnabled = false;
+  vctx.drawImage(c, 0, 0, view.width, view.height);
+  if (quad) {
+    vctx.strokeStyle = '#ff3b30'; vctx.lineWidth = 3;
+    vctx.beginPath();
+    quad.forEach((p, i) => (i ? vctx.lineTo(p.x * 2, p.y * 2) : vctx.moveTo(p.x * 2, p.y * 2)));
+    vctx.closePath(); vctx.stroke();
+    vctx.fillStyle = '#ff3b30';
+    quad.forEach((p, i) => { vctx.fillRect(p.x * 2 - 4, p.y * 2 - 4, 8, 8); vctx.fillText(String(i), p.x * 2 + 6, p.y * 2 - 6); });
+  }
+
+  const ps = quad ? paperScore(frame, quad) : null;
+  const edge = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const aspect = quad
+    ? (() => {
+        const w = (edge(quad[0], quad[1]) + edge(quad[3], quad[2])) / 2;
+        const h = (edge(quad[0], quad[3]) + edge(quad[1], quad[2])) / 2;
+        return Math.max(w, h) / Math.max(1, Math.min(w, h));
+      })()
+    : null;
+  const sharp = blurScore(toGray(frame), frame.width, frame.height);
+  const glare = quad ? glareInQuad(frame, quad) : null;
+  const fill = quad ? quadFill(quad, frame.width, frame.height) : null;
+  const gate = scorePage(frame, { longEdge: sw });
+
+  const fig = document.createElement('figure');
+  fig.appendChild(view);
+  const cap = document.createElement('figcaption');
+  cap.textContent =
+    `${src.split('/').pop()}\n` +
+    `quad ${quad ? 'FOUND' : 'none '}  ${ms.toFixed(1)}ms\n` +
+    `fill ${fill === null ? '  —  ' : (fill * 100).toFixed(0) + '%'}   sharp ${sharp.toFixed(3)}   glare ${glare === null ? '—' : (glare * 100).toFixed(1) + '%'}\n` +
+    `paper ${ps ? ps.paper.toFixed(2) : '—'}  step ${ps ? ps.step.toFixed(2) : '—'}  aspect ${aspect ? aspect.toFixed(2) : '—'}\n` +
+    `verdict ${gate.verdict}`;
+  fig.appendChild(cap);
+  document.getElementById('row').appendChild(fig);
+
+  results.push({ src, found: !!quad, fill, sharp, glare, verdict: gate.verdict, ms, paper: ps && ps.paper, step: ps && ps.step, aspect });
+}
+
+window.__detect = results;
+</script>
