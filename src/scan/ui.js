@@ -9,7 +9,7 @@
 import { createCapture } from './capture.js';
 import { acceptPage, explainPaper, ingest } from './pipeline.js';
 import { createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage } from './drafts.js';
-import { commitRun, confirmQuestion, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
+import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
 import { PAPER_TYPES, tierForType } from '../papers.js';
 
@@ -58,7 +58,7 @@ export async function initScanUI(ctx) {
     S.capture.setAutoCapture(next);
   });
 
-  window.__masteryScanVisible = (visible) => (visible ? startCamera() : stopCamera());
+  window.__masteryScanVisible = (visible, camera) => (visible ? startCamera(camera) : stopCamera());
 
   await restoreDraft();
   await paintDrafts();
@@ -66,20 +66,28 @@ export async function initScanUI(ctx) {
 
 // ── the camera ─────────────────────────────────────────────────────────────
 
-async function startCamera() {
+/**
+ * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
+ *   The request app.js fired when the tab opened, if there was one. Adopting it
+ *   is what keeps the permission sheet from waiting on this module's own load.
+ */
+async function startCamera(camera = null) {
   if (!S.capture?.supported) {
     // No camera, or a browser that will not give one up. Upload is a
     // first-class path, so this is a different route rather than a failure.
+    window.__masteryCameraLive?.(false, 'unavailable');
     window.__masteryRenderHint?.({
       hint: 'No camera here — add pages from your files instead', blocking: null,
     });
     return;
   }
+  window.__masteryCameraLive?.(false, 'starting');
   try {
-    await S.capture.start();
+    await S.capture.start(camera);
     window.__masteryCameraLive?.(true);
+    window.__masteryRenderHint?.(S.capture.state);
   } catch (error) {
-    window.__masteryCameraLive?.(false);
+    window.__masteryCameraLive?.(false, 'blocked');
     window.__masteryRenderHint?.({
       hint: error?.name === 'NotAllowedError'
         ? 'Camera access is off for this site — you can still add pages from your files'
@@ -107,6 +115,13 @@ async function takePage(shot, replacing = null) {
         paperType: null,
       });
     }
+    // A retake replaces the thumbnail too — the cache is keyed by page number,
+    // so without this the tray keeps showing the picture that was just rejected.
+    if (replacing !== null && S.thumbs.has(replacing)) {
+      URL.revokeObjectURL(S.thumbs.get(replacing));
+      S.thumbs.delete(replacing);
+    }
+
     const { page } = await acceptPage({
       draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
     });
@@ -292,13 +307,11 @@ async function run(paperType) {
     }
 
     S.run = result;
-    await deleteDraft(S.draft.id);
-    S.draft = null;
-    S.thumbs.forEach((url) => URL.revokeObjectURL(url));
-    S.thumbs.clear();
-    await paintTray();
-    await paintDrafts();
-
+    // The draft stays until the paper is committed. It holds the conditioned
+    // pages, and "Rescan this page" needs them: without it that button landed in
+    // an empty draft, tried to replace a page that was not there, and died on an
+    // undefined. The schema already expects this — a rescan starts a new run
+    // over the same paper.
     firm();
     await openReview(result.runId);
 
@@ -308,7 +321,7 @@ async function run(paperType) {
     explainPaper({
       runId: result.runId,
       regions: result.regions,
-      onQuestion: async () => { await refreshReview(); },
+      onQuestion: () => scheduleReviewRefresh(),
     }).catch(() => { /* a failed explanation leaves the marks intact and visible */ });
   } catch (error) {
     window.__masteryRenderProgress?.({
@@ -330,10 +343,29 @@ async function openReview(runId) {
   window.__masteryOpenReview?.();
 }
 
+/**
+ * Ask for a re-render soon, rather than once per event.
+ *
+ * Explanations land one at a time and each one used to trigger a full reload and
+ * a wholesale re-render — so the list reset its scroll under the student's
+ * finger during the exact moment the whole design is for: reading question one
+ * while question nine is still being worked out.
+ */
+let refreshTimer = null;
+function scheduleReviewRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setTimeout(() => { refreshTimer = null; refreshReview(); }, 400);
+}
+
 async function refreshReview() {
   if (!S.runId) return;
   S.review = await loadReview(S.runId);
   const paper = S.review.paper;
+  // The renderer rebuilds the list, so where the student had scrolled to is
+  // restored around it. Losing their place mid-read is the same failure as the
+  // list jumping, arriving by a different route.
+  const scroller = document.getElementById('reviewBody');
+  const scrollTop = scroller?.scrollTop ?? 0;
 
   window.__masteryRenderReview?.({
     title: paper?.subject
@@ -341,6 +373,8 @@ async function refreshReview() {
       : PAPER_TYPES.find((t) => t.value === paper?.type)?.label ?? 'Review',
     lead: S.review.lead,
     delta: S.review.delta,
+    outstanding: S.review.outstanding,
+    cleanCount: S.review.cleanUnconfirmed.length,
     saveLabel: S.review.outstanding
       ? `${S.review.outstanding} left to check`
       : 'Save to Library',
@@ -364,8 +398,16 @@ async function refreshReview() {
       catch (e) { toast(e.message, 'warn'); }
     },
     onAction: (id, action) => handleReviewAction(id, action),
+    onConfirmClean: async () => {
+      try {
+        await confirmQuestions(S.review.cleanUnconfirmed);
+        await refreshReview();
+      } catch (e) { toast(e.message, 'warn'); }
+    },
     onSave: save,
   });
+
+  if (scroller) scroller.scrollTop = scrollTop;
 }
 
 function handleReviewAction(id, action) {
@@ -407,16 +449,19 @@ function handleReviewAction(id, action) {
   if (action === 'rescan') {
     window.__masteryOpenSheet?.({
       title: `Take page ${question.pageNumber ?? ''} again?`,
-      body: 'One page, not the whole paper. What we already read from the other pages stays as it is.',
+      body: 'You retake one page, and we read the paper again with it.',
       items: [
-        ['Only this page is replaced.', 'The rest of the paper keeps its questions and marks.'],
-        ['It is read again from scratch.', 'Anything you have already fixed on this page is re-read.'],
+        ['Only this page is photographed again.', 'The others are already sent and are not re-uploaded.'],
+        ['The paper is then read from scratch.', 'Anything you have already fixed or confirmed is read again, so you will check it once more.'],
       ],
       primary: 'Take it again',
       primaryClass: 'primary',
       onConfirm: () => {
         window.__masteryCloseReview?.();
+        releaseCrops();
         S.retaking = question.pageNumber;
+        // Back to the camera, which is where the next thing they do happens.
+        window.__masteryGoto?.(2);
         toast(`Point at page ${question.pageNumber} and take it again.`);
       },
     });
@@ -438,6 +483,15 @@ async function save() {
     window.__masteryCloseReview?.();
     releaseCrops();
     S.runId = null;
+    // Now the pages have done their job.
+    if (S.draft) {
+      await deleteDraft(S.draft.id);
+      S.draft = null;
+      S.thumbs.forEach((url) => URL.revokeObjectURL(url));
+      S.thumbs.clear();
+      await paintTray();
+      await paintDrafts();
+    }
     await window.__masteryApp?.refreshLibrary?.();
   } catch (error) {
     toast(error.message || 'That could not be saved.', 'warn');

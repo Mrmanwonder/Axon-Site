@@ -104,9 +104,7 @@ export async function addPage(draft, page) {
 }
 
 export async function removePage(draft, pageNumber) {
-  draft.pages = draft.pages
-    .filter((p) => p.page_number !== pageNumber)
-    .map((p, i) => ({ ...p, page_number: i + 1 }));
+  draft.pages = renumber(draft.pages.filter((p) => p.page_number !== pageNumber));
   return saveDraft(draft);
 }
 
@@ -116,8 +114,24 @@ export async function movePage(draft, from, to) {
   const [moved] = pages.splice(from - 1, 1);
   if (!moved) return draft;
   pages.splice(Math.max(0, Math.min(pages.length, to - 1)), 0, moved);
-  draft.pages = pages.map((p, i) => ({ ...p, page_number: i + 1 }));
+  draft.pages = renumber(pages);
   return saveDraft(draft);
+}
+
+/**
+ * Give pages their positions, and un-send anything whose position changed.
+ *
+ * Storage is keyed by page number, so a page that has already been uploaded as
+ * page 3 and is now page 4 is not uploaded — the bytes sitting at page 4 are
+ * somebody else's. Carrying the `uploaded` flag through a renumber left the
+ * booklet silently out of order after a reorder that followed a failed upload,
+ * and nothing would ever have re-sent it.
+ */
+function renumber(pages) {
+  return pages.map((p, i) => {
+    const page_number = i + 1;
+    return page_number === p.page_number ? p : { ...p, page_number, uploaded: false };
+  });
 }
 
 /** Replace one page in place — a retake, keeping its position in the booklet. */

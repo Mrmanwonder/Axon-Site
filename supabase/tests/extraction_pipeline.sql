@@ -218,6 +218,62 @@ values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-00000000
 -- Q2 is a question the model could not construct a reason for. It leaves no row,
 -- which is the honest outcome — an empty slot rather than a shrug.
 
+-- ── a cleanly-read question still has to be confirmed ──────────────────────
+-- stage 7 sets needs_review on every region regardless of tier, because review
+-- is mandatory in v1. So a region the pipeline was confident about blocks the
+-- commit exactly like a doubtful one until the student says so. The client got
+-- this wrong once — it counted only the doubtful ones as outstanding, showed
+-- "Save to Library", and the server refused every time. Pinned here so the two
+-- cannot drift apart again.
+
+-- Its own paper, so the attempt it commits does not move the analytics counts
+-- the assertions further down are about.
+insert into public.paper (id, student_id, type, tier, date_taken, subject)
+values ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000002',
+        'unit_test','tier_1','2026-08-03','Physics');
+
+insert into public.extraction_run (id, paper_id, student_id, pipeline_version, reconciled)
+values ('aaaaaaaa-0000-4000-8000-000000000030','aaaaaaaa-0000-4000-8000-000000000005',
+        'aaaaaaaa-0000-4000-8000-000000000002','1.0.0', true);
+
+insert into public.question_region (
+  id, run_id, paper_id, student_id, order_index, page_spans,
+  question_label, question_label_box,
+  marks_awarded, marks_awarded_box, marks_available, marks_available_box,
+  confidence_tier, needs_review
+) values (
+  'aaaaaaaa-0000-4000-8000-000000000031','aaaaaaaa-0000-4000-8000-000000000030',
+  'aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000002', 0,
+  '[{"page":1,"box":{"x":40,"y":100,"w":900,"h":300}}]',
+  'Q1','{"page":1,"x":40,"y":100,"w":60,"h":40}',
+  5,'{"page":1,"x":980,"y":110,"w":40,"h":40}',
+  5,'{"page":1,"x":900,"y":100,"w":50,"h":40}',
+  'confident', true);
+
+do $$
+declare v_err text;
+begin
+  begin
+    perform public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
+    perform public._t('a confident question still blocks the commit until confirmed', false, 'commit succeeded');
+  exception when insufficient_privilege then
+    get stacked diagnostics v_err = message_text;
+    perform public._t('a confident question still blocks the commit until confirmed',
+      v_err like '1 question(s)%', v_err);
+  end;
+end $$;
+
+update public.question_region set student_confirmed_at = now()
+ where id = 'aaaaaaaa-0000-4000-8000-000000000031';
+
+do $$
+declare v_result jsonb;
+begin
+  v_result := public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
+  perform public._t('confirming the clean question lets the paper save',
+    (v_result ->> 'attempts_committed') = '1', v_result::text);
+end $$;
+
 -- ── commit ─────────────────────────────────────────────────────────────────
 
 do $$
