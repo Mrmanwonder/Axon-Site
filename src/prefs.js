@@ -14,7 +14,7 @@ import { sb } from './supabase.js';
 const LOCAL_KEY = 'mastery.prefs.v1';
 
 export const DEFAULTS = {
-  theme: 'dark',
+  theme: 'system',
   text_size: 'm',
   reduce_motion: false,
   always_show_reasoning: false,
