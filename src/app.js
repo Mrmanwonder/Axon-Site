@@ -1,7 +1,7 @@
 // Application glue: auth gate, settings, ingestion, account actions.
 
 import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './supabase.js';
-import { startOnboarding } from './onboarding.js';
+import { startOnboarding, BOARDS } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
 import { createPaper, addLinkPage, parsePaperLink, listPapers, PAPER_TYPES } from './papers.js';
@@ -207,8 +207,24 @@ async function wireSettings() {
     if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
     if (mailEl) mailEl.textContent = ctx.guardian.contact;
     if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
-    const cls = $('#set-class-aux'); if (cls && ctx.student) cls.textContent = String(ctx.student.class_level);
+    if (ctx.student) {
+      const cls = $('#set-class-aux'); if (cls) cls.textContent = String(ctx.student.class_level);
+      const board = $('#set-board-aux');
+      if (board) board.textContent = BOARDS.find((b) => b.value === ctx.student.board)?.label ?? ctx.student.board;
+      const subjects = $('#set-subjects-aux');
+      if (subjects) subjects.textContent = ctx.student.subjects?.length ? ctx.student.subjects.join(', ') : 'None yet';
+    }
   }
+  paintGreeting();
+}
+
+// The home greeting is the first thing a returning student sees, so it should
+// say who they are rather than the demo's fixed "Maya" — and the weekday next
+// to it should track the actual day, not stay pinned at "Tuesday".
+function paintGreeting() {
+  const dayEl = $('#greetDay'), nameEl = $('#greetName');
+  if (dayEl) dayEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long' });
+  if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian?.name ?? 'there';
 }
 
 // ── ingestion ──────────────────────────────────────────────────────────────
@@ -434,6 +450,9 @@ async function boot() {
   const { data: students } = await sb.from('student').select('*').limit(1);
   ctx.student = students?.[0] ?? null;
   if (!ctx.student) return showOnboarding();
+  const { data: subjectRows } = await sb
+    .from('student_subject').select('subject').eq('student_id', ctx.student.id);
+  ctx.student.subjects = (subjectRows ?? []).map((r) => r.subject);
 
   return startApp();
 }

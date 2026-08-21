@@ -699,7 +699,7 @@
 
     <!-- ══════════════ 0 · HOME ══════════════ -->
     <div class="view on" id="v0">
-      <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
+      <div class="greet"><div class="d" id="greetDay">Tuesday</div><h1 id="greetName">Maya</h1></div>
 
       <div class="hgrid">
       <div class="card insight press">
@@ -973,7 +973,7 @@
       <div class="list">
         <div class="srow" onclick="openSheet('board')">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
-          <div class="lbl">Board</div><div class="aux">CBSE</div>
+          <div class="lbl">Board</div><div class="aux" id="set-board-aux">CBSE</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
         <div class="srow" onclick="openSheet('class')">
@@ -983,7 +983,7 @@
         </div>
         <div class="srow">
           <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
+          <div class="lbl">Subjects</div><div class="aux" id="set-subjects-aux">Physics, Maths</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
       </div>
@@ -1009,8 +1009,8 @@
         <div class="srow noicon"><div class="lbl">Appearance</div>
           <div class="seg" id="segTheme">
             <button data-mode="light" onclick="setTheme('light',this)">Light</button>
-            <button data-mode="dark" class="on" onclick="setTheme('dark',this)">Dark</button>
-            <button data-mode="system" onclick="setTheme('system',this)">System</button>
+            <button data-mode="dark" onclick="setTheme('dark',this)">Dark</button>
+            <button data-mode="system" class="on" onclick="setTheme('system',this)">System</button>
           </div>
         </div>
         <div class="srow noicon"><div class="lbl">Text size</div><div class="seg" id="segText"><button data-size="s">S</button><button data-size="m" class="on">M</button><button data-size="l">L</button></div></div>
@@ -1321,7 +1321,7 @@ const COPY={
     primary:'Change to Class 12',primaryClass:'primary'},
   board:{title:'Board changes go through support',
     body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
-    items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
+    items:[['Nothing is deleted.','Your existing papers stay readable and keep their original scheme references.'],
       ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
       ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
     primary:'Contact support',primaryClass:'ghost'}

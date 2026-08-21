@@ -15,7 +15,7 @@
 
 import { sb, sendOtp, verifyOtp, currentSession } from './supabase.js';
 import { getVerificationAdapter } from './verification.js';
-import { listPurposes, recordConsent } from './consent.js';
+import { listPurposes, recordConsent, hasAllRequiredConsents } from './consent.js';
 import { PAPER_TYPES } from './papers.js';
 
 const h = (s) => s; // tagging helper for readability
@@ -27,6 +27,15 @@ function firm() { window.__masteryHaptic?.firm?.(); }
 
 const SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'English', 'Computer Science'];
 
+// Matches public.board. Scheme matching (Tier 2) only has a library for CBSE
+// today, so IGCSE and AS/A Level papers land on Tier 1 — extracted from the
+// teacher's marks, same as any school test — until that library grows.
+export const BOARDS = [
+  { value: 'CBSE', label: 'CBSE' },
+  { value: 'IGCSE', label: 'IGCSE' },
+  { value: 'AS_A_LEVEL', label: 'AS & A Level' },
+];
+
 export function startOnboarding(root, { onComplete, session = null }) {
   const state = {
     // A live session with no guardian row means the emailed link was clicked;
@@ -35,6 +44,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
     contact: session?.user?.email ?? session?.user?.phone ?? '',
     parentName: '',
     studentAge: null,
+    board: 'CBSE',
     verification: null,
     guardian: null,
     consent: {},
@@ -131,6 +141,43 @@ export function startOnboarding(root, { onComplete, session = null }) {
       <div class="subnote">So the student knows whose account this is.</div>
       <div class="btn primary press" id="ob-name-go" style="margin:18px">Continue</div>
     `), { title: 'One detail' });
+  }
+
+  /**
+   * Decide what a guardian we've just identified sees next.
+   *
+   * A guardian who already has a student profile has already been through
+   * verification, consent and profile creation at some point in the past.
+   * Routing them through those steps again is not just redundant — nothing
+   * stops a second `student` insert, so it would silently create a duplicate
+   * profile every time they signed back in, while the flow itself looked and
+   * felt like a login that never finished. That is the "can't log in" bug:
+   * they could authenticate fine, they just never landed anywhere real.
+   *
+   * A verified guardian with no student yet (they stopped partway through)
+   * resumes at the profile step instead of repeating consent and plan.
+   */
+  async function continueAsGuardian() {
+    const { data: existing, error } = await sb
+      .from('student')
+      .select('*')
+      .eq('guardian_id', state.guardian.id)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (error) throw error;
+
+    if (existing?.length) {
+      const student = existing[0];
+      const { data: subjectRows } = await sb
+        .from('student_subject').select('subject').eq('student_id', student.id);
+      state.student = { ...student, subjects: (subjectRows ?? []).map((r) => r.subject) };
+      onComplete?.({ guardian: state.guardian, student: state.student });
+      return;
+    }
+
+    if (!state.guardian.verified_at) return go('age');
+    if (await hasAllRequiredConsents(state.guardian.id, null)) return go('student');
+    go('consent');
   }
 
   // ── step 3 · age gate and verification ───────────────────────────────────
@@ -246,7 +293,10 @@ export function startOnboarding(root, { onComplete, session = null }) {
         <div class="seg" id="ob-class">
           ${[9, 10, 11, 12].map((c, i) => `<button data-class="${c}"${i === 2 ? ' class="on"' : ''}>${c}</button>`).join('')}
         </div></div>
-        <div class="srow noicon"><div class="lbl">Board</div><span class="aux">CBSE</span></div>
+        <div class="srow noicon"><div class="lbl">Board</div>
+        <div class="seg" id="ob-board">
+          ${BOARDS.map((b) => `<button data-board="${esc(b.value)}"${b.value === state.board ? ' class="on"' : ''}>${esc(b.label)}</button>`).join('')}
+        </div></div>
       </div>
       <div class="sectitle">Subjects</div>
       <div class="filterbar" id="ob-subjects" style="position:static">
@@ -361,7 +411,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         ).select().single();
         if (error) throw error;
         state.guardian = data;
-        go(data.verified_at ? 'consent' : 'age');
+        await continueAsGuardian();
       } catch (e) { state.error = e.message || 'That code did not work.'; render(); }
     });
 
@@ -378,7 +428,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         if (error) throw error;
         state.guardian = data;
         state.parentName = name;
-        go(data.verified_at ? 'consent' : 'age');
+        await continueAsGuardian();
       } catch (e) { state.error = e.message || 'That could not be saved.'; render(); }
     });
 
@@ -442,6 +492,12 @@ export function startOnboarding(root, { onComplete, session = null }) {
       root.querySelectorAll('#ob-class button').forEach(b => b.classList.toggle('on', b === e.currentTarget));
     });
 
+    on('#ob-board button', 'click', (e) => {
+      tick();
+      state.board = e.currentTarget.dataset.board;
+      root.querySelectorAll('#ob-board button').forEach(b => b.classList.toggle('on', b === e.currentTarget));
+    });
+
     on('#ob-subjects .fchip', 'click', (e) => {
       tick();
       e.currentTarget.classList.toggle('active');
@@ -458,6 +514,7 @@ export function startOnboarding(root, { onComplete, session = null }) {
         const { data, error } = await sb.from('student').insert({
           guardian_id: state.guardian.id,
           first_name: first,
+          board: state.board ?? 'CBSE',
           class_level: cls,
           age_band: state.studentAge ?? 'under_18',
         }).select().single();
