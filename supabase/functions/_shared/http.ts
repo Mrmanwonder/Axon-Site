@@ -42,6 +42,33 @@ export function clientFor(req: Request): SupabaseClient | null {
   );
 }
 
+/**
+ * A client that bypasses RLS. For the queue workers only.
+ *
+ * The rule above still stands for anything a user asked for: an extract that
+ * runs on a request runs as the requester. Workers have no requester — they are
+ * woken by a ten-second cron tick and read from a queue — and the runtime tables
+ * they need (model_route, model_call, r2_deletion) are deliberately unreadable
+ * to every authenticated role. So they hold the service key, and every student
+ * row they touch is reached through the paper id that was on the message, never
+ * through a query that could return someone else's.
+ *
+ * The key lives in Function secrets. It never reaches the client, and it is not
+ * the anon key that `src/config.js` commits.
+ */
+export function serviceClient(): SupabaseClient {
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set for this function');
+  return createClient(Deno.env.get('SUPABASE_URL')!, key, { auth: { persistSession: false } });
+}
+
+/** Authorise a cron- or service-triggered call. Rejects a student's own JWT. */
+export function isServiceCall(req: Request): boolean {
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const auth = req.headers.get('Authorization');
+  return !!key && auth === `Bearer ${key}`;
+}
+
 export async function readJson<T>(req: Request): Promise<T | null> {
   try { return await req.json() as T; } catch { return null; }
 }
