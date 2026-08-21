@@ -88,3 +88,65 @@ grant all on all tables in schema auth to authenticated, service_role;
 alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+-- ── pgmq, enough of it ─────────────────────────────────────────────────────
+-- The migrations create queues and the dead-letter sweep reads their tables.
+-- Neither needs a working queue to be schema-checked, so this provides the
+-- three functions the migrations call and the per-queue table shape the sweep
+-- addresses dynamically. Message delivery is not simulated: anything that
+-- depends on visibility timeouts has to be tested on the real extension.
+
+create schema if not exists pgmq;
+
+create table if not exists pgmq.meta (
+  queue_name text primary key,
+  created_at timestamptz not null default now()
+);
+
+create or replace function pgmq.list_queues()
+returns table (queue_name text, created_at timestamptz)
+language sql stable as $$ select m.queue_name, m.created_at from pgmq.meta m $$;
+
+create or replace function pgmq.create(queue_name text)
+returns void language plpgsql as $$
+begin
+  insert into pgmq.meta (queue_name) values (queue_name) on conflict do nothing;
+  execute format(
+    'create table if not exists pgmq.q_%I (
+       msg_id     bigserial primary key,
+       read_ct    integer     not null default 0,
+       enqueued_at timestamptz not null default now(),
+       vt         timestamptz not null default now(),
+       message    jsonb)', queue_name);
+  execute format(
+    'create table if not exists pgmq.a_%I (like pgmq.q_%I including all)', queue_name, queue_name);
+end; $$;
+
+create or replace function pgmq.send(queue_name text, msg jsonb)
+returns bigint language plpgsql as $$
+declare v_id bigint;
+begin
+  execute format('insert into pgmq.q_%I (message) values ($1) returning msg_id', queue_name)
+    into v_id using msg;
+  return v_id;
+end; $$;
+
+create or replace function pgmq.archive(queue_name text, msg_id bigint)
+returns boolean language plpgsql as $$
+begin
+  execute format(
+    'with moved as (delete from pgmq.q_%I where msg_id = $1 returning *)
+     insert into pgmq.a_%I select * from moved', queue_name, queue_name) using msg_id;
+  return true;
+end; $$;
+
+-- ── cron and net, named only ───────────────────────────────────────────────
+-- schedule_pipeline_tick() references these inside a plpgsql body, which is not
+-- resolved at creation time. The schemas exist so a call made by hand fails
+-- with something legible rather than "schema does not exist".
+
+create schema if not exists cron;
+create table if not exists cron.job (jobid bigserial primary key, jobname text, schedule text, command text);
+create schema if not exists net;
+
+grant usage on schema pgmq, cron, net to service_role;
