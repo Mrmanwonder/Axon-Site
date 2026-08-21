@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8"><title>conditioning v2</title>
+<body><pre id="out">running…</pre>
+<script type="module">
+import { syntheticPage } from './page.js';
+import { conditionPage } from '../src/scan/conditioning.js';
+
+const out = document.getElementById('out');
+const lines = []; const say = t => { lines.push(t); out.textContent = lines.join('\n'); };
+
+const page = syntheticPage(3264, 2448);
+const bmp = await createImageBitmap(new ImageData(page.data, page.width, page.height));
+
+const t0 = performance.now();
+const r = await conditionPage(bmp, { pageNumber: 1 });
+const ms = Math.round(performance.now() - t0);
+
+const mask = r.layers.mask.data;
+const distinct = new Set(mask).size;
+let soft = 0; for (const v of mask) if (v > 0 && v < 255) soft++;
+
+say(`source        ${page.width}x${page.height}`);
+say(`conditioned   ${r.width}x${r.height}  in ${ms}ms`);
+say(`page blob     ${(r.meta.bytes/1024).toFixed(0)}KB  ${r.meta.encoded_type}  q${r.meta.encode_quality}`);
+say(`mask blob     ${(r.meta.mask_bytes/1024).toFixed(0)}KB  png`);
+say(`mask values   ${distinct} distinct, ${soft} partial (soft, not binary)`);
+say(`channel       ${r.meta.mask_channel}   baseline ${r.layers.coverage.mask_baseline}`);
+say(`marks found   ${JSON.stringify(r.layers.teacher.shapes)}`);
+say(`coverage      ${JSON.stringify(r.layers.coverage)}`);
+say(`quality       ${r.quality.verdict}  ${JSON.stringify(r.quality.signals)}`);
+say(`reasons       ${r.quality.reasons.join(' | ') || '(none)'}`);
+say(`version       ${r.meta.preprocess_version}`);
+window.__cond = { ms, meta: r.meta, verdict: r.quality.verdict, distinct, soft,
+                  shapes: r.layers.teacher.shapes };
+</script>

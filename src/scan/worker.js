@@ -11,7 +11,6 @@
 // accuracy harness under Node.
 
 import { conditionPage } from './conditioning.js';
-import { separateLayers } from './layers.js';
 
 self.onmessage = async (event) => {
   const { id, source, quad, pageNumber } = event.data;
@@ -21,12 +20,17 @@ self.onmessage = async (event) => {
   // red-suppressed copy, and nothing downstream reads it: what gets uploaded
   // is the conditioned page, and the server crops its regions from that. It
   // was costing about two seconds a page to produce and discard.
-  const layers = separateLayers(conditioned.image, { withContentLayer: false });
+  // conditionPage has already run stage 2 and encoded the mask it produced.
+  // Running it a second time here would recompute the whole thing and then throw
+  // the answer away — and the mask that travels has to be the one the blob was
+  // encoded from, or the boxes will not line up with the image.
+  const layers = conditioned.layers;
 
     self.postMessage({
       id,
       ok: true,
       blob: conditioned.blob,
+      mask: conditioned.maskBlob,
       width: conditioned.width,
       height: conditioned.height,
       quality: conditioned.quality,

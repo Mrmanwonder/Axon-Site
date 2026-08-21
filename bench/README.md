@@ -7,6 +7,8 @@ number and the tempting answer is an opinion.
 | --- | --- |
 | `bench.html` | Device pipeline timing — conditioning, layer separation, the whole stage 0–2 leg |
 | `chroma.html` | How much of the teacher's ink each encoder destroys |
+| `anisotropy.html` | Whether a motion-blur measure can tell a shaken page from a ruled one |
+| `conditioning.html` | One page through stage 1 and 2, timed under CPU throttling |
 | `viewfinder.html` + `viewfinder.mjs` | The real capture controller against a page-on-a-desk scene streamed from a canvas |
 | `capture.test.mjs` | The steadiness window and the shutter decision, as pure functions |
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
@@ -63,3 +65,44 @@ to the model as a second image (`REVIEW_PIPELINE.md` §7.3, `IMAGE_PIPELINE.md`
 and an 8-bit greyscale PNG of a mostly-empty page is small. That makes the mask
 load-bearing rather than a hint — which is a change in how much it matters, and
 the reason it is computed from raw pixels and never from the encoded page.
+
+
+---
+
+## What anisotropy.html found
+
+`IMAGE_PIPELINE.md` §7 asks for motion blur as a gate of its own, measured by
+directional gradient anisotropy — the idea being that a shaken frame smears
+along one axis while an out-of-focus one loses detail evenly.
+
+It does not work, and it fails in a way worth recording so nobody implements it
+again. Measured on a synthetic ruled page, clean and then smeared in three
+directions:
+
+| page | gradient anisotropy | axis sharpness | plain sharpness |
+| --- | --- | --- | --- |
+| clean, ruled | 0.218 | 0.171 | **0.529** |
+| shaken sideways 5px | 0.464 | 0.571 | 0.150 |
+| shaken sideways 11px | 0.561 | 0.711 | 0.098 |
+| shaken vertically 5px | 0.210 | 0.264 | 0.041 |
+| shaken vertically 11px | **0.101** | 0.408 | 0.010 |
+| shaken diagonally 7px | 0.272 | **0.058** | 0.050 |
+
+First-order gradients measure which way the *content* runs, not which way it was
+smeared. An exam page is ruled, so it is lopsided before anyone shakes anything
+— and smearing it vertically destroys horizontal edges, which makes it read as
+*more* balanced than a clean page. On this measure, vertical shake scores better
+than no shake at all.
+
+Second derivatives are closer, because curvature dies along the smeared axis
+while ruled lines keep theirs. But diagonal shake degrades both axes equally and
+is invisible to any two-axis ratio — 0.058, below the clean page.
+
+The last column settles it. Plain variance-of-Laplacian, which was already
+there, puts every smeared page under the blur threshold of 0.22 and leaves the
+clean ruled page at 0.529. One gate catches all three directions; the proposed
+second gate catches two, misses one, and fires on every ruled page.
+
+So anisotropy is kept as a recorded signal and used only to choose between "the
+phone moved" and "too blurred to read" — the two need different actions from the
+student — and it decides nothing on its own.

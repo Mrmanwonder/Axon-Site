@@ -102,6 +102,73 @@ function insidePolygon(x, y, poly) {
   return inside;
 }
 
+/**
+ * How lopsided the page's *sharpness* is between the two axes.
+ *
+ * IMAGE_PIPELINE.md §7 asks for motion blur as a gate of its own, measured by
+ * directional gradient anisotropy. Measured, that does not work, and the way it
+ * fails is instructive enough to keep the code and drop the gate.
+ *
+ * First-order gradients measure which way the *content* runs, not which way it
+ * was smeared. An exam page is ruled, so it is lopsided before anyone shakes
+ * anything — and blurring it vertically removes horizontal edges, which makes it
+ * read as *more* balanced than a clean page. The gate fired on every ruled page
+ * and scored vertical shake as better than no shake at all.
+ *
+ * Second derivatives are closer: curvature dies along the axis that was smeared
+ * and ruled lines keep theirs. But diagonal shake degrades both axes equally and
+ * so is invisible to any two-axis ratio.
+ *
+ * What settles it is that plain variance-of-Laplacian already catches every
+ * direction — sideways, vertical and diagonal all land under the blur threshold
+ * while a clean ruled page sits comfortably above it (bench/anisotropy.html). So
+ * this is kept as a recorded signal and as a way to word the advice, and it
+ * decides nothing on its own.
+ */
+export function anisotropy(gray, width, height) {
+  let lx = 0, ly = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      lx += Math.abs(gray[i - 1] - 2 * gray[i] + gray[i + 1]);
+      ly += Math.abs(gray[i - width] - 2 * gray[i] + gray[i + width]);
+    }
+  }
+  const total = lx + ly;
+  return total ? Math.abs(lx - ly) / total : 0;
+}
+
+/**
+ * Share of pixels pinned at maximum in any one channel.
+ *
+ * Not the same thing as glare, and worth separating: a page can clip its red
+ * channel while still looking merely bright, and a clipped red channel is the
+ * teacher's ink flattened into the paper with nothing left to recover.
+ */
+export function clipping(img) {
+  const { data } = img;
+  let clipped = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] === 255 || data[i + 1] === 255 || data[i + 2] === 255) clipped++;
+  }
+  return clipped / (data.length / 4);
+}
+
+/** Greatest departure from square, in degrees, across a quad's four corners. */
+export function skewDegrees(quad) {
+  let worstAngle = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = quad[(i + 3) % 4], b = quad[i], c = quad[(i + 1) % 4];
+    const v1 = { x: a.x - b.x, y: a.y - b.y };
+    const v2 = { x: c.x - b.x, y: c.y - b.y };
+    const mag = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+    if (!mag) continue;
+    const deg = Math.acos(Math.max(-1, Math.min(1, (v1.x * v2.x + v1.y * v2.y) / mag))) * 180 / Math.PI;
+    worstAngle = Math.max(worstAngle, Math.abs(deg - 90));
+  }
+  return worstAngle;
+}
+
 /** Long edge in pixels. Below the floor there is no honest route back to 300 DPI. */
 export function resolutionScore(width, height) {
   return Math.max(width, height);
@@ -127,27 +194,51 @@ const worst = (...verdicts) =>
 export function scorePage(img, { longEdge = null } = {}) {
   const gray = toGray(img);
   const sharp = blurScore(gray, img.width, img.height);
+  const smear = anisotropy(gray, img.width, img.height);
   const glare = glareScore(img);
+  const clipped = clipping(img);
   const pageLongEdge = longEdge ?? resolutionScore(img.width, img.height);
 
   const reasons = [];
   const blurVerdict = sharp < QUALITY.BLUR_FAIL ? 'fail' : sharp < QUALITY.BLUR_WARN ? 'warn' : 'ok';
-  if (blurVerdict === 'fail') reasons.push('This page is too blurred to read the marking. Hold still and take it again.');
-  else if (blurVerdict === 'warn') reasons.push('Slightly soft — worth retaking if the red pen looks faint.');
+  // The anisotropy only picks the wording. A page that is soft in one direction
+  // was moved; a page that is soft in both was too far away or out of focus.
+  const moved = smear > QUALITY.ANISOTROPY_HINT;
+  if (blurVerdict === 'fail') {
+    reasons.push(moved
+      ? 'The phone moved while this was taken. Hold still and take it again.'
+      : 'This page is too blurred to read the marking. Take it again.');
+  } else if (blurVerdict === 'warn') {
+    reasons.push('Slightly soft — worth retaking if the red pen looks faint.');
+  }
 
   const glareVerdict = glare > QUALITY.GLARE_FAIL ? 'fail' : glare > QUALITY.GLARE_WARN ? 'warn' : 'ok';
   if (glareVerdict === 'fail') reasons.push('Light is washing out part of the page. Tilt it away from the light and take it again.');
   else if (glareVerdict === 'warn') reasons.push('A little glare on the page. Tilt it slightly if a mark falls in the bright patch.');
 
-  const resVerdict = pageLongEdge < QUALITY.RESOLUTION_FAIL ? 'fail'
-    : pageLongEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
-  if (resVerdict === 'fail') reasons.push('Too far away to read. Fill more of the frame with the page.');
-  else if (resVerdict === 'warn') reasons.push('Move a little closer so the page fills the frame.');
+  const clipVerdict = clipped > QUALITY.CLIP_WARN ? 'warn' : 'ok';
+  if (clipVerdict === 'warn') {
+    reasons.push('Parts of this page are over-exposed, which flattens red pen into the paper.');
+  }
+
+  // Advisory, never a fail. Resolution is the one condition a student's hardware
+  // may make unreachable, and a gate that fires on everything teaches them to
+  // ignore it.
+  const resVerdict = pageLongEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
+  if (resVerdict === 'warn') {
+    reasons.push('Smaller than we would like — closer next time means we read the marking better.');
+  }
 
   return {
-    verdict: worst(blurVerdict, glareVerdict, resVerdict),
+    verdict: worst(blurVerdict, glareVerdict, clipVerdict, resVerdict),
     reasons,
-    signals: { sharpness: round(sharp), glare: round(glare), long_edge: pageLongEdge },
+    signals: {
+      sharpness: round(sharp),
+      anisotropy: round(smear),
+      glare: round(glare),
+      clipping: round(clipped),
+      long_edge: pageLongEdge,
+    },
   };
 }
 

@@ -7,7 +7,6 @@
 // than a student who cannot scan at all.
 
 import { conditionPage } from './conditioning.js';
-import { separateLayers } from './layers.js';
 
 let worker = null;
 let nextId = 1;
@@ -57,10 +56,15 @@ async function processOnThisThread(source, { quad, pageNumber }) {
   const conditioned = await conditionPage(source, { quad, pageNumber });
   // No content layer — see the note in worker.js. A full pass over the page to
   // build something nothing downstream reads.
-  const layers = separateLayers(conditioned.image, { withContentLayer: false });
+  // conditionPage has already run stage 2 and encoded the mask it produced.
+  // Running it a second time here would recompute the whole thing and then throw
+  // the answer away — and the mask that travels has to be the one the blob was
+  // encoded from, or the boxes will not line up with the image.
+  const layers = conditioned.layers;
   return {
     ok: true,
     blob: conditioned.blob,
+    mask: conditioned.maskBlob,
     width: conditioned.width,
     height: conditioned.height,
     quality: conditioned.quality,

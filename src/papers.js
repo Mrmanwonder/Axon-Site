@@ -174,8 +174,19 @@ export async function uploadScannedPage({ studentId, paperId, page }) {
   const storagePath = `${base}.jpg`;
   const { error: upErr } = await sb.storage
     .from(PAPERS_BUCKET)
-    .upload(storagePath, page.blob, { contentType: 'image/jpeg', upsert: true });
+    .upload(storagePath, page.blob, { contentType: page.blob.type || 'image/jpeg', upsert: true });
   if (upErr) throw upErr;
+
+  // The red mask goes up as its own object. It is lossless, small, and it is
+  // where the fine detail lives: measured, a faint one-pixel stroke keeps 12% of
+  // itself through the page encoder and all of it here. The model gets both.
+  const maskPath = page.mask ? `${base}.mask.png` : null;
+  if (page.mask) {
+    const { error } = await sb.storage
+      .from(PAPERS_BUCKET)
+      .upload(maskPath, page.mask, { contentType: 'image/png', upsert: true });
+    if (error) throw error;
+  }
 
   // Upserted on (paper_id, page_number) so a retake replaces its page rather
   // than adding a second one beside it.
@@ -193,7 +204,7 @@ export async function uploadScannedPage({ studentId, paperId, page }) {
     .single();
   if (error) throw error;
 
-  return { row: data, storage_path: storagePath, proxy_path: proxyPath };
+  return { row: data, storage_path: storagePath, proxy_path: proxyPath, mask_path: maskPath };
 }
 
 /** Signed URL for a stored page. The bucket is private; there is no public URL. */
