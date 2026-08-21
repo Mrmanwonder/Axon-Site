@@ -6,6 +6,8 @@ import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
 import { createPaper, addLinkPage, parsePaperLink, listPapers, PAPER_TYPES } from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+// One small file on the critical path, on purpose — see armScan() below.
+import { cameraSupported, requestCamera } from './scan/camera.js';
 
 const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
 
@@ -354,11 +356,19 @@ async function ensureScan() {
 function armScan() {
   const placeholder = async (visible) => {
     if (!visible) return;
+    // The camera is asked for first and separately, before the pipeline has
+    // finished loading. It used to be asked for at the end of that chain, which
+    // put about ten seconds between tapping Scan and seeing the permission
+    // sheet — long enough to read as an app that does not work. The request and
+    // the load now race each other, and whichever wins waits for the other.
+    const camera = cameraSupported() ? requestCamera().catch((e) => e) : null;
+    window.__masteryCameraStarting?.();
     await ensureScan();
-    // initScanUI has replaced this handler by now; hand the visit to it. If it
-    // bailed out — no camera surface, no student — the placeholder is still
-    // installed and there is nothing to hand over to.
-    if (window.__masteryScanVisible !== placeholder) window.__masteryScanVisible(true);
+    // initScanUI has replaced this handler by now; hand the visit to it, with
+    // the stream if one is already on its way. If it bailed out — no camera
+    // surface, no student — the placeholder is still installed and there is
+    // nothing to hand over to.
+    if (window.__masteryScanVisible !== placeholder) window.__masteryScanVisible(true, camera);
   };
   window.__masteryScanVisible = placeholder;
 

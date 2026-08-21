@@ -16,6 +16,7 @@
 // seconds later at review usually means the page is simply lost.
 
 import { CAPTURE, QUALITY } from './contract.js';
+import { releaseCamera, requestCamera } from './camera.js';
 import { detectQuad, easeQuad, scaleQuad } from './edges.js';
 import { blurScore, glareInQuad, toGray } from './quality.js';
 import { quadDrift, quadFill, quadSize } from './geometry.js';
@@ -28,6 +29,42 @@ const DETECT_MAX_INTERVAL_MS = 320;
 // the student experiences as whether the app works.
 const DETECT_DUTY = 0.3;
 const PROXY_WIDTH = 240;
+
+/**
+ * How long the page has been sitting in one place.
+ *
+ * Measured against the pose the window opened at rather than against the
+ * previous search, which is the whole fix. Frame-to-frame comparison meant a few
+ * pixels of ordinary jitter — from the hand, and from a detector that re-fits
+ * its lines every search — reset the clock every time, so the window never
+ * closed and auto-capture never fired.
+ *
+ * Pure, and exported, because this is the piece that was silently wrong in the
+ * field and a camera is a poor place to find that out twice.
+ */
+export function steadyWindow({ anchor, found, width, height, since, now }) {
+  if (!anchor || quadDrift(anchor, found, width, height) > CAPTURE.STABILITY_TOLERANCE) {
+    return { anchor: found, since: now, steady: false };
+  }
+  return { anchor, since, steady: now - since >= CAPTURE.STABILITY_MS };
+}
+
+/**
+ * Whether to take the picture.
+ *
+ * Two ways to qualify. Stillness is the one that should normally fire. Patience
+ * is the safety net: a page found and unblocked continuously for long enough is
+ * a page someone is holding out to be photographed, and never taking it is a
+ * worse failure than occasionally taking one the student then deletes — which
+ * costs a tap, against a mode that otherwise simply does not work.
+ */
+export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFor, consecutiveFinds }) {
+  if (!autoCapture || !armed || blocking) return false;
+  // A detector locked onto something large and wrong is extremely stable, so
+  // stability alone is not evidence. Several finds running is.
+  if (consecutiveFinds < 4) return false;
+  return steady || heldFor >= CAPTURE.PATIENCE_MS;
+}
 
 /**
  * @param {Object} options
@@ -43,8 +80,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let detectHandle = 0;
 
   let quad = null;          // smoothed, in video coordinates
-  let lastDetection = null; // raw, for stability comparison
+  let lastDetection = null; // raw, for the shot's own geometry
+  // The pose the current steady window began at. Steadiness is measured against
+  // this rather than against the previous frame — see step().
+  let steadyAnchor = null;
   let steadySince = 0;
+  let heldSince = 0;
   let consecutiveFinds = 0;
   let autoCapture = true;
   let armed = true;         // disarms after a shot so one steady page is one page
@@ -67,22 +108,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
     };
   }
 
-  async function start() {
+  /**
+   * @param {Promise<MediaStream>|MediaStream|Error|null} [adopt]
+   *   A stream someone else already asked for. app.js fires the request the
+   *   moment the Scan tab opens, well before this module has finished loading,
+   *   so by the time we get here the permission sheet is usually already
+   *   answered. Passing the rejection through as a value rather than a rejected
+   *   promise keeps that early request from becoming an unhandled rejection.
+   */
+  async function start(adopt = null) {
     if (running) return;
-    // Ask for as much sensor as the browser will give. A page fills perhaps two
-    // thirds of the frame's short axis, so a 1920x1440 request put roughly 1400
-    // pixels across the page — nowhere near the 300 DPI the conditioning stage
-    // targets, and the reason every capture came back flagged. The frames cost
-    // more to condition, which is a trade worth making: the pixels are the
-    // handwriting, and conditioning is work we can make cheaper.
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 3264 },
-        height: { ideal: 2448 },
-      },
-      audio: false,
-    });
+    const resolved = adopt ? await adopt : await requestCamera();
+    if (resolved instanceof Error) throw resolved;
+    stream = resolved;
     video.srcObject = stream;
     video.setAttribute('playsinline', '');
     await video.play();
@@ -99,7 +137,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
-    quad = lastDetection = null;
+    quad = lastDetection = steadyAnchor = null;
+    steadySince = heldSince = consecutiveFinds = 0;
+    // Clear the shared request too, or the next visit adopts a stream whose
+    // tracks have already been stopped and shows a black viewfinder.
+    releaseCamera();
   }
 
   // ── the search ───────────────────────────────────────────────────────────
@@ -135,10 +177,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const next = blankState();
 
     if (!found) {
-      lastDetection = null;
-      steadySince = 0;
-      consecutiveFinds = 0;
+      lastDetection = steadyAnchor = null;
+      steadySince = heldSince = consecutiveFinds = 0;
       quad = null;
+      // Losing the page is what re-arms auto-capture. Without this, the first
+      // automatic shot was the only one: `armed` went false on firing and was
+      // only ever set back by a *blocking* frame, so lifting the phone to the
+      // next page — which simply loses the quad — left it disarmed for the rest
+      // of the session.
+      armed = true;
       publish(next);
       return;
     }
@@ -157,12 +204,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const size = quadSize(found);
     next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
 
-    // Steady means the corners have stopped moving, not that the phone has.
-    const drift = quadDrift(lastDetection, found, pw, ph);
-    if (drift > CAPTURE.STABILITY_TOLERANCE) steadySince = performance.now();
-    else if (!steadySince) steadySince = performance.now();
+    const window_ = steadyWindow({
+      anchor: steadyAnchor, found, width: pw, height: ph,
+      since: steadySince, now: performance.now(),
+    });
+    steadyAnchor = window_.anchor;
+    steadySince = window_.since;
     lastDetection = found;
-    next.steady = performance.now() - steadySince >= CAPTURE.STABILITY_MS;
+    next.steady = window_.steady;
 
     quad = easeQuad(quad, scaleQuad(found, { width: pw, height: ph }, { width: vw, height: vh }));
 
@@ -174,30 +223,45 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (next.glare > QUALITY.GLARE_WARN) {
       next.blocking = 'glare';
       next.hint = 'Light is bouncing off the page — tilt it slightly away from the light';
-    } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
-      next.blocking = 'distance';
-      next.hint = 'A little closer — we need to be able to read the marking';
     } else if (next.fill < CAPTURE.MIN_FILL) {
       next.blocking = 'distance';
       next.hint = 'Move closer so the page fills more of the frame';
     } else if (next.sharpness < QUALITY.BLUR_WARN) {
       next.blocking = 'focus';
       next.hint = 'Hold still — the page is not sharp yet';
+    } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
+      // Advisory, never blocking. Resolution is the one gate condition the
+      // student may be unable to satisfy: it depends on what sensor the browser
+      // handed over, and plenty of Android browsers cap getUserMedia far below
+      // what the camera can do. Blocking on it means a phone that cannot reach
+      // the threshold never auto-captures at all — the shutter simply stops
+      // working, with a hint telling the student to do something they are
+      // already doing. The page is taken, and the quality gate flags it in the
+      // tray, which is where a judgement the student can act on belongs.
+      next.hint = 'Closer if you can — more of the page means we read it better';
     } else if (!next.steady) {
       next.hint = 'Hold still';
     } else {
       next.hint = 'Ready';
     }
 
+    // How long the page has been continuously found with nothing blocking. The
+    // clock runs on the gate, not on stillness, so it survives the jitter that
+    // steadiness is fussy about.
+    if (next.blocking) heldSince = 0;
+    else if (!heldSince) heldSince = performance.now();
+    const heldFor = heldSince ? performance.now() - heldSince : 0;
+
+    // Held a while and still not called steady: say so honestly rather than
+    // repeating an instruction the student is already following.
+    if (!next.blocking && !next.steady && heldFor > 1800) next.hint = 'Almost — keep it there';
+
     publish(next);
 
-    // Auto-capture wants the page to have been *found* several times running,
-    // not merely to be sitting still. The two are different: a detector that
-    // latches onto something large and wrong is very stable indeed, which is how
-    // the first build of this ended up photographing a floor. A real page held
-    // over a desk clears this in under half a second; a phone being carried
-    // never does.
-    if (autoCapture && armed && !next.blocking && next.steady && consecutiveFinds >= 4) {
+    if (shouldAutoCapture({
+      autoCapture, armed, blocking: next.blocking,
+      steady: next.steady, heldFor, consecutiveFinds,
+    })) {
       armed = false;
       shoot(true);
     }

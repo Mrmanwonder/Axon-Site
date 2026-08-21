@@ -28,8 +28,19 @@ export const CAPTURE = {
   // it fires mid-adjustment; longer and it feels broken and people reach for the
   // shutter, which is fine but wastes the feature.
   STABILITY_MS: 600,
-  // Corner travel, as a share of the frame's short edge, still counted as still.
-  STABILITY_TOLERANCE: 0.012,
+  // Corner travel away from the pose the steady window began at, as a share of
+  // the frame's short edge, still counted as still.
+  //
+  // This was 0.012 — about three pixels on the 240px search proxy — and measured
+  // frame to frame rather than against an anchor. Between a hand-held phone and
+  // a detector that fits lines afresh every search, the corners move further
+  // than that essentially always, so the clock reset on every search and
+  // auto-capture never fired once. Ten pixels around a fixed pose is what
+  // holding a phone over a desk actually looks like.
+  STABILITY_TOLERANCE: 0.04,
+  // A page found and unblocked for this long fires even if it never satisfies
+  // the stillness test. The gate assists; it does not get to refuse forever.
+  PATIENCE_MS: 3500,
   // The page must fill this share of the viewport before auto-capture will fire.
   // Below it the page is too far away to hold 300 DPI after warping.
   MIN_FILL: 0.35,

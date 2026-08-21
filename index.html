@@ -218,26 +218,18 @@
   .draft .go{font-size:14px;font-weight:600;color:var(--amber);}
 
   /* ── camera-first scan viewfinder ── */
-  #v2{padding-top:0;}
-  .scanhero{position:relative;height:60vh;min-height:420px;max-height:560px;background:#050506;overflow:hidden;border-radius:0 0 28px 28px;}
+  /* The scanner is the whole screen. A viewfinder in a 60vh window with the
+     page scrolling underneath is a preview of a camera; this is the camera, and
+     the glass tab bar floats over it like it floats over everything else. */
+  #v2{padding:0;overflow:hidden;}
+  .scanhero{position:absolute;inset:0;background:#050506;overflow:hidden;}
   .feed{position:absolute;inset:0;background:
       radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
   .feedgrid{position:absolute;inset:0;background-image:
       linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
     background-size:34px 34px;opacity:.5;}
-  .sweep{position:absolute;left:0;right:0;height:2px;top:18%;
-    background:linear-gradient(90deg, transparent, rgba(58,134,255,.9), transparent);
-    box-shadow:0 0 16px 2px rgba(58,134,255,.5);
-    animation:sweepmove 3.2s ease-in-out infinite;}
-  @keyframes sweepmove{0%,100%{top:16%}50%{top:78%}}
-  .frame{position:absolute;left:9%;right:9%;top:12%;bottom:22%;pointer-events:none;}
-  .cn{position:absolute;width:26px;height:26px;border-color:#fff;border-style:solid;border-width:0;opacity:.92;}
-  .cn.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:8px 0 0 0;}
-  .cn.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 8px 0 0;}
-  .cn.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 8px;}
-  .cn.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 8px 0;}
-  .scanhint{position:absolute;left:0;right:0;top:calc(12% + 60px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
+  .scanhint{position:absolute;left:0;right:0;top:calc(var(--top-inset) + 92px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
 
   /* top-left: the appearance toggle owns the top-right corner of the shell */
   .draftsicon{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:19px;
@@ -248,7 +240,8 @@
   .draftsicon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   .draftsicon .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:4px;background:var(--amber);border:1.5px solid #1a1a1c;}
 
-  .scanctrls{position:absolute;left:0;right:0;bottom:22px;display:flex;align-items:center;justify-content:center;gap:34px;}
+  .scanctrls{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 128px);z-index:6;
+    display:flex;align-items:center;justify-content:center;gap:34px;}
   .sidebtn{width:46px;height:46px;border-radius:23px;background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
   .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
@@ -267,7 +260,10 @@
   .drafttoast .t2{font-size:12px;color:rgba(255,255,255,.6);margin-top:1px;}
   .drafttoast .go{font-size:13.5px;font-weight:600;color:#fff;background:var(--blue);padding:8px 13px;border-radius:11px;flex-shrink:0;}
 
-  .scanbelow{padding-top:20px;}
+  .scanbelow{position:absolute;inset:0;z-index:8;overflow-y:auto;background:var(--bg);
+    padding:var(--view-top) 0 var(--view-bottom);scrollbar-width:none;}
+  .scanbelow::-webkit-scrollbar{display:none;}
+  .scanbelow[hidden]{display:none;}
 
   /* ── live capture: the real viewfinder ──
      The feed sits under an overlay canvas that draws corner brackets on the
@@ -281,8 +277,10 @@
      placeholder frame and its sweep come off the moment the camera is live —
      two sets of brackets, one of them fixed to the viewport, would read as
      the detector being wrong. */
-  .scanhero[data-camera="on"] .feed,
-  .scanhero[data-camera="on"] .frame{display:none;}
+  .scanhero[data-camera="on"] .feed{display:none;}
+  /* Before the camera is live there is nothing to point at, so the one line of
+     text moves to the middle and says what is actually happening. */
+  .scanhero[data-camera="off"] .scanhint{top:50%;transform:translateY(-50%);}
 
   /* The gate speaks in one line, and amber is the whole vocabulary of attention
      here. Red belongs to the teacher's pen and to signing out, nowhere else. */
@@ -305,7 +303,13 @@
      A booklet is 15-20 pages. The tray is where they accumulate, reorder and get
      retaken, and where a page that failed its quality gate is flagged while the
      paper is still physically in front of the student. */
-  .tray{margin:14px var(--gutter) 0;}
+  .tray{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 222px);z-index:6;
+    padding:0 var(--gutter);}
+  .tray .trayscroll{padding-bottom:10px;}
+  /* The strip floats over the viewfinder, so its text is on camera, not on the
+     app's own background — it takes a light colour rather than the muted one
+     that reads correctly against a surface. */
+  .tray .traybar .cnt{color:rgba(255,255,255,.72);}
   .trayscroll{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
   .trayscroll::-webkit-scrollbar{display:none;}
   .traypage{position:relative;width:62px;height:82px;border-radius:10px;flex-shrink:0;overflow:hidden;
@@ -556,10 +560,16 @@
     .igrid .card,.igrid .list{margin-inline:0;}
     .igrid .sectitle,.igrid .subnote{margin-inline:4px;}
 
-    /* Scan — viewfinder becomes a contained panel */
-    #v2{--vmax:820px;padding-top:var(--view-top);}
-    .scanhero{margin:0 var(--gutter);border-radius:var(--r-card);
+    /* Scan — viewfinder becomes a contained panel again. Filling the screen is
+       right on a phone held over a page and wrong on a desktop, where the page
+       is somewhere else entirely and the window is mostly empty room. */
+    #v2{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
+    .scanhero{position:relative;inset:auto;margin:0 var(--gutter);border-radius:var(--r-card);
       height:clamp(360px,44vh,520px);min-height:0;}
+    .scanctrls{bottom:22px;}
+    .tray{position:static;margin:14px var(--gutter) 0;padding:0;}
+    .tray .traybar .cnt{color:var(--label-3);}
+    .scanbelow{position:static;padding:20px 0 0;background:none;overflow:visible;}
 
     /* Library rows stay single-column — they're already dense. */
   }
@@ -623,7 +633,6 @@
      The in-app toggle mirrors the OS setting, since a student may want stillness
      without changing their whole phone. */
   [data-motion="reduce"] *{transition-duration:.01ms !important;animation-duration:.01ms !important;}
-  [data-motion="reduce"] .sweep{animation:none;opacity:.35;}
   [data-motion="reduce"] .skel{animation:none;}
 
   /* ── app toast ── */
@@ -829,15 +838,14 @@
         <video id="scanVideo" playsinline muted></video>
         <canvas id="scanOverlay"></canvas>
 
-        <!-- Shown until the camera is live, and permanently where there is none. -->
-        <div class="feed">
-          <div class="feedgrid"></div>
-          <div class="sweep"></div>
-        </div>
-        <div class="frame">
-          <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
-        </div>
-        <div class="scanhint" id="scanHint" role="status" aria-live="polite">Lay the page flat and fit all four corners in the frame</div>
+        <!-- Shown until the camera is live, and permanently where there is none.
+             There used to be a fixed set of corner brackets here, inset at 9%
+             and 12%. They looked exactly like the detector's output and tracked
+             nothing at all, so a viewfinder that had not started yet read as one
+             whose page detection was wildly wrong. The only brackets now drawn
+             are the ones on a page we have actually found. -->
+        <div class="feed"><div class="feedgrid"></div></div>
+        <div class="scanhint" id="scanHint" role="status" aria-live="polite">Starting the camera…</div>
 
         <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
           <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
@@ -880,7 +888,7 @@
         </div>
       </div>
 
-      <div class="scanbelow" id="scanBelow">
+      <div class="scanbelow" id="scanBelow" hidden>
         <!-- Progress names the actual step and the actual page. Never a spinner,
              never a bar: a bar over work whose length nobody knows is a
              confident lie about how long it will take. -->
@@ -1061,7 +1069,13 @@
   <!-- Ingestion input. Deliberately without `capture`: that would force the
        camera open and prevent picking an already-taken photo or a PDF. On mobile
        the OS picker offers the camera anyway, which is the v1 intent. -->
-  <input type="file" id="fileInput" multiple accept="image/*,application/pdf" hidden>
+  <!-- Explicit types rather than the image/* wildcard. The wildcard makes iOS
+     and Android offer "Camera" alongside "Files", which is an odd thing for an
+     app with its own camera to do: the student taps upload, gets asked to take
+     a photo, and lands in a second scanner that skips every quality gate the
+     first one exists for. Naming the types routes straight to the file browser. -->
+  <input type="file" id="fileInput" multiple
+         accept="image/jpeg,image/png,image/heic,image/heif,image/webp,application/pdf" hidden>
 
   <div id="appToast" role="status" aria-live="polite"><div class="t1"></div></div>
 
@@ -1570,9 +1584,21 @@ window.__masteryScanSurface = () => ({
   overlay: document.getElementById('scanOverlay')
 });
 
-window.__masteryCameraLive = function(on){
+window.__masteryCameraLive = function(on, phase){
   const hero=document.getElementById('scanHero');
-  if(hero) hero.dataset.camera = on ? 'on' : 'off';
+  if(!hero) return;
+  hero.dataset.camera = on ? 'on' : 'off';
+  if(on) delete hero.dataset.phase; else hero.dataset.phase = phase || 'idle';
+};
+
+/* Called by app.js the instant the Scan tab opens — before the scanner's own
+   modules have finished loading. It exists so the screen says something true
+   during the seconds the permission sheet is coming up, instead of showing a
+   dead viewfinder and an instruction about corners. */
+window.__masteryCameraStarting = function(){
+  window.__masteryCameraLive(false, 'starting');
+  const hint=document.getElementById('scanHint');
+  if(hint){ hint.textContent='Starting the camera…'; delete hint.dataset.blocking; }
 };
 
 /* One line, and amber is the entire vocabulary of attention in the viewfinder.
@@ -1621,7 +1647,12 @@ window.__masteryRenderTray = function(pages, handlers){
    how long this takes and a bar would be a confident guess. */
 window.__masteryRenderProgress = function(model){
   const host=document.getElementById('scanProgress');
+  const panel=document.getElementById('scanBelow');
   if(!host) return;
+  // The panel covers the viewfinder while a paper is being read, and is not in
+  // the way when it is not. On a phone the camera is the whole screen, so there
+  // is no strip below it for this to live in.
+  if(panel) panel.hidden = !model;
   if(!model){ host.innerHTML=''; return; }
 
   const line = st => `<div class="pline ${st.state==='now'?'now':''}">

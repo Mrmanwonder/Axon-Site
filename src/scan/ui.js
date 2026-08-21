@@ -58,7 +58,7 @@ export async function initScanUI(ctx) {
     S.capture.setAutoCapture(next);
   });
 
-  window.__masteryScanVisible = (visible) => (visible ? startCamera() : stopCamera());
+  window.__masteryScanVisible = (visible, camera) => (visible ? startCamera(camera) : stopCamera());
 
   await restoreDraft();
   await paintDrafts();
@@ -66,20 +66,28 @@ export async function initScanUI(ctx) {
 
 // ── the camera ─────────────────────────────────────────────────────────────
 
-async function startCamera() {
+/**
+ * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
+ *   The request app.js fired when the tab opened, if there was one. Adopting it
+ *   is what keeps the permission sheet from waiting on this module's own load.
+ */
+async function startCamera(camera = null) {
   if (!S.capture?.supported) {
     // No camera, or a browser that will not give one up. Upload is a
     // first-class path, so this is a different route rather than a failure.
+    window.__masteryCameraLive?.(false, 'unavailable');
     window.__masteryRenderHint?.({
       hint: 'No camera here — add pages from your files instead', blocking: null,
     });
     return;
   }
+  window.__masteryCameraLive?.(false, 'starting');
   try {
-    await S.capture.start();
+    await S.capture.start(camera);
     window.__masteryCameraLive?.(true);
+    window.__masteryRenderHint?.(S.capture.state);
   } catch (error) {
-    window.__masteryCameraLive?.(false);
+    window.__masteryCameraLive?.(false, 'blocked');
     window.__masteryRenderHint?.({
       hint: error?.name === 'NotAllowedError'
         ? 'Camera access is off for this site — you can still add pages from your files'
