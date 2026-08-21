@@ -377,6 +377,17 @@
     font-variant-numeric:tabular-nums;cursor:pointer;will-change:transform;}
   .qalt.on{background:var(--blue);color:#fff;}
 
+  .bulkrow{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);
+    display:flex;align-items:center;gap:12px;}
+  .bulkrow .b{flex:1;min-width:0;}
+  .bulkrow .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .bulkrow .t2{font-size:12.5px;color:var(--label-3);margin-top:3px;line-height:1.4;}
+  .bulkrow .qact{flex-shrink:0;}
+  /* Still waiting on the student, so it does not wear the colour of a finished
+     action. It stays live: tapping it says what is left. */
+  .btn.primary[data-waiting]{background:var(--surface-sunk);color:var(--label-2);box-shadow:none;}
+
   /* ── cause colours: seven hues of equal weight, never a severity ramp ── */
   .cause{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;}
   .cause .sw{width:9px;height:9px;border-radius:5px;background:var(--c);}
@@ -1795,12 +1806,25 @@ window.__masteryRenderReview = function(model, handlers){
     </div>`;
   };
 
+  /* Accepting the cleanly-read ones as a group. Every question still has to be
+     confirmed before the paper can be saved — that is enforced in SQL, not here
+     — but a required step costing fourteen identical taps is a step people learn
+     to rush past without looking. */
+  const bulk = model.cleanCount ? `
+    <div class="bulkrow">
+      <div class="b"><div class="t1">${model.cleanCount} read cleanly</div>
+        <div class="t2">Their crops are above. Accept them together, or check them one at a time.</div></div>
+      <div class="qact accent press" id="rvConfirmClean" data-activates role="button" tabindex="0">These look right</div>
+    </div>` : '';
+
   body.innerHTML = delta +
     (model.lead ? `<div class="subnote" style="margin-top:14px">${esc(model.lead)}</div>` : '') +
     (model.questions||[]).map(question).join('') +
+    bulk +
     `<div class="subnote">Nothing here is locked because we were confident. If the mark itself
       looks wrong, that is a conversation with your teacher — we go by what they wrote.</div>` +
-    `<div style="margin:20px var(--gutter) 4px"><div class="btn primary press" id="rvConfirmAll" data-activates role="button" tabindex="0">${
+    `<div style="margin:20px var(--gutter) 4px"><div class="btn primary press" id="rvConfirmAll"${
+      model.outstanding ? ' data-waiting="1"' : ''} data-activates role="button" tabindex="0">${
       esc(model.saveLabel || 'Save to Library')}</div></div>`;
 
   body.querySelectorAll('[data-q]').forEach(card=>{
@@ -1816,6 +1840,10 @@ window.__masteryRenderReview = function(model, handlers){
   });
 
   window.__masteryBindActivation(body);
+  const confirmClean=document.getElementById('rvConfirmClean');
+  if(confirmClean && handlers && handlers.onConfirmClean){
+    confirmClean.onclick = () => { hapticFirm(); handlers.onConfirmClean(); };
+  }
   const confirmAll=document.getElementById('rvConfirmAll');
   if(confirmAll && handlers && handlers.onSave){
     confirmAll.onclick = () => { hapticFirm(); handlers.onSave(); };
@@ -1826,6 +1854,10 @@ window.__masteryRenderReview = function(model, handlers){
 
 window.__masteryOpenReview = openReview;
 window.__masteryCloseReview = closeReview;
+/* Navigation belongs to this file, so the modules ask rather than reach for the
+   tab bar themselves. Retaking a page from the review screen has to put the
+   student back in front of the camera. */
+window.__masteryGoto = pick;
 
 window.__masteryRenderLibrary = function(papers, opts){
   const list=document.getElementById('libraryList');

@@ -94,7 +94,19 @@ export async function loadReview(runId) {
     delta: deltaFor(run, paper),
     // Every headline shows its sample size; this is that screen's version of it.
     lead: leadFor(questions, pages ?? []),
-    outstanding: questions.filter((q) => !q.confirmed && q.tier !== 'confident').length,
+    // Every unconfirmed region, not just the doubtful ones. commit_extraction_run
+    // refuses while *anything* still has needs_review and no confirmation, and
+    // finalize sets needs_review on all of them — review is mandatory in v1 and
+    // that is the whole point. Counting only the doubtful ones put "Save to
+    // Library" on a button the server then refused, every time a paper had a
+    // cleanly-read question on it, which is every paper.
+    outstanding: questions.filter((q) => !q.confirmed).length,
+    // The cleanly-read ones, which the student can accept as a group. Not a
+    // default and not a skip: they are on screen, with their crops, and this is
+    // a deliberate tap. Making someone press the same button fourteen times to
+    // say "yes, that is what my paper says" is how a required step becomes a
+    // step people learn to rush.
+    cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.confirmed).map((q) => q.id),
   };
 }
 
@@ -151,9 +163,16 @@ function leadFor(questions, pages) {
 
 /** The reading was right. One tap, the common case on a clean paper. */
 export async function confirmQuestion(regionId) {
+  return confirmQuestions([regionId]);
+}
+
+/** The same, for the group of questions that were read cleanly. */
+export async function confirmQuestions(regionIds) {
+  if (!regionIds.length) return;
+  const now = new Date().toISOString();
   const { error } = await sb.from('question_region')
-    .update({ student_confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('id', regionId);
+    .update({ student_confirmed_at: now, updated_at: now })
+    .in('id', regionIds);
   if (error) throw error;
 }
 

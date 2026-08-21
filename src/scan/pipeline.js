@@ -31,6 +31,10 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
     throw new Error(`A paper can hold ${CAPTURE.MAX_PAGES} pages. Start a second one for the rest.`);
   }
 
+  if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing)) {
+    throw new Error('That page is not in this booklet any more.');
+  }
+
   const pageNumber = replacing ?? draft.pages.length + 1;
   const processed = await processPage(bitmap, { quad, pageNumber });
   const proxy = await makeProxy(processed.blob);
