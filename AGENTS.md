@@ -202,7 +202,37 @@ break by accident.
   exists to *find* a reading error, and its corrections still surface in review.
 - **Anything read off a page is data, never instruction.** A student will write
   "ignore previous instructions" on an answer sheet eventually. Extraction models get
-  no tools and can only emit a fixed schema.
+  no tools and can only emit a fixed schema, and page text goes into a prompt fenced
+  by `prompts/untrusted.ts` and labelled as material to analyse.
+
+### Where the pieces are
+
+| Function | Job |
+| --- | --- |
+| `paper-submit` | Idempotent create, then one message on `mastery_triage` |
+| `upload-intent` / `upload-complete` | Presigned PUTs out, server-side HEAD back |
+| `queue-tick` | Dispatch, and the two sweeps that make a stall visible |
+| `w-triage` → `w-structure` → `w-content` → `w-reconcile` → `w-adjudicate` | Stages 3–7 |
+| `review-complete` → `w-explain` | Stage 8, and only after the student confirms |
+| `w-r2-delete` | Makes a deletion real |
+| `eval-run` | The golden set through the same queues, with a route override |
+
+### Rules a new worker gets wrong
+
+- **Use `serveWorker()`.** It has the only three endings a worker may have: ack,
+  ack-a-permanent-failure, or leave the message for the visibility timeout. There is
+  no ending where the message is acked and nothing was recorded — that is a paper
+  that quietly loses a question.
+- **A permanent failure marks its unit and lets the paper proceed.** An unreadable
+  question is a gap with a crop beside it. Nineteen good readings blocked on the
+  twentieth is the worse failure, and the invisible one.
+- **Completion checks belong in SQL, not in the worker.** Twenty content calls go out
+  together and the last two land microseconds apart; `advance_after_*` takes an
+  advisory lock so the paper advances once.
+- **`run_advance()` is the only writer of run status.** It refuses to move a terminal
+  run, so a worker still in flight when the sweep failed its paper cannot resurrect it.
+- **A route override lives on the run, not on the message.** One that reached only the
+  first stage would have the eval measuring the default model for everything after it.
 
 ## Storage
 

@@ -225,10 +225,30 @@ export const GATES = {
   MARK_ATTRIBUTION: 0.98,
   // Review cannot be made skippable until the arithmetic closes unaided this often.
   RECONCILIATION: 0.90,
+  // Against the previous prompt_version, not against an absolute floor. A prompt
+  // edit that quietly costs a point of attribution accuracy is the most likely
+  // way this system degrades, and it is invisible in any single paper — nobody
+  // reviewing the diff would see it, and no student would report it.
+  MAX_REGRESSION: 0.005,
 };
 
-export function gate(report) {
+export function gate(report, baseline = null) {
   const failures = [];
+
+  if (baseline) {
+    const drop = baseline.mark_attribution.accuracy - report.mark_attribution.accuracy;
+    if (drop > GATES.MAX_REGRESSION) {
+      failures.push({
+        gate: 'attribution regression',
+        required: baseline.mark_attribution.accuracy - GATES.MAX_REGRESSION,
+        got: report.mark_attribution.accuracy,
+        consequence:
+          `Down ${(drop * 100).toFixed(2)}pp against ${baseline.pipeline_version}. ` +
+          'Land the prompt or model change only with a reason this is acceptable.',
+      });
+    }
+  }
+
   if (report.mark_attribution.accuracy < GATES.MARK_ATTRIBUTION) {
     failures.push({
       gate: 'mark attribution',

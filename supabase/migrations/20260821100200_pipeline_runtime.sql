@@ -78,6 +78,16 @@ do $$ begin
   end if;
 end $$;
 
+-- The device measured these in stage 2 and they are the input to stage 5. They
+-- travel on the page rather than in the submit call's body alone, because the
+-- worker that needs them runs minutes later, woken by a tick, with no request to
+-- read them out of.
+alter table public.paper_page
+  add column if not exists teacher_marks jsonb not null default '[]'::jsonb;
+
+comment on column public.paper_page.teacher_marks is
+  'Measured geometry from the device: [{page, box, shape, metrics}]. Not a model output — this is what the red mask found, and stage 5 binds it to questions.';
+
 create or replace function public.submit_paper(
   p_student_id      uuid,
   p_type            public.paper_type,
@@ -121,7 +131,8 @@ begin
         paper_id, student_id, page_number, source_kind, status,
         r2_bucket, r2_key, mask_key, original_key, thumb_key,
         bytes, sha256, etag, preprocess_version,
-        quality_verdict, quality_signals, conditioning_meta, layer_fallback)
+        quality_verdict, quality_signals, conditioning_meta, layer_fallback,
+        teacher_marks, teacher_mark_count)
       values (
         v_paper.id, p_student_id,
         (v_page ->> 'page_number')::smallint,
@@ -139,7 +150,9 @@ begin
         v_page ->> 'quality_verdict',
         coalesce(v_page -> 'quality_signals', '{}'::jsonb),
         coalesce(v_page -> 'conditioning_meta', '{}'::jsonb),
-        v_page ->> 'layer_fallback');
+        v_page ->> 'layer_fallback',
+        coalesce(v_page -> 'teacher_marks', '[]'::jsonb),
+        coalesce(jsonb_array_length(v_page -> 'teacher_marks'), 0));
     end loop;
   end if;
 
@@ -427,3 +440,53 @@ grant execute on function public.advance_after_explain(uuid) to service_role;
 
 comment on function public.begin_explanations(uuid) is
   'Opens stage 8, and refuses while any question still needs the student''s eyes. Queues only questions that actually lost marks, hardest-hit first.';
+
+-- ── the eval harness ───────────────────────────────────────────────────────
+-- The golden set, run against the real pipeline rather than against a mock of
+-- it. `route_override` is the whole point: point the content stage at a
+-- different model, rerun, compare. That is how model selection gets decided
+-- instead of guessed, and it is why model_route is a table.
+--
+-- It lives on the run rather than on the queue message so it survives every
+-- enqueue downstream. An override that reached only the first stage would have
+-- the eval measuring the default model for everything after it — the wrong
+-- number, told confidently, which is the failure mode an eval exists to prevent.
+
+alter table public.extraction_run
+  add column if not exists route_override jsonb,
+  add column if not exists eval_run_id    uuid;
+
+comment on column public.extraction_run.route_override is
+  'Set only by eval-run. Never by a client, and never able to relax the provider policy — allow_training is not overridable.';
+
+create table if not exists public.eval_run (
+  id                 uuid        primary key default gen_random_uuid(),
+  golden_set_version text        not null,
+  stages             text[]      not null default '{}',
+  route_override     jsonb,
+  notes              text,
+  papers             integer     not null default 0 check (papers >= 0),
+  started_at         timestamptz not null default now(),
+  finished_at        timestamptz
+);
+
+create table if not exists public.eval_result (
+  id           bigserial   primary key,
+  eval_run_id  uuid        not null references public.eval_run (id) on delete cascade,
+  run_id       uuid,
+  paper_id     uuid,
+  golden_id    text        not null,
+  status       text        not null default 'queued'
+                 check (status in ('queued', 'done', 'failed')),
+  created_at   timestamptz not null default now(),
+
+  unique (eval_run_id, golden_id)
+);
+
+alter table public.eval_run    enable row level security;
+alter table public.eval_result enable row level security;
+
+create index if not exists eval_result_run_idx on public.eval_result (eval_run_id);
+
+comment on table public.eval_run is
+  'One pass of the golden set. Service-role only: it names models and costs, which is operational rather than student-facing.';

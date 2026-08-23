@@ -98,6 +98,31 @@ export function forgetRoutes(): void {
   routes.clear();
 }
 
+/**
+ * Point one stage at a different model for one call.
+ *
+ * This is what makes the eval harness worth having: run the golden set, change
+ * the content model, run it again, compare. It is also why model_route is a
+ * table — model selection gets decided rather than guessed.
+ *
+ * Never applied from a queue message a student could influence: eval-run is
+ * service-role only, and the override travels on the message it mints.
+ */
+export function applyOverride(route: Route, override?: Partial<Route> | null): Route {
+  if (!override) return route;
+  return {
+    ...route,
+    ...(override.primary_model ? { primary_model: override.primary_model } : {}),
+    ...(Array.isArray(override.fallbacks) ? { fallbacks: override.fallbacks } : {}),
+    ...(typeof override.temperature === 'number' ? { temperature: override.temperature } : {}),
+    ...(typeof override.max_tokens === 'number' ? { max_tokens: override.max_tokens } : {}),
+    ...(override.prompt_version ? { prompt_version: override.prompt_version } : {}),
+    // Deliberately not overridable. A route that may be trained on is a decision
+    // a human makes in the table, not one an eval run can borrow for an hour.
+    allow_training: route.allow_training,
+  };
+}
+
 // ── errors ──────────────────────────────────────────────────────────────────
 
 export class ModelError extends Error {
@@ -182,6 +207,8 @@ export interface CallOpts<T> {
   studentId?: string | null;
   attempt?: number;
   timeoutMs?: number;
+  /** Set by eval-run only, to compare one stage across models. */
+  routeOverride?: Partial<Route> | null;
 }
 
 export interface CallResult<T> {
@@ -199,7 +226,7 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
   const key = Deno.env.get('OPENROUTER_API_KEY');
   if (!key) throw new ModelError('no_key', 'OPENROUTER_API_KEY is not set for this function', 0, false);
 
-  const route = await getRoute(opts.sb, opts.stage);
+  const route = applyOverride(await getRoute(opts.sb, opts.stage), opts.routeOverride);
   const attempt = opts.attempt ?? 1;
   const started = performance.now();
 
