@@ -122,13 +122,32 @@ begin
     'create table if not exists pgmq.a_%I (like pgmq.q_%I including all)', queue_name, queue_name);
 end; $$;
 
-create or replace function pgmq.send(queue_name text, msg jsonb)
+create or replace function pgmq.send(queue_name text, msg jsonb, delay integer default 0)
 returns bigint language plpgsql as $$
 declare v_id bigint;
 begin
-  execute format('insert into pgmq.q_%I (message) values ($1) returning msg_id', queue_name)
-    into v_id using msg;
+  execute format(
+    'insert into pgmq.q_%I (message, vt) values ($1, now() + make_interval(secs => $2)) returning msg_id',
+    queue_name) into v_id using msg, delay;
   return v_id;
+end; $$;
+
+create or replace function pgmq.read(queue_name text, p_vt integer, qty integer)
+returns table (msg_id bigint, read_ct integer, enqueued_at timestamptz, vt timestamptz, message jsonb)
+language plpgsql as $$
+begin
+  return query execute format(
+    'update pgmq.q_%I q set read_ct = q.read_ct + 1, vt = now() + make_interval(secs => $1)
+      where q.msg_id in (select msg_id from pgmq.q_%I where vt <= now() order by msg_id limit $2)
+      returning q.msg_id, q.read_ct, q.enqueued_at, q.vt, q.message',
+    queue_name, queue_name) using p_vt, qty;
+end; $$;
+
+create or replace function pgmq.delete(queue_name text, msg_id bigint)
+returns boolean language plpgsql as $$
+begin
+  execute format('delete from pgmq.q_%I where msg_id = $1', queue_name) using msg_id;
+  return true;
 end; $$;
 
 create or replace function pgmq.archive(queue_name text, msg_id bigint)
