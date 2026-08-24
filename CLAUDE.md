@@ -107,7 +107,8 @@ guardian           id, auth_user_id, name, contact, verified_at,
                    verification_method, verification_ref, deleted_at
 consent_event      id, seq, guardian_id, student_id?, purpose, granted,
                    notice_version, method, created_at     ← append-only
-student            id, guardian_id, board, class_level, age_band, first_name
+student            id, guardian_id, board, class_level, age_band, first_name,
+                   avatar_seed
 paper              id, student_id, type, tier, date_taken
 paper_page         id, paper_id, student_id, page_number, source_kind,
                    storage_path?, source_url?, status
