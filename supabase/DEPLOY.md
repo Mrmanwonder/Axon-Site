@@ -50,7 +50,8 @@ On the OpenRouter account itself, two settings that are not code:
 
 ## 2 · Buckets
 
-`axon-originals` and `axon-derived`, both in APAC. One thing is still owed:
+`axon-originals` and `axon-derived`, both in APAC, both empty. One thing is
+still owed:
 
 - **A lifecycle rule on `axon-originals`: 30 days, then delete.** Nothing else
   enforces the retention promise, and a promise nothing enforces is a promise
@@ -117,6 +118,14 @@ update public.model_route
  where stage in ('triage','structure','content','adjudicate','explain');
 ```
 
+> **This is currently set on `dlgcqieyevoebefhcggi`.** All five stages carry
+> `allow_training = true` and the marker in `notes`. That project is a testing
+> environment for as long as that is true. Check before assuming otherwise:
+>
+> ```sql
+> select stage, primary_model, allow_training from public.model_route order by stage;
+> ```
+
 **Two conditions on running it, and they are not decoration.** The pages that go
 through a training-permitted route become that provider's data. So:
 
@@ -126,7 +135,9 @@ through a training-permitted route become that provider's data. So:
 - **Revert before the first real paper**, and pick models with compliant
   endpoints at the same time:
   ```sql
-  update public.model_route set allow_training = false;
+  update public.model_route
+     set allow_training = false,
+         notes = replace(notes, ' — TESTING: training permitted, revert before real papers', '');
   update public.model_route
      set primary_model = 'anthropic/claude-sonnet-5',
          fallbacks = array['google/gemini-3.7-flash']
