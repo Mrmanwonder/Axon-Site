@@ -659,10 +659,221 @@
   [data-theme="light"] #appToast .t1{color:var(--label);}
   @media (min-width:768px){#appToast{left:calc(var(--rail-w) + 16px);right:16px;max-width:520px;}}
 
-  /* ── onboarding overlay ── */
-  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;}
+  /* ══════════════ ONBOARDING OVERLAY ══════════════
+     Its own surface rather than a view inside the app: there is no tab bar, no
+     header plate, and no student data to show yet. It borrows the tokens, the
+     springs and the press states, and adds the pieces below, which exist
+     nowhere else in the interface.
+
+     Two defaults are deliberately refused here. A percentage progress bar,
+     because a percentage implies a precision the branching flow doesn't have —
+     the rail names the phase instead. And a celebration at the end, because
+     the thing just completed is a parent complying with a consent law, not a
+     win. The single acknowledgment lands on the student's first screen, after
+     the work, which is where this design puts delight. */
+  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;
+    /* .view subtracts the rail from its own centring and offsets itself by it
+       at ≥768. There is no rail inside the overlay, so zero it or the column
+       sits off-centre. --view-bottom is the tab bar's clearance, which is
+       likewise absent here. */
+    --rail-w:0px;--view-bottom:clamp(24px,6vh,44px);
+    --ob-wash:.26;--ob-wash-2:.19;
+    /* One measured column, capped like a .view. Padding on #obroot cannot do
+       this: .obwrap is absolute, and inset:0 resolves against the padding box,
+       so the wrap spans the padding and the cap is ignored. The gutter is
+       carried per-element instead, and .obview reaches the same number through
+       .view's own --vmax centring so the head and the body stay flush.
+       Collapses to 0 below the cap, so no breakpoint is needed. */
+    --ob-side:max(0px,calc((100% - 620px) / 2));}
   #obroot[hidden]{display:none;}
-  @media (min-width:768px){#obroot{padding-inline:max(0px,calc((100% - 620px) / 2));}}
+  [data-theme="light"] #obroot{--ob-wash:.13;--ob-wash-2:.10;}
+
+  .obwrap{position:absolute;inset:0;display:flex;flex-direction:column;}
+  /* One wash, painted once and never animated. A gradient this large is the
+     most expensive thing on a budget Android GPU and this one is decoration,
+     so it gets a static paint and no compositing layer of its own. */
+  .obwrap::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;
+    height:min(46vh,380px);pointer-events:none;
+    background:
+      radial-gradient(120% 82% at 14% -10%,rgba(58,134,255,var(--ob-wash)),transparent 62%),
+      radial-gradient(92% 64% at 98% 2%,rgba(138,111,209,var(--ob-wash-2)),transparent 66%);}
+
+  /* header: back affordance + phase rail */
+  .obhead{position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;gap:13px;
+    padding:calc(var(--top-inset) + 18px) calc(var(--text-gutter) + var(--ob-side)) 0;}
+  .obback{width:33px;height:33px;margin-left:-3px;border-radius:17px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;will-change:transform;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);}
+  .obback svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .obprog{flex:1;min-width:0;}
+  .obprog .segs{display:flex;gap:5px;}
+  .obprog .segs i{flex:1;height:3px;border-radius:2px;background:var(--surface-sunk);overflow:hidden;}
+  /* Animating width would be a layout animation. The fill is a full-width
+     child scaled on X instead, so the rail stays on the compositor. It is a
+     keyframe rather than a transition because each step replaces the markup,
+     and a transition has nothing to transition from. */
+  .obprog .segs i span{display:block;height:100%;border-radius:2px;background:var(--blue);transform:scaleX(0);}
+  .obprog .segs i.done span{transform:scaleX(1);background:var(--label-3);}
+  .obprog .segs i.now span{transform-origin:left center;animation:obfill .32s var(--spring) both;}
+  @keyframes obfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .obprog .ph{margin-top:8px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;
+    letter-spacing:.055em;color:var(--label-3);}
+
+  /* step body */
+  .obview{position:relative;z-index:1;inset:auto;flex:1;min-height:0;
+    --vmax:620px;padding-top:clamp(10px,3vw,16px);}
+
+  /* Step entrance. Transform and opacity only, on the 200ms disclosure budget —
+     a step change is a disclosure. Children rise in a short stagger that caps
+     at five waves; past that it stops reading as arrival and starts reading as
+     a loading state. */
+  @keyframes obstep{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .obview > *{animation:obstep .26s var(--spring) both;}
+  .obview > :nth-child(1){animation-delay:.01s;}
+  .obview > :nth-child(2){animation-delay:.05s;}
+  .obview > :nth-child(3){animation-delay:.09s;}
+  .obview > :nth-child(4){animation-delay:.13s;}
+  .obview > :nth-child(n+5){animation-delay:.17s;}
+  /* Every moving part here is a keyframe with fill-mode both, so collapsing the
+     duration is not enough on its own: the delay still holds content at
+     opacity 0 through its whole stagger, and even at 0.01s there is a frame
+     before the first tick where the element is painted invisible. Removed
+     outright instead — with no animation the elements sit at their own style,
+     which is already the finished state. */
+  [data-motion="reduce"] .obview > *,
+  [data-motion="reduce"] .obprog .segs i.now span,
+  [data-motion="reduce"] .obseal{animation:none !important;}
+  [data-motion="reduce"] .obprog .segs i.now span{transform:scaleX(1);}
+
+  /* landing hero */
+  .obhero{padding:clamp(16px,5vw,26px) var(--text-gutter) 0;}
+  .obwordmark{display:flex;align-items:center;gap:9px;margin-bottom:clamp(22px,7.5vw,36px);}
+  .obwordmark .g{width:23px;height:23px;border-radius:7px;flex-shrink:0;
+    background:linear-gradient(155deg,#5AA0FF,#2E74E8);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
+    display:flex;align-items:center;justify-content:center;}
+  .obwordmark .g svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .obwordmark .n{font-size:14.5px;font-weight:600;letter-spacing:-.012em;}
+  .obhero h1{margin:0;font-size:clamp(29px,8.4vw,40px);font-weight:700;letter-spacing:-.042em;line-height:1.06;}
+  .obhero h1 em{font-style:normal;color:var(--blue);}
+  .obhero .sub{margin-top:12px;font-size:clamp(14.5px,4vw,16.5px);line-height:1.48;color:var(--label-2);max-width:30em;}
+
+  /* The seven cause hues, named. Categorical and equal-weight, exactly as they
+     are in the app — no bar lengths and no counts, because there is no student
+     data at this point and a chart shape here would be inventing some. */
+  .obspec{display:flex;flex-wrap:wrap;gap:6px;margin:0 var(--text-gutter);}
+  .obspec span{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 9px;border-radius:12px;
+    background:var(--surface);border:.5px solid var(--hairline);
+    font-size:12px;font-weight:500;color:var(--label-2);letter-spacing:-.005em;}
+  .obspec span::before{content:"";width:7px;height:7px;border-radius:2.5px;background:var(--c);flex-shrink:0;}
+
+  /* A labelled field. The account step used to borrow a settings row for the
+     label and the Library's search box for the input, which is most of why it
+     read as a preferences screen rather than a welcome. */
+  .obfields{margin:0 var(--gutter);display:flex;flex-direction:column;gap:11px;}
+  .obfield{background:var(--surface);border:.5px solid var(--hairline);border-radius:17px;
+    padding:12px 15px 13px;transition:border-color .12s ease;}
+  [data-theme="light"] .obfield{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obfield:focus-within{border-color:var(--blue);}
+  .obfield .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obfield input{display:block;width:100%;margin-top:5px;padding:0;background:none;border:none;outline:none;
+    font-family:inherit;font-size:16.5px;font-weight:500;color:var(--label);letter-spacing:-.02em;}
+  .obfield input::placeholder{color:var(--label-3);font-weight:400;letter-spacing:-.01em;}
+  .obfield .hint{margin-top:7px;font-size:12px;line-height:1.45;color:var(--label-3);}
+  /* The code field accepts a 6-digit code or a whole pasted link, so it cannot
+     be six boxes. Tabular figures and wide tracking give it the same
+     at-a-glance shape without breaking the paste. */
+  .obfield.obcode{text-align:center;}
+  .obfield.obcode input{font-size:clamp(21px,6vw,25px);font-weight:600;letter-spacing:.2em;text-align:center;}
+  .obfield.obcode input::placeholder{font-size:14.5px;font-weight:400;letter-spacing:-.01em;}
+
+  /* Provider sign-in, above the typed path on the account step.
+     Both buttons sit on our own neutral surface rather than each brand's button
+     colour: two saturated slabs stacked above the fields would outrank the
+     step's own primary action, and a black Apple button beside a white Google
+     one is two design languages arguing. Google's mark keeps its four colours,
+     which its brand terms require and which are not our palette making a
+     claim; Apple's is currentColor, which resolves to exactly the black-on-light
+     and white-on-dark pair Apple specifies. */
+  .obalt{margin:0 var(--gutter) 13px;display:flex;flex-direction:column;gap:9px;}
+  .obalt .btn{padding:14px;border-radius:18px;font-size:15.5px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label);}
+  [data-theme="light"] .obalt .btn{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obalt .btn svg{width:18px;height:18px;flex-shrink:0;}
+  .obalt .btn .apl{fill:currentColor;}
+  /* A hairline with "or" through it, not a heading. Neither path is the
+     recommended one — whichever the parent already has is the fast one. */
+  .obor{margin:0 var(--gutter) 13px;display:flex;align-items:center;gap:11px;
+    font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obor::before,.obor::after{content:"";flex:1;height:.5px;background:var(--hairline);}
+
+  /* A statement panel: the app talking, where .card is the app reporting. */
+  .obpanel{margin:0 var(--gutter);padding:clamp(17px,4.6vw,21px);border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .obpanel{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obpanel.tint{background:rgba(58,134,255,.09);border-color:rgba(58,134,255,.22);box-shadow:none;}
+  .obpanel .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.34;text-wrap:balance;}
+  .obpanel .line em{font-style:normal;color:var(--blue);}
+  .obpanel .body{margin-top:11px;font-size:13.5px;line-height:1.52;color:var(--label-2);}
+
+  /* One action group per step, so the primary button lands in the same place
+     every time and the spacing stops coming from a per-screen inline margin. */
+  .obfoot{margin:24px var(--gutter) 4px;display:flex;flex-direction:column;gap:2px;}
+  .obfoot .btn.primary{padding:16px;border-radius:19px;}
+
+  /* The only acknowledgment in the flow, and it lands after the work rather
+     than during it — 320ms, the recompute budget, spent once. */
+  .obseal{width:46px;height:46px;border-radius:16px;margin-bottom:16px;
+    background:rgba(48,209,88,.16);display:flex;align-items:center;justify-content:center;
+    animation:obseal .32s var(--spring) both;}
+  .obseal svg{width:23px;height:23px;fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  @keyframes obseal{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:none}}
+
+  /* Choice rows carry a chevron in the flow. In Scan a .method row is the whole
+     screen so it needs no affordance; inside a sequence of steps the interface
+     has to say which taps move you forward. */
+  #obroot .method .chev{opacity:.28;}
+  #obroot .list + .subnote{margin-top:11px;}
+  /* Cause hues stay on the landing motif, where they mean causes. Everywhere
+     else in the flow an icon is blue for accent, amber for attention or green
+     for something already settled — spending the cause palette on decoration
+     would weaken the one place it carries meaning.
+
+     The names are ic-* rather than bare letters because .method's own text
+     column is .b: a tone called "b" inherits flex:1 from it and the 38px icon
+     tile stretches across the row. */
+  #obroot .ic-b{background:rgba(58,134,255,.16);}
+  #obroot .ic-b svg{stroke:var(--blue);}
+  #obroot .ic-g{background:rgba(48,209,88,.16);}
+  #obroot .ic-g svg{stroke:var(--green);}
+  #obroot .ic-a{background:rgba(255,159,10,.16);}
+  #obroot .ic-a svg{stroke:var(--amber);}
+  #obroot .ic-n{background:var(--surface-sunk);}
+  #obroot .ic-n svg{stroke:var(--label-3);}
+  /* Headline to first block: .greet's 2px is tuned for a view that opens on a
+     dense card, not for a step that opens on a field or a statement. */
+  #obroot .greet{padding-bottom:14px;}
+  /* Subject chips wrap rather than scroll: a picker you can scroll past is a
+     picker where a subject gets missed. It is static here, so it also drops the
+     opaque strip the sticky version needs — that would cut across the wash. */
+  #obroot .filterbar{flex-wrap:wrap;overflow:visible;background:none;padding-right:var(--gutter);}
+  #obroot .filterbar::after{display:none;}
+  /* The dead ends carry their back affordance in the header, so the paragraph
+     is the last thing in the card and its button gap is spare. */
+  #obroot .estate p:last-child{margin-bottom:0;}
+  /* .chip.n's sunk grey turns muddy on the tinted panel. */
+  #obroot .obpanel.tint .chip.n{background:rgba(58,134,255,.16);color:var(--blue);}
+
+  @media (hover:hover) and (pointer:fine){
+    .obback:hover{color:var(--label);}
+    #obroot .method:hover .chev{opacity:.6;}
+  }
+  /* The global reduce-motion rule collapses transitions but not animations, and
+     every moving part of the flow is a keyframe. The OS setting alone has to be
+     enough — [data-motion] only covers the in-app toggle. */
+  @media (prefers-reduced-motion:reduce){
+    .obview > *,.obprog .segs i.now span,.obseal{animation:none !important;}
+    .obprog .segs i.now span{transform:scaleX(1);}
+  }
 
   /* Sheet extras used by the generic sheet opener. */
   .sheet .sh-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px;}

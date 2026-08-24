@@ -83,18 +83,19 @@ corrupt everything downstream.
 - Web-first PWA. Mobile viewport is the design target (~380px); desktop is secondary.
 - `index.html` is the entire front end and the design system. `src/` holds ES modules for
   data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
-- Supabase: Postgres, auth, and Edge Functions. Auth is email or phone OTP only.
-  An Edge Function gets **two seconds of CPU** — enough to orchestrate, never enough to
-  touch a pixel. All image work is on the device or nowhere.
+- Supabase: Postgres, auth, storage, and Edge Functions. Auth is passwordless: email or
+  phone OTP, or Google or Apple. A provider only vouches for the address — it shortens no
+  part of the flow, and the age gate, guardian verification and consent still happen in
+  order. An Edge Function gets **two seconds of CPU** — enough to orchestrate, never
+  enough to touch a pixel. All image work is on the device or nowhere.
 - Cloudflare R2 holds every user document, over the S3 API. Postgres holds metadata
   only, and bytes go device-to-bucket on a presigned URL without passing through a
   function. See `STORAGE_R2.md`.
 - Models are reached through OpenRouter, behind one client, on Zero Data Retention
   endpoints with provider data collection denied. Model IDs live in a table, never in
   code. See `REVIEW_PIPELINE.md` §7.
-- Offline: past papers and their analysis must be readable offline. Capture works
-  offline and queues; extraction needs the network. Cache read paths; queue nothing
-  that needs the model to have already run.
+- Offline: past papers and their analysis must be readable offline. Scanning and
+  extraction are online-only. Cache read paths; queue nothing that needs the model.
 - Performance floor: must hold 60fps on mid-tier Android. This is a real constraint, not
   an aspiration — most users are on budget devices.
 

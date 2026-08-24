@@ -1,8 +1,13 @@
 // Supabase client and auth.
 //
-// Auth is email or phone OTP only — no passwords, no social sign-in. Only the
+// Auth is passwordless: email or phone OTP, or Google or Apple. Only the
 // guardian ever holds credentials; the student works inside the guardian's
 // session and is never an auth user.
+//
+// A provider sign-in changes who vouches for the email address and nothing
+// else. It does not shorten the flow: the guardian row, the age gate,
+// verification and consent all still happen, because none of them is something
+// Google or Apple can assert on a parent's behalf.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
@@ -54,6 +59,102 @@ export async function sendOtp(contact) {
   });
   if (error) throw error;
   return { channel: isPhone(value) ? 'sms' : 'email', sentTo: value };
+}
+
+/** Providers offered on the account step, in the order they are shown. */
+export const OAUTH_PROVIDERS = ['google', 'apple'];
+
+export const PROVIDER_LABEL = { google: 'Google', apple: 'Apple' };
+
+/**
+ * Hand off to Google or Apple.
+ *
+ * This navigates away, so nothing after it runs on success — a resolved promise
+ * only means the redirect was accepted. The session comes back in the URL on
+ * return and `detectSessionInUrl` above picks it up, which is the same path the
+ * emailed link already uses.
+ */
+export async function signInWithProvider(provider) {
+  if (!OAUTH_PROVIDERS.includes(provider)) {
+    throw new Error(`Unknown sign-in provider: ${provider}`);
+  }
+  // Which provider we left with, so the message on the way back can name it.
+  // Session storage rather than local: it belongs to this attempt in this tab,
+  // and a stale value would misattribute a later failure.
+  try { sessionStorage.setItem(ATTEMPT_KEY, provider); } catch { /* private mode */ }
+  const { error } = await sb.auth.signInWithOAuth({
+    provider,
+    options: {
+      // Same reason as the OTP path: back to wherever the app is actually
+      // running, not to whatever the project's Site URL happens to say.
+      redirectTo: window.location.origin + window.location.pathname,
+      // A shared family device is the normal case here, so never silently
+      // resume whichever Google account the browser saw last.
+      ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}),
+    },
+  });
+  if (error) throw error;
+}
+
+const ATTEMPT_KEY = 'mastery.oauthAttempt';
+
+/**
+ * True when the failure is the provider not being switched on in the Supabase
+ * project, rather than anything the parent did. Worth telling apart: the raw
+ * message is developer-facing and reads like the parent's account is at fault.
+ */
+export function isProviderNotEnabled(error) {
+  return /provider is not enabled|unsupported provider|provider.*disabled/i
+    .test(error?.message ?? error?.description ?? '');
+}
+
+/**
+ * Read a failed provider round trip out of the URL we were returned to.
+ *
+ * `signInWithOAuth` navigates away, so it does not reject when the provider is
+ * refused — the failure comes back as `error` and `error_description` on the
+ * return URL instead, in the query string or the fragment depending on where it
+ * gave up. Without reading them the parent lands back on a blank first screen
+ * with no idea why, which is exactly the silent failure the project forbids.
+ *
+ * The params are stripped from the address bar on the way out, so a reload does
+ * not resurrect an error that has already been shown and dealt with.
+ *
+ * @returns {{provider:string|null, code:string, description:string, message:string}|null}
+ */
+export function takeProviderError() {
+  const url = new URL(window.location.href);
+  const frag = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const code = url.searchParams.get('error') || frag.get('error');
+  if (!code) return null;
+
+  const description =
+    url.searchParams.get('error_description') || frag.get('error_description') || '';
+  let provider = null;
+  try {
+    provider = sessionStorage.getItem(ATTEMPT_KEY);
+    sessionStorage.removeItem(ATTEMPT_KEY);
+  } catch { /* private mode */ }
+
+  for (const k of ['error', 'error_code', 'error_description']) {
+    url.searchParams.delete(k);
+    frag.delete(k);
+  }
+  const rest = frag.toString();
+  url.hash = rest ? `#${rest}` : '';
+  history.replaceState(null, '', url.toString());
+
+  const name = PROVIDER_LABEL[provider] ?? 'That provider';
+  let message;
+  if (/access_denied/i.test(code)) {
+    // Backing out is a decision, not a fault. Say what happened and stop.
+    message = `${name} sign-in was cancelled.`;
+  } else if (isProviderNotEnabled({ message: `${code} ${description}` })) {
+    message = `${name} sign-in isn't switched on yet. Use your email or phone instead.`;
+  } else {
+    message = description || `${name} sign-in didn't complete.`;
+  }
+  return { provider, code, description, message };
 }
 
 /**
