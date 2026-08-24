@@ -6,43 +6,64 @@ being asked. It also serves as the design system — the tokens, the type scale,
 glass lens and the spring engine are the reference implementation, so read it
 before building UI.
 
-`src/` holds ES modules for data and flow, loaded natively — no bundler. `vendor/`
-holds the Supabase client, vendored rather than pulled from a CDN so there is no
-third-party runtime dependency. The modules must be served over http; ES modules
-do not load from `file://`.
+`src/ui/` is the React app. `src/` holds the data and scanning modules it imports,
+still plain ES modules — see "The scanning pipeline" below for why they stay that
+way. The Supabase client is an npm dependency bundled into our own output, so
+there is still no third-party runtime request.
 
 `supabase/migrations/` is the database, as plain SQL. `supabase/tests/` holds SQL
 test suites that run inside a rolled-back transaction and are safe against any
 database, production included.
 
-## The bridge between index.html and src/
+## The bridge that used to exist
 
-`index.html` owns the design system; `src/` owns data and flow. Rather than
-duplicating primitives, the inline script publishes them and the modules call them:
-`__masteryHaptic`, `__masterySwitch`, `__masteryOpenSheet`, `__masteryRebindPress`,
-`__masteryOpenDisclosure`, `__masteryInsightsReady`, `__masteryRenderHome`,
-`__masteryRenderInsights`, `__masteryRenderScan`, `__masteryRenderLibrary`. Add to that
-list rather than reimplementing a spring or a sheet in a module — the two will drift
-otherwise.
+`index.html` owned the design system and `src/` owned data and flow, and the two
+met at a set of `window.__mastery*` globals — ten of them by the end. None of
+them survive the React port: components import the primitives directly, and
+`src/scan/ui.js` takes a `host` object from `initScanUI` instead.
 
-The render bridges take data and return nothing: the app layer decides *what* is true,
-this file decides how it looks. Two rules they exist to hold:
+Two hazards that bridge existed to manage are worth carrying forward:
 
-- A surface with no data says so. It never falls back to the numbers this file was
-  prototyped with — those read as this student's marks, which is the most confident lie
-  the interface can tell.
-- Which Insights view is shown is a data question (`__masteryInsightsReady`), not a tap
-  affordance. It used to toggle on a second tap, which showed a populated chart to a
-  student who had nothing in it.
+- `__masteryRebindPress` existed because press springs were bound at load and
+  had to be re-bound after any DOM injection. `PressBox` owns its own spring, so
+  there is nothing to rebind — but a press effect written as a bare `useEffect`
+  over a list would reintroduce exactly that bug.
+- Switches whose state belonged to the app carried `data-managed` so the generic
+  handler skipped them. Two handlers on one switch race: whichever ran second
+  read a class the first had already flipped, which once turned a consent grant
+  into a withdrawal. In React the equivalent is a switch that is both controlled
+  and locally stateful. Pick one.
 
-`src/curriculum.js` is the single source for the board, the stages, the class-level
-mapping and the syllabus codes. Nothing else should hardcode "CAIE", a stage name or a
-four-digit code.
+Two rules the render bridges were meant to hold, which the screens hold now:
 
-Switches whose state belongs to the app carry `data-managed`, and the generic `.sw`
-handler skips them. Two handlers on one switch race: whichever runs second reads a
-class the first already flipped, which once turned a consent grant into a
-withdrawal.
+- A surface with no data says so. It never falls back to the numbers the
+  prototype was built with — those read as this student's marks, which is the
+  most confident lie the interface can tell. `__masteryHomeEmpty` was never
+  called by anything, and `__masteryRenderHome` / `__masteryRenderInsights` were
+  never implemented, so on the pre-port build a brand-new student was shown
+  fourteen papers and seven marks lost. Home and Insights read from
+  `papers.js` now, and loading, empty and failed are three different states.
+- Which Insights view is shown is a data question — `student_analytics_readiness`
+  — not a tap affordance. It used to toggle on a second tap, which showed a
+  populated chart to a student who had nothing in it.
+
+`src/curriculum.js` is the single source for the board, the stages, the
+class-level mapping and the syllabus codes. Nothing else should hardcode "CAIE",
+a stage name or a four-digit code. Onboarding did, until the port; it offered a
+CBSE picker and wrote `board: 'CBSE'` while `curriculum.js` said otherwise.
+
+## Some CSS is addressed by id, and that is load-bearing
+
+Three sets of rules select by id rather than class, and the port broke each of
+them once by dropping the hook:
+
+- `#obroot` scopes twenty rules, including the whole onboarding palette
+  (`.ic-b`, `.ic-g`, `.ic-a`, `.ic-n`) and the `--ob-*` background wash.
+- `#scanVideo` and `#scanOverlay` size the viewfinder to its hero and hide both
+  while the camera is off. Without them the video renders at its natural size in
+  the corner of a full-bleed viewfinder.
+- The per-screen rules were `#v0`–`#v4`. A routed shell has no stack of numbered
+  view divs, so they are `[data-screen="…"]` now, set by `AppShell`.
 
 ## Erasure
 
