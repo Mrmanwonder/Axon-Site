@@ -80,3 +80,155 @@
   outline: var(--focus-ring);
   outline-offset: -4px;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE GLASS SWITCH
+
+   Overrides the flat switch in system.css. The thumb is a lens sitting proud of
+   the track, and the track refracts through it — the same material as the nav's
+   highlight, driven by the same displacement engine, so the interface has one
+   kind of glass rather than two that merely resemble each other.
+
+   Everything here is static. The only thing that animates is the thumb's
+   transform, which is what the motion rules allow and what a mid-tier Android
+   can actually hold at 60fps.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sw {
+  width: 56px;
+  height: 34px;
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  /* The thumb overhangs, so the glass must not be clipped away at the edge. */
+  overflow: visible;
+}
+
+/* The refracted layer: the track, and nothing else. The filter is attached from
+   the component so the map and the thumb can never disagree about position. */
+.sw .swglass {
+  position: absolute;
+  inset: 0;
+  border-radius: 17px;
+  /* Clipped to the capsule so the displacement cannot smear past the switch. */
+  overflow: hidden;
+}
+
+.sw .tr {
+  position: absolute;
+  inset: 0;
+  border-radius: 17px;
+  background: var(--track-off);
+  transition: background var(--d-recompute) ease;
+}
+
+.sw.on .tr {
+  background: var(--green);
+}
+
+/* ── the lens ──
+   Low white fill, because the point is that the track shows THROUGH it. The
+   work is done by the rim: a bright specular at the top-left where the light
+   is, a softer one along the bottom edge where it bounces back up, and a
+   hairline all the way round that separates the glass from whatever it is
+   sitting on. */
+.sw .th {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 42px;
+  height: 38px;
+  border-radius: 19px;
+  will-change: transform;
+
+  background:
+    linear-gradient(157deg,
+      rgba(255, 255, 255, .38) 0%,
+      rgba(255, 255, 255, .10) 34%,
+      rgba(255, 255, 255, .04) 62%,
+      rgba(255, 255, 255, .22) 100%);
+
+  box-shadow:
+    /* the specular rim */
+    inset 0 1.2px 0 rgba(255, 255, 255, .95),
+    inset 0 -1.2px 0 rgba(255, 255, 255, .70),
+    inset 1.2px 0 0 rgba(255, 255, 255, .45),
+    inset -1.2px 0 0 rgba(255, 255, 255, .45),
+    /* the glass body, lifting it off the track */
+    0 1px 2px rgba(0, 0, 0, .18),
+    0 4px 10px rgba(0, 0, 0, .16),
+    0 10px 26px rgba(0, 0, 0, .12);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Light mode's background is bright enough that a purely white rim disappears
+   into it; the glass needs a faint dark edge to hold its shape. */
+[data-theme="light"] .sw .th {
+  box-shadow:
+    inset 0 1.2px 0 rgba(255, 255, 255, .95),
+    inset 0 -1.2px 0 rgba(255, 255, 255, .55),
+    inset 1.2px 0 0 rgba(255, 255, 255, .40),
+    inset -1.2px 0 0 rgba(255, 255, 255, .40),
+    0 0 0 .5px rgba(28, 28, 40, .10),
+    0 1px 2px rgba(28, 28, 40, .14),
+    0 4px 10px rgba(28, 28, 40, .12),
+    0 8px 22px rgba(28, 28, 40, .08);
+}
+
+/* ── the state glyphs ──
+   These are not decoration. A glass thumb has far less contrast against its
+   track than a solid white one did, so position and colour are carrying less of
+   the state than they used to and these carry the rest. They survive greyscale,
+   which is the same reason confidence is a form and not a hue. */
+.sw .gI {
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--p-white);
+  opacity: 0;
+  transition: opacity var(--d-state) ease var(--d-state);
+  box-shadow: 0 0 3px rgba(0, 0, 0, .35);
+}
+
+.sw.on .gI {
+  opacity: .95;
+}
+
+.sw .gO {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  width: 9px;
+  height: 9px;
+  border: 1.6px solid rgba(255, 255, 255, .55);
+  border-radius: 50%;
+  opacity: 1;
+  transition: opacity var(--d-state) ease;
+  pointer-events: none;
+}
+
+[data-theme="light"] .sw .gO {
+  border-color: rgba(0, 0, 0, .26);
+}
+
+.sw.on .gO {
+  opacity: 0;
+}
+
+.sw:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 20px;
+}
+
+/* Disabled and in-flight both mean "your tap will not land yet", so they look
+   the same. A consent switch is aria-busy until the ledger answers. */
+.sw[disabled] {
+  opacity: .45;
+  cursor: default;
+}
