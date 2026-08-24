@@ -153,11 +153,12 @@ function print(r, baseline) {
     if (r.misses.length > 25) console.log(`    …and ${r.misses.length - 25} more`);
   }
 
-  const failures = gate(r);
+  const failures = gate(r, baseline);
   console.log('');
   if (!failures.length) {
-    console.log('  Gates: both pass.');
-    console.log(`    mark attribution ≥ ${pct(GATES.MARK_ATTRIBUTION)} · reconciliation ≥ ${pct(GATES.RECONCILIATION)}`);
+    console.log(`  Gates: ${baseline ? 'all three' : 'both'} pass.`);
+    console.log(`    mark attribution ≥ ${pct(GATES.MARK_ATTRIBUTION)} · reconciliation ≥ ${pct(GATES.RECONCILIATION)}` +
+      (baseline ? ` · no more than ${(GATES.MAX_REGRESSION * 100).toFixed(1)}pp below ${baseline.pipeline_version}` : ''));
   } else {
     for (const f of failures) {
       console.log(`  GATE FAILED · ${f.gate}: ${pct(f.got)} against ${pct(f.required)} required`);

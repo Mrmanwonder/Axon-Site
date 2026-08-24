@@ -1,0 +1,79 @@
+<!doctype html>
+<meta charset="utf-8"><title>anisotropy separation</title>
+<body><pre id="out">…</pre>
+<script type="module">
+// Does the motion-blur measure separate a shaken page from a merely ruled one?
+//
+// A ruled exam page is full of horizontal lines and horizontal handwriting, so
+// its gradient energy is lopsided before anyone shakes anything. If the
+// threshold cannot tell that apart from real smear, it fires on every page and
+// becomes noise the student learns to ignore.
+import { syntheticPage } from './page.js';
+import { anisotropy, blurScore, toGray } from '../src/scan/quality.js';
+
+/** Second-derivative energy per axis: how *sharp* each direction is, not how
+    much structure it has. Motion blur destroys curvature along the axis it
+    smears; ruled lines do not. */
+function sharpnessAnisotropy(gray, width, height) {
+  let lx = 0, ly = 0;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      lx += Math.abs(gray[i - 1] - 2 * gray[i] + gray[i + 1]);
+      ly += Math.abs(gray[i - width] - 2 * gray[i] + gray[i + width]);
+    }
+  }
+  const t = lx + ly;
+  return t ? Math.abs(lx - ly) / t : 0;
+}
+
+const out = document.getElementById('out');
+const lines = []; const say = t => { lines.push(t); out.textContent = lines.join('\n'); };
+
+const page = syntheticPage(1600, 1200);
+const c = document.createElement('canvas');
+c.width = 1600; c.height = 1200;
+const g = c.getContext('2d', { willReadFrequently: true });
+g.putImageData(new ImageData(page.data, 1600, 1200), 0, 0);
+const clean = g.getImageData(0, 0, 1600, 1200);
+
+/** Directional box smear, which is what a moved phone actually does. */
+function smear(img, dx, dy, n) {
+  const { data, width, height } = img;
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let r = 0, gg = 0, b = 0;
+      for (let k = 0; k < n; k++) {
+        const sx = Math.min(width - 1, Math.max(0, x + dx * (k - (n >> 1))));
+        const sy = Math.min(height - 1, Math.max(0, y + dy * (k - (n >> 1))));
+        const i = (sy * width + sx) * 4;
+        r += data[i]; gg += data[i + 1]; b += data[i + 2];
+      }
+      const o = (y * width + x) * 4;
+      out[o] = r / n; out[o + 1] = gg / n; out[o + 2] = b / n; out[o + 3] = 255;
+    }
+  }
+  return { data: out, width, height };
+}
+
+const cases = [
+  ['clean ruled page', clean],
+  ['shaken sideways 5px', smear(clean, 1, 0, 5)],
+  ['shaken sideways 11px', smear(clean, 1, 0, 11)],
+  ['shaken vertically 5px', smear(clean, 0, 1, 5)],
+  ['shaken vertically 11px', smear(clean, 0, 1, 11)],
+  ['shaken diagonally 7px', smear(clean, 1, 1, 7)],
+];
+
+const results = [];
+for (const [label, img] of cases) {
+  const gray = toGray(img);
+  const a = anisotropy(gray, img.width, img.height);
+  const b = sharpnessAnisotropy(gray, img.width, img.height);
+  const sharp = blurScore(gray, img.width, img.height);
+  results.push({ label, a, b, sharp });
+  say(`${label.padEnd(24)} gradient ${a.toFixed(3)}   axis ${b.toFixed(3)}   sharpness ${sharp.toFixed(3)}`);
+}
+window.__aniso = results;
+</script>

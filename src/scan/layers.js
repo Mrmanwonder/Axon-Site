@@ -1,70 +1,71 @@
 // Stage 2 · layer separation.
 //
-// The cheapest high-value trick in the pipeline, and it happens on device before
-// any model sees the page. The teacher's ink is red; the student's is blue or
-// black. A hue mask splits them for free — no model, no cost, no latency — and
-// what comes out is a spatial map of every teacher mark on the page, with
-// coordinates, before a single token has been spent. Stage 5 is then mostly a
-// join between that map and the question regions stage 3 finds.
+// Rewritten per IMAGE_PIPELINE.md §6. The teacher's ink is red and the student's
+// is blue or black, and separating them on device costs no model call — but the
+// old HSV hue mask was fragile in exactly the conditions that matter. Hue is
+// numerically unstable at low saturation, faint red pen under warm indoor light
+// *is* low saturation, and white paper under a tubelight drifts toward a hue a
+// naive red test partly selects. So it missed the marks and found the paper.
 //
-// It also produces a cleaner input for text recognition than the raw page,
-// because teacher ink routinely strikes straight through student writing.
+// What replaces it is an opponent-colour measure taken relative to the page's
+// own paper — see colour.js — emitted as a soft 8-bit probability rather than a
+// binary mask. Soft matters twice over. A lightly-written half-tick and a bold
+// cross both count, and the difference between them *is* the mark class, so
+// binarising throws away the distinction the mask exists to carry. And because
+// this is computed from decoded pixels before any lossy encode, a faint thin
+// stroke that will not survive WebP survives here at full strength — which,
+// measured, is the difference between keeping 12% of it and keeping all of it
+// (bench/README.md).
 //
-// The failure modes here are known and handled rather than assumed away: a
-// teacher who marked in green, a student who wrote in red. Neither fails the
-// scan. Both drop the page a confidence tier and route it down a colour-agnostic
-// path, because a page we read cautiously is worth far more than one we refuse.
+// The mask is derived from the image and never written back to it. Nothing in
+// this file changes a pixel that goes to a model.
 
 import { RED, LAYER_FALLBACK, MARK_SHAPE } from './contract.js';
-import { coarsePlane, samplePlane, dilate } from './raster.js';
-import { wrapImageData } from './imagedata.js';
+import { maskFrom, rednessPlane } from './colour.js';
 
 /**
- * Two masks in one pass: is this pixel ink at all, and is this pixel red ink.
+ * The soft red mask, and how much ink is on the page at all.
  *
- * Red is tested two ways and the results unioned. The HSV test is the principled
- * one, but ballpoint red on warm-lit paper often lands at a saturation an HSV
- * threshold rejects while still being unmistakable as a channel margin — R
- * clearly above both G and B. Either test alone loses real marks.
+ * Two passes rather than one: redness first, so the paper's baseline can be
+ * measured from the whole page before any pixel is judged against it. A
+ * threshold that does not know what this sheet looks like under this light is
+ * the thing being replaced.
  */
-export function maskPage(img) {
+export function maskPage(img, channel = RED.CHANNEL) {
   const { data, width, height } = img;
   const n = width * height;
-  const red = new Uint8Array(n);
+
+  const redness = rednessPlane(img, channel);
+  const [tLow, tHigh] = channel === 'lab'
+    ? [RED.LAB_T_LOW, RED.LAB_T_HIGH]
+    : [RED.RATIO_T_LOW, RED.RATIO_T_HIGH];
+  const { mask } = maskFrom(redness, tLow, tHigh);
+
+  // Ink coverage, for the fallback tests. Red counts as ink even where it is too
+  // bright to pass the luma test.
   const ink = new Uint8Array(n);
-  let redCount = 0, inkCount = 0;
+  let inkCount = 0, redCount = 0, redWeight = 0;
 
   for (let p = 0, i = 0; p < n; p++, i += 4) {
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    const luma = (r * 299 + g * 587 + b * 114) / 1000;
-    const isInk = luma <= RED.INK_LUMA_MAX;
-    if (isInk) { ink[p] = 1; inkCount++; }
-
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    if (max < RED.VALUE_MIN * 255) continue;
-
-    const delta = max - min;
-    const sat = max === 0 ? 0 : delta / max;
-    let isRed = false;
-
-    if (sat >= RED.SATURATION_MIN && delta > 0) {
-      let hue;
-      if (max === r) hue = 60 * (((g - b) / delta) % 6);
-      else if (max === g) hue = 60 * ((b - r) / delta + 2);
-      else hue = 60 * ((r - g) / delta + 4);
-      if (hue < 0) hue += 360;
-      isRed = hue <= RED.HUE_LOW_MAX || hue >= RED.HUE_HIGH_MIN;
-    }
-    if (!isRed && r - Math.max(g, b) >= RED.CHANNEL_MARGIN) isRed = true;
-
-    if (isRed) {
-      red[p] = 1; redCount++;
-      // Red pen is ink even where it is too bright to pass the luma test.
-      if (!ink[p]) { ink[p] = 1; inkCount++; }
-    }
+    const luma = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+    const isRed = mask[p] >= RED.COMPONENT_THRESHOLD;
+    if (isRed) { redCount++; redWeight += mask[p] / 255; }
+    if (luma <= RED.INK_LUMA_MAX || isRed) { ink[p] = 1; inkCount++; }
   }
 
-  return { red, ink, redCount, inkCount, width, height };
+  return {
+    mask, red: thresholded(mask), ink,
+    redCount, inkCount, redWeight,
+    baseline: redness.baseline, channel,
+    width, height,
+  };
+}
+
+/** A binary copy, for component analysis only. The stored mask stays soft. */
+function thresholded(mask) {
+  const out = new Uint8Array(mask.length);
+  for (let i = 0; i < mask.length; i++) out[i] = mask[i] >= RED.COMPONENT_THRESHOLD ? 1 : 0;
+  return out;
 }
 
 /**
@@ -283,48 +284,24 @@ export function findMarginBand(components, width) {
 }
 
 /**
- * The content layer: the page with red taken out and the paper put back.
- *
- * Not erased to white — filled from an estimate of the page built by averaging
- * down while ignoring red, so a strikethrough across an answer leaves the
- * surrounding paper tone rather than a bright scar. Text recognition reads the
- * result far more reliably than the raw page, where teacher ink crosses student
- * writing constantly.
- */
-export function suppressRed(img, redMask) {
-  const { data, width, height } = img;
-  const grown = dilate(redMask, width, height);
-  const pw = Math.max(8, Math.round(width / 24));
-  const ph = Math.max(8, Math.round(height / 24));
-  const plane = coarsePlane(img, pw, ph, grown);
-
-  const out = new Uint8ClampedArray(data.length);
-  out.set(data);
-  const sample = new Float32Array(3);
-
-  for (let p = 0; p < grown.length; p++) {
-    if (!grown[p]) continue;
-    const x = p % width, y = (p / width) | 0;
-    samplePlane(plane, pw, ph, x, y, width, height, sample);
-    const i = p * 4;
-    out[i] = sample[0]; out[i + 1] = sample[1]; out[i + 2] = sample[2]; out[i + 3] = 255;
-  }
-  return wrapImageData(out, width, height);
-}
-
-/**
  * Stage 2 in one call.
  *
- * Returns the teacher layer as measured components, the content layer as an
- * image, and — where the page broke the colour assumption — which way it broke,
- * so the caller can drop the page a tier and take the colour-agnostic path
- * instead of failing the scan.
+ * Returns the teacher layer as measured components, the soft mask itself, and —
+ * where the page broke the colour assumption — which way it broke, so the caller
+ * can drop the page a tier and take the colour-agnostic path rather than failing
+ * the scan.
+ *
+ * There is no content layer any more. The old build produced a red-suppressed
+ * copy of the page and nothing ever read it: the server crops from the
+ * conditioned page, and IMAGE_PIPELINE.md §3 forbids writing tonal changes back
+ * to the pixels a model sees in any case.
  */
-export function separateLayers(img, { withContentLayer = true } = {}) {
-  const { red, ink, redCount, inkCount, width, height } = maskPage(img);
+export function separateLayers(img, { channel = RED.CHANNEL } = {}) {
+  const m = maskPage(img, channel);
+  const { width, height } = m;
 
-  const inkShare = inkCount / (width * height);
-  const redShare = inkCount ? redCount / inkCount : 0;
+  const inkShare = m.inkCount / (width * height);
+  const redShare = m.inkCount ? m.redCount / m.inkCount : 0;
 
   let fallback = null;
   // A page with real content and effectively no red on it was marked in green,
@@ -332,19 +309,16 @@ export function separateLayers(img, { withContentLayer = true } = {}) {
   if (inkShare > 0.004 && redShare < LAYER_FALLBACK.RED_INK_SHARE_MIN) {
     fallback = LAYER_FALLBACK.NON_RED_MARKING;
   } else if (redShare > LAYER_FALLBACK.RED_INK_SHARE_MAX) {
-    // Red is most of the ink on the page, so it is not marginalia. Rare, and it
-    // breaks the assumption completely.
+    // Red is most of the ink, so it is not marginalia — the student wrote in it.
     fallback = LAYER_FALLBACK.STUDENT_WROTE_RED;
   }
 
-  // On a page the student wrote in red the mask is meaningless, and handing
-  // stage 5 a map of the answer would be worse than handing it nothing.
-  const labelled = fallback === LAYER_FALLBACK.STUDENT_WROTE_RED
+  // The mask is meaningless when the student wrote in red; do not hand stage 5 a
+  // map of the answer and call it the marking.
+  const { components: raw, labels } = fallback === LAYER_FALLBACK.STUDENT_WROTE_RED
     ? { components: [], labels: null }
-    : connectedComponents(red, width, height);
-  const components = labelled.components
-    .map((c) => measureComponent(c, labelled.labels, width, height))
-    .map(({ corners, ...rest }) => rest); // only geometry travels onward
+    : connectedComponents(m.red, width, height);
+  const components = raw.map((c) => measureComponent(c, labels, width, height));
 
   return {
     teacher: {
@@ -352,11 +326,17 @@ export function separateLayers(img, { withContentLayer = true } = {}) {
       margin_band: findMarginBand(components, width),
       shapes: tally(components),
     },
-    content: withContentLayer && fallback !== LAYER_FALLBACK.STUDENT_WROTE_RED
-      ? suppressRed(img, red)
-      : img,
+    mask: { data: m.mask, width, height },
     fallback,
-    coverage: { ink_share: r4(inkShare), red_share_of_ink: r4(redShare) },
+    coverage: {
+      ink_share: r4(inkShare),
+      red_share_of_ink: r4(redShare),
+      // IMAGE_PIPELINE.md §6.3 wants both stored: they route the same downgrade
+      // for different reasons and need different fixes later.
+      red_component_area_ratio: r4(m.redCount / (width * height)),
+      mask_baseline: r4(m.baseline),
+      mask_channel: m.channel,
+    },
   };
 }
 

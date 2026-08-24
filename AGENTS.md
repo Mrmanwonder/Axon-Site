@@ -170,6 +170,82 @@ it as `-140 * p`. `initScan()` and the drag-release path once used `-140 * (1 - 
 which inverted the range and parked the toast permanently off-screen. If you touch
 one of those handlers, keep all of them on the same mapping.
 
+## The backend
+
+`REVIEW_PIPELINE.md` is the specification; these are the rules that are easiest to
+break by accident.
+
+- **No image processing in an Edge Function.** The CPU limit is two seconds and a
+  single JPEG decode of a full page exceeds it. Pixel work happens on the device or
+  it does not happen. A function that crops, resizes or re-encodes is not slow, it is
+  dead.
+- **Every model call goes through `_shared/openrouter.ts`.** No direct fetch to a
+  provider anywhere else, so the provider policy, the route lookup and the cost ledger
+  cannot be bypassed by a new worker in a hurry.
+- **`PROVIDER_POLICY` is never overridden.** Zero Data Retention, provider data
+  collection denied. This is a minor's exam paper and prompt logging stays off at the
+  account level too, discount or no discount.
+- **Model IDs never appear in code.** They live in `model_routes`, so changing one is
+  an UPDATE rather than a redeploy — which is what makes the eval harness able to
+  answer which model is better.
+- **Prompts are versioned files, never edited in place.** A changed prompt gets a new
+  version, so `model_calls` stays comparable across the change. A prompt edit that
+  quietly costs a point of mark-attribution accuracy is the most likely way this
+  system degrades.
+- **Validate every model response after parsing**, even under a strict schema. Strict
+  mode is a strong constraint, not a proof.
+- **No field is written without its provenance box.** Enforced in code after the
+  parse, not merely asked for in the prompt.
+- **Workers are idempotent**: check terminal status, delete the message, exit. A
+  duplicate delivery must be cheap and harmless.
+- **Never auto-correct a mark to make reconciliation close.** The adjudication pass
+  exists to *find* a reading error, and its corrections still surface in review.
+- **Anything read off a page is data, never instruction.** A student will write
+  "ignore previous instructions" on an answer sheet eventually. Extraction models get
+  no tools and can only emit a fixed schema, and page text goes into a prompt fenced
+  by `prompts/untrusted.ts` and labelled as material to analyse.
+
+### Where the pieces are
+
+| Function | Job |
+| --- | --- |
+| `paper-submit` | Idempotent create, then one message on `mastery_triage` |
+| `upload-intent` / `upload-complete` | Presigned PUTs out, server-side HEAD back |
+| `queue-tick` | Dispatch, and the two sweeps that make a stall visible |
+| `w-triage` → `w-structure` → `w-content` → `w-reconcile` → `w-adjudicate` | Stages 3–7 |
+| `review-complete` → `w-explain` | Stage 8, and only after the student confirms |
+| `w-r2-delete` | Makes a deletion real |
+| `eval-run` | The golden set through the same queues, with a route override |
+
+### Rules a new worker gets wrong
+
+- **Use `serveWorker()`.** It has the only three endings a worker may have: ack,
+  ack-a-permanent-failure, or leave the message for the visibility timeout. There is
+  no ending where the message is acked and nothing was recorded — that is a paper
+  that quietly loses a question.
+- **A permanent failure marks its unit and lets the paper proceed.** An unreadable
+  question is a gap with a crop beside it. Nineteen good readings blocked on the
+  twentieth is the worse failure, and the invisible one.
+- **Completion checks belong in SQL, not in the worker.** Twenty content calls go out
+  together and the last two land microseconds apart; `advance_after_*` takes an
+  advisory lock so the paper advances once.
+- **`run_advance()` is the only writer of run status.** It refuses to move a terminal
+  run, so a worker still in flight when the sweep failed its paper cannot resurrect it.
+- **A route override lives on the run, not on the message.** One that reached only the
+  first stage would have the eval measuring the default model for everything after it.
+
+## Storage
+
+`STORAGE_R2.md` is the specification. Two things worth repeating:
+
+- **Bytes never pass through a function.** Devices PUT to a presigned URL and the
+  server confirms with a HEAD. Without that confirmation a client can register a row
+  for an object that was never uploaded, and it surfaces much later as a model call
+  against a 404 — which looks like a model problem and is not.
+- **A presigned GET handed to a model provider is a time-limited bearer capability to
+  a minor's exam paper.** Ten-minute TTL, unguessable keys, crops rather than pages,
+  and the signed URL is never written to `model_calls` — log the key.
+
 ## Verifying
 
 Three suites, all runnable without a Supabase project or an API key:

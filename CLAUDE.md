@@ -11,11 +11,33 @@ marks were lost and what to do differently.
 Not a grading tool. Not a teacher product. The student is the only daily user.
 
 The ingestion pipeline — everything between a page of paper and a committed, explained
-question — is specified separately and in full by **`SCANNING_SYSTEM.md`**. It is the
-highest-risk subsystem in the product and every other feature is downstream of it. That
-document owns stages 0 to 10, the confidence model, the failure taxonomy and the accuracy
-gates; where it and this document disagree about the pipeline, it wins. The four hard
-rules below are the exception: they bind it too.
+question — is specified separately and in full, across four documents. It is the
+highest-risk subsystem in the product and every other feature is downstream of it.
+
+| Document | Owns |
+| --- | --- |
+| `SCANNING_SYSTEM.md` | *What* the pipeline does: the ten stages, the confidence model, the failure taxonomy, the accuracy gates |
+| `IMAGE_PIPELINE.md` | What the device does to a page. **Replaces `SCANNING_SYSTEM.md` §4 and §5 outright** |
+| `REVIEW_PIPELINE.md` | *How* it runs: queues, workers, the paper state machine, the model client, the prompts |
+| `STORAGE_R2.md` | Where the bytes live. **Replaces every Supabase Storage reference** |
+
+Where they disagree with this document about the pipeline, they win. The four hard
+rules below are the exception: they bind all four, and they are enforced as database
+constraints rather than by convention. `REVIEW_PIPELINE.md` §4 sketches a schema that
+predates those constraints — its runtime columns are layered onto the tables that
+already exist rather than replacing them.
+
+Two things the later documents changed, worth stating here because they contradict
+what came before:
+
+- **Preprocessing may change geometry and encoding. It may not change tone.** No
+  grayscale, no binarisation, no sharpening, no denoise, no contrast stretch, no
+  illumination flattening. Every one of those was standard advice for a classical OCR
+  engine reading printed text, and every one of them destroys signal a vision model
+  would have used. The mask is derived from the image and never written back to it.
+- **Explanations run after review, not before.** No explanation may be built on a mark
+  the student has not confirmed. Generating twenty and then having question seven
+  corrected buys a stale explanation or a wasted call.
 
 ## Hard rules
 
@@ -61,7 +83,15 @@ corrupt everything downstream.
 - Web-first PWA. Mobile viewport is the design target (~380px); desktop is secondary.
 - `index.html` is the entire front end and the design system. `src/` holds ES modules for
   data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
-- Supabase: Postgres, auth, storage. Auth is email or phone OTP only.
+- Supabase: Postgres, auth, and Edge Functions. Auth is email or phone OTP only.
+  An Edge Function gets **two seconds of CPU** — enough to orchestrate, never enough to
+  touch a pixel. All image work is on the device or nowhere.
+- Cloudflare R2 holds every user document, over the S3 API. Postgres holds metadata
+  only, and bytes go device-to-bucket on a presigned URL without passing through a
+  function. See `STORAGE_R2.md`.
+- Models are reached through OpenRouter, behind one client, on Zero Data Retention
+  endpoints with provider data collection denied. Model IDs live in a table, never in
+  code. See `REVIEW_PIPELINE.md` §7.
 - Offline: past papers and their analysis must be readable offline. Capture works
   offline and queues; extraction needs the network. Cache read paths; queue nothing
   that needs the model to have already run.

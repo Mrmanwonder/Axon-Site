@@ -14,6 +14,49 @@ node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
 node harness/run.mjs harness/runs/2026-08-20.json --baseline harness/runs/2026-08-13.json
 ```
 
+## Running it against the real pipeline
+
+`eval-run` puts the golden set through the same queues, the same workers and the
+same prompts that a student's paper goes through. Not a mock: the point of an
+eval is to measure the thing that ships, and the workers do not know they are
+being measured.
+
+```bash
+curl -s "$FUNCTIONS_URL/eval-run" \
+  -H "Authorization: Bearer $SERVICE_KEY" -H 'Content-Type: application/json' \
+  -d '{"golden_set_version":"2026-08","paper_ids":["…"],
+       "route_override":{"primary_model":"anthropic/claude-sonnet-5"}}'
+```
+
+`route_override` is what makes this worth having. Point the content stage at a
+different model, rerun, compare — that is how model selection gets decided
+instead of guessed, and it is why `model_route` is a table rather than a
+constant. It cannot relax the retention policy: `allow_training` is stripped
+from any override before it is stored.
+
+The call returns immediately with the run ids. Once the queues have drained:
+
+```bash
+node harness/export.mjs <run-id> … > harness/runs/2026-08-23-sonnet.json
+node harness/run.mjs harness/runs/2026-08-23-sonnet.json \
+     --baseline harness/runs/2026-08-23-gemma.json
+```
+
+## The three gates
+
+Two are absolute and one is relative. `--baseline` turns the third one on.
+
+| Gate | Threshold | What failing it means |
+| --- | --- | --- |
+| Mark attribution | ≥ 98% | Insights must not ship against real data yet |
+| Reconciliation | ≥ 90% | The review step stays mandatory |
+| Attribution regression | ≤ 0.5pp below the baseline | Land the change only with a reason |
+
+The third exists because a prompt edit that costs a point of attribution
+accuracy passes both absolute thresholds, is invisible in any single paper, and
+would never show up in a code review. It is the most likely way this system
+degrades.
+
 ## The golden set comes first
 
 Twenty labelled papers **before** pipeline work, not after. Every decision made

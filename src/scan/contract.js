@@ -52,33 +52,37 @@ export const CAPTURE = {
 // a materially worse experience and often means the page is simply lost.
 
 export const QUALITY = {
-  // Variance of the Laplacian, normalised to 0–1 against this ceiling. Below
-  // BLUR_WARN the page is soft; below BLUR_FAIL thin red strokes are gone.
+  // Variance of the Laplacian, normalised to 0–1 against this ceiling.
   BLUR_NORMALISER: 900,
   BLUR_WARN: 0.22,
   BLUR_FAIL: 0.10,
-  // Specular highlight: bright and colourless. A washed-out red tick reads as no
-  // tick at all, which is silent destruction of the one layer that matters most.
+  // Not a gate. Measured, directional anisotropy cannot tell a shaken page from
+  // a ruled one, and misses diagonal shake entirely — while plain
+  // variance-of-Laplacian catches every direction. See bench/anisotropy.html.
+  // It survives only to choose between "the phone moved" and "too blurred",
+  // which is worth getting right because the two need different actions.
+  ANISOTROPY_HINT: 0.35,
+  // Specular highlight: bright and colourless. IMAGE_PIPELINE.md §7 is stricter
+  // than the old threshold, and right to be — a blown highlight is unrecoverable,
+  // there is no information under it to enhance, and it lands preferentially on
+  // the glossy ridge of a fresh ink stroke.
   GLARE_V: 0.94,
   GLARE_S: 0.12,
-  GLARE_WARN: 0.010,
+  GLARE_WARN: 0.005,
   GLARE_FAIL: 0.035,
-  // Long edge in pixels, after warping.
-  //
-  // These were 1600 and 1100, chosen to sit just under the 300 DPI conditioning
-  // target — and on a real phone every single capture came back flagged,
-  // because a page filling most of a 1920x1440 frame warps to about 1400px and
-  // no hand-held capture was ever going to clear 1600. A gate that fires on
-  // everything tells the student nothing and teaches them to ignore it.
-  //
-  // What replaces them is not a better guess: it is a placeholder with a job.
-  // The number that belongs here is the resolution below which extraction
-  // measurably gets worse, and §18's harness is the thing that can answer that.
-  // Until the golden set exists these are set where a red tick is still several
-  // pixels wide — about 128 DPI across A4 — so the flag means something when it
-  // does appear.
-  RESOLUTION_WARN: 1500,
+  // Any single channel pinned at maximum. Distinct from glare: a page can clip
+  // red without clipping to white, which is precisely the teacher's ink going.
+  CLIP_WARN: 0.02,
+  // Long edge in pixels after warping. Still a placeholder until the golden set
+  // can measure where extraction actually degrades — but advisory, never
+  // blocking, because it is the one gate a student's hardware may make
+  // unreachable.
+  RESOLUTION_WARN: 1800,
   RESOLUTION_FAIL: 1000,
+  // Corner angles further than this from square. A prompt to square up, not a
+  // refusal: perspective correction handles a great deal of tilt, and the
+  // warning is for the case where it will have to stretch one end badly.
+  SKEW_WARN_DEG: 15,
 };
 
 export const PAGE_VERDICT = /** @type {const} */ (['ok', 'warn', 'fail']);
@@ -86,45 +90,48 @@ export const PAGE_VERDICT = /** @type {const} */ (['ok', 'warn', 'fail']);
 // ── stage 1 · conditioning ─────────────────────────────────────────────────
 
 export const CONDITIONING = {
-  TARGET_DPI: 300,
-  // A4 long edge. Every CBSE answer booklet and question paper is A4, so the
-  // physical assumption is safe and gives a real DPI rather than a pixel count
-  // that means nothing without knowing the page size.
-  PAGE_LONG_EDGE_INCHES: 11.69,
-  // Bytes. Indian mobile data is the binding constraint on time-to-result far
-  // more often than server compute is, so this is a hard target, not a hope.
-  TARGET_BYTES: 400 * 1024,
-  // Quality is searched downward until the page fits, and stopped here whether
-  // it fits or not: past this point the red channel starts losing thin strokes,
-  // and a page that uploads fast and has lost the marks is worthless.
-  QUALITY_MAX: 0.86,
-  QUALITY_MIN: 0.52,
-  // Red-stroke retention, measured against the unconditioned page. Compression
-  // that drops below this is rejected even if it hits the byte target — the
-  // usual JPEG profile optimises for legible black text, which is the wrong
-  // target here.
-  RED_RETENTION_MIN: 0.92,
-  // Illumination is flattened against a heavily blurred estimate of the page's
-  // own lighting, computed at this width. Small enough to be cheap, large
-  // enough to follow a real gradient from a single overhead tubelight.
-  ILLUMINATION_PROXY_WIDTH: 64,
+  // IMAGE_PIPELINE.md §4. Not 300 DPI: that floor is calibrated for 10-12pt print
+  // read by a classical OCR engine, and exam handwriting is four to eight times
+  // larger. The models see crops, not pages, and a crop of a fifth of a page at
+  // 1500px arrives at four to five times the effective resolution the same
+  // region would have had inside a full-page image — while being smaller.
+  PAGE_LONG_EDGE: 2400,
+  CROP_LONG_EDGE: 1500,
+  // Quality, not a search. The old build walked JPEG quality down while
+  // measuring how much red survived, which was fighting a problem the format
+  // was creating. One encode, no re-encode. See bench/README.md.
+  ENCODE_QUALITY: 0.92,
+  // WebP where the browser has it, JPEG where it does not. Neither can be made
+  // to write 4:4:4 from a canvas — measured, see bench/README.md — which is why
+  // the mask carries the fine detail rather than the page.
+  ENCODE_TYPES: ['image/webp', 'image/jpeg'],
+  PREPROCESS_VERSION: 'v2',
 };
 
 // ── stage 2 · layer separation ─────────────────────────────────────────────
 
 export const RED = {
-  // Hue in degrees, both ends of the wrap-around.
-  HUE_LOW_MAX: 14,
-  HUE_HIGH_MIN: 340,
-  SATURATION_MIN: 0.34,
-  VALUE_MIN: 0.22,
-  // Ballpoint red on white under warm light often reads as low-saturation pink
-  // to an HSV test but is unambiguous as a channel margin, so the two tests are
-  // a union rather than an intersection.
-  CHANNEL_MARGIN: 26,
+  // IMAGE_PIPELINE.md §6. Hue is out; it is numerically unstable at exactly the
+  // saturation faint red pen lives at, and white paper under a tubelight drifts
+  // toward a hue a naive red test partly selects.
+  //
+  // Both replacements are kept because §6.1 says to measure rather than choose.
+  // Thresholds are distances *above the page's own paper*, never absolute — the
+  // baseline is what makes this work in a kitchen and a classroom alike.
+  CHANNEL: 'ratio',
+  // CIELAB a*. Blue-black ink reads around +12 above paper, faint red around
+  // +32, so the band sits between them with room on both sides.
+  LAB_T_LOW: 18,
+  LAB_T_HIGH: 30,
+  // R/(G+B). Blue ink goes *negative* here, which is a cleaner separation than
+  // a* manages, for one divide instead of two cube roots.
+  RATIO_T_LOW: 0.12,
+  RATIO_T_HIGH: 0.25,
+  // Above this the soft mask counts as ink for component analysis. The stored
+  // mask stays soft; only the shape analysis thresholds a copy.
+  COMPONENT_THRESHOLD: 128,
   // Ink is anything meaningfully darker than the page.
   INK_LUMA_MAX: 165,
-  // Components smaller than this are speckle, not marks.
   MIN_COMPONENT_PX: 12,
 };
 
@@ -134,10 +141,9 @@ export const LAYER_FALLBACK = {
   NON_RED_MARKING: 'non_red_marking',
   // The student wrote in red, which breaks the layer assumption completely.
   STUDENT_WROTE_RED: 'student_wrote_red',
-  // Red share of ink below this, with real ink present, means nobody marked in red.
   RED_INK_SHARE_MIN: 0.002,
-  // Above this, red is not marginalia — it is the body of the page.
-  RED_INK_SHARE_MAX: 0.34,
+  // IMAGE_PIPELINE.md §6.3 puts this at about 15% of written area.
+  RED_INK_SHARE_MAX: 0.15,
 };
 
 // Structural shape of a teacher mark, as the device can tell it from geometry

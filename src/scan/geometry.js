@@ -132,6 +132,22 @@ export function warpPerspective(src, quad, width, height) {
   const out = makeImageData(width, height);
   const s = src.data, d = out.data, sw = src.width, sh = src.height;
 
+  // How many source pixels each destination pixel is standing in for. Bilinear
+  // sampling reads four neighbours regardless, so on a real downscale it skips
+  // most of the source — and what it skips is high-frequency detail, which is
+  // exactly what a thin pen stroke is. IMAGE_PIPELINE.md §5.1 is blunt about the
+  // symptom: a stroke aliases into a dashed line, and that reads as a quirk of
+  // the student's handwriting rather than as an artefact we introduced.
+  //
+  // So the box is prefiltered: average over the footprint before interpolating.
+  // The scale is measured at the quad's own size rather than assumed, because a
+  // keystoned page is compressed at one end and not the other.
+  const size = quadSize(quad);
+  const scale = Math.max(size.width / width, size.height / height);
+  const k = Math.max(1, Math.min(4, Math.round(scale)));
+  const half = (k - 1) / 2;
+  const norm = 1 / (k * k);
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const w = Hinv[6] * x + Hinv[7] * y + Hinv[8];
@@ -139,26 +155,45 @@ export function warpPerspective(src, quad, width, height) {
       const sy = (Hinv[3] * x + Hinv[4] * y + Hinv[5]) / w;
       const o = (y * width + x) * 4;
 
+      // Outside the source is page white, never transparent black — a black
+      // border reads as ink to the mask and as one enormous dark component to
+      // the mark finder.
       if (sx < 0 || sy < 0 || sx > sw - 1 || sy > sh - 1) {
         d[o] = d[o + 1] = d[o + 2] = 255; d[o + 3] = 255;
         continue;
       }
 
-      const x0 = sx | 0, y0 = sy | 0;
-      const x1 = Math.min(x0 + 1, sw - 1), y1 = Math.min(y0 + 1, sh - 1);
-      const fx = sx - x0, fy = sy - y0;
-      const i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4;
-      const i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
-
-      for (let c = 0; c < 3; c++) {
-        const top = s[i00 + c] * (1 - fx) + s[i10 + c] * fx;
-        const bot = s[i01 + c] * (1 - fx) + s[i11 + c] * fx;
-        d[o + c] = top * (1 - fy) + bot * fy;
+      if (k === 1) {
+        sampleBilinear(s, sw, sh, sx, sy, d, o);
+      } else {
+        let r = 0, g = 0, b = 0;
+        for (let j = 0; j < k; j++) {
+          for (let i = 0; i < k; i++) {
+            const px = Math.min(sw - 1, Math.max(0, Math.round(sx - half + i)));
+            const py = Math.min(sh - 1, Math.max(0, Math.round(sy - half + j)));
+            const q = (py * sw + px) * 4;
+            r += s[q]; g += s[q + 1]; b += s[q + 2];
+          }
+        }
+        d[o] = r * norm; d[o + 1] = g * norm; d[o + 2] = b * norm;
       }
       d[o + 3] = 255;
     }
   }
   return out;
+}
+
+function sampleBilinear(s, sw, sh, sx, sy, d, o) {
+  const x0 = sx | 0, y0 = sy | 0;
+  const x1 = Math.min(x0 + 1, sw - 1), y1 = Math.min(y0 + 1, sh - 1);
+  const fx = sx - x0, fy = sy - y0;
+  const i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4;
+  const i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
+  for (let c = 0; c < 3; c++) {
+    const top = s[i00 + c] * (1 - fx) + s[i10 + c] * fx;
+    const bot = s[i01 + c] * (1 - fx) + s[i11 + c] * fx;
+    d[o + c] = top * (1 - fy) + bot * fy;
+  }
 }
 
 /** Map a box measured on the warped page back to the original photograph. */

@@ -122,3 +122,34 @@ test('the correction rate accepts a question list or a question count', () => {
   assert.equal(correctionRate([{ questions: [1, 2, 3, 4], corrections_count: 1 }]).rate, 0.25);
   assert.equal(correctionRate([{ questions: [] }]).rate, 0);
 });
+
+// ── the regression gate ────────────────────────────────────────────────────
+// The one gate that is relative. A prompt edit costing a point of attribution
+// accuracy passes every absolute threshold and is invisible in any single
+// paper — which is exactly why it needs its own check.
+
+test('a small drop against the previous version passes', () => {
+  const before = { pipeline_version: '1.0.0', mark_attribution: { accuracy: 0.990 }, reconciliation: { rate: 0.95 } };
+  const now = { pipeline_version: '1.0.1', mark_attribution: { accuracy: 0.987 }, reconciliation: { rate: 0.95 } };
+  assert.equal(gate(now, before).length, 0);
+});
+
+test('a drop of more than half a point does not', () => {
+  const before = { pipeline_version: '1.0.0', mark_attribution: { accuracy: 0.995 }, reconciliation: { rate: 0.95 } };
+  const now = { pipeline_version: '1.0.1', mark_attribution: { accuracy: 0.988 }, reconciliation: { rate: 0.95 } };
+  const failures = gate(now, before);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].gate, 'attribution regression');
+  assert.match(failures[0].consequence, /0\.70pp/);
+});
+
+test('an improvement is never a regression', () => {
+  const before = { pipeline_version: '1.0.0', mark_attribution: { accuracy: 0.982 }, reconciliation: { rate: 0.95 } };
+  const now = { pipeline_version: '1.0.1', mark_attribution: { accuracy: 0.995 }, reconciliation: { rate: 0.95 } };
+  assert.equal(gate(now, before).length, 0);
+});
+
+test('with no baseline there is nothing to regress against', () => {
+  const now = { pipeline_version: '1.0.1', mark_attribution: { accuracy: 0.985 }, reconciliation: { rate: 0.95 } };
+  assert.equal(gate(now).length, 0);
+});

@@ -90,6 +90,7 @@ export async function addPage(draft, page) {
   draft.pages.push({
     page_number: draft.pages.length + 1,
     blob: page.blob,
+    mask: page.mask ?? null,
     proxy: page.proxy ?? null,
     width: page.width,
     height: page.height,

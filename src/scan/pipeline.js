@@ -41,6 +41,10 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
 
   const page = {
     blob: processed.blob,
+    // Computed from the decoded pixels before the page was encoded, which is the
+    // whole reason it exists: a faint thin stroke the lossy page loses is still
+    // at full strength here. See bench/README.md.
+    mask: processed.mask,
     proxy,
     width: processed.width,
     height: processed.height,
@@ -105,6 +109,7 @@ export async function ingest({ studentId, draft, paperType, dateTaken, onProgres
     page_number: p.page_number,
     storage_path: `${studentId}/${paperId}/${p.page_number}.jpg`,
     proxy_path: p.proxy ? `${studentId}/${paperId}/${p.page_number}.proxy.jpg` : null,
+    mask_path: p.mask ? `${studentId}/${paperId}/${p.page_number}.mask.png` : null,
     width: p.width,
     height: p.height,
     quality: p.quality,
