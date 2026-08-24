@@ -1,0 +1,97 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>viewfinder harness</title>
+<style>
+  body{margin:0;background:#111;color:#eee;font:13px/1.5 system-ui;}
+  #stage{position:relative;width:390px;height:640px;overflow:hidden;background:#000;}
+  video,canvas#overlay{position:absolute;inset:0;width:100%;height:100%;}
+  video{object-fit:cover;}
+  pre{padding:10px;margin:0;}
+</style>
+<body>
+<div id="stage">
+  <video id="v" playsinline muted></video>
+  <canvas id="overlay"></canvas>
+</div>
+<pre id="log">starting…</pre>
+<script type="module">
+// Drives the real capture controller against a camera we author frame by frame.
+//
+// A fake webcam gives you a rolling colour pattern, which tells you the loop
+// runs and nothing about whether it finds a page. A canvas stream is a real
+// MediaStream showing a real scene — a sheet on a dark desk, with a couple of
+// pixels of hand shake — so the detector, the steadiness window and the shutter
+// are all exercised on the thing they are actually for.
+import { createCapture } from '../src/scan/capture.js';
+
+const W = 960, H = 1280;
+const scene = document.createElement('canvas');
+scene.width = W; scene.height = H;
+const g = scene.getContext('2d');
+
+const params = new URLSearchParams(location.search);
+const shake = Number(params.get('shake') ?? 2);   // pixels of hand wobble
+let t = 0;
+
+function draw() {
+  t++;
+  const jx = Math.sin(t / 7) * shake, jy = Math.cos(t / 5) * shake;
+
+  g.fillStyle = '#2b2f36'; g.fillRect(0, 0, W, H);          // desk
+  g.save();
+  g.translate(W / 2 + jx, H / 2 + jy);
+  g.rotate(0.03);
+  g.fillStyle = '#efeee9';                                   // the page
+  g.fillRect(-330, -450, 660, 900);
+  g.strokeStyle = '#c9c7c0'; g.lineWidth = 2;
+  for (let y = -390; y < 430; y += 46) {                     // ruled lines
+    g.beginPath(); g.moveTo(-290, y); g.lineTo(290, y); g.stroke();
+  }
+  g.strokeStyle = '#2a2f5a'; g.lineWidth = 5;                // handwriting
+  for (let y = -376; y < 420; y += 46) {
+    g.beginPath(); g.moveTo(-270, y);
+    g.lineTo(-270 + 300 + ((y * 7) % 220), y + Math.sin(y) * 3);
+    g.stroke();
+  }
+  g.fillStyle = '#c02226';                                   // marking
+  for (let i = 0; i < 8; i++) g.fillRect(232, -400 + i * 106, 26, 34);
+  g.restore();
+  requestAnimationFrame(draw);
+}
+draw();
+
+const stream = scene.captureStream(15);
+const log = document.getElementById('log');
+const events = [];
+const result = { live: false, states: [], shots: 0, firstShotMs: null, errors: [] };
+window.__vf = result;
+
+const started = performance.now();
+const capture = createCapture({
+  video: document.getElementById('v'),
+  overlay: document.getElementById('overlay'),
+  onState: (s) => {
+    const line = `${Math.round(performance.now() - started)}ms  page=${s.hasPage ? 'yes' : 'no '}  ` +
+      `steady=${s.steady ? 'yes' : 'no '}  edge=${s.pageLongEdge}  block=${s.blocking ?? '-'}  ${s.hint}`;
+    events.push(line);
+    result.states.push({ hasPage: s.hasPage, steady: s.steady, blocking: s.blocking,
+                         pageLongEdge: s.pageLongEdge, hint: s.hint });
+    log.textContent = events.slice(-14).join('\n');
+  },
+  onShot: (shot) => {
+    result.shots++;
+    result.firstShotMs ??= Math.round(performance.now() - started);
+    result.lastShot = { auto: shot.auto, hasQuad: !!shot.quad,
+                        size: `${shot.bitmap.width}x${shot.bitmap.height}` };
+    shot.bitmap.close?.();
+  },
+});
+
+try {
+  await capture.start(stream);
+  result.live = true;
+} catch (e) {
+  result.errors.push(e.message);
+  log.textContent = 'start failed: ' + e.message;
+}
+</script>

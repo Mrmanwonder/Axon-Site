@@ -1,12 +1,16 @@
 // Paper ingestion and reads.
 //
-// Upload-first, per v1 scope: no in-app camera. The phone's own camera app is
-// better than anything achievable in a PWA, and a mediocre scanner would
-// undermine the quality claim the product rests on.
+// Two ways in, both first-class. Pages can be captured in the app — stage 0 of
+// SCANNING_SYSTEM.md — or uploaded from the gallery, files, or a shared link. A
+// student who already photographed the paper last week should not have to
+// photograph it again, so upload is permanent rather than a fallback.
 //
 // Uploads and links both require the network, and both fail loudly offline
 // rather than queueing — queueing something the student cannot see is the
-// invisible-failure mode hard rule 4 exists to prevent.
+// invisible-failure mode hard rule 4 exists to prevent. Capture is the
+// exception: it works offline and queues into a local draft, because the paper
+// is in front of the student now and will not be later. It is extraction, not
+// scanning, that needs a connection.
 
 import { sb } from './supabase.js';
 import { PAPERS_BUCKET } from './config.js';
@@ -143,6 +147,64 @@ export async function addLinkPage({ studentId, paperId, url, pageNumber }) {
     .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Store one conditioned page from the scanner, and record it.
+ *
+ * The proxy goes up first and deliberately. It is a fraction of the size, so the
+ * structure pass can start on it while the full page is still climbing a 4G
+ * connection — and time-to-structure is the number the student actually
+ * experiences. It is also the downscaled page stage 3 wants anyway.
+ *
+ * @param {{studentId:string, paperId:string, page:Object}} args
+ */
+export async function uploadScannedPage({ studentId, paperId, page }) {
+  requireOnline('Uploading');
+  const base = `${studentId}/${paperId}/${page.page_number}`;
+  const proxyPath = page.proxy ? `${base}.proxy.jpg` : null;
+
+  if (page.proxy) {
+    const { error } = await sb.storage
+      .from(PAPERS_BUCKET)
+      .upload(proxyPath, page.proxy, { contentType: 'image/jpeg', upsert: true });
+    if (error) throw error;
+  }
+
+  const storagePath = `${base}.jpg`;
+  const { error: upErr } = await sb.storage
+    .from(PAPERS_BUCKET)
+    .upload(storagePath, page.blob, { contentType: page.blob.type || 'image/jpeg', upsert: true });
+  if (upErr) throw upErr;
+
+  // The red mask goes up as its own object. It is lossless, small, and it is
+  // where the fine detail lives: measured, a faint one-pixel stroke keeps 12% of
+  // itself through the page encoder and all of it here. The model gets both.
+  const maskPath = page.mask ? `${base}.mask.png` : null;
+  if (page.mask) {
+    const { error } = await sb.storage
+      .from(PAPERS_BUCKET)
+      .upload(maskPath, page.mask, { contentType: 'image/png', upsert: true });
+    if (error) throw error;
+  }
+
+  // Upserted on (paper_id, page_number) so a retake replaces its page rather
+  // than adding a second one beside it.
+  const { data, error } = await sb
+    .from('paper_page')
+    .upsert({
+      paper_id: paperId,
+      student_id: studentId,
+      page_number: page.page_number,
+      source_kind: 'upload',
+      storage_path: storagePath,
+      status: 'stored',
+    }, { onConflict: 'paper_id,page_number' })
+    .select()
+    .single();
+  if (error) throw error;
+
+  return { row: data, storage_path: storagePath, proxy_path: proxyPath, mask_path: maskPath };
 }
 
 /** Signed URL for a stored page. The bucket is private; there is no public URL. */

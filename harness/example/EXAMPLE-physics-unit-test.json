@@ -1,0 +1,54 @@
+{
+  "_this_is_not_a_measurement": "Synthetic, and here only so the label format is unambiguous and the runner can be exercised before any real paper is labelled. It is deliberately outside harness/goldenset/ so it can never be scored as if it were real. A golden set of invented papers measures nothing.",
+  "paper": {
+    "id": "example-physics-unit-test",
+    "board": "CBSE",
+    "class_level": 11,
+    "subject": "Physics",
+    "type": "unit_test",
+    "pages": 2,
+    "reported_total": 12,
+    "stated_maximum": 20,
+    "notes": "clean marking in red, one circled deduction"
+  },
+  "questions": [
+    {
+      "label": "Q1",
+      "spans": [{ "page": 1, "box": { "x": 120, "y": 300, "w": 2700, "h": 620 } }],
+      "region_type": "prose",
+      "marks_awarded": 4,
+      "marks_available": 5,
+      "answer_text": "Force equals mass times acceleration",
+      "teacher_marks": [
+        { "page": 1, "box": { "x": 2950, "y": 320, "w": 110, "h": 130 }, "mark_class": "marginal_number", "value": 4 },
+        { "page": 1, "box": { "x": 900, "y": 470, "w": 380, "h": 90 }, "mark_class": "circle" }
+      ]
+    },
+    {
+      "label": "Q2",
+      "spans": [{ "page": 1, "box": { "x": 120, "y": 980, "w": 2700, "h": 900 } }],
+      "region_type": "math",
+      "marks_awarded": 3,
+      "marks_available": 5,
+      "answer_text": "v = u + at so v = 5 + 2 times 3 = 11 m/s",
+      "teacher_marks": [
+        { "page": 1, "box": { "x": 2950, "y": 1000, "w": 105, "h": 130 }, "mark_class": "marginal_number", "value": 3 }
+      ]
+    },
+    {
+      "label": "Q3",
+      "spans": [
+        { "page": 1, "box": { "x": 120, "y": 1940, "w": 2700, "h": 500 } },
+        { "page": 2, "box": { "x": 120, "y": 200, "w": 2700, "h": 700 } }
+      ],
+      "region_type": "diagram",
+      "marks_awarded": 5,
+      "marks_available": 10,
+      "answer_text": "labelled ray diagram for a convex lens",
+      "teacher_marks": [
+        { "page": 2, "box": { "x": 2950, "y": 220, "w": 120, "h": 130 }, "mark_class": "marginal_number", "value": 5 },
+        { "page": 2, "box": { "x": 400, "y": 640, "w": 900, "h": 70 }, "mark_class": "underline" }
+      ]
+    }
+  ]
+}

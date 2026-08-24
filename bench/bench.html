@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>device pipeline benchmark</title>
+<body>
+<pre id="out">running…</pre>
+<script type="module">
+// A module that fails to parse otherwise hangs the runner on a promise that
+// never settles, which costs ten minutes to notice.
+window.onerror = (m) => { document.getElementById('out').textContent = 'ERROR: ' + m; window.__bench = { error: String(m) }; };
+import { syntheticPage } from './page.js';
+import { conditionPage } from '../src/scan/conditioning.js';
+import { separateLayers, maskPage, connectedComponents } from '../src/scan/layers.js';
+import { detectQuad } from '../src/scan/edges.js';
+import { scorePage } from '../src/scan/quality.js';
+
+const out = document.getElementById('out');
+const log = [];
+const say = (t) => { log.push(t); out.textContent = log.join('\n'); };
+
+function median(ns) { const s = [...ns].sort((a, b) => a - b); return s[s.length >> 1]; }
+
+async function time(label, runs, fn) {
+  const times = [];
+  for (let i = 0; i < runs; i++) {
+    const t0 = performance.now();
+    await fn();
+    times.push(performance.now() - t0);
+  }
+  const m = median(times);
+  say(`${label.padEnd(34)} ${m.toFixed(0).padStart(6)} ms   (${times.map(t => t.toFixed(0)).join(', ')})`);
+  return m;
+}
+
+const page = syntheticPage();
+
+// What conditionPage actually receives is a phone photo, not a page: bigger than
+// the 300 DPI target and needing to come down. Benchmarking it on an
+// already-correctly-sized image would hide the resize entirely.
+const photo = document.createElement('canvas');
+photo.width = 3024; photo.height = 4032;
+{
+  const src = document.createElement('canvas');
+  src.width = page.width; src.height = page.height;
+  src.getContext('2d').putImageData(new ImageData(page.data, page.width, page.height), 0, 0);
+  photo.getContext('2d').drawImage(src, 0, 0, photo.width, photo.height);
+}
+const bitmap = await createImageBitmap(photo);
+
+// A viewfinder frame: the 240px proxy detectQuad actually sees.
+const small = document.createElement('canvas');
+small.width = 240; small.height = 340;
+{
+  const ctx = small.getContext('2d');
+  ctx.fillStyle = '#22252b'; ctx.fillRect(0, 0, 240, 340);
+  ctx.fillStyle = '#e8e6e0'; ctx.save();
+  ctx.translate(120, 170); ctx.rotate(0.06); ctx.fillRect(-92, -140, 184, 280); ctx.restore();
+}
+const frame = small.getContext('2d').getImageData(0, 0, 240, 340);
+
+const results = {};
+results.detectQuad = await time('detectQuad (240x340 frame)', 15, () => detectQuad(frame));
+results.maskPage = await time('maskPage (full page)', 3, () => maskPage(page));
+{
+  const { red, width, height } = maskPage(page);
+  results.components = await time('connectedComponents (red)', 3, () => connectedComponents(red, width, height));
+}
+results.separateLayers = await time('separateLayers (full page)', 3, () => separateLayers(page));
+// scorePage runs on a 1400px proxy in production, not the full page.
+const proxy = (() => {
+  const c = document.createElement('canvas');
+  const scale = 1400 / Math.max(page.width, page.height);
+  c.width = Math.round(page.width * scale); c.height = Math.round(page.height * scale);
+  const src = document.createElement('canvas');
+  src.width = page.width; src.height = page.height;
+  src.getContext('2d').putImageData(new ImageData(page.data, page.width, page.height), 0, 0);
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  return c.getContext('2d').getImageData(0, 0, c.width, c.height);
+})();
+results.scorePage = await time('scorePage (1400px proxy)', 3, () => scorePage(proxy));
+results.conditionPage = await time('conditionPage (photo -> jpeg)', 3,
+  async () => { const r = await conditionPage(bitmap, { pageNumber: 1 }); results._bytes = r.meta.bytes; results._q = r.meta.jpeg_quality; });
+
+// The whole device leg, as acceptPage runs it.
+results.full = await time('processPage (condition + layers)', 3, async () => {
+  const c = await conditionPage(bitmap, { pageNumber: 1 });
+  separateLayers(c.image, { withContentLayer: false });
+});
+results.layersNoContent = await time('separateLayers (no content layer)', 3,
+  () => separateLayers(page, { withContentLayer: false }));
+
+say('');
+say(`jpeg ${(results._bytes / 1024).toFixed(0)}KB at quality ${results._q}`);
+window.__bench = results;
+</script>

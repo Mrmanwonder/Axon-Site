@@ -64,6 +64,36 @@ insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_los
  ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','presentation',2,'likely','Your answer is right. The mark went for units.'),
  ('bbbbbbbb-0000-4000-8000-000000000005','bbbbbbbb-0000-4000-8000-000000000004','bbbbbbbb-0000-4000-8000-000000000002','keyword_miss',1,'likely','x');
 
+-- Objects for both students, written as the privileged role so the isolation
+-- tests below have something real to fail to reach.
+insert into storage.objects (bucket_id, name, owner) values
+ ('papers','aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-000000000003/1.jpg','11111111-1111-4111-8111-111111111111'),
+ ('papers','bbbbbbbb-0000-4000-8000-000000000002/bbbbbbbb-0000-4000-8000-000000000003/1.jpg','22222222-2222-4222-8222-222222222222');
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- The avatar seed
+-- ══════════════════════════════════════════════════════════════════════════
+-- Opaque and generated, never a name. There is no image anywhere in this
+-- schema, and this column is what stands in for one.
+
+select public._t('avatar_seed is generated automatically',
+  (select avatar_seed ~ '^[0-9a-f]{8,64}$' from public.student
+   where id='aaaaaaaa-0000-4000-8000-000000000002'));
+
+-- Scoped to the fixtures: a volatile column default is evaluated per row on the
+-- rewrite, but an unscoped count would also sweep in whatever the database
+-- already holds and stop testing that.
+select public._t('two students do not share an avatar seed',
+  (select count(distinct avatar_seed) = 2 from public.student
+   where id in ('aaaaaaaa-0000-4000-8000-000000000002',
+                'bbbbbbbb-0000-4000-8000-000000000002')));
+
+do $$ begin begin
+  update public.student set avatar_seed = 'Anya Sharma'
+  where id='aaaaaaaa-0000-4000-8000-000000000002';
+  perform public._t('avatar_seed cannot hold a name', false, 'update succeeded');
+exception when others then perform public._t('avatar_seed cannot hold a name', true, sqlstate); end; end $$;
+
 -- ══════════════════════════════════════════════════════════════════════════
 -- Hard rule 1 · the model never assigns marks
 -- ══════════════════════════════════════════════════════════════════════════
@@ -265,6 +295,36 @@ do $$ begin begin
   perform public._t('an attempt cannot use another student''s paper', false, 'insert succeeded');
 exception when others then perform public._t('an attempt cannot use another student''s paper', true, sqlstate); end; end $$;
 
+-- ── storage: the papers bucket ─────────────────────────────────────────────
+-- Uploads are images of a child's handwriting. The path convention is
+-- papers/<student_id>/..., and it is enforced by policy, not by the client
+-- choosing to behave. Insert is additionally gated on live store_papers
+-- consent, so a withdrawal stops new uploads rather than only hiding old ones.
+
+select public._t('the papers bucket is private',
+  (select not public from storage.buckets where id = 'papers'));
+
+do $$ declare n int; begin
+  select count(*) into n from storage.objects
+  where bucket_id = 'papers' and name like 'bbbbbbbb-0000-4000-8000-000000000002/%';
+  perform public._t('A cannot list objects under B''s student prefix', n = 0, 'rows=' || n);
+end $$;
+
+do $$ begin begin
+  insert into storage.objects (bucket_id, name, owner)
+  values ('papers', 'bbbbbbbb-0000-4000-8000-000000000002/p/1.jpg',
+          '11111111-1111-4111-8111-111111111111');
+  perform public._t('A cannot upload into B''s student prefix', false, 'insert succeeded');
+exception when others then perform public._t('A cannot upload into B''s student prefix', true, sqlstate); end; end $$;
+
+-- A's own prefix, but store_papers was withdrawn for that student above.
+do $$ begin begin
+  insert into storage.objects (bucket_id, name, owner)
+  values ('papers', 'aaaaaaaa-0000-4000-8000-000000000002/p/1.jpg',
+          '11111111-1111-4111-8111-111111111111');
+  perform public._t('upload is refused after store_papers is withdrawn', false, 'insert succeeded');
+exception when others then perform public._t('upload is refused after store_papers is withdrawn', true, sqlstate); end; end $$;
+
 -- shared reference data: readable, not writable
 select public._t('A can read canonical_question', (select count(*) = 1 from public.canonical_question));
 
@@ -291,6 +351,10 @@ select public._t('B sees only its own student',
   and (select count(*) = 0 from public.student where id='aaaaaaaa-0000-4000-8000-000000000002'));
 select public._t('B cannot read A''s attempts',
   (select count(*) = 0 from public.student_attempt where student_id='aaaaaaaa-0000-4000-8000-000000000002'));
+select public._t('B sees only its own paper objects',
+  (select count(*) = 1 from storage.objects where bucket_id = 'papers')
+  and (select count(*) = 0 from storage.objects
+       where name like 'aaaaaaaa-0000-4000-8000-000000000002/%'));
 
 reset role;
 
@@ -307,6 +371,10 @@ select public._t('anon reads no attempts',    (select count(*) = 0 from public.s
 select public._t('anon reads no loss events', (select count(*) = 0 from public.mark_loss_event));
 select public._t('anon reads no consent',     (select count(*) = 0 from public.consent_event));
 select public._t('anon reads no analytics',   (select count(*) = 0 from public.attempt_analytics));
+-- The publishable key ships in the client. It must not enumerate a single page
+-- of a single child's exam paper.
+select public._t('anon reads no paper objects',
+  (select count(*) = 0 from storage.objects where bucket_id = 'papers'));
 -- Even the shared question bank is authenticated-only: it is licensed scheme
 -- paraphrase, and there is no reason for an unauthenticated key to enumerate it.
 select public._t('anon cannot read canonical_question', (select count(*) = 0 from public.canonical_question));

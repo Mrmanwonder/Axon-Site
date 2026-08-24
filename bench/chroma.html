@@ -1,0 +1,112 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>chroma survival</title>
+<body><pre id="out">measuring…</pre>
+<script type="module">
+// Does the encoder we ship destroy the teacher's ink?
+//
+// IMAGE_PIPELINE.md §1.1 says JPEG's 4:2:0 chroma subsampling quarters colour
+// resolution, that a thin red stroke on white paper is almost entirely a chroma
+// event, and that a 2px tick therefore "smears into pink mush or disappears".
+// The current build encodes JPEG and then searches for a quality that protects
+// the red — which, if §1.1 is right, is fighting a problem the format creates.
+//
+// Measured rather than believed, and split by the two variables that decide it:
+// how wide the stroke is, and how much ink was left in the pen. A bold 5px mark
+// is nobody's worry; a faint 1px half-tick is the whole question.
+import { maskPage } from '../src/scan/layers.js';
+
+const out = document.getElementById('out');
+const lines = [];
+const say = (t) => { lines.push(t); out.textContent = lines.join('\n'); };
+
+const W = 1600, H = 2000;
+const WIDTHS = [1, 2, 3, 5];
+// Bold is a fresh pen. Faint is one running out, or a light hand — which is what
+// a half-tick usually is, and the case §1.1 is really about.
+const INKS = { bold: '#c0212a', faint: '#cf7d78' };
+
+function paint(g, ink, width, y0) {
+  g.strokeStyle = ink; g.lineWidth = width; g.lineCap = 'round';
+  for (let k = 0; k < 10; k++) {
+    const y = y0 + k * 34;
+    g.beginPath(); g.moveTo(160, y); g.lineTo(178, y + 18);
+    g.lineTo(214, y - 22); g.stroke();                       // a tick
+    g.beginPath(); g.moveTo(300, y - 12); g.lineTo(420, y - 12); g.stroke();  // an underline
+    g.beginPath(); g.ellipse(560, y - 6, 38, 17, 0, 0, 7); g.stroke();        // a circle
+  }
+}
+
+// Each cohort gets its own band, so recall can be attributed to a width and an ink.
+const bands = [];
+const c = document.createElement('canvas');
+c.width = W; c.height = H;
+const g = c.getContext('2d');
+
+g.fillStyle = '#f2f0ea'; g.fillRect(0, 0, W, H);
+const noise = g.getImageData(0, 0, W, H);
+for (let i = 0; i < noise.data.length; i += 4) {
+  const n = (Math.random() - 0.5) * 6;
+  noise.data[i] += n; noise.data[i + 1] += n; noise.data[i + 2] += n;
+}
+g.putImageData(noise, 0, 0);
+
+// Student's writing across the whole page: pure luma, and the thing whose
+// presence makes the red share realistic.
+g.strokeStyle = '#22264e'; g.lineWidth = 4; g.lineCap = 'round';
+for (let y = 40; y < H - 40; y += 58) {
+  g.beginPath(); g.moveTo(700, y);
+  g.lineTo(700 + 500 + ((y * 13) % 380), y + Math.sin(y / 20) * 4); g.stroke();
+}
+
+let y0 = 60;
+for (const [inkName, ink] of Object.entries(INKS)) {
+  for (const w of WIDTHS) {
+    paint(g, ink, w, y0);
+    bands.push({ label: `${inkName} ${w}px`, top: y0 - 40, bottom: y0 + 10 * 34 + 30 });
+    y0 += 10 * 34 + 70;
+  }
+}
+
+const original = g.getImageData(0, 0, W, H);
+const base = maskPage(original);
+
+const inBand = (i, band) => {
+  const y = Math.floor(i / W);
+  return y >= band.top && y < band.bottom;
+};
+
+async function roundTrip(label, type, quality) {
+  const blob = await new Promise((r) => c.toBlob(r, type, quality));
+  if (!blob) { say(`${label.padEnd(22)} unsupported`); return null; }
+  const bmp = await createImageBitmap(blob);
+  const d = document.createElement('canvas');
+  d.width = W; d.height = H;
+  d.getContext('2d').drawImage(bmp, 0, 0);
+  const after = maskPage(d.getContext('2d').getImageData(0, 0, W, H));
+
+  const per = bands.map((band) => {
+    let src = 0, kept = 0;
+    for (let i = band.top * W; i < band.bottom * W; i++) {
+      if (base.red[i]) { src++; if (after.red[i]) kept++; }
+    }
+    return { band: band.label, recall: src ? kept / src : 1, src };
+  });
+
+  say(`${label.padEnd(20)} ${(blob.size / 1024).toFixed(0).padStart(5)}KB  ` +
+      per.map((p) => `${p.band}:${(p.recall * 100).toFixed(0).padStart(3)}%`).join('  '));
+  return { label, bytes: blob.size, per };
+}
+
+say(`page ${W}x${H}, ${base.redCount} red px. recall per cohort:\n`);
+const results = [];
+for (const [label, type, q] of [
+  ['jpeg q0.76 (shipped)', 'image/jpeg', 0.76],
+  ['jpeg q0.92', 'image/jpeg', 0.92],
+  ['webp q0.92', 'image/webp', 0.92],
+  ['webp lossless', 'image/webp', 1],
+]) results.push(await roundTrip(label, type, q));
+
+window.__chroma = results.filter(Boolean);
+say('\ndone');
+</script>

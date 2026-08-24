@@ -1,11 +1,15 @@
 // Application glue: auth gate, settings, ingestion, account actions.
 
-import { sb, currentSession, currentGuardian, signOut, onAuthChange } from './supabase.js';
-import { startOnboarding } from './onboarding.js';
+import {
+  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+} from './supabase.js';
+import { startOnboarding, BOARDS } from './onboarding.js';
 import { loadPrefs, savePrefs, readLocal } from './prefs.js';
 import { listPurposes, readConsentState, recordConsent, withdrawConsent } from './consent.js';
-import { createPaper, uploadPages, addLinkPage, parsePaperLink, listPapers, tierForType, PAPER_TYPES } from './papers.js';
+import { createPaper, addLinkPage, parsePaperLink, listPapers, PAPER_TYPES } from './papers.js';
 import { exportMyData, downloadJson, deleteAccount } from './account.js';
+// One small file on the critical path, on purpose — see armScan() below.
+import { cameraSupported, requestCamera } from './scan/camera.js';
 
 const ctx = { session: null, guardian: null, student: null, prefs: readLocal(), consent: {} };
 
@@ -205,11 +209,38 @@ async function wireSettings() {
     if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian.name;
     if (mailEl) mailEl.textContent = ctx.guardian.contact;
     if (picEl) picEl.textContent = (ctx.student?.first_name ?? ctx.guardian.name ?? '?')[0].toUpperCase();
-    const cls = $('#set-class-aux'); if (cls && ctx.student) cls.textContent = String(ctx.student.class_level);
+    if (ctx.student) {
+      const cls = $('#set-class-aux'); if (cls) cls.textContent = String(ctx.student.class_level);
+      const board = $('#set-board-aux');
+      if (board) board.textContent = BOARDS.find((b) => b.value === ctx.student.board)?.label ?? ctx.student.board;
+      const subjects = $('#set-subjects-aux');
+      if (subjects) subjects.textContent = ctx.student.subjects?.length ? ctx.student.subjects.join(', ') : 'None yet';
+    }
   }
+  paintGreeting();
+}
+
+// The home greeting is the first thing a returning student sees, so it should
+// say who they are rather than the demo's fixed "Maya" — and the weekday next
+// to it should track the actual day, not stay pinned at "Tuesday".
+function paintGreeting() {
+  const dayEl = $('#greetDay'), nameEl = $('#greetName');
+  if (dayEl) dayEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long' });
+  if (nameEl) nameEl.textContent = ctx.student?.first_name ?? ctx.guardian?.name ?? 'there';
 }
 
 // ── ingestion ──────────────────────────────────────────────────────────────
+
+// Set once by onboarding step 8, which has already asked the guided question.
+// Consumed on the next ingest and cleared, so the second paper is asked about
+// rather than silently inheriting the first one's type — which would file a
+// board paper as a school test and cost it its marking scheme.
+let pendingType = null;
+function takePendingType() {
+  const t = pendingType;
+  pendingType = null;
+  return t;
+}
 
 function askPaperType(then) {
   window.__masteryOpenSheet?.({
@@ -221,30 +252,24 @@ function askPaperType(then) {
   });
 }
 
+/**
+ * Uploaded pages join the scanning pipeline rather than bypassing it.
+ *
+ * Before capture existed this uploaded raw files straight to storage, which was
+ * right when nothing read them. Now that something does, an unconditioned page
+ * would skip stage 1 and stage 2 — no deskew, no illumination flattening, no
+ * red-layer separation — and arrive at the structure pass in materially worse
+ * shape than a captured one. Upload is a first-class path, so it takes the same
+ * road; it simply has no quad to warp by.
+ */
 async function ingestFiles(files) {
   if (!ctx.student) return toast('Create a student profile first.', 'warn');
   if (!files.length) return;
-  const run = async (type) => {
-    try {
-      toast('Uploading…');
-      const paper = await createPaper({
-        studentId: ctx.student.id, type,
-        dateTaken: new Date().toISOString().slice(0, 10),
-      });
-      await uploadPages({
-        studentId: ctx.student.id, paperId: paper.id, files,
-        onProgress: (n, total) => toast(`Uploading page ${n} of ${total}…`),
-      });
-      firm();
-      toast(`Added ${files.length} page(s). ${tierForType(type) === 'tier_2'
-        ? 'We\'ll match it to the official scheme.'
-        : 'We\'ll explain it from your teacher\'s marks.'}`);
-      await refreshLibrary();
-    } catch (e) {
-      toast(e.message || 'Upload failed.', 'warn');
-    }
-  };
-  askPaperType(run);
+  const scan = await ensureScan();
+  const t = takePendingType();
+  if (t) scan.setPendingPaperType(t);
+  await scan.acceptUploads(files);
+  toast(`${files.length} page(s) added. Check the order, then read the paper.`);
 }
 
 async function ingestLink(url) {
@@ -261,7 +286,8 @@ async function ingestLink(url) {
       await refreshLibrary();
     } catch (e) { toast(e.message || 'That link could not be added.', 'warn'); }
   };
-  askPaperType(run);
+  const t = takePendingType();
+  t ? run(t) : askPaperType(run);
 }
 
 function wireIngestion() {
@@ -304,16 +330,78 @@ async function refreshLibrary() {
   try {
     const { data, stale } = await listPapers(ctx.student.id);
     window.__masteryRenderLibrary?.(data, { stale });
-    // Home has nothing honest to show until a paper exists, so it swaps for a
-    // single call to action. Driven from the same read as the Library rather
-    // than a separate count — one source, so the two can't disagree.
-    window.__masteryHomeEmpty?.(data.length === 0, ctx.student.first_name);
   } catch { /* the cached view stays on screen */ }
+}
+
+// ── the scanner, loaded when it is needed ──────────────────────────────────
+//
+// The pipeline is sixteen ES modules and none of them are needed to look at a
+// paper you scanned last week. Imported statically they cost sixteen extra
+// round-trips on the critical path — measured at about 0.7s of extra boot on a
+// throttled mid-tier profile, which is the phone this product is actually for.
+// CLAUDE.md's performance floor is a real constraint, not an aspiration, so the
+// scanner is fetched on the first thing that needs it and not before.
+
+let scanPromise = null;
+let scanReady = null;
+
+/**
+ * Load the scanner and wire it up, once.
+ *
+ * Both entry points go through here — the Scan tab and an upload started from
+ * anywhere else. That matters: the module keeps its own state, and calling into
+ * it before initScanUI has handed it the student would drop the upload on the
+ * floor without saying anything, which is precisely the invisible failure hard
+ * rule 4 exists to prevent.
+ */
+async function ensureScan() {
+  scanPromise ??= import('./scan/ui.js');
+  const scan = await scanPromise;
+  scanReady ??= Promise.resolve(scan.initScanUI(ctx))
+    .then(() => scan.setPendingPaperType(pendingType));
+  await scanReady;
+  return scan;
+}
+
+/**
+ * Stand in for the scan module until something asks for it.
+ *
+ * index.html calls __masteryScanVisible on every entry to and exit from the
+ * Scan tab. Until the module is loaded this placeholder answers that call,
+ * pulls it in on the first visit, and then steps aside — initScanUI installs
+ * the real handler over the top, so this runs exactly once.
+ */
+function armScan() {
+  const placeholder = async (visible) => {
+    if (!visible) return;
+    // The camera is asked for first and separately, before the pipeline has
+    // finished loading. It used to be asked for at the end of that chain, which
+    // put about ten seconds between tapping Scan and seeing the permission
+    // sheet — long enough to read as an app that does not work. The request and
+    // the load now race each other, and whichever wins waits for the other.
+    const camera = cameraSupported() ? requestCamera().catch((e) => e) : null;
+    window.__masteryCameraStarting?.();
+    await ensureScan();
+    // initScanUI has replaced this handler by now; hand the visit to it, with
+    // the stream if one is already on its way. If it bailed out — no camera
+    // surface, no student — the placeholder is still installed and there is
+    // nothing to hand over to.
+    if (window.__masteryScanVisible !== placeholder) window.__masteryScanVisible(true, camera);
+  };
+  window.__masteryScanVisible = placeholder;
+
+  // Warm it while the phone is idle, so tapping Scan is instant — but not on a
+  // connection where sixteen files is a real cost to someone who may never
+  // scan. Save-Data is a request, and a slow link is an answer.
+  const link = navigator.connection;
+  if (link?.saveData || /^(slow-)?2g$/.test(link?.effectiveType ?? '')) return;
+  const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 2000));
+  idle(() => { scanPromise ??= import('./scan/ui.js').catch(() => { scanPromise = null; }); });
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
 
-function showOnboarding() {
+function showOnboarding(providerError = null) {
   const overlay = $('#obroot');
   if (!overlay) return;
   overlay.hidden = false;
@@ -322,21 +410,22 @@ function showOnboarding() {
     // Passed so a guardian who arrived by clicking the emailed link is not sent
     // back to the beginning of a flow they have already half-completed.
     session: ctx.session,
+    // A Google or Apple round trip that came back refused. Handed in so the flow
+    // opens on the account step already saying so, rather than looking like the
+    // tap did nothing.
+    providerError,
     // The rows just created are handed straight over rather than re-fetched.
     // Re-reading would re-run the gate, and on a read replica that has not caught
     // up yet the student would not be there — dropping someone who has just
     // finished onboarding back to the start of it.
-    // The student's four first-run screens end by handing over to Home, which
-    // is empty and carries one call to action. Onboarding deliberately does not
-    // open the file picker itself: landing straight in a system dialog is the
-    // opposite of the pacing those four screens just established, and the paper
-    // type still gets asked on the first upload by askPaperType().
-    onComplete: async ({ guardian, student }) => {
+    onComplete: async ({ guardian, student, firstPaperType }) => {
+      pendingType = firstPaperType ?? null;
       if (guardian) ctx.guardian = guardian;
       if (student) ctx.student = student;
       overlay.hidden = true;
       document.querySelector('.app')?.removeAttribute('aria-hidden');
       await startApp();
+      if (firstPaperType) $('#fileInput')?.click();
     },
   });
 }
@@ -349,6 +438,7 @@ async function startApp() {
   }
   await wireSettings();
   wireIngestion();
+  armScan();
   await refreshLibrary();
   $('#obroot')?.setAttribute('hidden', '');
   document.querySelector('.app')?.removeAttribute('aria-hidden');
@@ -357,8 +447,13 @@ async function startApp() {
 async function boot() {
   applyPrefs(ctx.prefs);
 
+  // Read before the session, and unconditionally: it clears the error out of the
+  // URL either way, so a refused attempt cannot linger in the address bar and
+  // reappear on the next reload.
+  const providerError = takeProviderError();
+
   ctx.session = await currentSession();
-  if (!ctx.session) return showOnboarding();
+  if (!ctx.session) return showOnboarding(providerError);
 
   ctx.guardian = await currentGuardian();
   if (!ctx.guardian) return showOnboarding();
@@ -366,6 +461,9 @@ async function boot() {
   const { data: students } = await sb.from('student').select('*').limit(1);
   ctx.student = students?.[0] ?? null;
   if (!ctx.student) return showOnboarding();
+  const { data: subjectRows } = await sb
+    .from('student_subject').select('subject').eq('student_id', ctx.student.id);
+  ctx.student.subjects = (subjectRows ?? []).map((r) => r.subject);
 
   return startApp();
 }

@@ -218,26 +218,18 @@
   .draft .go{font-size:14px;font-weight:600;color:var(--amber);}
 
   /* ── camera-first scan viewfinder ── */
-  #v2{padding-top:0;}
-  .scanhero{position:relative;height:60vh;min-height:420px;max-height:560px;background:#050506;overflow:hidden;border-radius:0 0 28px 28px;}
+  /* The scanner is the whole screen. A viewfinder in a 60vh window with the
+     page scrolling underneath is a preview of a camera; this is the camera, and
+     the glass tab bar floats over it like it floats over everything else. */
+  #v2{padding:0;overflow:hidden;}
+  .scanhero{position:absolute;inset:0;background:#050506;overflow:hidden;}
   .feed{position:absolute;inset:0;background:
       radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
   .feedgrid{position:absolute;inset:0;background-image:
       linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
     background-size:34px 34px;opacity:.5;}
-  .sweep{position:absolute;left:0;right:0;height:2px;top:18%;
-    background:linear-gradient(90deg, transparent, rgba(58,134,255,.9), transparent);
-    box-shadow:0 0 16px 2px rgba(58,134,255,.5);
-    animation:sweepmove 3.2s ease-in-out infinite;}
-  @keyframes sweepmove{0%,100%{top:16%}50%{top:78%}}
-  .frame{position:absolute;left:9%;right:9%;top:12%;bottom:22%;pointer-events:none;}
-  .cn{position:absolute;width:26px;height:26px;border-color:#fff;border-style:solid;border-width:0;opacity:.92;}
-  .cn.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:8px 0 0 0;}
-  .cn.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 8px 0 0;}
-  .cn.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 8px;}
-  .cn.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 8px 0;}
-  .scanhint{position:absolute;left:0;right:0;top:calc(12% + 60px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
+  .scanhint{position:absolute;left:0;right:0;top:calc(var(--top-inset) + 92px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
 
   /* top-left: the appearance toggle owns the top-right corner of the shell */
   .draftsicon{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:19px;
@@ -248,7 +240,8 @@
   .draftsicon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   .draftsicon .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:4px;background:var(--amber);border:1.5px solid #1a1a1c;}
 
-  .scanctrls{position:absolute;left:0;right:0;bottom:22px;display:flex;align-items:center;justify-content:center;gap:34px;}
+  .scanctrls{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 128px);z-index:6;
+    display:flex;align-items:center;justify-content:center;gap:34px;}
   .sidebtn{width:46px;height:46px;border-radius:23px;background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
   .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
@@ -267,7 +260,137 @@
   .drafttoast .t2{font-size:12px;color:rgba(255,255,255,.6);margin-top:1px;}
   .drafttoast .go{font-size:13.5px;font-weight:600;color:#fff;background:var(--blue);padding:8px 13px;border-radius:11px;flex-shrink:0;}
 
-  .scanbelow{padding-top:20px;}
+  .scanbelow{position:absolute;inset:0;z-index:8;overflow-y:auto;background:var(--bg);
+    padding:var(--view-top) 0 var(--view-bottom);scrollbar-width:none;}
+  .scanbelow::-webkit-scrollbar{display:none;}
+  .scanbelow[hidden]{display:none;}
+
+  /* ── live capture: the real viewfinder ──
+     The feed sits under an overlay canvas that draws corner brackets on the
+     detected quad. Both are object-fit: cover, and the overlay maps through the
+     same cover transform — a letterbox mapping would put the brackets a few
+     pixels off the page, which reads as the detector being wrong when it isn't. */
+  #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050506;}
+  #scanOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .scanhero[data-camera="off"] #scanVideo,.scanhero[data-camera="off"] #scanOverlay{display:none;}
+  /* The real overlay draws the brackets on the detected page, so the static
+     placeholder frame and its sweep come off the moment the camera is live —
+     two sets of brackets, one of them fixed to the viewport, would read as
+     the detector being wrong. */
+  .scanhero[data-camera="on"] .feed{display:none;}
+  /* Before the camera is live there is nothing to point at, so the one line of
+     text moves to the middle and says what is actually happening. */
+  .scanhero[data-camera="off"] .scanhint{top:50%;transform:translateY(-50%);}
+
+  /* The gate speaks in one line, and amber is the whole vocabulary of attention
+     here. Red belongs to the teacher's pen and to signing out, nowhere else. */
+  .scanhint{transition:color .12s linear;}
+  .scanhint[data-blocking]{color:var(--amber);}
+
+  /* Top-left, beside the drafts slot. The appearance toggle owns the shell's
+     top-right corner, and two controls in one corner is one control nobody
+     can hit. The offset is fixed rather than conditional on the drafts icon
+     being visible, so this chip does not jump when a draft appears. */
+  .autotoggle{position:absolute;top:16px;left:62px;display:flex;align-items:center;gap:7px;
+    padding:7px 11px;border-radius:16px;background:rgba(255,255,255,.14);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:.5px solid rgba(255,255,255,.22);color:#fff;font-size:12px;font-weight:600;
+    letter-spacing:-.01em;cursor:pointer;will-change:transform;}
+  .autotoggle .dot{width:7px;height:7px;border-radius:4px;background:rgba(255,255,255,.35);}
+  .autotoggle.on .dot{background:var(--green);}
+
+  /* ── the page tray ──
+     A booklet is 15-20 pages. The tray is where they accumulate, reorder and get
+     retaken, and where a page that failed its quality gate is flagged while the
+     paper is still physically in front of the student. */
+  .tray{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 222px);z-index:6;
+    padding:0 var(--gutter);}
+  .tray .trayscroll{padding-bottom:10px;}
+  /* The strip floats over the viewfinder, so its text is on camera, not on the
+     app's own background — it takes a light colour rather than the muted one
+     that reads correctly against a surface. */
+  .tray .traybar .cnt{color:rgba(255,255,255,.72);}
+  .trayscroll{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
+  .trayscroll::-webkit-scrollbar{display:none;}
+  .traypage{position:relative;width:62px;height:82px;border-radius:10px;flex-shrink:0;overflow:hidden;
+    background:var(--surface-sunk);border:.5px solid var(--hairline);cursor:pointer;will-change:transform;}
+  .traypage img{width:100%;height:100%;object-fit:cover;display:block;}
+  .traypage .n{position:absolute;left:5px;bottom:5px;font-size:10.5px;font-weight:700;color:#fff;
+    background:rgba(0,0,0,.55);padding:1.5px 5px;border-radius:5px;}
+  .traypage[data-quality="warn"]{border-color:rgba(255,159,10,.55);border-width:1.5px;}
+  .traypage[data-quality="fail"]{border-color:var(--amber);border-width:2px;}
+  .traypage .flag{position:absolute;top:5px;right:5px;width:16px;height:16px;border-radius:8px;
+    background:var(--amber);display:none;align-items:center;justify-content:center;}
+  .traypage[data-quality="warn"] .flag,.traypage[data-quality="fail"] .flag{display:flex;}
+  .traypage .flag svg{width:9px;height:9px;stroke:#fff;stroke-width:2.6;fill:none;stroke-linecap:round;}
+  .traybar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px;}
+  .traybar .cnt{font-size:12.5px;color:var(--label-3);font-weight:500;}
+  .traybar .btn{padding:11px 18px;font-size:14.5px;border-radius:14px;}
+
+  /* ── review: the reconciliation banner ──
+     Plain numbers, and a framing that puts the student in the position of
+     checking the scan rather than auditing their teacher. */
+  .delta{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:18px;
+    background:rgba(255,159,10,.11);border:.5px solid rgba(255,159,10,.28);}
+  .delta .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .delta .t2{font-size:13px;color:var(--label-2);margin-top:4px;line-height:1.45;}
+  .delta .sums{display:flex;gap:18px;margin-top:10px;}
+  .delta .sums div{font-size:12.5px;color:var(--label-3);font-weight:500;}
+  .delta .sums b{display:block;font-size:19px;font-weight:600;color:var(--label);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:2px;}
+
+  /* ── confidence, as form rather than colour ──
+     Solid fill, light fill with a border, dashed outline. Survives greyscale and
+     colourblindness, and students screenshot constantly. */
+  .conf{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;letter-spacing:-.005em;}
+  .conf.confirmed{background:var(--label);color:var(--bg);}
+  .conf.likely{background:var(--surface-sunk);border:.5px solid var(--hairline);color:var(--label-2);}
+  .conf.unsure{background:transparent;border:1px dashed var(--label-3);color:var(--label-2);}
+
+  /* ── review: a field against its own crop ──
+     Only possible because every extracted value carries the box it was read
+     from. The crop is the argument; the value is the claim. */
+  .qcard{margin:12px var(--gutter) 0;border-radius:var(--r-card);background:var(--surface);
+    border:.5px solid var(--hairline);overflow:hidden;}
+  /* Keyed off an attribute rather than a class: .attention already means
+     something else in this file, and a second meaning for one name is how
+     two components quietly break each other. */
+  .qcard[data-attention]{border-color:rgba(255,159,10,.34);}
+  .qhead{display:flex;align-items:center;gap:9px;padding:14px 16px 10px;}
+  .qhead .t1{font-size:15.5px;font-weight:600;letter-spacing:-.018em;flex:1;}
+  .qmarks{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+  .qmarks small{font-size:12px;color:var(--label-3);font-weight:500;margin-left:2px;}
+  .qcrop{margin:0 16px;border-radius:14px;overflow:hidden;background:var(--surface-sunk);
+    border:.5px solid var(--hairline);max-height:200px;display:flex;align-items:center;justify-content:center;}
+  .qcrop img{width:100%;display:block;object-fit:cover;}
+  .qcrop .missing{padding:26px 16px;font-size:13px;color:var(--label-3);text-align:center;line-height:1.5;}
+  .qfield{padding:11px 16px;border-top:.5px solid var(--hairline);margin-top:12px;}
+  .qfield .k{font-size:11.5px;color:var(--label-3);font-weight:600;letter-spacing:.01em;text-transform:uppercase;}
+  .qfield .v{font-size:14.5px;margin-top:3px;line-height:1.5;color:var(--label);}
+  .qfield .v.empty{color:var(--label-3);}
+  .qacts{display:flex;gap:8px;padding:12px 16px 14px;flex-wrap:wrap;}
+  .qact{font-size:13px;font-weight:600;padding:8px 13px;border-radius:11px;background:var(--surface-sunk);
+    color:var(--label);cursor:pointer;will-change:transform;}
+  .qact.accent{background:rgba(58,134,255,.14);color:var(--blue);}
+  .qalts{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 12px;}
+  .qalt{font-size:14px;font-weight:600;padding:9px 14px;border-radius:12px;background:var(--surface-sunk);
+    font-variant-numeric:tabular-nums;cursor:pointer;will-change:transform;}
+  .qalt.on{background:var(--blue);color:#fff;}
+
+  .bulkrow{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);
+    display:flex;align-items:center;gap:12px;}
+  .bulkrow .b{flex:1;min-width:0;}
+  .bulkrow .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .bulkrow .t2{font-size:12.5px;color:var(--label-3);margin-top:3px;line-height:1.4;}
+  .bulkrow .qact{flex-shrink:0;}
+  /* Still waiting on the student, so it does not wear the colour of a finished
+     action. It stays live: tapping it says what is left. */
+  .btn.primary[data-waiting]{background:var(--surface-sunk);color:var(--label-2);box-shadow:none;}
+
+  /* ── cause colours: seven hues of equal weight, never a severity ramp ── */
+  .cause{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;}
+  .cause .sw{width:9px;height:9px;border-radius:5px;background:var(--c);}
 
   /* ── fullscreen paper review ── */
   .reviewsheet{position:absolute;inset:0;z-index:55;background:var(--bg);transform:translateX(100%);will-change:transform;display:flex;flex-direction:column;transition:transform .42s cubic-bezier(.32,.72,0,1);}
@@ -448,10 +571,16 @@
     .igrid .card,.igrid .list{margin-inline:0;}
     .igrid .sectitle,.igrid .subnote{margin-inline:4px;}
 
-    /* Scan — viewfinder becomes a contained panel */
-    #v2{--vmax:820px;padding-top:var(--view-top);}
-    .scanhero{margin:0 var(--gutter);border-radius:var(--r-card);
+    /* Scan — viewfinder becomes a contained panel again. Filling the screen is
+       right on a phone held over a page and wrong on a desktop, where the page
+       is somewhere else entirely and the window is mostly empty room. */
+    #v2{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
+    .scanhero{position:relative;inset:auto;margin:0 var(--gutter);border-radius:var(--r-card);
       height:clamp(360px,44vh,520px);min-height:0;}
+    .scanctrls{bottom:22px;}
+    .tray{position:static;margin:14px var(--gutter) 0;padding:0;}
+    .tray .traybar .cnt{color:var(--label-3);}
+    .scanbelow{position:static;padding:20px 0 0;background:none;overflow:visible;}
 
     /* Library rows stay single-column — they're already dense. */
   }
@@ -529,7 +658,6 @@
      The in-app toggle mirrors the OS setting, since a student may want stillness
      without changing their whole phone. */
   [data-motion="reduce"] *{transition-duration:.01ms !important;animation-duration:.01ms !important;}
-  [data-motion="reduce"] .sweep{animation:none;opacity:.35;}
   [data-motion="reduce"] .skel{animation:none;}
 
   /* ── app toast ── */
@@ -545,10 +673,221 @@
   [data-theme="light"] #appToast .t1{color:var(--label);}
   @media (min-width:768px){#appToast{left:calc(var(--rail-w) + 16px);right:16px;max-width:520px;}}
 
-  /* ── onboarding overlay ── */
-  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;}
+  /* ══════════════ ONBOARDING OVERLAY ══════════════
+     Its own surface rather than a view inside the app: there is no tab bar, no
+     header plate, and no student data to show yet. It borrows the tokens, the
+     springs and the press states, and adds the pieces below, which exist
+     nowhere else in the interface.
+
+     Two defaults are deliberately refused here. A percentage progress bar,
+     because a percentage implies a precision the branching flow doesn't have —
+     the rail names the phase instead. And a celebration at the end, because
+     the thing just completed is a parent complying with a consent law, not a
+     win. The single acknowledgment lands on the student's first screen, after
+     the work, which is where this design puts delight. */
+  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;
+    /* .view subtracts the rail from its own centring and offsets itself by it
+       at ≥768. There is no rail inside the overlay, so zero it or the column
+       sits off-centre. --view-bottom is the tab bar's clearance, which is
+       likewise absent here. */
+    --rail-w:0px;--view-bottom:clamp(24px,6vh,44px);
+    --ob-wash:.26;--ob-wash-2:.19;
+    /* One measured column, capped like a .view. Padding on #obroot cannot do
+       this: .obwrap is absolute, and inset:0 resolves against the padding box,
+       so the wrap spans the padding and the cap is ignored. The gutter is
+       carried per-element instead, and .obview reaches the same number through
+       .view's own --vmax centring so the head and the body stay flush.
+       Collapses to 0 below the cap, so no breakpoint is needed. */
+    --ob-side:max(0px,calc((100% - 620px) / 2));}
   #obroot[hidden]{display:none;}
-  @media (min-width:768px){#obroot{padding-inline:max(0px,calc((100% - 620px) / 2));}}
+  [data-theme="light"] #obroot{--ob-wash:.13;--ob-wash-2:.10;}
+
+  .obwrap{position:absolute;inset:0;display:flex;flex-direction:column;}
+  /* One wash, painted once and never animated. A gradient this large is the
+     most expensive thing on a budget Android GPU and this one is decoration,
+     so it gets a static paint and no compositing layer of its own. */
+  .obwrap::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;
+    height:min(46vh,380px);pointer-events:none;
+    background:
+      radial-gradient(120% 82% at 14% -10%,rgba(58,134,255,var(--ob-wash)),transparent 62%),
+      radial-gradient(92% 64% at 98% 2%,rgba(138,111,209,var(--ob-wash-2)),transparent 66%);}
+
+  /* header: back affordance + phase rail */
+  .obhead{position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;gap:13px;
+    padding:calc(var(--top-inset) + 18px) calc(var(--text-gutter) + var(--ob-side)) 0;}
+  .obback{width:33px;height:33px;margin-left:-3px;border-radius:17px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;will-change:transform;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);}
+  .obback svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .obprog{flex:1;min-width:0;}
+  .obprog .segs{display:flex;gap:5px;}
+  .obprog .segs i{flex:1;height:3px;border-radius:2px;background:var(--surface-sunk);overflow:hidden;}
+  /* Animating width would be a layout animation. The fill is a full-width
+     child scaled on X instead, so the rail stays on the compositor. It is a
+     keyframe rather than a transition because each step replaces the markup,
+     and a transition has nothing to transition from. */
+  .obprog .segs i span{display:block;height:100%;border-radius:2px;background:var(--blue);transform:scaleX(0);}
+  .obprog .segs i.done span{transform:scaleX(1);background:var(--label-3);}
+  .obprog .segs i.now span{transform-origin:left center;animation:obfill .32s var(--spring) both;}
+  @keyframes obfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .obprog .ph{margin-top:8px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;
+    letter-spacing:.055em;color:var(--label-3);}
+
+  /* step body */
+  .obview{position:relative;z-index:1;inset:auto;flex:1;min-height:0;
+    --vmax:620px;padding-top:clamp(10px,3vw,16px);}
+
+  /* Step entrance. Transform and opacity only, on the 200ms disclosure budget —
+     a step change is a disclosure. Children rise in a short stagger that caps
+     at five waves; past that it stops reading as arrival and starts reading as
+     a loading state. */
+  @keyframes obstep{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .obview > *{animation:obstep .26s var(--spring) both;}
+  .obview > :nth-child(1){animation-delay:.01s;}
+  .obview > :nth-child(2){animation-delay:.05s;}
+  .obview > :nth-child(3){animation-delay:.09s;}
+  .obview > :nth-child(4){animation-delay:.13s;}
+  .obview > :nth-child(n+5){animation-delay:.17s;}
+  /* Every moving part here is a keyframe with fill-mode both, so collapsing the
+     duration is not enough on its own: the delay still holds content at
+     opacity 0 through its whole stagger, and even at 0.01s there is a frame
+     before the first tick where the element is painted invisible. Removed
+     outright instead — with no animation the elements sit at their own style,
+     which is already the finished state. */
+  [data-motion="reduce"] .obview > *,
+  [data-motion="reduce"] .obprog .segs i.now span,
+  [data-motion="reduce"] .obseal{animation:none !important;}
+  [data-motion="reduce"] .obprog .segs i.now span{transform:scaleX(1);}
+
+  /* landing hero */
+  .obhero{padding:clamp(16px,5vw,26px) var(--text-gutter) 0;}
+  .obwordmark{display:flex;align-items:center;gap:9px;margin-bottom:clamp(22px,7.5vw,36px);}
+  .obwordmark .g{width:23px;height:23px;border-radius:7px;flex-shrink:0;
+    background:linear-gradient(155deg,#5AA0FF,#2E74E8);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
+    display:flex;align-items:center;justify-content:center;}
+  .obwordmark .g svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .obwordmark .n{font-size:14.5px;font-weight:600;letter-spacing:-.012em;}
+  .obhero h1{margin:0;font-size:clamp(29px,8.4vw,40px);font-weight:700;letter-spacing:-.042em;line-height:1.06;}
+  .obhero h1 em{font-style:normal;color:var(--blue);}
+  .obhero .sub{margin-top:12px;font-size:clamp(14.5px,4vw,16.5px);line-height:1.48;color:var(--label-2);max-width:30em;}
+
+  /* The seven cause hues, named. Categorical and equal-weight, exactly as they
+     are in the app — no bar lengths and no counts, because there is no student
+     data at this point and a chart shape here would be inventing some. */
+  .obspec{display:flex;flex-wrap:wrap;gap:6px;margin:0 var(--text-gutter);}
+  .obspec span{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 9px;border-radius:12px;
+    background:var(--surface);border:.5px solid var(--hairline);
+    font-size:12px;font-weight:500;color:var(--label-2);letter-spacing:-.005em;}
+  .obspec span::before{content:"";width:7px;height:7px;border-radius:2.5px;background:var(--c);flex-shrink:0;}
+
+  /* A labelled field. The account step used to borrow a settings row for the
+     label and the Library's search box for the input, which is most of why it
+     read as a preferences screen rather than a welcome. */
+  .obfields{margin:0 var(--gutter);display:flex;flex-direction:column;gap:11px;}
+  .obfield{background:var(--surface);border:.5px solid var(--hairline);border-radius:17px;
+    padding:12px 15px 13px;transition:border-color .12s ease;}
+  [data-theme="light"] .obfield{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obfield:focus-within{border-color:var(--blue);}
+  .obfield .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obfield input{display:block;width:100%;margin-top:5px;padding:0;background:none;border:none;outline:none;
+    font-family:inherit;font-size:16.5px;font-weight:500;color:var(--label);letter-spacing:-.02em;}
+  .obfield input::placeholder{color:var(--label-3);font-weight:400;letter-spacing:-.01em;}
+  .obfield .hint{margin-top:7px;font-size:12px;line-height:1.45;color:var(--label-3);}
+  /* The code field accepts a 6-digit code or a whole pasted link, so it cannot
+     be six boxes. Tabular figures and wide tracking give it the same
+     at-a-glance shape without breaking the paste. */
+  .obfield.obcode{text-align:center;}
+  .obfield.obcode input{font-size:clamp(21px,6vw,25px);font-weight:600;letter-spacing:.2em;text-align:center;}
+  .obfield.obcode input::placeholder{font-size:14.5px;font-weight:400;letter-spacing:-.01em;}
+
+  /* Provider sign-in, above the typed path on the account step.
+     Both buttons sit on our own neutral surface rather than each brand's button
+     colour: two saturated slabs stacked above the fields would outrank the
+     step's own primary action, and a black Apple button beside a white Google
+     one is two design languages arguing. Google's mark keeps its four colours,
+     which its brand terms require and which are not our palette making a
+     claim; Apple's is currentColor, which resolves to exactly the black-on-light
+     and white-on-dark pair Apple specifies. */
+  .obalt{margin:0 var(--gutter) 13px;display:flex;flex-direction:column;gap:9px;}
+  .obalt .btn{padding:14px;border-radius:18px;font-size:15.5px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label);}
+  [data-theme="light"] .obalt .btn{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obalt .btn svg{width:18px;height:18px;flex-shrink:0;}
+  .obalt .btn .apl{fill:currentColor;}
+  /* A hairline with "or" through it, not a heading. Neither path is the
+     recommended one — whichever the parent already has is the fast one. */
+  .obor{margin:0 var(--gutter) 13px;display:flex;align-items:center;gap:11px;
+    font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obor::before,.obor::after{content:"";flex:1;height:.5px;background:var(--hairline);}
+
+  /* A statement panel: the app talking, where .card is the app reporting. */
+  .obpanel{margin:0 var(--gutter);padding:clamp(17px,4.6vw,21px);border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .obpanel{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obpanel.tint{background:rgba(58,134,255,.09);border-color:rgba(58,134,255,.22);box-shadow:none;}
+  .obpanel .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.34;text-wrap:balance;}
+  .obpanel .line em{font-style:normal;color:var(--blue);}
+  .obpanel .body{margin-top:11px;font-size:13.5px;line-height:1.52;color:var(--label-2);}
+
+  /* One action group per step, so the primary button lands in the same place
+     every time and the spacing stops coming from a per-screen inline margin. */
+  .obfoot{margin:24px var(--gutter) 4px;display:flex;flex-direction:column;gap:2px;}
+  .obfoot .btn.primary{padding:16px;border-radius:19px;}
+
+  /* The only acknowledgment in the flow, and it lands after the work rather
+     than during it — 320ms, the recompute budget, spent once. */
+  .obseal{width:46px;height:46px;border-radius:16px;margin-bottom:16px;
+    background:rgba(48,209,88,.16);display:flex;align-items:center;justify-content:center;
+    animation:obseal .32s var(--spring) both;}
+  .obseal svg{width:23px;height:23px;fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  @keyframes obseal{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:none}}
+
+  /* Choice rows carry a chevron in the flow. In Scan a .method row is the whole
+     screen so it needs no affordance; inside a sequence of steps the interface
+     has to say which taps move you forward. */
+  #obroot .method .chev{opacity:.28;}
+  #obroot .list + .subnote{margin-top:11px;}
+  /* Cause hues stay on the landing motif, where they mean causes. Everywhere
+     else in the flow an icon is blue for accent, amber for attention or green
+     for something already settled — spending the cause palette on decoration
+     would weaken the one place it carries meaning.
+
+     The names are ic-* rather than bare letters because .method's own text
+     column is .b: a tone called "b" inherits flex:1 from it and the 38px icon
+     tile stretches across the row. */
+  #obroot .ic-b{background:rgba(58,134,255,.16);}
+  #obroot .ic-b svg{stroke:var(--blue);}
+  #obroot .ic-g{background:rgba(48,209,88,.16);}
+  #obroot .ic-g svg{stroke:var(--green);}
+  #obroot .ic-a{background:rgba(255,159,10,.16);}
+  #obroot .ic-a svg{stroke:var(--amber);}
+  #obroot .ic-n{background:var(--surface-sunk);}
+  #obroot .ic-n svg{stroke:var(--label-3);}
+  /* Headline to first block: .greet's 2px is tuned for a view that opens on a
+     dense card, not for a step that opens on a field or a statement. */
+  #obroot .greet{padding-bottom:14px;}
+  /* Subject chips wrap rather than scroll: a picker you can scroll past is a
+     picker where a subject gets missed. It is static here, so it also drops the
+     opaque strip the sticky version needs — that would cut across the wash. */
+  #obroot .filterbar{flex-wrap:wrap;overflow:visible;background:none;padding-right:var(--gutter);}
+  #obroot .filterbar::after{display:none;}
+  /* The dead ends carry their back affordance in the header, so the paragraph
+     is the last thing in the card and its button gap is spare. */
+  #obroot .estate p:last-child{margin-bottom:0;}
+  /* .chip.n's sunk grey turns muddy on the tinted panel. */
+  #obroot .obpanel.tint .chip.n{background:rgba(58,134,255,.16);color:var(--blue);}
+
+  @media (hover:hover) and (pointer:fine){
+    .obback:hover{color:var(--label);}
+    #obroot .method:hover .chev{opacity:.6;}
+  }
+  /* The global reduce-motion rule collapses transitions but not animations, and
+     every moving part of the flow is a keyframe. The OS setting alone has to be
+     enough — [data-motion] only covers the in-app toggle. */
+  @media (prefers-reduced-motion:reduce){
+    .obview > *,.obprog .segs i.now span,.obseal{animation:none !important;}
+    .obprog .segs i.now span{transform:scaleX(1);}
+  }
 
   /* ── onboarding: the student half ──
      Steps 1-6 are the parent's, and they are dense on purpose — a parent wants
@@ -629,7 +968,7 @@
 
     <!-- ══════════════ 0 · HOME ══════════════ -->
     <div class="view on" id="v0">
-      <div class="greet"><div class="d">Tuesday</div><h1>Maya</h1></div>
+      <div class="greet"><div class="d" id="greetDay">Tuesday</div><h1 id="greetName">Maya</h1></div>
 
       <div class="hgrid">
       <div class="card insight press">
@@ -782,30 +1121,40 @@
     <!-- ══════════════ 2 · SCAN ══════════════ -->
     <div class="view" id="v2">
 
-      <!-- viewfinder: opens immediately, covers most of the viewport -->
-      <div class="scanhero">
-        <div class="feed">
-          <div class="feedgrid"></div>
-          <div class="sweep"></div>
-        </div>
-        <div class="frame">
-          <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
-        </div>
-        <div class="scanhint">Fits Physics · Unit Test — align all four corners</div>
+      <!-- Viewfinder. Capture is in v1 and this is the pure-web build of it:
+           edge detection, a stability gate and glare scoring, all in plain JS.
+           SCANNING_SYSTEM.md §3 leaves the container question open — a native
+           document scanner would do this better — and nothing below stage 0
+           depends on which way that goes.
+
+           The camera is a path, not the path. Upload stays first-class: a
+           student who photographed the paper last week should not do it again. -->
+      <div class="scanhero" id="scanHero" data-camera="off">
+        <video id="scanVideo" playsinline muted></video>
+        <canvas id="scanOverlay"></canvas>
+
+        <!-- Shown until the camera is live, and permanently where there is none.
+             There used to be a fixed set of corner brackets here, inset at 9%
+             and 12%. They looked exactly like the detector's output and tracked
+             nothing at all, so a viewfinder that had not started yet read as one
+             whose page detection was wildly wrong. The only brackets now drawn
+             are the ones on a page we have actually found. -->
+        <div class="feed"><div class="feedgrid"></div></div>
+        <div class="scanhint" id="scanHint" role="status" aria-live="polite">Starting the camera…</div>
 
         <div class="draftsicon press" id="draftsIcon" onclick="openDrafts()">
           <svg viewBox="0 0 24 24"><path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"/><path d="M14.5 4.5V9H19"/></svg>
           <span class="badge"></span>
         </div>
 
-        <!-- No in-app camera in v1: the phone's own camera app is better than
-             anything achievable in a PWA, so the shutter opens the OS picker,
-             which offers camera or gallery. -->
+        <!-- Auto-capture assists; it never blocks. The shutter always fires. -->
+        <div class="autotoggle press on" id="autoToggle" role="button" tabindex="0" data-activates aria-pressed="true">Auto <span class="dot"></span></div>
+
         <div class="scanctrls">
           <div class="sidebtn press" data-action="link" role="button" tabindex="0" aria-label="Add a link">
             <svg viewBox="0 0 24 24"><path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/></svg>
           </div>
-          <div class="shutter press" data-action="upload" role="button" tabindex="0" aria-label="Add pages"><div class="ring"></div></div>
+          <div class="shutter press" id="shutterBtn" role="button" tabindex="0" data-activates aria-label="Take this page"><div class="ring"></div></div>
           <div class="sidebtn press" data-action="upload" role="button" tabindex="0" aria-label="Upload from files">
             <svg viewBox="0 0 24 24"><path d="M12 16V5M12 5 8 9M12 5l4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg>
           </div>
@@ -816,96 +1165,55 @@
           <div class="dh"></div>
           <div class="row2">
             <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 7v5l3.5 2"/><circle cx="12" cy="12" r="9"/></svg></div>
-            <div class="b"><div class="t1">Resume draft</div><div class="t2">Physics booklet · 8 of ~16 pages added</div></div>
-            <div class="go press" onclick="closeDraftToast(true)">Resume</div>
+            <div class="b"><div class="t1">Resume draft</div><div class="t2" id="draftToastSub"></div></div>
+            <div class="go press" id="draftToastGo">Resume</div>
           </div>
         </div>
       </div>
 
-      <div class="scanbelow">
-        <div class="sectitle tight">Processing</div>
-        <div class="card proc press" onclick="openReview()">
-          <div class="hd">Reading page 3 of 6</div>
-          <div class="sub">Physics · PYQ 2023 · started 40s ago</div>
-          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Pages uploaded</span></div>
-          <div class="pline"><span class="st done"><svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg></span><span class="lb">Layout detected · 14 questions found</span></div>
-          <div class="pline now"><span class="st now"></span><span class="lb">Reading handwriting</span></div>
-          <div class="pline"><span class="st wait"></span><span class="lb">Matching to marking scheme</span></div>
-          <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px"><div class="skel" style="width:82%"></div><div class="skel" style="width:64%"></div><div class="skel" style="width:73%"></div></div>
+      <!-- Pages accumulate here, reorderable and individually retakeable. A page
+           that failed its quality gate is flagged now, while the paper is still
+           in front of the student — the same flag at review usually means the
+           page is simply lost. -->
+      <div class="tray" id="scanTray" hidden>
+        <div class="trayscroll" id="trayScroll"></div>
+        <div class="traybar">
+          <span class="cnt" id="trayCount"></span>
+          <div class="btn primary press" id="trayDone">Read this paper</div>
         </div>
-        <div class="subnote">Progress names the actual step. Tap to open this paper's full review.</div>
+      </div>
 
-        <div class="sectitle">Needs your eyes first</div>
-        <div class="list">
-          <div class="row press" onclick="openReview()"><div class="thumb" style="background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3)"><div class="ln" style="top:14px;background:var(--amber)"></div><div class="ln" style="top:24px;right:18px;background:var(--amber)"></div></div>
-            <div class="b"><div class="t1">Page 5 couldn't be read</div><div class="t2">Glare across the lower half</div><div class="t2" style="margin-top:6px"><span class="tier uns">Retake or enter manually</span></div></div>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-          <div class="row press" onclick="openReview()"><div class="b"><div class="t1">Q7 — final answer unclear</div><div class="t2">We read "42.6", low confidence</div><div class="t2" style="margin-top:6px"><span class="tier uns">Unsure</span></div></div>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg></div>
-        </div>
-        <div class="subnote">Unsure items come first. Nothing is ever dropped silently.</div>
+      <div class="scanbelow" id="scanBelow" hidden>
+        <!-- Progress names the actual step and the actual page. Never a spinner,
+             never a bar: a bar over work whose length nobody knows is a
+             confident lie about how long it will take. -->
+        <div id="scanProgress"></div>
       </div>
     </div>
 
-    <!-- ══════════════ FULLSCREEN PAPER REVIEW ══════════════ -->
+    <!-- ══════════════ STAGE 9 · REVIEW ══════════════ -->
+    <!-- Required, not skippable, and not defaulted to accept. A confident-paper
+         fast path is earned once extraction accuracy is measured rather than
+         assumed, and until then every paper passes through here.
+
+         Unsure and unreadable fields come first. Every field is shown against
+         its own crop, which is only possible because every extracted value
+         carries the box on the page it was read from. -->
     <div class="reviewsheet" id="reviewsheet">
       <div class="rvhead">
         <div class="rvback press" onclick="closeReview()"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></div>
-        <div class="rvtitle">Physics · PYQ 2023</div>
-        <div class="rvsave press" onclick="closeReview()">Save</div>
+        <div class="rvtitle" id="rvTitle">Review</div>
+        <div class="rvsave press" id="rvSave">Save</div>
       </div>
-      <div class="rvscroll">
-        <div class="rvcrop">
-          <div class="ln" style="top:20px"></div><div class="ln" style="top:34px;right:60px"></div><div class="ln" style="top:48px"></div>
-          <div class="ln" style="top:62px;right:30px"></div><div class="ln" style="top:82px"></div><div class="ln" style="top:96px;right:90px"></div>
-          <span class="rvzoom">Page 3 of 6</span>
-        </div>
-
-        <div class="sectitle tight">Detected automatically</div>
-        <div class="list">
-          <div class="row press" onclick="cycleField(this,['Physics','Chemistry','Mathematics','Biology'])">
-            <div class="b"><div class="t1">Subject</div></div>
-            <span class="fval">Physics</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-          <div class="row press" onclick="cycleField(this,['Rotational Motion','Kinematics','Optics','Work & Energy'])">
-            <div class="b"><div class="t1">Chapter</div></div>
-            <span class="fval">Rotational Motion</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-          <div class="row press" onclick="cycleField(this,['10 Aug 2026','9 Aug 2026','8 Aug 2026'])">
-            <div class="b"><div class="t1">Date taken</div></div>
-            <span class="fval">10 Aug 2026</span><span class="tier t2" style="margin-left:6px">Auto-detected</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-        </div>
-
-        <div class="sectitle">Couldn't tell — your call</div>
-        <div class="list">
-          <div class="row press" id="ttRow" onclick="cycleField(this,['PYQ','Sample paper','Unit test','Mid-term'],true)">
-            <div class="b"><div class="t1">Test type</div><div class="t2">This decides whether a scheme match is attempted</div></div>
-            <span class="fval" style="color:var(--label-3)">Tap to set</span><span class="tier uns" style="margin-left:6px">Needs input</span>
-            <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
-          </div>
-        </div>
-        <div class="subnote">Everything here stays editable, even after it's auto-filled — nothing is locked just because we were confident.</div>
-
-        <div style="margin:20px var(--gutter) 4px"><div class="btn primary press" onclick="confirmSave()">Confirm &amp; save to Library</div></div>
-      </div>
+      <div class="rvscroll" id="reviewBody"></div>
     </div>
 
     <!-- ══════════════ DRAFTS PANEL ══════════════ -->
     <div class="scrim" id="draftsScrim" onclick="closeDrafts()"></div>
     <div class="sheet" id="draftsSheet">
       <h4 style="margin-bottom:14px">Drafts</h4>
-      <div class="list">
-        <div class="row press">
-          <div class="thumb"><div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div></div>
-          <div class="b"><div class="t1">Physics booklet</div><div class="t2">8 of ~16 pages · saved locally</div></div>
-          <div class="go press" style="color:var(--blue);font-weight:600;font-size:14px" onclick="closeDrafts();closeDraftToast(true)">Resume</div>
-        </div>
-      </div>
-      <div class="subnote">Drafts stay on this device even if a booklet capture gets interrupted — nothing is lost, nothing re-uploads.</div>
+      <div class="list" id="draftsList"></div>
+      <div class="subnote">Drafts stay on this device even if a booklet capture gets interrupted — nothing is lost, and nothing that already reached us uploads twice.</div>
       <div class="acts"><div class="btn plain press" onclick="closeDrafts()">Close</div></div>
     </div>
 
@@ -949,7 +1257,7 @@
       <div class="list">
         <div class="srow" onclick="openSheet('board')">
           <div class="ic" style="background:rgba(58,134,255,.16)"><svg viewBox="0 0 24 24" stroke="var(--blue)"><path d="M4 5.5h16v13H4z"/><path d="M8 10h8M8 14h5"/></svg></div>
-          <div class="lbl">Board</div><div class="aux">CBSE</div>
+          <div class="lbl">Board</div><div class="aux" id="set-board-aux">CBSE</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
         <div class="srow" onclick="openSheet('class')">
@@ -959,7 +1267,7 @@
         </div>
         <div class="srow">
           <div class="ic" style="background:rgba(48,209,88,.16)"><svg viewBox="0 0 24 24" stroke="var(--green)"><path d="M20 6 9 17l-5-5"/></svg></div>
-          <div class="lbl">Subjects</div><div class="aux">Physics, Maths</div>
+          <div class="lbl">Subjects</div><div class="aux" id="set-subjects-aux">Physics, Maths</div>
           <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
         </div>
       </div>
@@ -985,8 +1293,8 @@
         <div class="srow noicon"><div class="lbl">Appearance</div>
           <div class="seg" id="segTheme">
             <button data-mode="light" onclick="setTheme('light',this)">Light</button>
-            <button data-mode="dark" class="on" onclick="setTheme('dark',this)">Dark</button>
-            <button data-mode="system" onclick="setTheme('system',this)">System</button>
+            <button data-mode="dark" onclick="setTheme('dark',this)">Dark</button>
+            <button data-mode="system" class="on" onclick="setTheme('system',this)">System</button>
           </div>
         </div>
         <div class="srow noicon"><div class="lbl">Text size</div><div class="seg" id="segText"><button data-size="s">S</button><button data-size="m" class="on">M</button><button data-size="l">L</button></div></div>
@@ -1056,7 +1364,13 @@
   <!-- Ingestion input. Deliberately without `capture`: that would force the
        camera open and prevent picking an already-taken photo or a PDF. On mobile
        the OS picker offers the camera anyway, which is the v1 intent. -->
-  <input type="file" id="fileInput" multiple accept="image/*,application/pdf" hidden>
+  <!-- Explicit types rather than the image/* wildcard. The wildcard makes iOS
+     and Android offer "Camera" alongside "Files", which is an odd thing for an
+     app with its own camera to do: the student taps upload, gets asked to take
+     a photo, and lands in a second scanner that skips every quality gate the
+     first one exists for. Naming the types routes straight to the file browser. -->
+  <input type="file" id="fileInput" multiple
+         accept="image/jpeg,image/png,image/heic,image/heif,image/webp,application/pdf" hidden>
 
   <div id="appToast" role="status" aria-live="polite"><div class="t1"></div></div>
 
@@ -1212,6 +1526,11 @@ function pick(i){
   }});
   if(i===1&&insightsFull) animateInsights();
   if(i===2&&!wasScan) initScan();
+  // The camera is a live capture device, not a decoration: it starts when the
+  // Scan tab is on screen and stops the moment it isn't. Leaving it running
+  // behind another tab costs battery and, more to the point, leaves a camera
+  // on in a student's bedroom because they navigated away.
+  if(i===2!==wasScan) window.__masteryScanVisible && window.__masteryScanVisible(i===2);
 }
 function animateInsights(){
   setTimeout(()=>{
@@ -1287,7 +1606,7 @@ const COPY={
     primary:'Change to Class 12',primaryClass:'primary'},
   board:{title:'Board changes go through support',
     body:"Moving between boards re-maps every concept your papers were analysed against, so it isn't a self-serve change. Support migrates the account and confirms what carries over first.",
-    items:[['Nothing is deleted.','Your existing papers stay readable under CBSE and keep their original scheme references.'],
+    items:[['Nothing is deleted.','Your existing papers stay readable and keep their original scheme references.'],
       ['Scheme verification restarts.','Tier 2 depends on board-specific marking schemes, so verified papers revert to extracted-only under a new board.'],
       ['Usually resolved within a day.','Support confirms the mapping before anything changes on your side.']],
     primary:'Contact support',primaryClass:'ghost'}
@@ -1300,10 +1619,6 @@ let sheetConsequential=false;
 function confirmSheet(){
   if(sheetConsequential) hapticFirm();
   closeSheet();
-}
-function confirmSave(){
-  hapticFirm();
-  closeReview();
 }
 function openSheet(k){
   sheetConsequential=true;
@@ -1333,13 +1648,18 @@ seed('drafts',1);
 seed('review',1);
 let draftDismissed=false, dragStartY=null, dragCurrentY=0;
 
+/* The toast slides in for a real unfinished booklet and for nothing else.
+   It used to appear on every visit to the Scan tab, which was fine while it
+   was a prototype of a draft and wrong the moment drafts became real —
+   offering to resume something that does not exist is a lie the interface
+   tells before the student has done anything. */
 function initScan(){
-  if(!draftDismissed){
-    spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
-      document.getElementById('draftToast').style.transform=`translateY(${-140*p}%)`;
-    }});
-    document.getElementById('draftsIcon').classList.remove('show');
-  }
+  const toast=document.getElementById('draftToast');
+  if(!toast||toast.dataset.hasDraft!=='1'||draftDismissed) return;
+  spring('draftToast',{to:0,stiffness:230,damping:24,onUpdate:p=>{
+    toast.style.transform=`translateY(${-140*p}%)`;
+  }});
+  document.getElementById('draftsIcon').classList.remove('show');
 }
 function closeDraftToast(resume){
   spring('draftToast',{to:1,stiffness:260,damping:28,onUpdate:p=>{
@@ -1385,20 +1705,10 @@ function openReview(){
 function closeReview(){
   document.getElementById('reviewsheet').classList.remove('open');
 }
-function cycleField(row,options,marksResolved){
-  const span=row.querySelector('.fval');
-  const cur=options.indexOf(span.textContent);
-  const next=options[(cur+1+options.length)%options.length];
-  span.textContent=next; span.style.color='var(--label)';
-  if(marksResolved){
-    const tag=row.querySelector('.tier');
-    tag.textContent='Set by you'; tag.className='tier t2';
-  }
-}
-/* The shutter no longer simulates a capture: v1 has no in-app camera, so it
-   opens the OS picker instead. The ring-squash animation is gone with it — it
-   implied a photo had been taken when what actually happens is a file chooser.
-   The press spring and the selection tick (wired in src/app.js) carry it. */
+/* The shutter takes a page now. Its confirmation is the haptic tick and the
+   thumbnail arriving in the tray — both are the thing that happened. No ring
+   squash: the capture flow has a zero budget for decorative motion, and a
+   flourish here would be exactly that. */
 function openSheetGeneric(kind){
   // reuses the warning-sheet mechanics for a lightweight confirmation
   sheetConsequential=false;
@@ -1423,11 +1733,20 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',hapticTi
    The nav and the appearance toggle are divs, so they need the activation
    behaviour a <button> would have given them for free. Arrow keys move along
    the nav in whichever direction it's currently laid out. */
-document.querySelectorAll('.tab,.themebtn').forEach(el=>{
-  el.addEventListener('keydown',e=>{
-    if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+function bindActivation(scope){
+  (scope||document).querySelectorAll('.tab,.themebtn,[data-activates]').forEach(el=>{
+    if(el.dataset.keyBound) return;
+    el.dataset.keyBound='1';
+    el.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); }
+    });
   });
-});
+}
+bindActivation();
+/* Anything rendered after boot — the review screen's chips, the tray — carries
+   data-activates and is bound the same way. A div that responds to a tap and
+   not to Enter is a control half the people who need it cannot use. */
+window.__masteryBindActivation = bindActivation;
 document.getElementById('refractlayer').addEventListener('keydown',e=>{
   const fwd=isRail()?'ArrowDown':'ArrowRight', back=isRail()?'ArrowUp':'ArrowLeft';
   if(e.key!==fwd&&e.key!==back) return;
@@ -1559,6 +1878,297 @@ confirmSheet = function(){
   __baseConfirmSheet();
   if(fn) fn();
 };
+
+/* ══ scan and review renderers ═══════════════════════════════════════════
+   The pipeline lives in src/scan/. These are the surfaces it paints into —
+   they belong here because they are design, not flow: the confidence chips,
+   the cause hues, the tray, and the one place a reconciliation gap is put
+   into words. */
+
+const CAUSE_HUE = {
+  conceptual_gap:'#4C7DF0', procedural_slip:'#3FA9A0', misread_question:'#8A6FD1',
+  incomplete:'#C98A3E', presentation:'#C46B8A', keyword_miss:'#7C9455', timed_out:'#78808F'
+};
+const CAUSE_LABEL = {
+  conceptual_gap:'Concept gap', procedural_slip:'Slip in the working',
+  misread_question:'Misread the question', incomplete:'Left incomplete',
+  presentation:'How it was presented', keyword_miss:'Missing keyword',
+  timed_out:'Ran out of time'
+};
+const esc = t => String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = n => Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
+
+/* The camera's two surfaces, handed over rather than found by the module, so
+   the markup stays owned by this file. */
+window.__masteryScanSurface = () => ({
+  hero: document.getElementById('scanHero'),
+  video: document.getElementById('scanVideo'),
+  overlay: document.getElementById('scanOverlay')
+});
+
+window.__masteryCameraLive = function(on, phase){
+  const hero=document.getElementById('scanHero');
+  if(!hero) return;
+  hero.dataset.camera = on ? 'on' : 'off';
+  if(on) delete hero.dataset.phase; else hero.dataset.phase = phase || 'idle';
+};
+
+/* Called by app.js the instant the Scan tab opens — before the scanner's own
+   modules have finished loading. It exists so the screen says something true
+   during the seconds the permission sheet is coming up, instead of showing a
+   dead viewfinder and an instruction about corners. */
+window.__masteryCameraStarting = function(){
+  window.__masteryCameraLive(false, 'starting');
+  const hint=document.getElementById('scanHint');
+  if(hint){ hint.textContent='Starting the camera…'; delete hint.dataset.blocking; }
+};
+
+/* One line, and amber is the entire vocabulary of attention in the viewfinder.
+   Red is the teacher's pen and the sign-out row; it appears nowhere else. */
+window.__masteryRenderHint = function(state){
+  const el=document.getElementById('scanHint');
+  if(!el) return;
+  el.textContent = state.hint;
+  if(state.blocking) el.dataset.blocking = state.blocking;
+  else delete el.dataset.blocking;
+};
+
+window.__masteryRenderTray = function(pages, handlers){
+  const tray=document.getElementById('scanTray');
+  const scroll=document.getElementById('trayScroll');
+  const count=document.getElementById('trayCount');
+  if(!tray||!scroll) return;
+
+  tray.hidden = !pages.length;
+  if(!pages.length){ scroll.innerHTML=''; return; }
+
+  scroll.innerHTML = pages.map(p=>`
+    <div class="traypage press" data-page="${p.page_number}" data-quality="${esc(p.quality&&p.quality.verdict||'ok')}"
+         role="button" tabindex="0" aria-label="Page ${p.page_number}">
+      ${p.thumb?`<img src="${p.thumb}" alt="">`:''}
+      <span class="n">${p.page_number}</span>
+      <span class="flag"><svg viewBox="0 0 12 12"><path d="M6 2.5v4"/><path d="M6 9h.01"/></svg></span>
+    </div>`).join('');
+
+  const bad = pages.filter(p=>p.quality&&p.quality.verdict!=='ok').length;
+  count.textContent = `${pages.length} page${pages.length===1?'':'s'}` +
+    (bad?` · ${bad} worth retaking`:'');
+
+  scroll.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>{
+    hapticTick();
+    handlers && handlers.onPage && handlers.onPage(Number(el.dataset.page));
+  }));
+  window.__masteryRebindPress(scroll);
+  window.__masteryBindActivation(scroll);
+
+  const done=document.getElementById('trayDone');
+  if(done && handlers && handlers.onDone){ done.onclick = () => { hapticFirm(); handlers.onDone(); }; }
+};
+
+/* Progress names the step and the page. There is no bar, because nobody knows
+   how long this takes and a bar would be a confident guess. */
+window.__masteryRenderProgress = function(model){
+  const host=document.getElementById('scanProgress');
+  const panel=document.getElementById('scanBelow');
+  if(!host) return;
+  // The panel covers the viewfinder while a paper is being read, and is not in
+  // the way when it is not. On a phone the camera is the whole screen, so there
+  // is no strip below it for this to live in.
+  if(panel) panel.hidden = !model;
+  if(!model){ host.innerHTML=''; return; }
+
+  const line = st => `<div class="pline ${st.state==='now'?'now':''}">
+      <span class="st ${st.state}">${st.state==='done'
+        ? '<svg viewBox="0 0 12 12"><path d="M2 6.5 4.5 9 10 3.5"/></svg>' : ''}</span>
+      <span class="lb">${esc(st.label)}</span></div>`;
+
+  host.innerHTML = `
+    <div class="sectitle tight">${esc(model.heading||'Reading this paper')}</div>
+    <div class="card proc${model.tappable?' press':''}" ${model.tappable?'id="progressCard"':''}>
+      <div class="hd">${esc(model.now)}</div>
+      ${model.sub?`<div class="sub">${esc(model.sub)}</div>`:''}
+      ${(model.steps||[]).map(line).join('')}
+      ${model.skeleton?`<div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <div class="skel" style="width:82%"></div><div class="skel" style="width:64%"></div>
+        <div class="skel" style="width:73%"></div></div>`:''}
+    </div>
+    ${model.note?`<div class="subnote">${esc(model.note)}</div>`:''}`;
+
+  const card=document.getElementById('progressCard');
+  if(card && model.onOpen) card.onclick = model.onOpen;
+  window.__masteryRebindPress(host);
+};
+
+window.__masteryRenderDrafts = function(drafts, handlers){
+  const list=document.getElementById('draftsList');
+  const icon=document.getElementById('draftsIcon');
+  if(!list) return;
+
+  if(icon) icon.classList.toggle('show', drafts.length>0);
+
+  if(!drafts.length){
+    list.innerHTML = `<div class="srow noicon"><div class="lbl">No drafts<small>An interrupted booklet waits here until you come back to it</small></div></div>`;
+    return;
+  }
+  list.innerHTML = drafts.map(d=>`
+    <div class="row press">
+      <div class="thumb">${d.thumb?`<img src="${d.thumb}" alt="" style="width:100%;height:100%;object-fit:cover">`
+        :'<div class="ln" style="top:8px"></div><div class="ln" style="top:16px;right:16px"></div><div class="ln" style="top:24px"></div>'}</div>
+      <div class="b"><div class="t1">${esc(d.title)}</div>
+        <div class="t2">${d.pages} page${d.pages===1?'':'s'} · saved on this device</div></div>
+      <div class="go press" data-resume="${esc(d.id)}" style="color:var(--blue);font-weight:600;font-size:14px">Resume</div>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-resume]').forEach(el=>el.addEventListener('click',()=>{
+    hapticTick(); closeDrafts();
+    handlers && handlers.onResume && handlers.onResume(el.dataset.resume);
+  }));
+  window.__masteryRebindPress(list);
+};
+
+window.__masteryDraftToast = function(draft, handlers){
+  const toast=document.getElementById('draftToast');
+  const sub=document.getElementById('draftToastSub');
+  const go=document.getElementById('draftToastGo');
+  if(!toast||!sub||!go) return;
+  if(!draft){ toast.dataset.hasDraft='0'; closeDraftToast(false); return; }
+  toast.dataset.hasDraft='1';
+  sub.textContent = `${draft.pages} page${draft.pages===1?'':'s'} added · not sent yet`;
+  go.onclick = () => { closeDraftToast(false); handlers && handlers.onResume && handlers.onResume(draft.id); };
+  draftDismissed=false;
+  if(current===2) initScan();
+};
+
+/* ── stage 9 · the review screen ──
+   Unsure and unreadable first. Every field against its own crop. The
+   correction ladder is pick → type → rescan, and the alternatives picker is
+   the landing state because it is the one-tap common case. */
+window.__masteryRenderReview = function(model, handlers){
+  const body=document.getElementById('reviewBody');
+  const title=document.getElementById('rvTitle');
+  const save=document.getElementById('rvSave');
+  if(!body) return;
+  if(title) title.textContent = model.title || 'Review';
+
+  const delta = model.delta ? `
+    <div class="delta">
+      <div class="t1">Worth a second look</div>
+      <div class="t2">${esc(model.delta.message)}</div>
+      <div class="sums">
+        <div>Our reading<b>${num(model.delta.ours)}</b></div>
+        <div>On the paper<b>${num(model.delta.theirs)}</b></div>
+      </div>
+    </div>` : '';
+
+  const question = q => {
+    const attention = q.tier !== 'confident';
+    const conf = q.tier === 'unreadable'
+      ? '<span class="conf unsure">Couldn\'t read</span>'
+      : q.tier === 'unsure'
+        ? '<span class="conf unsure">Unsure</span>'
+        : q.confirmed ? '<span class="conf confirmed">You confirmed</span>'
+                      : '<span class="conf likely">Read cleanly</span>';
+
+    const crop = q.crop
+      ? `<div class="qcrop"><img src="${q.crop}" alt="The part of your paper this came from"></div>`
+      : `<div class="qcrop"><div class="missing">${esc(q.unreadableReason
+          || 'We could not show this part of the page.')}</div></div>`;
+
+    const field = (k,v) => `<div class="qfield"><div class="k">${esc(k)}</div>
+      <div class="v${v?'':' empty'}">${esc(v || 'Not read')}</div></div>`;
+
+    /* The picker is asking what the teacher wrote, not what the student thinks
+       they deserved. The wording carries that, because the difference is the
+       whole of hard rule 1. */
+    const alts = (q.alternatives||[]).length ? `
+      <div class="qfield"><div class="k">Which number did your teacher write?</div></div>
+      <div class="qalts" role="radiogroup" aria-label="Which number did your teacher write?">${
+        q.alternatives.map(a=>`<div class="qalt press${a===q.marksAwarded?' on':''}" data-mark="${a}" data-activates role="radio" tabindex="0" aria-checked="${a===q.marksAwarded}">${num(a)}</div>`).join('')
+      }</div>` : '';
+
+    const cause = q.explanation && q.explanation.cause ? `
+      <div class="qfield">
+        <div class="k">Why the mark went</div>
+        <div class="v"><span class="cause" style="--c:${CAUSE_HUE[q.explanation.cause]||'#78808F'}">
+          <span class="sw"></span>${esc(CAUSE_LABEL[q.explanation.cause]||q.explanation.cause)}</span></div>
+        ${q.explanation.body?`<div class="v" style="margin-top:7px;color:var(--label-2)">${esc(q.explanation.body)}</div>`:''}
+        ${q.explanation.doThisNext?`<div class="v" style="margin-top:9px"><b>Do this next.</b> ${esc(q.explanation.doThisNext)}</div>`:''}
+      </div>` : '';
+
+    return `<div class="qcard" ${attention?'data-attention="1"':''} data-q="${esc(q.id)}">
+      <div class="qhead">
+        <span class="t1">${esc(q.label || 'This question')}</span>
+        ${conf}
+        ${q.marksAwarded!=null&&q.marksAvailable!=null
+          ? `<span class="qmarks">${num(q.marksAwarded)}<small>/${num(q.marksAvailable)}</small></span>` : ''}
+      </div>
+      ${crop}
+      ${alts}
+      ${field('Your answer', q.answer)}
+      ${q.remark ? field('Your teacher wrote', q.remark) : ''}
+      ${cause}
+      <div class="qacts">
+        ${q.confirmed ? '' : '<div class="qact accent press" data-act="confirm">That\'s right</div>'}
+        <div class="qact press" data-act="type" data-activates role="button" tabindex="0">Fix this</div>
+        <div class="qact press" data-act="rescan" data-activates role="button" tabindex="0">Rescan this page</div>
+        ${q.explanation && q.explanation.cause && !q.causeRejected
+          ? '<div class="qact press" data-act="cause" data-activates role="button" tabindex="0">Not why I lost it</div>' : ''}
+      </div>
+    </div>`;
+  };
+
+  /* Accepting the cleanly-read ones as a group. Every question still has to be
+     confirmed before the paper can be saved — that is enforced in SQL, not here
+     — but a required step costing fourteen identical taps is a step people learn
+     to rush past without looking. */
+  const bulk = model.cleanCount ? `
+    <div class="bulkrow">
+      <div class="b"><div class="t1">${model.cleanCount} read cleanly</div>
+        <div class="t2">Their crops are above. Accept them together, or check them one at a time.</div></div>
+      <div class="qact accent press" id="rvConfirmClean" data-activates role="button" tabindex="0">These look right</div>
+    </div>` : '';
+
+  body.innerHTML = delta +
+    (model.lead ? `<div class="subnote" style="margin-top:14px">${esc(model.lead)}</div>` : '') +
+    (model.questions||[]).map(question).join('') +
+    bulk +
+    `<div class="subnote">Nothing here is locked because we were confident. If the mark itself
+      looks wrong, that is a conversation with your teacher — we go by what they wrote.</div>` +
+    `<div style="margin:20px var(--gutter) 4px"><div class="btn primary press" id="rvConfirmAll"${
+      model.outstanding ? ' data-waiting="1"' : ''} data-activates role="button" tabindex="0">${
+      esc(model.saveLabel || 'Save to Library')}</div></div>`;
+
+  body.querySelectorAll('[data-q]').forEach(card=>{
+    const id=card.dataset.q;
+    card.querySelectorAll('[data-act]').forEach(el=>el.addEventListener('click',()=>{
+      hapticTick();
+      handlers && handlers.onAction && handlers.onAction(id, el.dataset.act);
+    }));
+    card.querySelectorAll('[data-mark]').forEach(el=>el.addEventListener('click',()=>{
+      hapticTick();
+      handlers && handlers.onMark && handlers.onMark(id, Number(el.dataset.mark));
+    }));
+  });
+
+  window.__masteryBindActivation(body);
+  const confirmClean=document.getElementById('rvConfirmClean');
+  if(confirmClean && handlers && handlers.onConfirmClean){
+    confirmClean.onclick = () => { hapticFirm(); handlers.onConfirmClean(); };
+  }
+  const confirmAll=document.getElementById('rvConfirmAll');
+  if(confirmAll && handlers && handlers.onSave){
+    confirmAll.onclick = () => { hapticFirm(); handlers.onSave(); };
+  }
+  if(save && handlers && handlers.onSave){ save.onclick = () => { hapticFirm(); handlers.onSave(); }; }
+  window.__masteryRebindPress(body);
+};
+
+window.__masteryOpenReview = openReview;
+window.__masteryCloseReview = closeReview;
+/* Navigation belongs to this file, so the modules ask rather than reach for the
+   tab bar themselves. Retaking a page from the review screen has to put the
+   student back in front of the camera. */
+window.__masteryGoto = pick;
 
 window.__masteryRenderLibrary = function(papers, opts){
   const list=document.getElementById('libraryList');

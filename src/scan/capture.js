@@ -1,0 +1,358 @@
+// Stage 0 · capture.
+//
+// The viewfinder, the gate in front of the shutter, and the tray behind it.
+//
+// The container question in SCANNING_SYSTEM.md §3 is still open — a native
+// document scanner behind Capacitor would do this better than any web build can,
+// and until that is decided this is the competent-but-modest in-app camera the
+// document names as the honest fallback. Everything below the capture boundary
+// is unaffected by that choice: what this produces is a conditioned page, a
+// teacher-mark map and a quality verdict, and a native scanner would produce the
+// same three things.
+//
+// Two rules shape all of it. The gate assists, it never blocks: auto-capture can
+// refuse, the shutter never does. And the quality verdict happens here, while
+// the paper is still in front of the student, because the same verdict forty
+// seconds later at review usually means the page is simply lost.
+
+import { CAPTURE, QUALITY } from './contract.js';
+import { releaseCamera, requestCamera } from './camera.js';
+import { detectQuad, easeQuad, scaleQuad } from './edges.js';
+import { blurScore, glareInQuad, toGray } from './quality.js';
+import { quadDrift, quadFill, quadSize } from './geometry.js';
+
+const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
+const DETECT_MAX_INTERVAL_MS = 320;
+// The share of the main thread the search is allowed to take. Finding the page
+// is not worth a viewfinder that stutters — on the phones this is built for, a
+// fixed cadence means the search sets the frame rate, and the frame rate is what
+// the student experiences as whether the app works.
+const DETECT_DUTY = 0.3;
+const PROXY_WIDTH = 240;
+
+/**
+ * How long the page has been sitting in one place.
+ *
+ * Measured against the pose the window opened at rather than against the
+ * previous search, which is the whole fix. Frame-to-frame comparison meant a few
+ * pixels of ordinary jitter — from the hand, and from a detector that re-fits
+ * its lines every search — reset the clock every time, so the window never
+ * closed and auto-capture never fired.
+ *
+ * Pure, and exported, because this is the piece that was silently wrong in the
+ * field and a camera is a poor place to find that out twice.
+ */
+export function steadyWindow({ anchor, found, width, height, since, now }) {
+  if (!anchor || quadDrift(anchor, found, width, height) > CAPTURE.STABILITY_TOLERANCE) {
+    return { anchor: found, since: now, steady: false };
+  }
+  return { anchor, since, steady: now - since >= CAPTURE.STABILITY_MS };
+}
+
+/**
+ * Whether to take the picture.
+ *
+ * Two ways to qualify. Stillness is the one that should normally fire. Patience
+ * is the safety net: a page found and unblocked continuously for long enough is
+ * a page someone is holding out to be photographed, and never taking it is a
+ * worse failure than occasionally taking one the student then deletes — which
+ * costs a tap, against a mode that otherwise simply does not work.
+ */
+export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFor, consecutiveFinds }) {
+  if (!autoCapture || !armed || blocking) return false;
+  // A detector locked onto something large and wrong is extremely stable, so
+  // stability alone is not evidence. Several finds running is.
+  if (consecutiveFinds < 4) return false;
+  return steady || heldFor >= CAPTURE.PATIENCE_MS;
+}
+
+/**
+ * @param {Object} options
+ * @param {HTMLVideoElement} options.video
+ * @param {HTMLCanvasElement} options.overlay
+ * @param {(state: GateState) => void} options.onState
+ * @param {(shot: {bitmap: ImageBitmap, quad: Array|null, auto: boolean}) => void} options.onShot
+ */
+export function createCapture({ video, overlay, onState, onShot }) {
+  let stream = null;
+  let running = false;
+  let rafHandle = 0;
+  let detectHandle = 0;
+
+  let quad = null;          // smoothed, in video coordinates
+  let lastDetection = null; // raw, for the shot's own geometry
+  // The pose the current steady window began at. Steadiness is measured against
+  // this rather than against the previous frame — see step().
+  let steadyAnchor = null;
+  let steadySince = 0;
+  let heldSince = 0;
+  let consecutiveFinds = 0;
+  let autoCapture = true;
+  let armed = true;         // disarms after a shot so one steady page is one page
+  let state = blankState();
+
+  const proxy = document.createElement('canvas');
+  const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
+
+  function blankState() {
+    return {
+      hasPage: false,
+      fill: 0,
+      pageLongEdge: 0,
+      sharpness: 0,
+      glare: 0,
+      steady: false,
+      /** What the student is told, right now. One line, actionable. */
+      hint: 'Lay the page flat and fit all four corners in the frame',
+      blocking: null,
+    };
+  }
+
+  /**
+   * @param {Promise<MediaStream>|MediaStream|Error|null} [adopt]
+   *   A stream someone else already asked for. app.js fires the request the
+   *   moment the Scan tab opens, well before this module has finished loading,
+   *   so by the time we get here the permission sheet is usually already
+   *   answered. Passing the rejection through as a value rather than a rejected
+   *   promise keeps that early request from becoming an unhandled rejection.
+   */
+  async function start(adopt = null) {
+    if (running) return;
+    const resolved = adopt ? await adopt : await requestCamera();
+    if (resolved instanceof Error) throw resolved;
+    stream = resolved;
+    video.srcObject = stream;
+    video.setAttribute('playsinline', '');
+    await video.play();
+    running = true;
+    armed = true;
+    loop();
+    detect();
+  }
+
+  function stop() {
+    running = false;
+    cancelAnimationFrame(rafHandle);
+    clearTimeout(detectHandle);
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    video.srcObject = null;
+    quad = lastDetection = steadyAnchor = null;
+    steadySince = heldSince = consecutiveFinds = 0;
+    // Clear the shared request too, or the next visit adopts a stream whose
+    // tracks have already been stopped and shows a black viewfinder.
+    releaseCamera();
+  }
+
+  // ── the search ───────────────────────────────────────────────────────────
+
+  function detect() {
+    if (!running) return;
+    // Nothing to look at while the tab is in the background, and a camera search
+    // running behind another app is battery spent on nobody.
+    if (document.hidden) {
+      detectHandle = setTimeout(detect, DETECT_MAX_INTERVAL_MS);
+      return;
+    }
+    const started = performance.now();
+    try { step(); } catch { /* a bad frame is not worth stopping the camera for */ }
+    const cost = performance.now() - started;
+    // Back off in proportion to what the last search actually cost, so a slow
+    // phone searches less often rather than searching just as often and dropping
+    // frames to do it.
+    const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
+    detectHandle = setTimeout(detect, wait);
+  }
+
+  function step() {
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return;
+
+    const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
+    proxyCtx.drawImage(video, 0, 0, pw, ph);
+    const frame = proxyCtx.getImageData(0, 0, pw, ph);
+
+    const found = detectQuad(frame);
+    const next = blankState();
+
+    if (!found) {
+      lastDetection = steadyAnchor = null;
+      steadySince = heldSince = consecutiveFinds = 0;
+      quad = null;
+      // Losing the page is what re-arms auto-capture. Without this, the first
+      // automatic shot was the only one: `armed` went false on firing and was
+      // only ever set back by a *blocking* frame, so lifting the phone to the
+      // next page — which simply loses the quad — left it disarmed for the rest
+      // of the session.
+      armed = true;
+      publish(next);
+      return;
+    }
+
+    next.hasPage = true;
+    next.fill = quadFill(found, pw, ph);
+    next.sharpness = blurScore(toGray(frame), pw, ph);
+    next.glare = glareInQuad(frame, found);
+    consecutiveFinds++;
+
+    // How big the page will be once it is warped flat, in the camera's own
+    // pixels. This is the number the quality gate will judge the page on, so it
+    // is the number the advice should come from — telling someone to move closer
+    // because the page covers less than a third of a *frame* is advice about the
+    // wrong thing, and it is wrong whenever the frame is mostly desk.
+    const size = quadSize(found);
+    next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+
+    const window_ = steadyWindow({
+      anchor: steadyAnchor, found, width: pw, height: ph,
+      since: steadySince, now: performance.now(),
+    });
+    steadyAnchor = window_.anchor;
+    steadySince = window_.since;
+    lastDetection = found;
+    next.steady = window_.steady;
+
+    quad = easeQuad(quad, scaleQuad(found, { width: pw, height: ph }, { width: vw, height: vh }));
+
+    // ── the gate ───────────────────────────────────────────────────────────
+    // Ordered by what the student should fix first. Glare comes before
+    // sharpness because a washed-out red tick reads as no tick at all — the
+    // page looks fine and the marks are simply gone.
+
+    if (next.glare > QUALITY.GLARE_WARN) {
+      next.blocking = 'glare';
+      next.hint = 'Light is bouncing off the page — tilt it slightly away from the light';
+    } else if (next.fill < CAPTURE.MIN_FILL) {
+      next.blocking = 'distance';
+      next.hint = 'Move closer so the page fills more of the frame';
+    } else if (next.sharpness < QUALITY.BLUR_WARN) {
+      next.blocking = 'focus';
+      next.hint = 'Hold still — the page is not sharp yet';
+    } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
+      // Advisory, never blocking. Resolution is the one gate condition the
+      // student may be unable to satisfy: it depends on what sensor the browser
+      // handed over, and plenty of Android browsers cap getUserMedia far below
+      // what the camera can do. Blocking on it means a phone that cannot reach
+      // the threshold never auto-captures at all — the shutter simply stops
+      // working, with a hint telling the student to do something they are
+      // already doing. The page is taken, and the quality gate flags it in the
+      // tray, which is where a judgement the student can act on belongs.
+      next.hint = 'Closer if you can — more of the page means we read it better';
+    } else if (!next.steady) {
+      next.hint = 'Hold still';
+    } else {
+      next.hint = 'Ready';
+    }
+
+    // How long the page has been continuously found with nothing blocking. The
+    // clock runs on the gate, not on stillness, so it survives the jitter that
+    // steadiness is fussy about.
+    if (next.blocking) heldSince = 0;
+    else if (!heldSince) heldSince = performance.now();
+    const heldFor = heldSince ? performance.now() - heldSince : 0;
+
+    // Held a while and still not called steady: say so honestly rather than
+    // repeating an instruction the student is already following.
+    if (!next.blocking && !next.steady && heldFor > 1800) next.hint = 'Almost — keep it there';
+
+    publish(next);
+
+    if (shouldAutoCapture({
+      autoCapture, armed, blocking: next.blocking,
+      steady: next.steady, heldFor, consecutiveFinds,
+    })) {
+      armed = false;
+      shoot(true);
+    }
+    if (next.blocking) armed = true;
+  }
+
+  function publish(next) {
+    state = next;
+    onState?.(next);
+  }
+
+  // ── the overlay ──────────────────────────────────────────────────────────
+  // Corner brackets on the detected quad, drawn every frame from whatever the
+  // last search found. No decorative motion: the capture flow is the one place
+  // CLAUDE.md gives a zero budget for it.
+
+  function loop() {
+    if (!running) return;
+    rafHandle = requestAnimationFrame(loop);
+
+    const rect = video.getBoundingClientRect();
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
+    if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
+
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    if (!quad || !video.videoWidth) return;
+
+    // The video is object-fit: cover, so the drawn frame is cropped, not
+    // letterboxed. Mapping has to match or the brackets sit off the page.
+    const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
+    const offsetX = (w - video.videoWidth * scale) / 2;
+    const offsetY = (h - video.videoHeight * scale) / 2;
+    const points = quad.map((p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY }));
+
+    ctx.strokeStyle = state.blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
+    ctx.lineWidth = 3 * dpr;
+    ctx.lineCap = 'round';
+
+    // Brackets rather than a full outline, matching the viewfinder in
+    // index.html: an outline hides the page edge it is meant to confirm.
+    const armLength = 26 * dpr;
+    for (let i = 0; i < 4; i++) {
+      const p = points[i];
+      for (const q of [points[(i + 1) % 4], points[(i + 3) % 4]]) {
+        const dx = q.x - p.x, dy = q.y - p.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const t = Math.min(armLength, length * 0.4) / length;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + dx * t, p.y + dy * t);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ── the shutter ──────────────────────────────────────────────────────────
+
+  async function shoot(auto = false) {
+    if (!running || !video.videoWidth) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const bitmap = await createImageBitmap(canvas);
+
+    // The quad travels with the frame so conditioning can warp it. Full-frame
+    // coordinates, because the quad on screen is the smoothed display copy.
+    const shotQuad = lastDetection && video.videoWidth
+      ? scaleQuad(lastDetection,
+          { width: proxy.width, height: proxy.height },
+          { width: video.videoWidth, height: video.videoHeight })
+      : null;
+
+    const shot = { bitmap, quad: shotQuad, auto, gate: { ...state } };
+    onShot?.(shot);
+    // Re-arm on the next frame that is not ready, so holding steady over one
+    // page does not fire twice, and turning to the next page fires once.
+    armed = false;
+    return shot;
+  }
+
+  return {
+    start,
+    stop,
+    shoot: () => shoot(false),
+    get state() { return state; },
+    setAutoCapture(on) { autoCapture = !!on; armed = true; },
+    get autoCapture() { return autoCapture; },
+    /** Whether a camera exists at all. Upload is a first-class path, not a fallback. */
+    supported: !!navigator.mediaDevices?.getUserMedia,
+  };
+}
