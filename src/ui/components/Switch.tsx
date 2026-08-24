@@ -33,20 +33,34 @@ import { spring, seed, releaseSpring } from "../lib/spring";
 import { hapticTick } from "../lib/haptics";
 import { lensMapFor } from "../lib/lens";
 
-/* Geometry. The thumb is a capsule wider than it is tall, and it overhangs the
-   track on every side — that overhang is what makes it read as a lens resting
-   ON the track rather than a disc sunk into it. Kept here rather than in CSS
-   because the displacement map has to be built at exactly these dimensions;
-   if the two ever disagree the refraction detaches from the glass. */
+/* Geometry, taken from the proportions of the reference rather than from the
+   flat switch this replaces.
+
+   The lens is large relative to its track and overhangs it generously — about a
+   fifth of the track's width past the end, and a third of its height above and
+   below. That is what makes it read as a piece of glass resting ON the track
+   instead of a disc running inside it, and it is why the track is thinner than
+   the control's own height: the glass needs room to sit proud of it.
+
+   A big thumb means short travel. That is the look, not a compromise.
+
+   Kept here rather than in CSS because the displacement map must be generated at
+   exactly these dimensions — if the two disagree the refraction detaches from
+   the glass and the whole illusion goes with it. */
 const TRACK_W = 56;
-const THUMB_W = 42;
+const TRACK_H = 28;
+const THUMB_W = 46;
 const THUMB_H = 38;
-const OVERHANG = 2;
+const OVERHANG = 5;
 const TRAVEL = TRACK_W - THUMB_W + OVERHANG * 2;
 
 /** Corner radius the displacement map is built for. A capsule, so half the
     short side — the same relationship PILL_R has to the nav pill. */
 const THUMB_R = THUMB_H / 2;
+
+/** Published so the stylesheet and this file cannot drift on the numbers the
+    lens depends on. */
+export const SWITCH_METRICS = { TRACK_W, TRACK_H, THUMB_W, THUMB_H, OVERHANG, TRAVEL };
 
 export default function Switch({
   on,
@@ -152,7 +166,11 @@ export default function Switch({
               <feMergeNode in="neutral" />
               <feMergeNode in="lensmap" />
             </feMerge>
-            <feDisplacementMap in="SourceGraphic" in2="dmap" scale="13" xChannelSelector="R" yChannelSelector="G" />
+            {/* Scale is bounded by the overhang. Push it further and the lens
+                samples past the clipped track, pulling transparency into the
+                green and tearing the edge — which reads as an artifact rather
+                than as refraction. */}
+            <feDisplacementMap in="SourceGraphic" in2="dmap" scale="8" xChannelSelector="R" yChannelSelector="G" />
           </filter>
         </defs>
       </svg>
