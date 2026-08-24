@@ -8,8 +8,9 @@ The curriculum is Cambridge only: IGCSE, AS and A Level. `src/curriculum.js` hol
 stages, the class-level mapping and the syllabus codes, and is the one place to change
 if another board is ever added.
 
-`index.html` is the front end and the design system. `src/` holds ES modules for data
-and flow; `vendor/` holds the Supabase client. No bundler, no framework, no install.
+`src/ui/` is the React app. `src/` holds the data and scanning modules it imports,
+still plain ES modules — the scan stage modules are pure and have to keep running in
+the Web Worker and in Node under `harness/`.
 
 It must be **served**, not opened as a file — ES modules do not load over `file://`.
 
@@ -112,12 +113,13 @@ No Supabase project and no API key needed for any of them.
 
 ## Deploying
 
-`netlify.toml` copies `index.html`, `src/` and `vendor/` into `dist/` and publishes
-that. The publish directory is explicit rather than the repo root, so the Constitution
-specs, the blueprint and the design reference images stay out of the deployed site.
+`netlify.toml` runs `npm ci && npm run build` and publishes `dist/`, so the
+Constitution specs, the blueprint, the design reference images, `bench/`, `harness/`
+and `reference/` all stay out of the deployed site.
 
-There is nothing to install — no `package.json`, no framework, no build step beyond
-the copy.
+Real routing needs a CDN-level rewrite: every path falls back to `/index.html` with a
+200, so a deep link to `/library/<paper>/<question>` resolves on a cold load rather
+than 404ing before React ever runs.
 
 The four edge functions in `supabase/functions/` deploy separately and need
 `ANTHROPIC_API_KEY` set on the project. `MASTERY_MODEL_STRUCTURE`,

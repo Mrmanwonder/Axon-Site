@@ -13,3 +13,7 @@
 # editor / tooling scratch
 .vscode/
 .idea/
+
+# dependencies + build caches
+/node_modules
+*.tsbuildinfo

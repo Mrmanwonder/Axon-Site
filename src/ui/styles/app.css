@@ -1,0 +1,202 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAILWIND THEME
+
+   Tailwind ships a complete design system of its own — its own greys, its own
+   spacing ramp, its own radii, its own durations. Left in place it would sit
+   alongside this project's tokens as a second, competing source of truth, and
+   `text-red-500` would be one keystroke away in a codebase where red means
+   exactly one thing.
+
+   `--*: initial` clears every default namespace. What follows is the only
+   vocabulary the utilities expose, and all of it resolves to tokens.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@theme {
+  --*: initial;
+
+  /* surfaces */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-hairline: var(--hairline);
+  --color-field: var(--field);
+  --color-sheet: var(--sheet-bg);
+  --color-scrim: var(--scrim);
+
+  /* text */
+  --color-label: var(--label);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
+  --color-statusfg: var(--statusfg);
+
+  /* meaning */
+  --color-accent: var(--accent);
+  --color-positive: var(--positive);
+  --color-attention: var(--attention);
+  --color-signout: var(--signout);
+  --color-accent-wash: var(--accent-wash);
+  --color-positive-wash: var(--positive-wash);
+  --color-attention-wash: var(--attention-wash);
+
+  /* cause — categorical, equal weight, never a ramp */
+  --color-cause-conceptual-gap: var(--cause-conceptual-gap);
+  --color-cause-procedural-slip: var(--cause-procedural-slip);
+  --color-cause-misread-question: var(--cause-misread-question);
+  --color-cause-incomplete: var(--cause-incomplete);
+  --color-cause-presentation: var(--cause-presentation);
+  --color-cause-keyword-miss: var(--cause-keyword-miss);
+  --color-cause-timed-out: var(--cause-timed-out);
+
+  /* nav glass */
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-border: var(--nav-border);
+  --color-nav-icon: var(--nav-icon);
+  --color-nav-icon-on: var(--nav-icon-on);
+  --color-nav-pill: var(--nav-pill);
+
+  /* radii */
+  --radius-card: var(--r-card);
+  --radius-sheet: var(--r-sheet);
+  --radius-nav: var(--r-nav);
+  --radius-pill: var(--r-pill);
+  --radius-btn: var(--r-btn);
+  --radius-cta: var(--r-cta);
+  --radius-chip: var(--r-chip);
+  --radius-fchip: var(--r-fchip);
+  --radius-field: var(--r-field);
+  --radius-tile: var(--r-tile);
+  --radius-tier: var(--r-tier);
+  --radius-thumb: var(--r-thumb);
+
+  /* type */
+  --text-h1: var(--fs-h1);
+  --text-insight: var(--fs-insight);
+  --text-sec: var(--fs-sec);
+  --text-title: var(--fs-title);
+  --text-name: var(--fs-name);
+  --text-hdr: var(--fs-hdr);
+  --text-btn: var(--fs-btn);
+  --text-t1: var(--fs-t1);
+  --text-t2: var(--fs-t2);
+  --text-meta: var(--fs-meta);
+  --text-chip: var(--fs-chip);
+  --text-tier: var(--fs-tier);
+  --text-body: var(--fs-body);
+  --text-row: var(--fs-row);
+  --text-row2: var(--fs-row2);
+  --text-lbl: var(--fs-lbl);
+
+  --font-weight-regular: var(--fw-regular);
+  --font-weight-medium: var(--fw-medium);
+  --font-weight-semibold: var(--fw-semibold);
+  --font-weight-bold: var(--fw-bold);
+
+  --tracking-h1: var(--ls-h1);
+  --tracking-title: var(--ls-title);
+  --tracking-name: var(--ls-name);
+  --tracking-insight: var(--ls-insight);
+  --tracking-hdr: var(--ls-hdr);
+  --tracking-t1: var(--ls-t1);
+  --tracking-tight: var(--ls-tight);
+  --tracking-sec: var(--ls-sec);
+
+  /* spacing — the rhythm is the gutter and its derivatives, not a 4px ramp */
+  --spacing-gutter: var(--gutter);
+  --spacing-text-gutter: var(--text-gutter);
+  --spacing-view-top: var(--view-top);
+  --spacing-view-bottom: var(--view-bottom);
+  --spacing-rail: var(--rail-w);
+
+  /* motion */
+  --ease-spring: var(--spring);
+  --duration-state: var(--d-state);
+  --duration-disclose: var(--d-disclose);
+  --duration-recompute: var(--d-recompute);
+  --duration-theme: var(--d-theme);
+
+  /* the two breakpoints in the system, both about navigation */
+  --breakpoint-rail: 768px;
+  --breakpoint-rail-lg: 1024px;
+
+  --font-sans: "Onest", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FONT
+
+   Onest, the latin variable subset, self-hosted. In the prototype this was a
+   data URI inside the document so the real face painted on the first frame
+   with no network at all. As a real asset it is a separate request, so it is
+   preloaded from the document head and given an immutable cache header — see
+   index.html and netlify.toml.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: "Onest";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: block;
+  src: url("/fonts/onest-latin-var.woff2") format("woff2");
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════════════ */
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: var(--font-sans);
+  transition: background var(--d-theme) ease;
+}
+
+#root {
+  height: 100%;
+}
+
+::selection {
+  background: var(--accent-select);
+  color: var(--p-white);
+}
+
+/* Keyboard only. The design's own press states cover pointers, and the
+   browser default outline is never used. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+  border-radius: var(--r-chip);
+}
+
+/* ── reduce motion ──
+   Mirrors the OS setting, and the in-app toggle (Settings -> Reduce motion)
+   sets data-motion="reduce" so a student can have stillness in this app
+   without changing their whole phone. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
+
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  transition-duration: .01ms !important;
+  animation-duration: .01ms !important;
+}

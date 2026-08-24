@@ -1,0 +1,258 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APP CONTEXT
+
+   What `src/app.js` called `ctx`, as React state. The modules it reads from —
+   supabase, prefs, consent, papers — are imported unchanged; this replaces the
+   imperative glue that wired them to the DOM, not the modules themselves.
+
+   Three properties carried over deliberately, each of which was a bug once:
+
+   · **Consent is never cached optimistically.** `refreshConsent` always goes to
+     the server, and `setConsent` re-reads the ledger after writing rather than
+     trusting the value it just sent. On failure the switch goes back to what
+     the ledger says, because the ledger is the truth and the UI is not.
+
+   · **Prefs are safe to cache and consent is not.** A stale text size is a
+     cosmetic annoyance; a stale yes is a compliance failure. They are separate
+     paths here for that reason, not merely for tidiness.
+
+   · **The student's rows are handed over, not re-fetched, after onboarding.**
+     Re-reading re-runs the gate, and on a read replica that has not caught up
+     the student is not there yet — which drops someone who has just finished
+     onboarding back to the start of it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
+} from "react";
+import type { ReactNode } from "react";
+import {
+  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+  loadPrefs, savePrefs, readLocal,
+  readConsentState, recordConsent, withdrawConsent,
+  listPapers,
+} from "./modules";
+import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper } from "./modules";
+
+
+/** What the boot sequence concluded about who this is. */
+export type Gate = "loading" | "onboarding" | "ready";
+
+type AppValue = {
+  gate: Gate;
+  providerError: ProviderError | null;
+  session: unknown;
+  guardian: Guardian | null;
+  student: Student | null;
+
+  prefs: Prefs;
+  setPref: (patch: Partial<Prefs>) => Promise<void>;
+
+  /** purpose -> granted. Absent key means unknown, never "no". */
+  consent: ConsentState;
+  refreshConsent: () => Promise<void>;
+  setConsent: (purpose: string, granted: boolean) => Promise<void>;
+
+  papers: Paper[];
+  papersStale: boolean;
+  refreshLibrary: () => Promise<void>;
+
+  online: boolean;
+  finishOnboarding: (r: { guardian?: Guardian; student?: Student; firstPaperType?: string | null }) => Promise<void>;
+  /** Set by onboarding step 8; consumed by the next ingest, then cleared. */
+  takePendingPaperType: () => string | null;
+  signOutNow: () => Promise<void>;
+};
+
+const Ctx = createContext<AppValue | null>(null);
+
+export function useApp(): AppValue {
+  const v = useContext(Ctx);
+  if (!v) throw new Error("useApp called outside AppProvider");
+  return v;
+}
+
+/** Applied to the root element so CSS owns the actual scaling — the same
+    contract `applyPrefs` had, and the reason the pre-paint script in index.html
+    can set these before React exists. */
+function applyPrefs(prefs: Prefs) {
+  const root = document.documentElement;
+  const resolved = prefs.theme === "system"
+    ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : prefs.theme;
+  root.dataset.theme = resolved;
+  root.dataset.text = prefs.text_size;
+  root.dataset.motion = prefs.reduce_motion ? "reduce" : "full";
+  document.querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", resolved === "dark" ? "#000000" : "#F4F4F7");
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [gate, setGate] = useState<Gate>("loading");
+  const [providerError, setProviderError] = useState<ProviderError | null>(null);
+  const [session, setSession] = useState<unknown>(null);
+  const [guardian, setGuardian] = useState<Guardian | null>(null);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
+  const [consent, setConsentState] = useState<ConsentState>({});
+  const [papers, setPapers] = useState<Paper[]>([]);
+  const [papersStale, setPapersStale] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+
+  const pendingPaperType = useRef<string | null>(null);
+  const takePendingPaperType = useCallback(() => {
+    const t = pendingPaperType.current;
+    pendingPaperType.current = null;
+    return t;
+  }, []);
+
+  // The cached prefs are already on the root from index.html's inline script;
+  // this keeps React's copy and the DOM in step from here on.
+  useEffect(() => { applyPrefs(prefs); }, [prefs]);
+
+  // A theme of "system" has to follow the OS while the app is open, not only at
+  // boot — otherwise a phone that flips to dark at sunset leaves this in light.
+  useEffect(() => {
+    if (prefs.theme !== "system") return;
+    const mq = matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => applyPrefs(prefs);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [prefs]);
+
+  useEffect(() => {
+    const paint = () => setOnline(navigator.onLine);
+    addEventListener("online", paint);
+    addEventListener("offline", paint);
+    return () => {
+      removeEventListener("online", paint);
+      removeEventListener("offline", paint);
+    };
+  }, []);
+
+  const setPref = useCallback(async (patch: Partial<Prefs>) => {
+    // Local first so the UI is instant; savePrefs treats offline as non-fatal
+    // because the local mirror already holds the change.
+    const next = await savePrefs(guardian?.id, patch);
+    setPrefs(next);
+  }, [guardian]);
+
+  const refreshConsent = useCallback(async () => {
+    if (!guardian) return;
+    // Always the server. An unreachable ledger leaves the previous map in place
+    // rather than substituting a guess; a missing key reads as unknown.
+    setConsentState(await readConsentState(guardian.id, student?.id ?? null));
+  }, [guardian, student]);
+
+  const setConsent = useCallback(async (purpose: string, granted: boolean) => {
+    if (!guardian) return;
+    const args = { guardianId: guardian.id, studentId: student?.id ?? null };
+    if (granted) await recordConsent({ ...args, decisions: { [purpose]: granted } });
+    else await withdrawConsent({ ...args, purpose });
+    // Re-read rather than trusting what we just wrote. If this throws, the
+    // caller reverts the switch — the ledger decides, not the interface.
+    setConsentState(await readConsentState(guardian.id, student?.id ?? null));
+  }, [guardian, student]);
+
+  const refreshLibrary = useCallback(async () => {
+    if (!student) return;
+    try {
+      const { data, stale } = await listPapers(student.id);
+      setPapers(data ?? []);
+      setPapersStale(!!stale);
+    } catch {
+      /* the cached view stays on screen */
+    }
+  }, [student]);
+
+  const finishOnboarding = useCallback(async (r: {
+    guardian?: Guardian; student?: Student; firstPaperType?: string | null;
+  }) => {
+    pendingPaperType.current = r.firstPaperType ?? null;
+    if (r.guardian) setGuardian(r.guardian);
+    if (r.student) setStudent(r.student);
+    setGate("ready");
+  }, []);
+
+  const signOutNow = useCallback(async () => {
+    await signOut();
+    location.reload();
+  }, []);
+
+  // ── boot ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // Read before the session and unconditionally: it clears the error out of
+      // the URL either way, so a refused provider attempt cannot linger in the
+      // address bar and reappear on the next reload.
+      const err = takeProviderError();
+      if (err && !cancelled) setProviderError(err);
+
+      const s = await currentSession();
+      if (cancelled) return;
+      setSession(s);
+      if (!s) return setGate("onboarding");
+
+      const g = await currentGuardian();
+      if (cancelled) return;
+      setGuardian(g);
+      if (!g) return setGate("onboarding");
+
+      const { data: students } = await sb.from("student").select("*").limit(1);
+      if (cancelled) return;
+      const st = students?.[0] ?? null;
+      if (!st) return setGate("onboarding");
+
+      const { data: subjectRows } = await sb
+        .from("student_subject").select("subject").eq("student_id", st.id);
+      if (cancelled) return;
+      st.subjects = (subjectRows ?? []).map((r: { subject: string }) => r.subject);
+
+      setStudent(st);
+      setGate("ready");
+    })().catch(() => {
+      // Boot failing is not a reason to show a half-app. Onboarding is the
+      // honest destination: it can re-establish who this is.
+      if (!cancelled) setGate("onboarding");
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // Server-side prefs and consent land once we know who this is.
+  useEffect(() => {
+    if (!guardian) return;
+    loadPrefs(guardian.id).then((p: Prefs) => setPrefs(p)).catch(() => { /* local stands */ });
+  }, [guardian]);
+
+  useEffect(() => { void refreshConsent(); }, [refreshConsent]);
+  useEffect(() => { void refreshLibrary(); }, [refreshLibrary]);
+
+  // A sign-out in another tab must not leave this one showing a signed-in app.
+  useEffect(() => {
+    let had = false;
+    const { data: { subscription } } = onAuthChange((s: unknown) => {
+      if (s) had = true;
+      else if (had) location.reload();
+      setSession(s);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const value = useMemo<AppValue>(() => ({
+    gate, providerError, session, guardian, student,
+    prefs, setPref,
+    consent, refreshConsent, setConsent,
+    papers, papersStale, refreshLibrary,
+    online, finishOnboarding, takePendingPaperType, signOutNow,
+  }), [
+    gate, providerError, session, guardian, student, prefs, setPref,
+    consent, refreshConsent, setConsent, papers, papersStale, refreshLibrary,
+    online, finishOnboarding, takePendingPaperType, signOutNow,
+  ]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+

@@ -1,0 +1,398 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOKENS
+
+   Every value here was lifted from reference/prototype.html, which CLAUDE.md
+   names as the design system of record. Nothing was invented, rounded or
+   "tidied": where the prototype says 15.5px, this file says 15.5px.
+
+   Four layers, each allowed to read only from the one above it:
+
+     1 · PALETTE    raw values with no meaning attached
+     2 · SURFACE    the theme — what the background of a thing is
+     3 · ROLE       what a colour means (accent, attention, sign out)
+     4 · COMPONENT  what a specific part uses (nav, pill, sheet, chip)
+
+   A component must reference layer 3 or 4, never layer 1. That is the whole
+   point of the split: swapping a palette value must not require knowing
+   which components happened to use it.
+
+   Dark is defined first and is the default. Light is a re-declaration of
+   layers 2 and 3 only — layer 1 is shared, layer 4 is derived.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   1 · PALETTE — raw, meaningless, theme-independent
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* neutrals */
+  --p-black: #000;
+  --p-white: #fff;
+  --p-ink-950: #0C0C10;
+  --p-ink-900: #0E0E10;
+  --p-ink-850: #151517;
+  --p-ink-800: #1B1B1E;
+  --p-ink-780: #1C1C1F;
+  --p-ink-700: #3A3A3E;
+  --p-paper-100: #FFFFFF;
+  --p-paper-200: #F4F4F7;
+  --p-paper-300: #EDEDF1;
+  --p-paper-400: #D9D9DE;
+  --p-mist-100: #F5F5F7;
+
+  /* accent scales — the two themes need different hues at the same role,
+     because #3A86FF on white is not the same perceived weight as on black */
+  --p-blue-d: #3A86FF;
+  --p-blue-l: #2C74E8;
+  --p-green-d: #30D158;
+  --p-green-l: #249B49;
+  --p-amber-d: #FF9F0A;
+  --p-amber-l: #C77A06;
+  --p-red-d: #FF6B57;
+  --p-red-l: #D8462F;
+
+  /* avatar gradient stops */
+  --p-avatar-from: #5AA0FF;
+  --p-avatar-to: #2E74E8;
+
+  /* the scan viewfinder is its own darkroom and does not follow the theme */
+  --p-viewfinder: #050506;
+
+  /* ── cause hues ──
+     Seven categorical hues of equal visual weight. Fixed by CLAUDE.md; they
+     do NOT vary by theme and they are NOT a severity ramp. Ordering them by
+     anything other than the enum's own order would imply a ranking. */
+  --p-cause-conceptual-gap: #4C7DF0;
+  --p-cause-procedural-slip: #3FA9A0;
+  --p-cause-misread-question: #8A6FD1;
+  --p-cause-incomplete: #C98A3E;
+  --p-cause-presentation: #C46B8A;
+  --p-cause-keyword-miss: #7C9455;
+  --p-cause-timed-out: #78808F;
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   2 · SURFACE + 3 · ROLE — dark (primary)
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 2 · surface */
+  --bg: var(--p-black);
+  --surface: var(--p-ink-850);
+  --surface-sunk: var(--p-ink-900);
+  --hairline: rgba(255, 255, 255, .075);
+  --field: var(--p-ink-800);
+  --sheet-bg: var(--p-ink-780);
+  --scrim: rgba(0, 0, 0, .55);
+  --card-shadow: none;
+
+  /* 3 · role — text */
+  --label: var(--p-mist-100);
+  --label-2: rgba(235, 235, 245, .6);
+  --label-3: rgba(235, 235, 245, .32);
+  --statusfg: var(--p-white);
+
+  /* 3 · role — meaning.
+     accent    = blue, the only thing that draws the eye forward
+     attention = amber, everything that would reach for red elsewhere
+     positive  = green, confirmed states and gains
+     signout   = red, and red appears nowhere else in the interface
+
+     --blue / --green / --amber / --red are the design system's OWN names and
+     the ones system.css uses in 44 places. They are not legacy and must not be
+     removed: system.css is carried over verbatim precisely so it cannot drift,
+     which means this layer has to speak its vocabulary. The semantic aliases
+     below exist so new code can say what it means rather than which hue it
+     wants; both name the same value and neither is the "real" one. */
+  --blue: var(--p-blue-d);
+  --green: var(--p-green-d);
+  --amber: var(--p-amber-d);
+  --red: var(--p-red-d);
+
+  --accent: var(--blue);
+  --positive: var(--green);
+  --attention: var(--amber);
+  --signout: var(--red);
+
+  /* tinted washes of the role colours, used as backgrounds behind them */
+  --accent-wash: rgba(58, 134, 255, .15);
+  --accent-glow: rgba(58, 134, 255, .26);
+  --accent-glow-strong: rgba(58, 134, 255, .28);
+  --accent-select: rgba(58, 134, 255, .32);
+  --positive-wash: rgba(48, 209, 88, .16);
+  --attention-wash: rgba(255, 159, 10, .16);
+  --attention-wash-soft: rgba(255, 159, 10, .11);
+  --attention-wash-firm: rgba(255, 159, 10, .18);
+  --attention-wash-strong: rgba(255, 159, 10, .22);
+  --attention-rim: rgba(255, 159, 10, .28);
+
+  /* switch track when off — not a role colour, it is furniture */
+  --track-off: var(--p-ink-700);
+  --seg-on: var(--p-ink-700);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: var(--p-paper-200);
+  --surface: var(--p-paper-100);
+  --surface-sunk: var(--p-paper-300);
+  --hairline: rgba(60, 60, 67, .11);
+  --field: var(--p-paper-300);
+  --sheet-bg: var(--p-paper-100);
+  --scrim: rgba(20, 20, 28, .32);
+  /* light mode needs elevation to separate a white card from a white page;
+     dark mode does not, and gets none */
+  --card-shadow: 0 1px 2px rgba(28, 28, 40, .05), 0 8px 20px rgba(28, 28, 40, .05);
+
+  --label: var(--p-ink-950);
+  --label-2: rgba(60, 60, 67, .68);
+  --label-3: rgba(60, 60, 67, .4);
+  --statusfg: var(--p-ink-950);
+
+  --blue: var(--p-blue-l);
+  --green: var(--p-green-l);
+  --amber: var(--p-amber-l);
+  --red: var(--p-red-l);
+
+  --accent: var(--blue);
+  --positive: var(--green);
+  --attention: var(--amber);
+  --signout: var(--red);
+
+  --accent-wash: rgba(58, 134, 255, .15);
+  --accent-glow: rgba(58, 134, 255, .26);
+  --accent-glow-strong: rgba(58, 134, 255, .28);
+  --accent-select: rgba(58, 134, 255, .32);
+  --positive-wash: rgba(48, 209, 88, .16);
+  --attention-wash: rgba(255, 159, 10, .16);
+  --attention-wash-soft: rgba(255, 159, 10, .11);
+  --attention-wash-firm: rgba(255, 159, 10, .18);
+  --attention-wash-strong: rgba(255, 159, 10, .22);
+  --attention-rim: rgba(255, 159, 10, .28);
+
+  --track-off: var(--p-paper-400);
+  --seg-on: var(--surface);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   3 · ROLE — cause + confidence
+
+   Cause colours are aliased into the role layer under their enum names, so a
+   component writes var(--cause-conceptual-gap) and never touches the palette.
+
+   Confidence is deliberately absent from the colour tokens. It is expressed
+   as FORM, not colour: confirmed = solid fill, likely = light fill + border,
+   unsure = dashed outline. Those live in the component layer below as border
+   styles, so the distinction survives greyscale and colourblindness.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* ── the mastery-map ramp ──
+     The one place a ramp is legitimate: these are two ends of a SINGLE hue
+     standing for "how much of this chapter has been seen", not a scale from
+     good to bad. It stays blue at both ends for that reason — a green-to-red
+     version would turn the concept heatmap into a shame map.
+
+     In the pre-port app these were written inline on `.app`, which meant every
+     rule reading them broke the moment anything else rendered that element. */
+  --m1: rgba(58, 134, 255, .12);
+  --m5: #3A86FF;
+
+  --cause-conceptual-gap: var(--p-cause-conceptual-gap);
+  --cause-procedural-slip: var(--p-cause-procedural-slip);
+  --cause-misread-question: var(--p-cause-misread-question);
+  --cause-incomplete: var(--p-cause-incomplete);
+  --cause-presentation: var(--p-cause-presentation);
+  --cause-keyword-miss: var(--p-cause-keyword-miss);
+  --cause-timed-out: var(--p-cause-timed-out);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   4 · COMPONENT — nav / glass
+   The nav is the only surface with its own full colour set, because it is
+   the only one made of glass sitting over arbitrary content.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --nav-bg: rgba(38, 38, 42, .52);
+  --nav-border: rgba(255, 255, 255, .16);
+  --nav-rim: rgba(255, 255, 255, .30);
+  --nav-shadow: 0 16px 40px rgba(0, 0, 0, .6);
+  --nav-pill: rgba(255, 255, 255, .16);
+  --nav-pill-rim: rgba(255, 255, 255, .30);
+  --nav-icon: rgba(235, 235, 245, .62);
+  --nav-icon-on: var(--p-white);
+}
+
+[data-theme="light"] {
+  --nav-bg: rgba(255, 255, 255, .62);
+  --nav-border: rgba(255, 255, 255, .85);
+  --nav-rim: rgba(255, 255, 255, .95);
+  --nav-shadow: 0 10px 30px rgba(28, 28, 40, .16), 0 2px 8px rgba(28, 28, 40, .08);
+  --nav-pill: rgba(120, 120, 130, .13);
+  --nav-pill-rim: rgba(255, 255, 255, .9);
+  --nav-icon: rgba(28, 28, 32, .55);
+  --nav-icon-on: var(--p-ink-950);
+}
+
+/* glass furniture that floats over the viewfinder, which is always dark —
+   so these are fixed, not themed */
+:root {
+  --glass-fill: rgba(255, 255, 255, .14);
+  --glass-fill-hover: rgba(255, 255, 255, .24);
+  --glass-rim: rgba(255, 255, 255, .22);
+  --toast-bg: rgba(30, 30, 34, .7);
+  --toast-rim: rgba(255, 255, 255, .16);
+}
+
+
+/* ───────────────────────────────────────────────────────────────────────────
+   4 · COMPONENT — geometry, type, motion
+
+   The responsive ramp is continuous: clamp() everywhere rather than a value
+   per breakpoint. There are only two breakpoints in the whole system and both
+   are about navigation, not type.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* safe areas */
+  --top-inset: env(safe-area-inset-top, 0px);
+  --bot-inset: env(safe-area-inset-bottom, 0px);
+
+  /* spacing rhythm */
+  --gutter: clamp(14px, 4vw, 18px);
+  --text-gutter: calc(var(--gutter) + 4px);
+  --view-top: calc(var(--top-inset) + clamp(14px, 3.6vw, 22px));
+  --view-bottom: calc(128px + var(--bot-inset));
+  --dock-pad: max(9px, var(--bot-inset));
+  --rail-w: 0px;
+
+  /* radii */
+  --r-card: clamp(20px, 5vw, 24px);
+  --r-sheet: 32px;
+  --r-nav: 32px;
+  --r-pill: 26px;
+  --r-btn: 18px;
+  --r-cta: 20px;
+  --r-chip: 8px;
+  --r-fchip: 14px;
+  --r-field: 14px;
+  --r-tile: 12px;
+  --r-tier: 6px;
+  --r-thumb: 8px;
+
+  /* type scale */
+  --fs-h1: clamp(27px, 7.4vw, 34px);
+  --fs-insight: clamp(18px, 4.8vw, 21px);
+  --fs-sec: clamp(11.5px, 3vw, 12.5px);
+  --fs-title: 21px;
+  --fs-name: 19px;
+  --fs-estate-h: 18px;
+  --fs-hdr: 16px;
+  --fs-btn: 16px;
+  --fs-t1: 15.5px;
+  --fs-t2: 13px;
+  --fs-meta: 12.5px;
+  --fs-chip: 11.5px;
+  --fs-tier: 11px;
+
+  /* user-adjustable text size overrides these three (Settings -> Text size) */
+  --fs-body: 15px;
+  --fs-row: 15.5px;
+  --fs-row2: 13px;
+  --fs-lbl: 16px;
+
+  /* tracking — negative throughout; the face is set tight by design */
+  --ls-h1: -.036em;
+  --ls-title: -.028em;
+  --ls-name: -.026em;
+  --ls-insight: -.024em;
+  --ls-hdr: -.02em;
+  --ls-t1: -.015em;
+  --ls-tight: -.01em;
+  --ls-sec: .055em;
+  --ls-chip: .05em;
+
+  /* weights — the face carries 400-700 and the design uses no 800 */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ── motion ──
+     CLAUDE.md names three durations by meaning. The prototype also uses a set
+     of shorter values for colour and opacity cross-fades, which are recorded
+     here as-is rather than being collapsed into the three — collapsing them
+     would visibly change the interface. See the note in the port report. */
+  --spring: cubic-bezier(.32, .72, 0, 1);
+  --d-state: 120ms;      /* chips, toggles */
+  --d-disclose: 200ms;   /* disclosure, transitions */
+  --d-recompute: 320ms;  /* the signature moment, after a correction */
+  /* supporting cross-fades, measured from the prototype */
+  --d-tint: .15s;
+  --d-glyph: .18s;
+  --d-label: .22s;
+  --d-icon: .25s;
+  --d-plate: .26s;
+  --d-scrim: .3s;
+  --d-panel: .38s;
+  --d-theme: .4s;
+  --d-review: .42s;
+
+  /* spring physics — these are numbers the rAF engine reads, not CSS */
+  --spring-press-stiffness: 320;
+  --spring-press-damping: 27;
+  --spring-tab-stiffness: 210;
+  --spring-tab-damping: 24;
+
+  /* focus ring — every interactive element, keyboard only */
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+}
+
+/* text size — scales the type tokens only, never the layout, so the nav
+   geometry the displacement lens was measured against stays put */
+[data-text="s"] {
+  --fs-h1: clamp(24px, 6.6vw, 30px);
+  --fs-insight: clamp(16px, 4.3vw, 19px);
+  --fs-sec: clamp(10.5px, 2.7vw, 11.5px);
+  --fs-body: 14px;
+  --fs-row: 14px;
+  --fs-row2: 12px;
+  --fs-lbl: 15px;
+}
+
+[data-text="m"] {
+  --fs-body: 15px;
+  --fs-row: 15.5px;
+  --fs-row2: 13px;
+  --fs-lbl: 16px;
+}
+
+[data-text="l"] {
+  --fs-h1: clamp(30px, 8.2vw, 38px);
+  --fs-insight: clamp(20px, 5.3vw, 24px);
+  --fs-sec: clamp(12.5px, 3.3vw, 13.5px);
+  --fs-body: 17px;
+  --fs-row: 17.5px;
+  --fs-row2: 14.5px;
+  --fs-lbl: 18px;
+}
+
+/* content column widths — per route, applied by the shell */
+@media (min-width: 768px) {
+  :root {
+    --rail-w: 76px;
+    --view-bottom: clamp(30px, 5vh, 56px);
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --rail-w: 216px;
+  }
+}

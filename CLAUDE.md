@@ -53,8 +53,12 @@ corrupt everything downstream.
 ## Stack
 
 - Web-first PWA. Mobile viewport is the design target (~380px); desktop is secondary.
-- `index.html` is the entire front end and the design system. `src/` holds ES modules for
-  data and flow; `vendor/` holds the Supabase client. No bundler, no framework.
+- Vite + React + TypeScript, routed with React Router. Tailwind's default theme is
+  cleared, so `src/ui/styles/` is the only vocabulary. The React app is `src/ui/`;
+  `src/` holds the data and scanning modules it imports.
+- The scan pipeline stays plain ES modules on purpose. Its stage modules are pure and
+  run on the main thread, in the Web Worker AND in Node under `harness/`; rewriting
+  them as components would break two of the three.
 - Supabase: Postgres, auth, storage. Auth is email or phone OTP only.
 - Offline: past papers and their analysis must be readable offline. Scanning and
   extraction are online-only. Cache read paths; queue nothing that needs the model.
@@ -113,11 +117,14 @@ not one, which is what makes rule 1 unfalsifiable at the schema level.
 
 ## Design language
 
-**`index.html` is the design system.** There is no separate DESIGN_SYSTEM.md; the tokens,
-type scale, spacing rhythm, radius scale, the `feDisplacementMap` glass lens on the nav,
-and the spring engine live in that file and are the reference implementation. Read it
-before building or editing any UI. Where this document and `index.html` disagree,
-`index.html` wins.
+**The design system is `src/ui/styles/`, carried over verbatim from the pre-port
+`index.html`.** There is no separate DESIGN_SYSTEM.md. `tokens.css` layers the tokens
+(palette → surface → role → component); `system.css` is the component system, extracted
+rather than retyped so it cannot drift; the `feDisplacementMap` glass lens and the spring
+engine are in `src/ui/lib/`. `reference/prototype.html` is the pre-port original, kept
+for comparison. Read the styles before building or editing any UI. Where this document
+and the stylesheet disagree on the design system, the stylesheet wins; where they
+disagree on information architecture, this document wins.
 
 **Red is reserved for signing out.** It is the one place red appears in the interface —
 not for errors, not for warnings, not for low scores, not for notification badges, and
