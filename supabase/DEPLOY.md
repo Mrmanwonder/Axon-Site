@@ -4,9 +4,10 @@ Everything below is a one-time step per environment. The order matters: the
 functions read secrets at cold start, and the tick has nowhere to call until
 they exist.
 
-The schema is already applied to `dlgcqieyevoebefhcggi`. The functions are not
-deployed, and cannot usefully be until steps 1 and 2 are done — every one of them
-would cold-start and immediately throw on a missing environment variable.
+The schema is already applied to `dlgcqieyevoebefhcggi`, and both buckets exist.
+The functions are not deployed, and cannot usefully be until step 1 is done —
+every one of them would cold-start and immediately throw on a missing
+environment variable.
 
 ## 1 · Secrets
 
@@ -24,13 +25,19 @@ supabase secrets set --project-ref dlgcqieyevoebefhcggi \
   R2_ACCESS_KEY_ID=... \
   R2_SECRET_ACCESS_KEY=... \
   R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com \
-  R2_BUCKET_ORIGINALS=mastery-originals \
-  R2_BUCKET_DERIVED=mastery-derived \
+  R2_BUCKET_ORIGINALS=axon-originals \
+  R2_BUCKET_DERIVED=axon-derived \
   MASTERY_SITE_URL=https://<the deployed site>
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected
 by the platform; do not set them by hand.
+
+`OPENCODE_API_KEY` is not in this list on purpose. opencode is the build agent
+from `REVIEW_PIPELINE.md` §14 — it runs on a developer's machine and writes this
+repository. Nothing the pipeline deploys reads it, and nothing should: a key that
+buys model calls has no reason to be inside a function that serves a student.
+Keep it in the developer's local `.env`.
 
 The R2 token is **one per environment, Object Read & Write, scoped to those two
 buckets** — not an account-level token. Create it under R2 → Manage API Tokens.
@@ -43,15 +50,11 @@ On the OpenRouter account itself, two settings that are not code:
 
 ## 2 · Buckets
 
-Both exist and are empty. Two things are still owed:
+`axon-originals` and `axon-derived`, both in APAC. One thing is still owed:
 
-- **They are in `ENAM`, not `apac`.** The location hint is creation-time only, so
-  the fix is to delete and recreate them from the dashboard with the APAC hint
-  while they are still empty. Per `STORAGE_R2.md` §10 this is a latency
-  question, not a residency guarantee — but it is free to fix now and impossible
-  to fix later.
-- **A lifecycle rule on `mastery-originals`: 30 days, then delete.** Nothing else
-  enforces the retention promise; `mastery-derived` gets no rule, because its
+- **A lifecycle rule on `axon-originals`: 30 days, then delete.** Nothing else
+  enforces the retention promise, and a promise nothing enforces is a promise
+  that quietly stops being true. `axon-derived` gets no rule, because its
   objects die with their paper.
 
 Neither bucket may ever have a `r2.dev` URL or a custom domain enabled. Access is
@@ -89,34 +92,53 @@ select jobname, schedule, active from cron.job where jobname = 'mastery-tick';
 
 To stop the pipeline without undeploying anything: `select cron.unschedule('mastery-tick');`
 
-## 5 · Choose the models
+## 5 · Models
 
-`model_route` is seeded with OpenRouter's free models so the pipeline can be
-exercised before a paid key exists. **Read this before pointing a real student's
-paper at it.**
+**Right now: the free routes, for testing.** That is a deliberate decision and
+this section is what it costs.
 
-A free endpoint is usually free because the provider keeps what you send it.
-`PROVIDER_POLICY` asks OpenRouter for zero-data-retention endpoints with
-provider data collection denied, and if no provider for a model satisfies that,
-the call fails with `no_compliant_provider` rather than quietly routing to one
-that does not. That is the correct behaviour and it is likely what the free
-routes will do.
+`model_route` is seeded with OpenRouter's free models. A free endpoint is
+usually free *because* the provider keeps what you send it, so
+`PROVIDER_POLICY` — zero data retention, provider data collection denied — will
+in most cases leave no eligible provider and the call will fail with
+`no_compliant_provider`. That is the client working correctly, not a bug to
+route around.
 
-There are two honest ways forward, and one that is not available:
+To let the free routes actually run, set the per-stage escape hatch. It is a
+column rather than an environment variable precisely so that turning it on is a
+row someone can see, and so it can be turned off again in one statement:
 
-1. **Point the routes at paid models with compliant endpoints.** This is the
-   answer for anything with a real student's paper in it.
-   ```sql
-   update public.model_route set primary_model = 'anthropic/claude-sonnet-5',
-          fallbacks = array['google/gemini-3.7-flash'] where stage = 'content';
-   ```
-2. **Set `allow_training` on a specific stage, deliberately**, for development
-   against papers that are not a child's. Nothing in the codebase writes that
-   column; a human sets it having read what it means, and `eval-run` strips it
-   from any override rather than letting an eval borrow it.
+```sql
+-- Development only. Everything sent through these stages may be retained and
+-- trained on by whichever provider serves it.
+update public.model_route
+   set allow_training = true,
+       notes = notes || ' — TESTING: training permitted, revert before real papers'
+ where stage in ('triage','structure','content','adjudicate','explain');
+```
 
-What is not available: relaxing `PROVIDER_POLICY` globally. It is a constant,
-not configuration, and there is no environment variable that changes it.
+**Two conditions on running it, and they are not decoration.** The pages that go
+through a training-permitted route become that provider's data. So:
+
+- **Test with papers that are not a child's.** Your own handwriting on a mock
+  paper is a perfectly good test of the pipeline. A real student's script, with
+  their name and school on the cover, is not something to spend on a smoke test.
+- **Revert before the first real paper**, and pick models with compliant
+  endpoints at the same time:
+  ```sql
+  update public.model_route set allow_training = false;
+  update public.model_route
+     set primary_model = 'anthropic/claude-sonnet-5',
+         fallbacks = array['google/gemini-3.7-flash']
+   where stage = 'content';
+  ```
+
+`eval-run` strips `allow_training` from any route override it is given, so an
+eval can never borrow the relaxation even while the column is set.
+
+What is not available, in any environment: relaxing `PROVIDER_POLICY` globally.
+It is a constant in `_shared/openrouter.ts`, not configuration, and there is no
+environment variable that changes it.
 
 ## 6 · Check it
 

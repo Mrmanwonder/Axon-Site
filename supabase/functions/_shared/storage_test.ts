@@ -20,8 +20,8 @@ const PAPER = 'aaaaaaaa-0000-4000-8000-000000000003';
 Deno.env.set('R2_ACCESS_KEY_ID', 'test-access-key');
 Deno.env.set('R2_SECRET_ACCESS_KEY', 'test-secret-key');
 Deno.env.set('R2_ENDPOINT', 'https://acct.r2.cloudflarestorage.com');
-Deno.env.set('R2_BUCKET_ORIGINALS', 'mastery-originals');
-Deno.env.set('R2_BUCKET_DERIVED', 'mastery-derived');
+Deno.env.set('R2_BUCKET_ORIGINALS', 'axon-originals');
+Deno.env.set('R2_BUCKET_DERIVED', 'axon-derived');
 
 // ── keys ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ Deno.test('a presigned PUT names the object and expires', async () => {
   const url = new URL(await presignPut('originals', key, 'image/heic'));
 
   assertEquals(url.host, 'acct.r2.cloudflarestorage.com');
-  assertStringIncludes(url.pathname, 'mastery-originals');
+  assertStringIncludes(url.pathname, 'axon-originals');
   assertStringIncludes(url.pathname, STUDENT);
   assertEquals(url.searchParams.get('X-Amz-Expires'), '900');
   assert(url.searchParams.get('X-Amz-Signature'));

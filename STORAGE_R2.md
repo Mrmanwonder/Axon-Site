@@ -39,8 +39,8 @@ Two, deliberately.
 
 | Bucket | Contents | Lifecycle |
 |---|---|---|
-| `mastery-originals` | Uploaded PDFs, raw captures | 30 days → delete |
-| `mastery-derived` | Conditioned pages, crops, masks | Retained with the paper |
+| `axon-originals` | Uploaded PDFs, raw captures | 30 days → delete |
+| `axon-derived` | Conditioned pages, crops, masks | Retained with the paper |
 
 Splitting them means the retention policy is a bucket-level rule rather than a
 prefix convention that a future migration quietly breaks. Originals are the
@@ -53,11 +53,11 @@ guarantee, and the distinction matters legally.
 ### Key layout
 
 ```
-mastery-originals/
+axon-originals/
   {student_id}/{paper_id}/upload/{upload_id}.pdf
   {student_id}/{paper_id}/raw/{page_idx}-{nonce}.heic
 
-mastery-derived/
+axon-derived/
   {student_id}/{paper_id}/page/{page_idx}-{nonce}.webp
   {student_id}/{paper_id}/mask/{page_idx}-{nonce}.png
   {student_id}/{paper_id}/crop/{question_id}.webp
@@ -84,8 +84,8 @@ R2_ACCOUNT_ID
 R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_ENDPOINT          = https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com
-R2_BUCKET_ORIGINALS  = mastery-originals
-R2_BUCKET_DERIVED    = mastery-derived
+R2_BUCKET_ORIGINALS  = axon-originals
+R2_BUCKET_DERIVED    = axon-derived
 ```
 
 Region is always `auto` for R2.
@@ -257,7 +257,7 @@ alongside the teacher-consent question.
 
 ## 7. PDFs
 
-Uploaded PDFs are stored as-is in `mastery-originals/.../upload/{upload_id}.pdf`.
+Uploaded PDFs are stored as-is in `axon-originals/.../upload/{upload_id}.pdf`.
 That is the object of record, and nothing overwrites it.
 
 ### Rasterisation
@@ -299,7 +299,7 @@ digital one at A4.
 
 ### Lifecycle rules
 
-On `mastery-originals`:
+On `axon-originals`:
 
 ```json
 {
@@ -317,7 +317,7 @@ originals are no longer needed — crops and conditioned pages carry the review 
 and any re-extraction. Less stored data is less to lose, and this is the rule
 that makes that real rather than aspirational.
 
-`mastery-derived` has no expiry rule. Its objects die with their paper.
+`axon-derived` has no expiry rule. Its objects die with their paper.
 
 ### Deletion is real
 
@@ -361,7 +361,7 @@ alter table pages
   add column preprocess_version text not null default 'v2';
 
 alter table pages
-  add column original_key text;      -- in mastery-originals, may be expired
+  add column original_key text;      -- in axon-originals, may be expired
 
 alter table questions
   drop column crop_key,
