@@ -1,19 +1,21 @@
-# Mastery is a single static file — there is no framework, no dependencies and
-# nothing to compile. The "build" copies the one published artifact into an
-# empty directory.
-#
-# This is deliberately not `publish = "."`: the repo also holds the Constitution
-# specs, the blueprint and the design reference images, none of which should be
-# fetchable from the public site. Publishing an explicit directory keeps the
-# deploy to exactly what belongs on the web.
+# Mastery is a Vite + React app. The build emits to dist/, which holds only what
+# belongs on the web — the Constitution specs, the blueprint, the design
+# reference images, bench/, harness/ and reference/ are all in the repo and none
+# of them are fetchable from the public site.
 
 [build]
-  command = "mkdir -p dist && cp index.html dist/index.html && cp -r src vendor dist/"
+  command = "npm ci && npm run build"
   publish = "dist"
 
 [build.environment]
-  # Nothing to install. Skips the dependency step entirely.
-  NETLIFY_SKIP_DEFAULT_PLUGINS = "false"
+  NODE_VERSION = "22"
+
+# Real routing means real URLs, and a deep link to /library/<paper>/<question>
+# has to resolve on a cold load rather than 404 at the CDN before React runs.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
 [[headers]]
   for = "/*"
@@ -26,10 +28,21 @@
     # third-party script cannot reach it.
     Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
 
-# The font is embedded in the document as a data URI, so there is no separate
-# asset to cache. The document itself must not be cached hard, or a redeploy
-# won't reach anyone who has already visited.
+# The document must not be cached hard, or a redeploy won't reach anyone who has
+# already visited.
 [[headers]]
   for = "/index.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+# Vite fingerprints these, so they can be cached forever.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The font is no longer embedded in the document, so it needs its own header.
+[[headers]]
+  for = "/fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

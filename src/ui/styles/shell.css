@@ -1,0 +1,384 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHELL
+
+   The app frame: the fixed viewport, the scrolling view column, the header
+   plate, the appearance toggle and the nav glass. Screen content styles do
+   not live here.
+
+   Every value resolves to a token. Nothing in this file is a literal except
+   the handful of glass rim opacities that the prototype also wrote inline,
+   which are part of the nav's own material rather than the theme.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--label);
+  /* marks must not jitter when they recompute */
+  font-variant-numeric: tabular-nums;
+  transition: background var(--d-theme) ease, color var(--d-theme) ease;
+}
+
+/* ── header ── */
+.header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--top-inset) + 52px);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.header .plate {
+  position: absolute;
+  inset: 0;
+  background: var(--nav-bg);
+  backdrop-filter: blur(26px) saturate(1.8);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  border-bottom: .5px solid var(--hairline);
+  opacity: 0;
+  transition: opacity var(--d-plate) ease;
+}
+
+.header.stuck .plate {
+  opacity: 1;
+}
+
+.header .t {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 9px;
+}
+
+.header .t span {
+  font-size: var(--fs-hdr);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-hdr);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity var(--d-label) ease, transform var(--d-scrim) var(--spring);
+}
+
+.header.stuck .t span {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── the scrolling view column ── */
+.view {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-top: var(--view-top);
+  padding-bottom: var(--view-bottom);
+  /* Percentages here resolve against the containing block (the app shell), not
+     the view's own box, so the rail has to come out explicitly or the column
+     ends up narrow and pushed off-centre beside the sidebar. Easy to get wrong
+     and it looks almost right when you do. */
+  padding-inline: max(0px, calc((100% - var(--rail-w) - var(--vmax, 100%)) / 2));
+  scrollbar-width: none;
+}
+
+.view::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── appearance toggle ──
+   A glass icon button in the corner rather than a floating labelled pill,
+   which read as leftover debug furniture. Shows the destination state, the
+   way iOS and macOS do. */
+.themebtn {
+  position: absolute;
+  top: calc(var(--top-inset) + 9px);
+  right: 14px;
+  z-index: 41;
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border: .5px solid var(--nav-border);
+  color: var(--label-2);
+  cursor: pointer;
+  transition: color var(--d-icon) ease, background var(--d-theme) ease;
+}
+
+.themebtn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[data-theme="dark"] .themebtn .ic-moon,
+[data-theme="light"] .themebtn .ic-sun {
+  display: none;
+}
+
+/* ── nav ──
+   One DOM, two orientations. Geometry comes from JS measurement; this file
+   only provides the material. */
+.tabdock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  padding: 0 13px var(--dock-pad);
+}
+
+.tabbar {
+  position: relative;
+  padding: 5px;
+  border-radius: var(--r-nav);
+  overflow: hidden;
+  background: var(--nav-bg);
+  backdrop-filter: blur(30px) saturate(2);
+  -webkit-backdrop-filter: blur(30px) saturate(2);
+  box-shadow: var(--nav-shadow);
+  transition: background var(--d-theme) ease, box-shadow var(--d-theme) ease;
+}
+
+.tabbar .rim {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-nav);
+  pointer-events: none;
+  z-index: 5;
+  border: .5px solid var(--nav-border);
+  box-shadow: inset 0 1px 0 var(--nav-rim), inset 0 -1px 0 rgba(255, 255, 255, .08);
+}
+
+.refractlayer {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 46px;
+  border-radius: var(--r-pill);
+  background: var(--nav-pill);
+  will-change: transform;
+  transition: background var(--d-theme) ease;
+}
+
+.tab {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  will-change: transform;
+  /* it is a <button> now, not a <div role="tab"> */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.tab .lbl {
+  display: none;
+}
+
+.tab svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: var(--nav-icon);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke var(--d-icon) ease, fill var(--d-icon) ease;
+}
+
+.tab.on svg {
+  stroke: var(--nav-icon-on);
+}
+
+.tab.on svg.solid {
+  fill: var(--nav-icon-on);
+  stroke: none;
+}
+
+/* Not red: red is reserved for sign out, the one irreversible-feeling action
+   in the interface. A notification dot is an accent, not a rebuke. */
+.tab .dot {
+  position: absolute;
+  top: 12px;
+  right: calc(50% - 14px);
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 4px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--nav-bg);
+}
+
+.tab .pfp {
+  width: 25px;
+  height: 25px;
+  border-radius: 13px;
+  background: linear-gradient(155deg, var(--p-avatar-from), var(--p-avatar-to));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: var(--fw-semibold);
+  color: var(--p-white);
+  transition: box-shadow var(--d-icon) ease;
+}
+
+.tab.on .pfp {
+  box-shadow: 0 0 0 2px var(--nav-icon-on);
+}
+
+.lensglow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 46px;
+  border-radius: var(--r-pill);
+  pointer-events: none;
+  z-index: 3;
+  box-shadow:
+    inset 0 1px 0 var(--nav-pill-rim),
+    inset 0 -1px 0 rgba(255, 255, 255, .1),
+    inset 1px 0 0 rgba(255, 255, 255, .14),
+    inset -1px 0 0 rgba(255, 255, 255, .14);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 58%);
+  will-change: transform;
+}
+
+
+/* ══════════════ TABLET >=768: nav becomes a left rail ══════════════ */
+@media (min-width: 768px) {
+  .tabdock {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--rail-w);
+    padding: var(--gutter) 7px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .refractlayer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    height: 48px;
+  }
+
+  .header,
+  .view {
+    left: var(--rail-w);
+  }
+
+  .view {
+    --vmax: 760px;
+  }
+
+  .themebtn {
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+  }
+}
+
+/* >=1024: room for labels, so the rail earns them */
+@media (min-width: 1024px) {
+  .tabdock {
+    padding: var(--gutter) 12px;
+  }
+
+  .tab {
+    justify-content: flex-start;
+    gap: 13px;
+    padding-left: 15px;
+  }
+
+  .tab .lbl {
+    display: block;
+    font-size: 15px;
+    font-weight: var(--fw-medium);
+    letter-spacing: var(--ls-t1);
+    color: var(--nav-icon);
+    transition: color var(--d-icon) ease;
+  }
+
+  .tab.on .lbl {
+    color: var(--nav-icon-on);
+    font-weight: var(--fw-semibold);
+  }
+
+  .tab svg,
+  .tab .pfp {
+    flex: 0 0 auto;
+  }
+
+  .tab .dot {
+    top: 13px;
+    right: auto;
+    left: 33px;
+  }
+}
+
+
+/* ══════════════ POINTER + KEYBOARD ══════════════
+   Hover is gated behind a fine pointer so touch devices don't get stuck in a
+   hover state after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover svg {
+    stroke: var(--nav-icon-on);
+  }
+
+  .tab:hover .lbl {
+    color: var(--nav-icon-on);
+  }
+
+  .themebtn:hover {
+    color: var(--label);
+  }
+}
+
+.tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -4px;
+}
+
+/* Disabled: no pointer affordance, no hover response, and visibly recessed
+   without borrowing a colour that means something else. */
+.tab[disabled],
+.themebtn[disabled] {
+  opacity: .38;
+  cursor: default;
+  pointer-events: none;
+}

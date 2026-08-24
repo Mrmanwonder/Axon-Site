@@ -11,16 +11,12 @@
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
-// The UMD bundle is vendored rather than loaded from a CDN, so the app has no
-// third-party runtime dependency and keeps working offline. Fail with something
-// legible if it did not load, instead of a bare destructuring TypeError.
-if (!window.supabase?.createClient) {
-  throw new Error(
-    'vendor/supabase.umd.js did not load, so the client cannot be created. ' +
-      'Check that it is present and served alongside index.html.',
-  );
-}
-const { createClient } = window.supabase;
+// Imported rather than read off `window` from a vendored UMD script. The intent
+// is unchanged — the client is bundled into our own output, so there is still no
+// third-party runtime request and the app still works offline — but with a
+// bundler the vendored global has nothing left to offer, and an import is
+// type-checkable and tree-shakeable where a global is neither.
+import { createClient } from '@supabase/supabase-js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
