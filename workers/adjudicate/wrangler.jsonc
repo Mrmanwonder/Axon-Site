@@ -1,0 +1,20 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-adjudicate",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "consumers": [{
+      "queue": "adjudicate-queue",
+      "max_batch_size": 5,
+      "max_batch_timeout": 10,
+      "max_retries": 3,
+      "max_concurrency": 5,
+      "dead_letter_queue": "adjudicate-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 60000 }
+}

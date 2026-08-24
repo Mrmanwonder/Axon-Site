@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-triage",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "producers": [
+      { "binding": "STRUCTURE_QUEUE", "queue": "structure-queue" }
+    ],
+    "consumers": [{
+      "queue": "triage-queue",
+      "max_batch_size": 5,
+      "max_batch_timeout": 5,
+      "max_retries": 3,
+      "max_concurrency": 5,
+      "dead_letter_queue": "triage-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 30000 }
+}

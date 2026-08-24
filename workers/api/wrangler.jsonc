@@ -1,0 +1,21 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "r2_buckets": [
+    { "binding": "ORIGINALS", "bucket_name": "axon-originals" },
+    { "binding": "DERIVED", "bucket_name": "axon-derived" }
+  ],
+
+  "queues": {
+    "producers": [
+      { "binding": "TRIAGE_QUEUE", "queue": "triage-queue" },
+      { "binding": "EXPLAIN_QUEUE", "queue": "explain-queue" }
+    ]
+  },
+
+  "limits": { "cpu_ms": 20000 }
+}

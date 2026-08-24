@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-content",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "producers": [
+      { "binding": "RECONCILE_QUEUE", "queue": "reconcile-queue" }
+    ],
+    "consumers": [{
+      "queue": "content-queue",
+      "max_batch_size": 30,
+      "max_batch_timeout": 10,
+      "max_retries": 3,
+      "max_concurrency": 10,
+      "dead_letter_queue": "content-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 60000 }
+}

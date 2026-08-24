@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-reconcile",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "producers": [
+      { "binding": "ADJUDICATE_QUEUE", "queue": "adjudicate-queue" }
+    ],
+    "consumers": [{
+      "queue": "reconcile-queue",
+      "max_batch_size": 10,
+      "max_batch_timeout": 5,
+      "max_retries": 3,
+      "max_concurrency": 10,
+      "dead_letter_queue": "reconcile-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 15000 }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-sweep",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "r2_buckets": [
+    { "binding": "ORIGINALS", "bucket_name": "axon-originals" },
+    { "binding": "DERIVED", "bucket_name": "axon-derived" }
+  ],
+
+  "triggers": { "crons": ["*/15 * * * *"] },
+
+  "limits": { "cpu_ms": 30000 }
+}

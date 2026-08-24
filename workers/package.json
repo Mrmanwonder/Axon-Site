@@ -1,0 +1,35 @@
+{
+  "name": "mastery-workers",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Workers runtime for the review pipeline. See CLOUDFLARE_WORKERS.md at the repo root.",
+  "scripts": {
+    "dev:api": "wrangler dev --config api/wrangler.jsonc",
+    "dev:triage": "wrangler dev --config triage/wrangler.jsonc",
+    "dev:structure": "wrangler dev --config structure/wrangler.jsonc",
+    "dev:content": "wrangler dev --config content/wrangler.jsonc",
+    "dev:reconcile": "wrangler dev --config reconcile/wrangler.jsonc",
+    "dev:adjudicate": "wrangler dev --config adjudicate/wrangler.jsonc",
+    "dev:explain": "wrangler dev --config explain/wrangler.jsonc",
+    "dev:sweep": "wrangler dev --config sweep/wrangler.jsonc",
+    "deploy:api": "wrangler deploy --config api/wrangler.jsonc",
+    "deploy:triage": "wrangler deploy --config triage/wrangler.jsonc",
+    "deploy:structure": "wrangler deploy --config structure/wrangler.jsonc",
+    "deploy:content": "wrangler deploy --config content/wrangler.jsonc",
+    "deploy:reconcile": "wrangler deploy --config reconcile/wrangler.jsonc",
+    "deploy:adjudicate": "wrangler deploy --config adjudicate/wrangler.jsonc",
+    "deploy:explain": "wrangler deploy --config explain/wrangler.jsonc",
+    "deploy:sweep": "wrangler deploy --config sweep/wrangler.jsonc",
+    "deploy:all": "npm run deploy:api && npm run deploy:triage && npm run deploy:structure && npm run deploy:content && npm run deploy:reconcile && npm run deploy:adjudicate && npm run deploy:explain && npm run deploy:sweep",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "aws4fetch": "^1.0.20"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260801.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  }
+}

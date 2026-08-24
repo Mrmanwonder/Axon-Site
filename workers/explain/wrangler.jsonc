@@ -1,0 +1,20 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-explain",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "consumers": [{
+      "queue": "explain-queue",
+      "max_batch_size": 20,
+      "max_batch_timeout": 10,
+      "max_retries": 3,
+      "max_concurrency": 10,
+      "dead_letter_queue": "explain-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 60000 }
+}

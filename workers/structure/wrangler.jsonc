@@ -1,0 +1,24 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "mastery-structure",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "queues": {
+    "producers": [
+      { "binding": "CONTENT_QUEUE", "queue": "content-queue" },
+      { "binding": "RECONCILE_QUEUE", "queue": "reconcile-queue" }
+    ],
+    "consumers": [{
+      "queue": "structure-queue",
+      "max_batch_size": 20,
+      "max_batch_timeout": 10,
+      "max_retries": 3,
+      "max_concurrency": 10,
+      "dead_letter_queue": "structure-dlq"
+    }]
+  },
+
+  "limits": { "cpu_ms": 60000 }
+}
