@@ -169,7 +169,11 @@
   /* The scanner is the whole screen. A viewfinder in a 60vh window with the
      page scrolling underneath is a preview of a camera; this is the camera, and
      the glass tab bar floats over it like it floats over everything else. */
-  #v2{padding:0;overflow:hidden;}
+  /* Was #v2. The routed shell renders one .view and names it with data-screen,
+     because there is no longer a stack of numbered view divs for an id to point
+     at. Same rule, addressed by what the screen IS rather than by its old
+     position in the markup. */
+  [data-screen="scan"]{padding:0;overflow:hidden;}
   .scanhero{position:absolute;inset:0;background:#050506;overflow:hidden;}
   .feed{position:absolute;inset:0;background:
       radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
@@ -505,7 +509,7 @@
       margin-inline:auto;}
 
     /* Home — hero insight + needs-attention side by side above recent scans */
-    #v0{--vmax:900px;}
+    [data-screen="home"]{--vmax:900px;}
     .hgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
       gap:var(--gutter);align-items:start;padding:0 var(--gutter);margin-top:18px;}
     .hgrid > .card{margin:0;}
@@ -513,7 +517,7 @@
     .hgrid .attention{margin-top:0;}
 
     /* Insights — cards into two columns */
-    #v1{--vmax:1100px;}
+    [data-screen="insights"]{--vmax:1100px;}
     .igrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
       gap:2px var(--gutter);align-items:start;padding-inline:var(--gutter);}
     .igrid .card,.igrid .list{margin-inline:0;}
@@ -522,7 +526,7 @@
     /* Scan — viewfinder becomes a contained panel again. Filling the screen is
        right on a phone held over a page and wrong on a desktop, where the page
        is somewhere else entirely and the window is mostly empty room. */
-    #v2{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
+    [data-screen="scan"]{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
     .scanhero{position:relative;inset:auto;margin:0 var(--gutter);border-radius:var(--r-card);
       height:clamp(360px,44vh,520px);min-height:0;}
     .scanctrls{bottom:22px;}

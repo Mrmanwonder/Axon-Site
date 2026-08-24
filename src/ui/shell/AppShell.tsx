@@ -16,6 +16,7 @@ import TabNav from "./TabNav";
 import Header from "./Header";
 import ThemeToggle from "./ThemeToggle";
 import { activeIndex, destinations } from "../app/nav";
+import ReviewSheet from "../scan/ReviewSheet";
 
 export default function AppShell() {
   const { pathname } = useLocation();
@@ -45,9 +46,18 @@ export default function AppShell() {
           The router does that job now, so exactly one view exists at a time and
           it is always the visible one — but the class still has to be there or
           the screen renders into a display:none box. */}
-      <div className="view on" ref={scrollRef} key={pathname}>
+      <div
+        className="view on"
+        data-screen={i >= 0 ? destinations[i].label.toLowerCase() : undefined}
+        ref={scrollRef}
+        key={pathname}
+      >
         <Outlet />
       </div>
+
+      {/* Stage 9 lives above the shell: it is a screen, not a sheet, and it has
+          to survive the tab bar being tapped underneath it. */}
+      <ReviewSheet />
 
       <TabNav />
     </div>

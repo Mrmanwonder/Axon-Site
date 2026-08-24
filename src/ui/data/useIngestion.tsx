@@ -15,7 +15,10 @@
    · **Both entry points go through `ensureScan`.** The module holds its own
      state, and calling into it before `initScanUI` has handed it the student
      drops the upload silently — the invisible failure hard rule 4 exists to
-     prevent.
+     prevent. `ScanProvider` owns that load-once dance now, and this defers to
+     it rather than keeping a second copy: two loaders would each think they
+     were first, and the second `initScanUI` would reset the flow's state
+     underneath a capture already in progress.
 
    · **The camera request races the pipeline load rather than following it.**
      Asking at the end of the chain put about ten seconds between tapping Scan
@@ -34,6 +37,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "./AppProvider";
+import { useScan } from "../scan/ScanProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import {
@@ -41,18 +45,11 @@ import {
 } from "./modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
-type ScanModule = {
-  initScanUI: (ctx: unknown) => void | Promise<void>;
-  setPendingPaperType: (t: string | null) => void;
-  acceptUploads: (files: File[]) => Promise<void>;
-};
-
 type IngestionValue = {
   /** Open the OS picker. The same path for the Scan tab and for anywhere else. */
   addPaper: () => void;
   addLink: () => void;
   ingestFiles: (files: File[]) => Promise<void>;
-  ensureScan: () => Promise<ScanModule>;
 };
 
 const Ctx = createContext<IngestionValue | null>(null);
@@ -67,19 +64,8 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
   const app = useApp();
   const toast = useToast();
   const { openSheet } = useSheetControls();
+  const { ensureScan } = useScan();
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const scanPromise = useRef<Promise<ScanModule> | null>(null);
-  const scanReady = useRef<Promise<unknown> | null>(null);
-
-  const ensureScan = useCallback(async (): Promise<ScanModule> => {
-    scanPromise.current ??= import("../../scan/ui.js") as Promise<ScanModule>;
-    const scan = await scanPromise.current;
-    scanReady.current ??= Promise.resolve(scan.initScanUI(app))
-      .then(() => scan.setPendingPaperType(app.takePendingPaperType()));
-    await scanReady.current;
-    return scan;
-  }, [app]);
 
   const ingestFiles = useCallback(async (files: File[]) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
@@ -150,23 +136,24 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     });
   }, [openSheet, ingestLink, toast]);
 
-  // Warm the pipeline while the phone is idle so tapping Scan is instant — but
-  // not on a connection where sixteen files is a real cost to someone who may
-  // never scan. Save-Data is a request, and a slow link is an answer.
+  /* Warm the pipeline while the phone is idle so tapping Scan is instant — but
+     not on a connection where sixteen files is a real cost to someone who may
+     never scan. Save-Data is a request, and a slow link is an answer.
+
+     This warms the module only; it does not call initScanUI, because doing that
+     before the Scan screen has mounted would hand the flow a viewfinder that
+     does not exist yet. */
   useEffect(() => {
     type Conn = { saveData?: boolean; effectiveType?: string };
     const link = (navigator as Navigator & { connection?: Conn }).connection;
     if (link?.saveData || /^(slow-)?2g$/.test(link?.effectiveType ?? "")) return;
     const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 2000));
-    idle(() => {
-      scanPromise.current ??= (import("../../scan/ui.js") as Promise<ScanModule>)
-        .catch(() => { scanPromise.current = null; throw new Error("scan load failed"); });
-    });
+    idle(() => { void import("../../scan/ui.js").catch(() => { /* it will retry on demand */ }); });
   }, []);
 
   const value = useMemo<IngestionValue>(
-    () => ({ addPaper, addLink, ingestFiles, ensureScan }),
-    [addPaper, addLink, ingestFiles, ensureScan],
+    () => ({ addPaper, addLink, ingestFiles }),
+    [addPaper, addLink, ingestFiles],
   );
 
   return (

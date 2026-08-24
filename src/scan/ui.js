@@ -1,10 +1,17 @@
 // Scan and review, wired together.
 //
-// index.html owns the surfaces — the viewfinder, the tray, the review screen,
-// the confidence chips and the cause hues. This owns the flow: when the camera
+// React owns the surfaces — the viewfinder, the tray, the review screen, the
+// confidence chips and the cause hues. This owns the flow: when the camera
 // runs, what happens to a page once it is taken, which stage is running, and
-// what a correction does. The two meet at the renderers published by the design
-// system, so neither reimplements the other.
+// what a correction does. The two meet at the `host` handed in by initScanUI,
+// so neither reimplements the other.
+//
+// This module deliberately stayed plain JavaScript through the React port. It
+// is the only module that knows the ten stages and their order, and rewriting
+// it as components would have put the pipeline at risk for no gain — the DOM
+// coupling was never in the flow, only in the render calls, which are now the
+// host's job. What changed is that those calls went from `window.__mastery*`
+// globals to an injected object; nothing about the order did.
 
 import { createCapture } from './capture.js';
 import { acceptPage, explainPaper, ingest } from './pipeline.js';
@@ -23,21 +30,39 @@ const S = {
   busy: false,
 };
 
-const toast = (m, tone) => window.__masteryApp?.toast?.(m, tone);
-const tick = () => window.__masteryHaptic?.tick?.();
-const firm = () => window.__masteryHaptic?.firm?.();
+/**
+ * The surfaces this flow paints into, and the primitives it needs.
+ *
+ * Set once by initScanUI. Every entry is a no-op by default so a call that
+ * arrives before the screen has mounted goes quiet rather than throwing —
+ * `explainPaper` lands questions asynchronously and can outlive the screen that
+ * started it.
+ */
+let host = {
+  toast() {}, tick() {}, firm() {},
+  scanSurface: () => null,
+  renderHint() {}, cameraLive() {},
+  renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {},
+  openSheet() {}, openReview() {}, renderReview() {}, closeReview() {},
+  goto() {}, refreshLibrary: async () => {},
+};
 
-export async function initScanUI(ctx) {
+const toast = (m, tone) => host.toast(m, tone);
+const tick = () => host.tick();
+const firm = () => host.firm();
+
+export async function initScanUI(ctx, surfaces = {}) {
   S.ctx = ctx;
+  host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
-  const surface = window.__masteryScanSurface?.();
+  const surface = host.scanSurface();
   if (!surface?.video) return;
 
   S.capture = createCapture({
     video: surface.video,
     overlay: surface.overlay,
-    onState: (state) => window.__masteryRenderHint?.(state),
+    onState: (state) => host.renderHint(state),
     onShot: (shot) => {
       tick();
       // A retake replaces the page it was taken for, keeping its place in the
@@ -48,20 +73,31 @@ export async function initScanUI(ctx) {
     },
   });
 
-  document.getElementById('shutterBtn')?.addEventListener('click', () => S.capture.shoot());
-  document.getElementById('autoToggle')?.addEventListener('click', (e) => {
-    const el = e.currentTarget;
-    const next = !el.classList.contains('on');
-    el.classList.toggle('on', next);
-    el.setAttribute('aria-pressed', String(next));
-    tick();
-    S.capture.setAutoCapture(next);
-  });
-
-  window.__masteryScanVisible = (visible, camera) => (visible ? startCamera(camera) : stopCamera());
-
   await restoreDraft();
   await paintDrafts();
+}
+
+/** The shutter. Exported rather than bound to a button id, so the control that
+    fires it is the screen's business and not this module's. */
+export function shoot() {
+  S.capture?.shoot();
+}
+
+export function setAutoCapture(on) {
+  tick();
+  S.capture?.setAutoCapture(on);
+}
+
+/**
+ * Called on every entry to and exit from the Scan screen.
+ *
+ * @param {boolean} visible
+ * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
+ *   The request fired the instant the tab opened, if there was one. Adopting it
+ *   is what keeps the permission sheet from waiting on this module's own load.
+ */
+export function setScanVisible(visible, camera = null) {
+  return visible ? startCamera(camera) : stopCamera();
 }
 
 // ── the camera ─────────────────────────────────────────────────────────────
@@ -75,20 +111,20 @@ async function startCamera(camera = null) {
   if (!S.capture?.supported) {
     // No camera, or a browser that will not give one up. Upload is a
     // first-class path, so this is a different route rather than a failure.
-    window.__masteryCameraLive?.(false, 'unavailable');
-    window.__masteryRenderHint?.({
+    host.cameraLive(false, 'unavailable');
+    host.renderHint({
       hint: 'No camera here — add pages from your files instead', blocking: null,
     });
     return;
   }
-  window.__masteryCameraLive?.(false, 'starting');
+  host.cameraLive(false, 'starting');
   try {
     await S.capture.start(camera);
-    window.__masteryCameraLive?.(true);
-    window.__masteryRenderHint?.(S.capture.state);
+    host.cameraLive(true);
+    host.renderHint(S.capture.state);
   } catch (error) {
-    window.__masteryCameraLive?.(false, 'blocked');
-    window.__masteryRenderHint?.({
+    host.cameraLive(false, 'blocked');
+    host.renderHint({
       hint: error?.name === 'NotAllowedError'
         ? 'Camera access is off for this site — you can still add pages from your files'
         : 'The camera could not start — you can still add pages from your files',
@@ -99,7 +135,7 @@ async function startCamera(camera = null) {
 
 function stopCamera() {
   S.capture?.stop();
-  window.__masteryCameraLive?.(false);
+  host.cameraLive(false);
 }
 
 // ── a page ─────────────────────────────────────────────────────────────────
@@ -152,7 +188,7 @@ async function paintTray() {
     if (S.thumbs.has(page.page_number)) continue;
     S.thumbs.set(page.page_number, URL.createObjectURL(page.proxy ?? page.blob));
   }
-  window.__masteryRenderTray?.(
+  host.renderTray(
     pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) })),
     { onPage: openPageActions, onDone: sendPaper },
   );
@@ -170,7 +206,7 @@ function openPageActions(pageNumber) {
   if (!page) return;
   const reasons = page.quality?.reasons ?? [];
 
-  window.__masteryOpenSheet?.({
+  host.openSheet({
     title: `Page ${pageNumber}`,
     body: reasons.length ? reasons[0] : 'This page looks fine.',
     items: [],
@@ -205,7 +241,7 @@ async function restoreDraft() {
   const drafts = await listDrafts(S.ctx.student.id);
   const latest = drafts[0];
   if (!latest) return;
-  window.__masteryDraftToast?.(
+  host.draftToast(
     { id: latest.id, pages: latest.pages.length },
     { onResume: resumeDraft },
   );
@@ -213,7 +249,7 @@ async function restoreDraft() {
 
 async function paintDrafts() {
   const drafts = await listDrafts(S.ctx.student.id);
-  window.__masteryRenderDrafts?.(
+  host.renderDrafts(
     drafts.map((d) => ({
       id: d.id,
       title: d.paper_type
@@ -254,7 +290,7 @@ function sendPaper() {
 
   // The type decides Tier 1 against Tier 2, which is the highest-leverage field
   // in the app, so it is asked plainly rather than guessed from a filename.
-  window.__masteryOpenSheet?.({
+  host.openSheet({
     title: 'What kind of paper is this?',
     body: 'This decides whether we can match it to an official marking scheme.',
     items: [],
@@ -273,7 +309,7 @@ async function run(paperType) {
   ];
   let current = 'upload';
 
-  const paint = (now, sub) => window.__masteryRenderProgress?.({
+  const paint = (now, sub) => host.renderProgress({
     heading: 'Reading this paper',
     now,
     sub,
@@ -297,7 +333,7 @@ async function run(paperType) {
     });
 
     if (result.refused) {
-      window.__masteryRenderProgress?.({
+      host.renderProgress({
         heading: 'This one we did not read',
         now: result.message,
         steps: [],
@@ -324,7 +360,7 @@ async function run(paperType) {
       onQuestion: () => scheduleReviewRefresh(),
     }).catch(() => { /* a failed explanation leaves the marks intact and visible */ });
   } catch (error) {
-    window.__masteryRenderProgress?.({
+    host.renderProgress({
       heading: 'That did not finish',
       now: error.message || 'Something went wrong reading this paper.',
       steps: [],
@@ -340,7 +376,7 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 async function openReview(runId) {
   S.runId = runId;
   await refreshReview();
-  window.__masteryOpenReview?.();
+  host.openReview();
 }
 
 /**
@@ -361,13 +397,15 @@ async function refreshReview() {
   if (!S.runId) return;
   S.review = await loadReview(S.runId);
   const paper = S.review.paper;
-  // The renderer rebuilds the list, so where the student had scrolled to is
-  // restored around it. Losing their place mid-read is the same failure as the
-  // list jumping, arriving by a different route.
-  const scroller = document.getElementById('reviewBody');
-  const scrollTop = scroller?.scrollTop ?? 0;
 
-  window.__masteryRenderReview?.({
+  /* The old renderer rebuilt the list from innerHTML on every refresh, so the
+     scroll position had to be saved and put back around it — losing a student's
+     place mid-read is the same failure as the list jumping, arriving by another
+     route. React reconciles a keyed list instead of replacing it, so the scroll
+     is never lost in the first place and the save-and-restore is gone. The
+     requirement it served has not gone anywhere: keep the question key stable. */
+
+  host.renderReview({
     title: paper?.subject
       ? `${paper.subject} · ${PAPER_TYPES.find((t) => t.value === paper.type)?.label ?? ''}`.trim()
       : PAPER_TYPES.find((t) => t.value === paper?.type)?.label ?? 'Review',
@@ -406,8 +444,6 @@ async function refreshReview() {
     },
     onSave: save,
   });
-
-  if (scroller) scroller.scrollTop = scrollTop;
 }
 
 function handleReviewAction(id, action) {
@@ -430,16 +466,17 @@ function handleReviewAction(id, action) {
   }
 
   if (action === 'type') {
-    window.__masteryOpenSheet?.({
+    host.openSheet({
       title: 'Fix this',
       body: 'Type what your answer actually says. We take your word for it — you have the paper.',
       items: [],
       input: { id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
-      primaryClass: 'primary',
-      onConfirm: async () => {
-        const value = document.querySelector('#fixText')?.value ?? '';
-        try { await correctAnswer(id, value); await refreshReview(); }
+      // The sheet hands back what was typed, rather than this reaching into the
+      // document for it. The student is the authority here: whatever they type
+      // is accepted as-is, with no verification and no review queue.
+      onConfirm: async (value) => {
+        try { await correctAnswer(id, value ?? ''); await refreshReview(); }
         catch (e) { toast(e.message, 'warn'); }
       },
     });
@@ -447,7 +484,7 @@ function handleReviewAction(id, action) {
   }
 
   if (action === 'rescan') {
-    window.__masteryOpenSheet?.({
+    host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,
       body: 'You retake one page, and we read the paper again with it.',
       items: [
@@ -455,13 +492,12 @@ function handleReviewAction(id, action) {
         ['The paper is then read from scratch.', 'Anything you have already fixed or confirmed is read again, so you will check it once more.'],
       ],
       primary: 'Take it again',
-      primaryClass: 'primary',
       onConfirm: () => {
-        window.__masteryCloseReview?.();
+        host.closeReview();
         releaseCrops();
         S.retaking = question.pageNumber;
         // Back to the camera, which is where the next thing they do happens.
-        window.__masteryGoto?.(2);
+        host.goto('scan');
         toast(`Point at page ${question.pageNumber} and take it again.`);
       },
     });
@@ -480,7 +516,7 @@ async function save() {
     const result = await commitRun(S.runId);
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
-    window.__masteryCloseReview?.();
+    host.closeReview();
     releaseCrops();
     S.runId = null;
     // Now the pages have done their job.
@@ -492,7 +528,7 @@ async function save() {
       await paintTray();
       await paintDrafts();
     }
-    await window.__masteryApp?.refreshLibrary?.();
+    await host.refreshLibrary();
   } catch (error) {
     toast(error.message || 'That could not be saved.', 'warn');
   }

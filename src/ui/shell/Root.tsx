@@ -20,6 +20,7 @@ import { AppProvider, useApp } from "../data/AppProvider";
 import { ToastProvider } from "../components/ToastProvider";
 import { SheetProvider } from "../components/SheetProvider";
 import { IngestionProvider } from "../data/useIngestion";
+import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 
 /* Split out for the same reason the scanner is: a returning student is signed
@@ -47,9 +48,15 @@ export default function Root() {
     <AppProvider>
       <ToastProvider>
         <SheetProvider>
-          <IngestionProvider>
-            <Gate />
-          </IngestionProvider>
+          {/* ScanProvider is outside IngestionProvider because ingestion asks it
+              for the loader: an upload started from Home has to go through the
+              same door as the shutter, or it reaches the flow before the flow
+              has been handed the student and is dropped in silence. */}
+          <ScanProvider>
+            <IngestionProvider>
+              <Gate />
+            </IngestionProvider>
+          </ScanProvider>
         </SheetProvider>
       </ToastProvider>
     </AppProvider>
