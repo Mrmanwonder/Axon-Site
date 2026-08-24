@@ -24,6 +24,8 @@ import * as prefsMod from "../../prefs.js";
 import * as consentMod from "../../consent.js";
 import * as papersMod from "../../papers.js";
 import * as accountMod from "../../account.js";
+import * as verificationMod from "../../verification.js";
+import * as curriculumMod from "../../curriculum.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -94,6 +96,52 @@ export const takeProviderError = supabaseMod.takeProviderError as () => Provider
 export const onAuthChange = supabaseMod.onAuthChange as (
   fn: (session: unknown) => void,
 ) => { data: { subscription: { unsubscribe: () => void } } };
+
+// ── auth ───────────────────────────────────────────────────────────────────
+export const sendOtp = supabaseMod.sendOtp as (
+  contact: string,
+) => Promise<{ channel: string; sentTo: string }>;
+/** Accepts a typed code OR a whole pasted magic link — the emailed link still
+    works after the mail app has already opened it, which is the common case. */
+export const verifyOtp = supabaseMod.verifyOtp as (contact: string, input: string) => Promise<unknown>;
+export const signInWithProvider = supabaseMod.signInWithProvider as (p: string) => Promise<void>;
+export const isProviderNotEnabled = supabaseMod.isProviderNotEnabled as (e: unknown) => boolean;
+export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as ("google" | "apple")[];
+export const PROVIDER_LABEL = supabaseMod.PROVIDER_LABEL as Record<string, string>;
+
+// ── guardian verification ──────────────────────────────────────────────────
+/** Swappable adapter; the stub is wired for development and DigiLocker is the
+    intended production one. Only a reference and a timestamp are ever stored. */
+export const getVerificationAdapter = verificationMod.getVerificationAdapter as () => {
+  label: string;
+  description: string;
+  verify: () => Promise<{ verifiedAt: string; method: string; reference: string }>;
+};
+
+// ── curriculum ─────────────────────────────────────────────────────────────
+/* AGENTS.md: this is the single source for the board, the stages, the
+   class-level mapping and the syllabus codes. Nothing else may hardcode
+   "CAIE", a stage name or a four-digit code. */
+export const BOARD = curriculumMod.BOARD as string;
+export const BOARD_LABEL = curriculumMod.BOARD_LABEL as string;
+export const CLASS_LEVELS = curriculumMod.CLASS_LEVELS as number[];
+export const STAGES = curriculumMod.STAGES as {
+  stage: string; label: string; classLevels: number[];
+}[];
+export const stageForClass = curriculumMod.stageForClass as (c: number) => {
+  stage: string; label: string; classLevels: number[];
+};
+export const classLabel = curriculumMod.classLabel as (c: number) => string;
+export const classLabelShort = curriculumMod.classLabelShort as (c: number) => string;
+export const subjectsForClass = curriculumMod.subjectsForClass as (
+  c: number,
+) => { subject: string; code: string }[];
+export const syllabusCode = curriculumMod.syllabusCode as (
+  subject: string, c: number,
+) => string | null;
+export const subjectLabel = curriculumMod.subjectLabel as (
+  subject: string, code: string | null,
+) => string;
 
 // ── prefs ──────────────────────────────────────────────────────────────────
 export const DEFAULTS = prefsMod.DEFAULTS as Prefs;

@@ -232,3 +232,10 @@
   opacity: .45;
   cursor: default;
 }
+
+/* The syllabus code beside a subject name. Recessive: the code identifies the
+   syllabus but the subject is what the parent is reading for. */
+.obcode-badge {
+  opacity: .6;
+  font-variant-numeric: tabular-nums;
+}
