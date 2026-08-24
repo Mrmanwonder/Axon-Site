@@ -46,10 +46,21 @@ export type Student = {
 export type Paper = {
   id: string;
   type: string;
-  tier: number | null;
+  /** 'tier_1' (teacher's marks) or 'tier_2' (matched to an official scheme). */
+  tier: string | null;
   date_taken: string;
   [k: string]: unknown;
 };
+
+/** What every cached read returns.
+
+    `src/cache.js` wraps these in read-through caching, so the value is always
+    under `.data` and never the bare result. `stale` means the network read
+    failed and this came from the cache — which is a legitimate thing to show a
+    student, clearly labelled, because past papers must stay readable offline.
+    It is NOT the same as empty, and a caller that ignores the wrapper reads
+    `undefined` and renders a confident zero. */
+export type Cached<T> = { data: T; stale: boolean; offline: boolean };
 
 /** A refused Google or Apple round trip, already cleared out of the URL. */
 export type ProviderError = {
@@ -114,9 +125,9 @@ export const listPurposes = consentMod.listPurposes as () => Promise<
 >;
 
 // ── papers ─────────────────────────────────────────────────────────────────
-export const listPapers = papersMod.listPapers as (
+export const listPapers = papersMod.listPapers as unknown as (
   studentId: string,
-) => Promise<{ data: Paper[]; stale: boolean }>;
+) => Promise<Cached<Paper[]>>;
 export const createPaper = papersMod.createPaper as (a: {
   studentId: string; type: string; dateTaken: string;
 }) => Promise<Paper>;
@@ -125,6 +136,41 @@ export const addLinkPage = papersMod.addLinkPage as (a: {
 }) => Promise<unknown>;
 export const parsePaperLink = papersMod.parsePaperLink as (raw: string) => string;
 export const PAPER_TYPES = papersMod.PAPER_TYPES as { value: string; label: string }[];
+export const paperTypeLabel = papersMod.paperTypeLabel as (type: string) => string;
+
+/* ── the analytics reads ──
+   These exist in papers.js and, as of this port, nothing had ever called them.
+   That is why Home and Insights were still showing the prototype's numbers on
+   main; see the note in ui/pages/Home.tsx. */
+
+/** Marks-lost totals by cause. Reads mark_loss_analytics, never the base table,
+    so unsure and student-rejected rows are already excluded — hard rule 3. */
+export const lossByCause = papersMod.lossByCause as unknown as (
+  studentId: string,
+) => Promise<Cached<Record<string, number>>>;
+
+/** Attempts whose transcription came back unsure and are not yet confirmed.
+    Reads the BASE table on purpose: hard rule 3 keeps unsure rows out of
+    aggregation, and this is the surface that exists to show them. */
+export const needsCheck = papersMod.needsCheck as unknown as (
+  studentId: string,
+) => Promise<Cached<{ count: number; papers: number }>>;
+
+/** Pages OCR could not read — hard rule 4's surface. */
+export const unreadablePages = papersMod.unreadablePages as unknown as (
+  studentId: string,
+) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
+
+/** Sample size, and whether there is enough to show an insight at all. */
+export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (
+  studentId: string,
+) => Promise<Cached<{
+  papers_counted: number; questions_counted: number; has_enough_data: boolean;
+}>>;
+
+export const listSubjects = papersMod.listSubjects as unknown as (
+  studentId: string,
+) => Promise<Cached<{ subject: string; syllabus_code: string }[]>>;
 
 // ── account ────────────────────────────────────────────────────────────────
 export const exportMyData = accountMod.exportMyData as (g: Guardian) => Promise<unknown>;

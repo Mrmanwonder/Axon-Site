@@ -23,13 +23,17 @@
   transition: background var(--d-theme) ease, color var(--d-theme) ease;
 }
 
-/* Undo the UA button stylesheet wherever a control became a real button. */
+/* Undo the UA button stylesheet wherever a control became a real button.
+   `.sw` matters most here: its track is an absolutely-positioned child, so a
+   leftover `background: buttonface` paints a white slab over it and the switch
+   reads as an empty circle with no state at all. */
 .tab,
 .sh-choice,
 .btn,
 .themebtn,
 .fchip,
 .method,
+.sw,
 .srow[data-interactive],
 .row[data-interactive] {
   font: inherit;

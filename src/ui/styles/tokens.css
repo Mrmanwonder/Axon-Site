@@ -96,14 +96,26 @@
   --statusfg: var(--p-white);
 
   /* 3 · role — meaning.
-     accent   = blue, the only thing that draws the eye forward
+     accent    = blue, the only thing that draws the eye forward
      attention = amber, everything that would reach for red elsewhere
      positive  = green, confirmed states and gains
-     signout   = red, and red appears nowhere else in the interface */
-  --accent: var(--p-blue-d);
-  --positive: var(--p-green-d);
-  --attention: var(--p-amber-d);
-  --signout: var(--p-red-d);
+     signout   = red, and red appears nowhere else in the interface
+
+     --blue / --green / --amber / --red are the design system's OWN names and
+     the ones system.css uses in 44 places. They are not legacy and must not be
+     removed: system.css is carried over verbatim precisely so it cannot drift,
+     which means this layer has to speak its vocabulary. The semantic aliases
+     below exist so new code can say what it means rather than which hue it
+     wants; both name the same value and neither is the "real" one. */
+  --blue: var(--p-blue-d);
+  --green: var(--p-green-d);
+  --amber: var(--p-amber-d);
+  --red: var(--p-red-d);
+
+  --accent: var(--blue);
+  --positive: var(--green);
+  --attention: var(--amber);
+  --signout: var(--red);
 
   /* tinted washes of the role colours, used as backgrounds behind them */
   --accent-wash: rgba(58, 134, 255, .15);
@@ -141,10 +153,15 @@
   --label-3: rgba(60, 60, 67, .4);
   --statusfg: var(--p-ink-950);
 
-  --accent: var(--p-blue-l);
-  --positive: var(--p-green-l);
-  --attention: var(--p-amber-l);
-  --signout: var(--p-red-l);
+  --blue: var(--p-blue-l);
+  --green: var(--p-green-l);
+  --amber: var(--p-amber-l);
+  --red: var(--p-red-l);
+
+  --accent: var(--blue);
+  --positive: var(--green);
+  --attention: var(--amber);
+  --signout: var(--red);
 
   --accent-wash: rgba(58, 134, 255, .15);
   --accent-glow: rgba(58, 134, 255, .26);
@@ -174,6 +191,17 @@
    styles, so the distinction survives greyscale and colourblindness.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
+  /* ── the mastery-map ramp ──
+     The one place a ramp is legitimate: these are two ends of a SINGLE hue
+     standing for "how much of this chapter has been seen", not a scale from
+     good to bad. It stays blue at both ends for that reason — a green-to-red
+     version would turn the concept heatmap into a shame map.
+
+     In the pre-port app these were written inline on `.app`, which meant every
+     rule reading them broke the moment anything else rendered that element. */
+  --m1: rgba(58, 134, 255, .12);
+  --m5: #3A86FF;
+
   --cause-conceptual-gap: var(--p-cause-conceptual-gap);
   --cause-procedural-slip: var(--p-cause-procedural-slip);
   --cause-misread-question: var(--p-cause-misread-question);

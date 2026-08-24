@@ -40,7 +40,12 @@ export default function AppShell() {
       <ThemeToggle />
       <Header title={title} stuck={stuck} />
 
-      <div className="view" ref={scrollRef} key={pathname}>
+      {/* `.on` is not decorative: system.css hides `.view` by default and shows
+          only the active one, which is how the pre-port app switched screens.
+          The router does that job now, so exactly one view exists at a time and
+          it is always the visible one — but the class still has to be there or
+          the screen renders into a display:none box. */}
+      <div className="view on" ref={scrollRef} key={pathname}>
         <Outlet />
       </div>
 

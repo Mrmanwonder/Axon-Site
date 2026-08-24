@@ -19,6 +19,7 @@ import { lazy, Suspense } from "react";
 import { AppProvider, useApp } from "../data/AppProvider";
 import { ToastProvider } from "../components/ToastProvider";
 import { SheetProvider } from "../components/SheetProvider";
+import { IngestionProvider } from "../data/useIngestion";
 import AppShell from "./AppShell";
 
 /* Split out for the same reason the scanner is: a returning student is signed
@@ -46,7 +47,9 @@ export default function Root() {
     <AppProvider>
       <ToastProvider>
         <SheetProvider>
-          <Gate />
+          <IngestionProvider>
+            <Gate />
+          </IngestionProvider>
         </SheetProvider>
       </ToastProvider>
     </AppProvider>
