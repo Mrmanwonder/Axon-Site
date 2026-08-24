@@ -1,42 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    APPEARANCE TOGGLE
 
-   Dark is the default, not a fallback: students study at night. The stored
-   preference wins over the OS setting, because a student may want this app
-   dark without changing their whole phone.
-
    Shows the DESTINATION state, the way iOS and macOS do — the sun icon means
    "switch to light", not "you are in light".
+
+   It writes through `setPref`, so the corner button and Settings → Appearance
+   are the same setting rather than two that can disagree. Tapping it from
+   "system" resolves to the opposite of whatever the OS currently is, which is
+   what a person tapping a toggle means by it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from "react";
+import { useApp } from "../data/AppProvider";
 import { hapticTick } from "../lib/haptics";
 
-type Theme = "dark" | "light";
-const KEY = "theme";
-
-function initial(): Theme {
-  const stored = localStorage.getItem(KEY);
-  if (stored === "dark" || stored === "light") return stored;
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
-
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(initial);
+  const { prefs, setPref } = useApp();
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(KEY, theme);
-    // The browser chrome follows the app, so the status bar doesn't sit at a
-    // different brightness from the screen under it.
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", theme === "dark" ? "#000000" : "#F4F4F7");
-  }, [theme]);
+  const resolved = prefs.theme === "system"
+    ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+    : prefs.theme;
 
   const flip = () => {
     hapticTick();
-    setTheme((t) => (t === "dark" ? "light" : "dark"));
+    void setPref({ theme: resolved === "dark" ? "light" : "dark" });
   };
 
   return (
@@ -44,7 +30,7 @@ export default function ThemeToggle() {
       type="button"
       className="themebtn"
       onClick={flip}
-      aria-label={theme === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}
+      aria-label={resolved === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}
     >
       <svg className="ic-sun" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="4.2" />

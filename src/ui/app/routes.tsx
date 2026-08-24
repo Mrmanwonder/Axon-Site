@@ -25,7 +25,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import AppShell from "../shell/AppShell";
+import Root from "../shell/Root";
 import Home from "../pages/Home";
 import Library from "../pages/Library";
 import PaperOverview from "../pages/PaperOverview";
@@ -42,7 +42,7 @@ export type { SheetName } from "./paths";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <AppShell />,
+    element: <Root />,
     errorElement: <NotFound />,
     children: [
       { index: true, element: <Home /> },

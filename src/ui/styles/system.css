@@ -1,0 +1,887 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE COMPONENT SYSTEM
+
+   Extracted verbatim from the pre-port index.html, which CLAUDE.md names as the
+   design system of record. It is carried over rather than retyped because it
+   already reads from the tokens for every colour — retyping ~900 lines by hand
+   would only introduce drift, and the one thing this port must not do is
+   redesign anything on the way through.
+
+   The token declarations, the @font-face and the text-size / reduce-motion
+   overrides are NOT here; they are layered in tokens.css. Shell-level rules that
+   the React port changed structurally — the tab becoming a real <button> — are
+   in shell.css and win by load order.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+  
+  /* The reset, html/body and the .app frame live in app.css and shell.css.
+     Everything from here down is the component system. */
+
+  /* header */
+  .header{position:absolute;top:0;left:0;right:0;height:calc(var(--top-inset) + 52px);z-index:30;pointer-events:none;}
+  .header .plate{position:absolute;inset:0;background:var(--nav-bg);backdrop-filter:blur(26px) saturate(1.8);-webkit-backdrop-filter:blur(26px) saturate(1.8);border-bottom:.5px solid var(--hairline);opacity:0;transition:opacity .26s ease;}
+  .header.stuck .plate{opacity:1;}
+  .header .t{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:9px;}
+  .header .t span{font-size:16px;font-weight:600;letter-spacing:-.02em;opacity:0;transform:translateY(5px);transition:opacity .22s ease,transform .3s var(--spring);}
+  .header.stuck .t span{opacity:1;transform:none;}
+
+  .view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+    padding-top:var(--view-top);padding-bottom:var(--view-bottom);
+    /* Percentages here resolve against the containing block (the app shell),
+       not the view's own box, so the rail has to come out explicitly or the
+       column ends up narrow and pushed off-centre beside the sidebar. */
+    padding-inline:max(0px,calc((100% - var(--rail-w) - var(--vmax,100%)) / 2));
+    scrollbar-width:none;display:none;}
+  .view.on{display:block;}
+  .view::-webkit-scrollbar{display:none;}
+
+  .greet{padding:16px var(--text-gutter) 2px;}
+  .greet .d{font-size:14px;font-weight:500;color:var(--label-3);margin-bottom:2px;}
+  .greet h1{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.036em;line-height:1.06;}
+  .greet .sub{font-size:14px;color:var(--label-3);margin-top:5px;line-height:1.45;}
+
+  .sectitle{margin:26px var(--text-gutter) 9px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;letter-spacing:.055em;color:var(--label-3);}
+  .sectitle.tight{margin-top:20px;}
+  .subnote{margin:8px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;line-height:1.5;color:var(--label-3);}
+  .note{margin:9px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;line-height:1.5;color:var(--label-3);}
+
+  .card{margin:0 var(--gutter);background:var(--surface);border:.5px solid var(--hairline);border-radius:var(--r-card);will-change:transform;}
+  [data-theme="light"] .card{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .list{margin:0 var(--gutter);border-radius:var(--r-card);overflow:hidden;background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .list{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .row{display:flex;align-items:center;gap:13px;padding:15px 18px;position:relative;will-change:transform;}
+  .row + .row::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .row .b{flex:1;min-width:0;}
+  .row .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;}
+  .row .t2{font-size:13px;color:var(--label-3);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .chev{width:7px;height:12px;opacity:.3;flex-shrink:0;}
+  .lost{font-size:15.5px;font-weight:600;letter-spacing:-.02em;text-align:right;}
+  .lost small{display:block;font-size:11px;font-weight:500;color:var(--label-3);margin-top:2px;}
+
+  .tier{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;}
+  .tier.t2{background:rgba(48,209,88,.16);color:var(--green);}
+  .tier.t1{background:var(--surface-sunk);color:var(--label-2);}
+  .tier.uns{background:rgba(255,159,10,.16);color:var(--amber);}
+
+  /* filter bar */
+  .filterbar{position:sticky;top:var(--view-top);z-index:12;padding:10px 0 10px var(--gutter);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;background:var(--bg);}
+  .filterbar::-webkit-scrollbar{display:none;}
+  .filterbar::after{content:"";flex:0 0 var(--gutter);}
+  .fchip{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:14px;background:var(--surface);border:.5px solid var(--hairline);font-size:13.5px;font-weight:500;color:var(--label-2);letter-spacing:-.01em;cursor:pointer;}
+  .fchip.active{background:var(--blue);border-color:transparent;color:#fff;font-weight:600;}
+  .fchip svg{width:9px;height:9px;opacity:.55;}
+
+  /* search */
+  .searchwrap{padding:12px var(--gutter) 2px;}
+  .search{display:flex;align-items:center;gap:9px;background:var(--field);border-radius:14px;padding:11px 13px;}
+  .search svg{width:16px;height:16px;fill:none;stroke:var(--label-3);stroke-width:2;stroke-linecap:round;}
+  .search input{flex:1;background:none;border:none;outline:none;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
+  .search input::placeholder{color:var(--label-3);}
+
+  /* cheap marks */
+  .cheap{display:flex;align-items:flex-start;gap:13px;padding:16px 18px;position:relative;will-change:transform;}
+  .cheap + .cheap::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .cheap .rank{width:24px;height:24px;border-radius:8px;flex-shrink:0;background:var(--surface-sunk);color:var(--label-2);font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .cheap .b{flex:1;}
+  .cheap .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;line-height:1.35;}
+  .cheap .t2{font-size:13px;color:var(--label-3);margin-top:5px;}
+  .cheap .gain{font-size:15.5px;font-weight:700;color:var(--green);letter-spacing:-.02em;flex-shrink:0;text-align:right;}
+  .cheap .gain small{display:block;font-size:10.5px;font-weight:500;color:var(--label-3);margin-top:2px;letter-spacing:0;}
+
+  /* cause */
+  .causecard{padding:18px;}
+  .causebar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;margin-bottom:16px;}
+  .causebar i{display:block;height:100%;border-radius:2px;}
+  .causegrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;}
+  .cz{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .cz .sw2{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+  .cz .n{flex:1;font-size:13px;color:var(--label-2);letter-spacing:-.01em;}
+  .cz .v{font-size:13px;font-weight:600;color:var(--label);}
+
+  /* mastery map */
+  .mapcard{padding:18px 18px 14px;}
+  .maprow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .maprow:last-of-type{margin-bottom:0;}
+  .maprow .ch{width:104px;font-size:12.5px;color:var(--label-2);letter-spacing:-.01em;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .maprow .cells{flex:1;display:flex;gap:4px;}
+  .maprow .cells i{flex:1;height:22px;border-radius:5px;cursor:pointer;}
+  .maplegend{display:flex;align-items:center;gap:7px;margin-top:15px;padding-top:13px;border-top:.5px solid var(--hairline);font-size:11.5px;color:var(--label-3);}
+  .maplegend .ramp{flex:1;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--m1),var(--m5));}
+
+  /* trend */
+  .trendcard{padding:18px 18px 12px;}
+  .trendcard .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;}
+  .trendcard .hd .k{font-size:13.5px;color:var(--label-2);}
+  .trendcard .hd .v{font-size:13.5px;font-weight:600;color:var(--green);}
+  .trendcard svg{display:block;width:100%;}
+  .xlab{display:flex;justify-content:space-between;padding:7px 2px 0;font-size:11px;color:var(--label-3);}
+
+  /* question type */
+  .qt{padding:15px 18px;position:relative;}
+  .qt + .qt::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .qt .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;}
+  .qt .n{font-size:15px;font-weight:500;letter-spacing:-.015em;}
+  .qt .r{font-size:13px;color:var(--label-3);}
+  .qt .r b{color:var(--label);font-weight:600;font-size:14px;}
+  .qt .track{height:5px;border-radius:3px;background:var(--surface-sunk);overflow:hidden;}
+  .qt .track i{display:block;height:100%;border-radius:3px;background:var(--blue);width:0;transition:width 1s var(--spring);}
+
+  /* empty / insufficient state */
+  .estate{margin:18px var(--gutter);padding:28px 22px;border-radius:var(--r-card);background:var(--surface);border:.5px solid var(--hairline);text-align:center;}
+  .estate .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+  .estate .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .estate h4{margin:0 0 7px;font-size:18px;font-weight:700;letter-spacing:-.025em;}
+  .estate p{margin:0 0 18px;font-size:14px;line-height:1.5;color:var(--label-2);}
+  .estate .prog{display:flex;align-items:center;gap:9px;margin-bottom:18px;}
+  .estate .prog .tr{flex:1;height:6px;border-radius:3px;background:var(--surface-sunk);overflow:hidden;}
+  .estate .prog .tr i{display:block;height:100%;width:50%;background:var(--blue);border-radius:3px;}
+  .estate .prog span{font-size:12px;color:var(--label-3);font-weight:500;}
+
+  /* buttons */
+  .btn{padding:15px;border-radius:18px;text-align:center;font-size:16px;font-weight:600;letter-spacing:-.015em;cursor:pointer;will-change:transform;display:flex;align-items:center;justify-content:center;gap:9px;}
+  .btn.primary{background:var(--blue);color:#fff;box-shadow:0 8px 20px rgba(58,134,255,.26);}
+  .btn.ghost{background:var(--surface-sunk);color:var(--label);}
+  .btn.plain{color:var(--label-3);font-weight:500;padding:11px;}
+  .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* library thumb */
+  .thumb{width:44px;height:56px;border-radius:8px;flex-shrink:0;overflow:hidden;background:var(--surface-sunk);position:relative;border:.5px solid var(--hairline);}
+  .thumb .ln{position:absolute;left:6px;right:6px;height:2px;border-radius:1px;background:var(--label-3);opacity:.35;}
+
+  /* scan */
+  .method{display:flex;align-items:center;gap:14px;padding:17px 18px;position:relative;will-change:transform;cursor:pointer;}
+  .method + .method::before{content:"";position:absolute;top:0;left:18px;right:0;height:.5px;background:var(--hairline);}
+  .method .ic{width:38px;height:38px;border-radius:12px;flex-shrink:0;background:rgba(58,134,255,.15);display:flex;align-items:center;justify-content:center;}
+  .method .ic svg{width:19px;height:19px;fill:none;stroke:var(--blue);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .method .b{flex:1;}
+  .method .t1{font-size:16px;font-weight:500;letter-spacing:-.015em;}
+  .method .t2{font-size:13px;color:var(--label-3);margin-top:2px;line-height:1.4;}
+
+  .draft{margin:16px var(--gutter) 0;padding:15px 17px;border-radius:20px;background:rgba(255,159,10,.11);border:.5px solid rgba(255,159,10,.28);display:flex;align-items:center;gap:13px;}
+  .draft .ic{width:32px;height:32px;border-radius:10px;background:rgba(255,159,10,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .draft .ic svg{width:16px;height:16px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .draft .b{flex:1;}
+  .draft .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .draft .t2{font-size:12.5px;color:var(--label-2);margin-top:2px;}
+  .draft .go{font-size:14px;font-weight:600;color:var(--amber);}
+
+  /* ── camera-first scan viewfinder ── */
+  /* The scanner is the whole screen. A viewfinder in a 60vh window with the
+     page scrolling underneath is a preview of a camera; this is the camera, and
+     the glass tab bar floats over it like it floats over everything else. */
+  #v2{padding:0;overflow:hidden;}
+  .scanhero{position:absolute;inset:0;background:#050506;overflow:hidden;}
+  .feed{position:absolute;inset:0;background:
+      radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
+  .feedgrid{position:absolute;inset:0;background-image:
+      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size:34px 34px;opacity:.5;}
+  .scanhint{position:absolute;left:0;right:0;top:calc(var(--top-inset) + 92px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
+
+  /* top-left: the appearance toggle owns the top-right corner of the shell */
+  .draftsicon{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:19px;
+    background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;
+    opacity:0;transform:scale(.7);pointer-events:none;transition:opacity .3s var(--spring),transform .3s var(--spring);will-change:transform;}
+  .draftsicon.show{opacity:1;transform:scale(1);pointer-events:auto;}
+  .draftsicon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .draftsicon .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:4px;background:var(--amber);border:1.5px solid #1a1a1c;}
+
+  .scanctrls{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 128px);z-index:6;
+    display:flex;align-items:center;justify-content:center;gap:34px;}
+  .sidebtn{width:46px;height:46px;border-radius:23px;background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .shutter .ring{width:56px;height:56px;border-radius:28px;background:#fff;transition:transform .15s ease,border-radius .15s ease;}
+
+  .drafttoast{position:absolute;left:10px;right:10px;top:10px;z-index:6;
+    background:rgba(30,30,34,.7);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
+    border:.5px solid rgba(255,255,255,.16);border-radius:20px;padding:10px 14px 13px;
+    transform:translateY(-140%);will-change:transform;touch-action:none;}
+  .drafttoast .dh{width:34px;height:4px;background:rgba(255,255,255,.3);border-radius:2px;margin:0 auto 9px;}
+  .drafttoast .row2{display:flex;align-items:center;gap:12px;}
+  .drafttoast .ic{width:32px;height:32px;border-radius:10px;background:rgba(255,159,10,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .drafttoast .ic svg{width:16px;height:16px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .drafttoast .b{flex:1;min-width:0;}
+  .drafttoast .t1{font-size:14px;font-weight:600;color:#fff;letter-spacing:-.015em;}
+  .drafttoast .t2{font-size:12px;color:rgba(255,255,255,.6);margin-top:1px;}
+  .drafttoast .go{font-size:13.5px;font-weight:600;color:#fff;background:var(--blue);padding:8px 13px;border-radius:11px;flex-shrink:0;}
+
+  .scanbelow{position:absolute;inset:0;z-index:8;overflow-y:auto;background:var(--bg);
+    padding:var(--view-top) 0 var(--view-bottom);scrollbar-width:none;}
+  .scanbelow::-webkit-scrollbar{display:none;}
+  .scanbelow[hidden]{display:none;}
+
+  /* ── live capture: the real viewfinder ──
+     The feed sits under an overlay canvas that draws corner brackets on the
+     detected quad. Both are object-fit: cover, and the overlay maps through the
+     same cover transform — a letterbox mapping would put the brackets a few
+     pixels off the page, which reads as the detector being wrong when it isn't. */
+  #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050506;}
+  #scanOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  .scanhero[data-camera="off"] #scanVideo,.scanhero[data-camera="off"] #scanOverlay{display:none;}
+  /* The real overlay draws the brackets on the detected page, so the static
+     placeholder frame and its sweep come off the moment the camera is live —
+     two sets of brackets, one of them fixed to the viewport, would read as
+     the detector being wrong. */
+  .scanhero[data-camera="on"] .feed{display:none;}
+  /* Before the camera is live there is nothing to point at, so the one line of
+     text moves to the middle and says what is actually happening. */
+  .scanhero[data-camera="off"] .scanhint{top:50%;transform:translateY(-50%);}
+
+  /* The gate speaks in one line, and amber is the whole vocabulary of attention
+     here. Red belongs to the teacher's pen and to signing out, nowhere else. */
+  .scanhint{transition:color .12s linear;}
+  .scanhint[data-blocking]{color:var(--amber);}
+
+  /* Top-left, beside the drafts slot. The appearance toggle owns the shell's
+     top-right corner, and two controls in one corner is one control nobody
+     can hit. The offset is fixed rather than conditional on the drafts icon
+     being visible, so this chip does not jump when a draft appears. */
+  .autotoggle{position:absolute;top:16px;left:62px;display:flex;align-items:center;gap:7px;
+    padding:7px 11px;border-radius:16px;background:rgba(255,255,255,.14);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    border:.5px solid rgba(255,255,255,.22);color:#fff;font-size:12px;font-weight:600;
+    letter-spacing:-.01em;cursor:pointer;will-change:transform;}
+  .autotoggle .dot{width:7px;height:7px;border-radius:4px;background:rgba(255,255,255,.35);}
+  .autotoggle.on .dot{background:var(--green);}
+
+  /* ── the page tray ──
+     A booklet is 15-20 pages. The tray is where they accumulate, reorder and get
+     retaken, and where a page that failed its quality gate is flagged while the
+     paper is still physically in front of the student. */
+  .tray{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 222px);z-index:6;
+    padding:0 var(--gutter);}
+  .tray .trayscroll{padding-bottom:10px;}
+  /* The strip floats over the viewfinder, so its text is on camera, not on the
+     app's own background — it takes a light colour rather than the muted one
+     that reads correctly against a surface. */
+  .tray .traybar .cnt{color:rgba(255,255,255,.72);}
+  .trayscroll{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
+  .trayscroll::-webkit-scrollbar{display:none;}
+  .traypage{position:relative;width:62px;height:82px;border-radius:10px;flex-shrink:0;overflow:hidden;
+    background:var(--surface-sunk);border:.5px solid var(--hairline);cursor:pointer;will-change:transform;}
+  .traypage img{width:100%;height:100%;object-fit:cover;display:block;}
+  .traypage .n{position:absolute;left:5px;bottom:5px;font-size:10.5px;font-weight:700;color:#fff;
+    background:rgba(0,0,0,.55);padding:1.5px 5px;border-radius:5px;}
+  .traypage[data-quality="warn"]{border-color:rgba(255,159,10,.55);border-width:1.5px;}
+  .traypage[data-quality="fail"]{border-color:var(--amber);border-width:2px;}
+  .traypage .flag{position:absolute;top:5px;right:5px;width:16px;height:16px;border-radius:8px;
+    background:var(--amber);display:none;align-items:center;justify-content:center;}
+  .traypage[data-quality="warn"] .flag,.traypage[data-quality="fail"] .flag{display:flex;}
+  .traypage .flag svg{width:9px;height:9px;stroke:#fff;stroke-width:2.6;fill:none;stroke-linecap:round;}
+  .traybar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px;}
+  .traybar .cnt{font-size:12.5px;color:var(--label-3);font-weight:500;}
+  .traybar .btn{padding:11px 18px;font-size:14.5px;border-radius:14px;}
+
+  /* ── review: the reconciliation banner ──
+     Plain numbers, and a framing that puts the student in the position of
+     checking the scan rather than auditing their teacher. */
+  .delta{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:18px;
+    background:rgba(255,159,10,.11);border:.5px solid rgba(255,159,10,.28);}
+  .delta .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .delta .t2{font-size:13px;color:var(--label-2);margin-top:4px;line-height:1.45;}
+  .delta .sums{display:flex;gap:18px;margin-top:10px;}
+  .delta .sums div{font-size:12.5px;color:var(--label-3);font-weight:500;}
+  .delta .sums b{display:block;font-size:19px;font-weight:600;color:var(--label);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-top:2px;}
+
+  /* ── confidence, as form rather than colour ──
+     Solid fill, light fill with a border, dashed outline. Survives greyscale and
+     colourblindness, and students screenshot constantly. */
+  .conf{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;letter-spacing:-.005em;}
+  .conf.confirmed{background:var(--label);color:var(--bg);}
+  .conf.likely{background:var(--surface-sunk);border:.5px solid var(--hairline);color:var(--label-2);}
+  .conf.unsure{background:transparent;border:1px dashed var(--label-3);color:var(--label-2);}
+
+  /* ── review: a field against its own crop ──
+     Only possible because every extracted value carries the box it was read
+     from. The crop is the argument; the value is the claim. */
+  .qcard{margin:12px var(--gutter) 0;border-radius:var(--r-card);background:var(--surface);
+    border:.5px solid var(--hairline);overflow:hidden;}
+  /* Keyed off an attribute rather than a class: .attention already means
+     something else in this file, and a second meaning for one name is how
+     two components quietly break each other. */
+  .qcard[data-attention]{border-color:rgba(255,159,10,.34);}
+  .qhead{display:flex;align-items:center;gap:9px;padding:14px 16px 10px;}
+  .qhead .t1{font-size:15.5px;font-weight:600;letter-spacing:-.018em;flex:1;}
+  .qmarks{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+  .qmarks small{font-size:12px;color:var(--label-3);font-weight:500;margin-left:2px;}
+  .qcrop{margin:0 16px;border-radius:14px;overflow:hidden;background:var(--surface-sunk);
+    border:.5px solid var(--hairline);max-height:200px;display:flex;align-items:center;justify-content:center;}
+  .qcrop img{width:100%;display:block;object-fit:cover;}
+  .qcrop .missing{padding:26px 16px;font-size:13px;color:var(--label-3);text-align:center;line-height:1.5;}
+  .qfield{padding:11px 16px;border-top:.5px solid var(--hairline);margin-top:12px;}
+  .qfield .k{font-size:11.5px;color:var(--label-3);font-weight:600;letter-spacing:.01em;text-transform:uppercase;}
+  .qfield .v{font-size:14.5px;margin-top:3px;line-height:1.5;color:var(--label);}
+  .qfield .v.empty{color:var(--label-3);}
+  .qacts{display:flex;gap:8px;padding:12px 16px 14px;flex-wrap:wrap;}
+  .qact{font-size:13px;font-weight:600;padding:8px 13px;border-radius:11px;background:var(--surface-sunk);
+    color:var(--label);cursor:pointer;will-change:transform;}
+  .qact.accent{background:rgba(58,134,255,.14);color:var(--blue);}
+  .qalts{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 12px;}
+  .qalt{font-size:14px;font-weight:600;padding:9px 14px;border-radius:12px;background:var(--surface-sunk);
+    font-variant-numeric:tabular-nums;cursor:pointer;will-change:transform;}
+  .qalt.on{background:var(--blue);color:#fff;}
+
+  .bulkrow{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);
+    display:flex;align-items:center;gap:12px;}
+  .bulkrow .b{flex:1;min-width:0;}
+  .bulkrow .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
+  .bulkrow .t2{font-size:12.5px;color:var(--label-3);margin-top:3px;line-height:1.4;}
+  .bulkrow .qact{flex-shrink:0;}
+  /* Still waiting on the student, so it does not wear the colour of a finished
+     action. It stays live: tapping it says what is left. */
+  .btn.primary[data-waiting]{background:var(--surface-sunk);color:var(--label-2);box-shadow:none;}
+
+  /* ── cause colours: seven hues of equal weight, never a severity ramp ── */
+  .cause{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;}
+  .cause .sw{width:9px;height:9px;border-radius:5px;background:var(--c);}
+
+  /* ── fullscreen paper review ── */
+  .reviewsheet{position:absolute;inset:0;z-index:55;background:var(--bg);transform:translateX(100%);will-change:transform;display:flex;flex-direction:column;transition:transform .42s cubic-bezier(.32,.72,0,1);}
+  .reviewsheet.open{transform:translateX(0);}
+  .rvhead{padding-top:calc(var(--top-inset) + 10px);height:calc(var(--top-inset) + 48px);display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:16px;flex-shrink:0;border-bottom:.5px solid var(--hairline);}
+  .rvback{width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;background:var(--surface-sunk);cursor:pointer;will-change:transform;}
+  .rvback svg{width:16px;height:16px;}
+  .rvtitle{font-size:15px;font-weight:600;letter-spacing:-.015em;}
+  .rvsave{font-size:15px;font-weight:600;color:var(--blue);cursor:pointer;will-change:transform;}
+  .rvscroll{flex:1;overflow-y:auto;padding-bottom:40px;scrollbar-width:none;}
+  .rvscroll::-webkit-scrollbar{display:none;}
+  .rvcrop{margin:16px 18px 0;height:230px;border-radius:20px;background:var(--surface-sunk);border:.5px solid var(--hairline);position:relative;overflow:hidden;padding:20px;}
+  .rvcrop .ln{position:absolute;left:20px;right:20px;height:2px;border-radius:1px;background:var(--label-3);opacity:.3;}
+  .rvzoom{position:absolute;bottom:12px;right:14px;font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.45);padding:4px 9px;border-radius:8px;}
+  .fval{font-size:15px;color:var(--label-2);font-weight:500;letter-spacing:-.01em;}
+
+  .proc{padding:18px;}
+  .proc .hd{font-size:15.5px;font-weight:600;letter-spacing:-.018em;margin-bottom:3px;}
+  .proc .sub{font-size:13px;color:var(--label-3);margin-bottom:16px;}
+  .pline{display:flex;align-items:center;gap:11px;padding:9px 0;font-size:14px;}
+  .pline .st{width:18px;height:18px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .pline .st.done{background:var(--green);}
+  .pline .st.done svg{width:10px;height:10px;stroke:#fff;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .pline .st.now{border:2px solid var(--blue);}
+  .pline .st.wait{border:2px solid var(--hairline);}
+  .pline .lb{flex:1;color:var(--label-2);letter-spacing:-.01em;}
+  .pline.now .lb{color:var(--label);font-weight:500;}
+  .skel{height:11px;border-radius:5px;background:linear-gradient(90deg,var(--surface-sunk) 25%,rgba(140,140,150,.16) 50%,var(--surface-sunk) 75%);background-size:200% 100%;animation:sk 1.5s linear infinite;}
+  @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* ── Home-only: insight card / attention / scan cta ── */
+  .insight{margin-top:18px;padding:clamp(17px,4.6vw,22px) clamp(17px,4.6vw,22px) 6px;}
+  .chips{display:flex;gap:7px;margin-bottom:12px;}
+  .chip{font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;letter-spacing:.005em;}
+  .chip.n{background:var(--surface-sunk);color:var(--label-2);}
+  .chip.conf-likely{background:rgba(255,159,10,.16);color:var(--amber);}
+  .chip.conf-confirmed{background:rgba(48,209,88,.16);color:var(--green);}
+  .insight .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.32;}
+  .insight .line em{font-style:normal;color:var(--blue);}
+  .disclose{margin-top:14px;border-top:.5px solid var(--hairline);}
+  .disclose .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;cursor:pointer;font-size:14px;font-weight:500;color:var(--label-2);}
+  .disclose .toggle .car{width:11px;height:11px;transition:transform .32s var(--spring);opacity:.5;}
+  .disclose.open .toggle .car{transform:rotate(90deg);}
+  .disclose .panel{overflow:hidden;height:0;transition:height .38s var(--spring);}
+  .disclose .inner{padding-bottom:16px;}
+  .dgroup{margin-bottom:13px;}
+  .dgroup:last-child{margin-bottom:0;}
+  .dgroup .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);margin-bottom:4px;}
+  .dgroup .v{font-size:14px;line-height:1.5;color:var(--label-2);}
+  .attention{margin-top:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;}
+  .attention .ic{width:34px;height:34px;border-radius:11px;flex-shrink:0;background:rgba(255,159,10,.16);display:flex;align-items:center;justify-content:center;}
+  .attention .ic svg{width:17px;height:17px;fill:none;stroke:var(--amber);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .attention .b{flex:1;}
+  .attention .b .t1{font-size:15.5px;font-weight:500;letter-spacing:-.015em;}
+  .attention .b .t2{font-size:13px;color:var(--label-3);margin-top:2px;}
+  .scanbtn{margin:14px var(--gutter) 0;padding:16px;border-radius:20px;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--blue);color:#fff;font-size:16px;font-weight:600;letter-spacing:-.015em;box-shadow:0 8px 20px rgba(58,134,255,.28);will-change:transform;cursor:pointer;}
+  .scanbtn svg{width:19px;height:19px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* ── Settings-only ── */
+  .srow{display:flex;align-items:center;gap:13px;padding:13px 18px;position:relative;will-change:transform;}
+  .srow + .srow::before{content:"";position:absolute;top:0;left:57px;right:0;height:.5px;background:var(--hairline);}
+  .srow.noicon + .srow.noicon::before{left:18px;}
+  .srow .ic{width:29px;height:29px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .srow .ic svg{width:16px;height:16px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .srow .lbl{flex:1;font-size:16px;font-weight:400;letter-spacing:-.015em;}
+  .srow .lbl small{display:block;font-size:12.5px;color:var(--label-3);margin-top:2px;letter-spacing:-.005em;}
+  .srow .aux{font-size:15.5px;color:var(--label-3);letter-spacing:-.015em;}
+  .locked{font-size:12px;font-weight:600;color:var(--label-3);background:var(--surface-sunk);padding:3px 8px;border-radius:7px;}
+  .sprofile{margin:16px var(--gutter) 0;padding:20px;display:flex;align-items:center;gap:15px;border-radius:var(--r-card);}
+  .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
+  .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
+  .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
+  .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
+  .seg button{border:none;background:transparent;padding:6px 11px;border-radius:9px;font-family:inherit;font-size:13px;font-weight:500;color:var(--label-2);cursor:pointer;transition:background .22s ease,color .22s ease;}
+  .seg button.on{background:var(--surface);color:var(--label);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:600;}
+  [data-theme="dark"] .seg button.on{background:#3A3A3E;}
+  .sw{width:56px;height:34px;position:relative;flex-shrink:0;cursor:pointer;}
+  .sw .tr{position:absolute;inset:0;border-radius:17px;background:#3A3A3E;transition:background .32s ease;}
+  [data-theme="light"] .sw .tr{background:#D9D9DE;}
+  .sw.on .tr{background:var(--green);}
+  .sw .th{position:absolute;top:3px;left:3px;width:28px;height:28px;border-radius:14px;background:#fff;
+    box-shadow:0 3px 8px rgba(0,0,0,.32),0 1px 2px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.95);
+    will-change:transform;display:flex;align-items:center;justify-content:center;}
+  .sw .gI{width:2px;height:12px;border-radius:1px;background:var(--green);opacity:0;transition:opacity .18s ease .06s;}
+  .sw.on .gI{opacity:1;}
+  .sw .gO{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:9px;height:9px;
+    border:1.6px solid rgba(255,255,255,.5);border-radius:50%;opacity:1;transition:opacity .18s ease;}
+  [data-theme="light"] .sw .gO{border-color:rgba(0,0,0,.26);}
+  .sw.on .gO{opacity:0;}
+  .sfoot{text-align:center;color:var(--label-3);font-size:12.5px;margin:24px 0 0;line-height:1.6;}
+
+  /* ── warning sheet ── */
+  .scrim{position:absolute;inset:0;z-index:50;background:var(--scrim);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .3s ease;}
+  .scrim.on{opacity:1;pointer-events:auto;}
+  .sheet{position:absolute;left:8px;right:8px;bottom:max(8px,var(--bot-inset));z-index:51;background:var(--sheet-bg);border-radius:32px;padding:24px 22px 18px;transform:translateY(115%);will-change:transform;box-shadow:0 -10px 50px rgba(0,0,0,.4);border:.5px solid var(--hairline);
+    /* never taller than the shell — a landscape phone has ~390px to work with */
+    max-height:calc(100% - 16px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;}
+  .sheet::-webkit-scrollbar{display:none;}
+  .sheet .warnic{width:44px;height:44px;border-radius:14px;background:rgba(255,159,10,.16);display:flex;align-items:center;justify-content:center;margin-bottom:15px;}
+  .sheet .warnic svg{width:22px;height:22px;fill:none;stroke:var(--amber);stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .sheet h4{margin:0 0 7px;font-size:21px;font-weight:700;letter-spacing:-.028em;line-height:1.2;}
+  .sheet .body{font-size:14.5px;line-height:1.5;color:var(--label-2);}
+  .sheet ul{margin:14px 0 0;padding:0;list-style:none;}
+  .sheet li{display:flex;gap:10px;font-size:14px;line-height:1.45;color:var(--label-2);padding:8px 0;border-top:.5px solid var(--hairline);}
+  .sheet li b{color:var(--label);font-weight:600;}
+  .sheet li .d{width:6px;height:6px;border-radius:3px;background:var(--amber);flex-shrink:0;margin-top:6px;}
+  .sheet .acts{margin-top:18px;display:flex;flex-direction:column;gap:9px;}
+
+  /* nav — one DOM, two orientations. Geometry comes from JS measurement. */
+  .tabdock{position:absolute;left:0;right:0;bottom:0;z-index:35;padding:0 13px var(--dock-pad);}
+  .tabbar{position:relative;padding:5px;border-radius:32px;overflow:hidden;background:var(--nav-bg);
+    backdrop-filter:blur(30px) saturate(2);-webkit-backdrop-filter:blur(30px) saturate(2);
+    box-shadow:var(--nav-shadow);transition:background .4s ease,box-shadow .4s ease;}
+  .tabbar .rim{position:absolute;inset:0;border-radius:32px;pointer-events:none;z-index:5;
+    border:.5px solid var(--nav-border);box-shadow:inset 0 1px 0 var(--nav-rim),inset 0 -1px 0 rgba(255,255,255,.08);}
+  .refractlayer{position:relative;display:flex;align-items:center;}
+  .pill{position:absolute;top:0;left:0;height:46px;border-radius:26px;background:var(--nav-pill);will-change:transform;transition:background .4s ease;}
+  .tab{flex:1;position:relative;z-index:1;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
+  .tab .lbl{display:none;}
+  .isec{min-width:0;}
+  .tab svg{width:24px;height:24px;fill:none;stroke:var(--nav-icon);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s ease,fill .25s ease;}
+  .tab.on svg{stroke:var(--nav-icon-on);}
+  .tab.on svg.solid{fill:var(--nav-icon-on);stroke:none;}
+  /* Not red: red is reserved for sign out, the one irreversible-feeling action
+     in the interface. A notification dot is an accent, not a rebuke. */
+  .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--blue);box-shadow:0 0 0 2px var(--nav-bg);}
+  .tab .pfp{width:25px;height:25px;border-radius:13px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#fff;transition:box-shadow .25s ease;}
+  .tab.on .pfp{box-shadow:0 0 0 2px var(--nav-icon-on);}
+  .lensglow{position:absolute;top:0;left:0;height:46px;border-radius:26px;pointer-events:none;z-index:3;
+    box-shadow:inset 0 1px 0 var(--nav-pill-rim),inset 0 -1px 0 rgba(255,255,255,.1),
+    inset 1px 0 0 rgba(255,255,255,.14),inset -1px 0 0 rgba(255,255,255,.14);
+    background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,0) 58%);will-change:transform;}
+
+  /* Appearance toggle: a glass icon button in the header rather than a floating
+     labelled pill, which read as leftover debug furniture. Shows the
+     destination state, the way iOS and macOS do. */
+  .themebtn{position:absolute;top:calc(var(--top-inset) + 9px);right:14px;z-index:41;
+    width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;
+    background:var(--nav-bg);backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);
+    border:.5px solid var(--nav-border);color:var(--label-2);cursor:pointer;
+    transition:color .25s ease,background .4s ease;}
+  .themebtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  [data-theme="dark"] .themebtn .ic-moon{display:none;}
+  [data-theme="light"] .themebtn .ic-sun{display:none;}
+
+  /* ══════════════ TABLET ≥768: nav becomes a left rail, content reflows ══════════════ */
+  @media (min-width:768px){
+    :root{--rail-w:76px;--view-bottom:clamp(30px,5vh,56px);}
+
+    .tabdock{top:0;bottom:0;left:0;right:auto;width:var(--rail-w);
+      padding:var(--gutter) 7px;display:flex;flex-direction:column;justify-content:center;}
+    .refractlayer{flex-direction:column;align-items:stretch;}
+    .tab{flex:0 0 auto;height:48px;}
+
+    .header{left:var(--rail-w);}
+    .view{left:var(--rail-w);--vmax:760px;}
+    .reviewsheet{left:var(--rail-w);}
+    .rvscroll{padding-inline:max(0px,calc((100% - var(--rail-w) - 760px) / 2));}
+    .themebtn{bottom:16px;right:16px;}
+
+    /* sheets centre inside the content area rather than spanning the rail */
+    .sheet{left:var(--rail-w);right:0;bottom:16px;
+      width:min(520px,calc(100% - var(--rail-w) - 2 * var(--gutter)));
+      margin-inline:auto;}
+
+    /* Home — hero insight + needs-attention side by side above recent scans */
+    #v0{--vmax:900px;}
+    .hgrid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+      gap:var(--gutter);align-items:start;padding:0 var(--gutter);margin-top:18px;}
+    .hgrid > .card{margin:0;}
+    .hgrid .insight{margin-top:0;}
+    .hgrid .attention{margin-top:0;}
+
+    /* Insights — cards into two columns */
+    #v1{--vmax:1100px;}
+    .igrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:2px var(--gutter);align-items:start;padding-inline:var(--gutter);}
+    .igrid .card,.igrid .list{margin-inline:0;}
+    .igrid .sectitle,.igrid .subnote{margin-inline:4px;}
+
+    /* Scan — viewfinder becomes a contained panel again. Filling the screen is
+       right on a phone held over a page and wrong on a desktop, where the page
+       is somewhere else entirely and the window is mostly empty room. */
+    #v2{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
+    .scanhero{position:relative;inset:auto;margin:0 var(--gutter);border-radius:var(--r-card);
+      height:clamp(360px,44vh,520px);min-height:0;}
+    .scanctrls{bottom:22px;}
+    .tray{position:static;margin:14px var(--gutter) 0;padding:0;}
+    .tray .traybar .cnt{color:var(--label-3);}
+    .scanbelow{position:static;padding:20px 0 0;background:none;overflow:visible;}
+
+    /* Library rows stay single-column — they're already dense. */
+  }
+
+  /* ≥1024: room for labels, so the rail earns them */
+  @media (min-width:1024px){
+    :root{--rail-w:216px;}
+    .tabdock{padding:var(--gutter) 12px;}
+    .tab{justify-content:flex-start;gap:13px;padding-left:15px;}
+    .tab .lbl{display:block;font-size:15px;font-weight:500;letter-spacing:-.015em;
+      color:var(--nav-icon);transition:color .25s ease;}
+    .tab.on .lbl{color:var(--nav-icon-on);font-weight:600;}
+    .tab svg,.tab .pfp{flex:0 0 auto;}
+    .tab .dot{top:13px;right:auto;left:33px;}
+  }
+
+  /* ══════════════ POINTER + KEYBOARD ══════════════
+     The prototype was touch-only, so on a real site every surface felt inert
+     under a cursor. Hover is gated behind a fine pointer so touch devices
+     don't get stuck in a hover state after a tap. Only genuinely interactive
+     rows respond — the [onclick] attribute selector keeps read-only settings
+     rows from advertising themselves as tappable. */
+  @media (hover:hover) and (pointer:fine){
+    .row,.cheap{cursor:pointer;}
+    .row:hover,.cheap:hover,.method:hover,.srow[onclick]:hover{background:var(--surface-sunk);}
+    .srow[onclick]{cursor:pointer;}
+    .fchip:hover:not(.active){border-color:var(--label-3);color:var(--label);}
+    .fchip.active:hover{filter:brightness(1.08);}
+    .btn:hover,.scanbtn:hover{filter:brightness(1.07);}
+    .tab:hover svg{stroke:var(--nav-icon-on);}
+    .tab:hover .lbl{color:var(--nav-icon-on);}
+    .themebtn:hover{color:var(--label);}
+    .sidebtn:hover,.draftsicon:hover,.shutter:hover{background:rgba(255,255,255,.24);}
+    .rvback:hover,.disclose .toggle:hover{color:var(--label);}
+    .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
+  }
+
+  /* ── disabled ──
+     The design system had no disabled state before onboarding needed one (the
+     verification button, while the adapter is mid-handoff). Deliberately built
+     from opacity and pointer-events alone: a greyed-out palette would mean a
+     new colour, and this project's whole position is that new colours are
+     decisions, not defaults. Reads correctly in both themes because it dims
+     whatever the button already was.
+
+     aria-disabled rather than the `disabled` attribute: these are divs, and a
+     div cannot carry it. Handlers must still check the attribute — CSS
+     pointer-events stops a click but not the Enter key. */
+  [aria-disabled="true"]{opacity:.45;pointer-events:none;cursor:default;}
+  .btn[aria-disabled="true"]{box-shadow:none;}
+
+  /* Visible only for keyboard users; the design's press states cover pointers. */
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px;}
+  .tab:focus-visible{outline-offset:-4px;}
+  .search input:focus-visible{outline:none;}
+
+  ::selection{background:rgba(58,134,255,.32);color:#fff;}
+
+  /* ── text size ──
+     Scales the typographic tokens rather than zooming the layout, so the nav
+     geometry the lens depends on stays exactly where it was measured. */
+  .row .t1,.cheap .t1,.method .t1{font-size:var(--fs-row,15.5px);}
+  .row .t2,.cheap .t2,.method .t2{font-size:var(--fs-row2,13px);}
+  .srow .lbl{font-size:var(--fs-lbl,16px);}
+  .srow .lbl small{font-size:calc(var(--fs-row2,13px) - .5px);}
+  .sheet .body,.estate p{font-size:var(--fs-body,15px);}
+
+  /* ── reduce motion ──
+     The in-app toggle mirrors the OS setting, since a student may want stillness
+     without changing their whole phone. */  [data-motion="reduce"] .skel{animation:none;}
+
+  /* ── app toast ── */
+  #appToast{position:absolute;left:10px;right:10px;top:calc(var(--top-inset) + 8px);z-index:60;
+    background:rgba(30,30,34,.82);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
+    border:.5px solid rgba(255,255,255,.16);border-radius:18px;padding:12px 15px;
+    transform:translateY(-160%);transition:transform .38s var(--spring);pointer-events:none;}
+  #appToast.show{transform:translateY(0);}
+  #appToast .t1{font-size:14px;font-weight:500;color:#fff;letter-spacing:-.01em;line-height:1.4;}
+  #appToast[data-tone="warn"]{border-color:rgba(255,159,10,.42);}
+  [data-theme="light"] #appToast{background:rgba(255,255,255,.9);border-color:rgba(60,60,67,.14);
+    box-shadow:0 10px 30px rgba(28,28,40,.18);}
+  [data-theme="light"] #appToast .t1{color:var(--label);}
+  @media (min-width:768px){#appToast{left:calc(var(--rail-w) + 16px);right:16px;max-width:520px;}}
+
+  /* ══════════════ ONBOARDING OVERLAY ══════════════
+     Its own surface rather than a view inside the app: there is no tab bar, no
+     header plate, and no student data to show yet. It borrows the tokens, the
+     springs and the press states, and adds the pieces below, which exist
+     nowhere else in the interface.
+
+     Two defaults are deliberately refused here. A percentage progress bar,
+     because a percentage implies a precision the branching flow doesn't have —
+     the rail names the phase instead. And a celebration at the end, because
+     the thing just completed is a parent complying with a consent law, not a
+     win. The single acknowledgment lands on the student's first screen, after
+     the work, which is where this design puts delight. */
+  #obroot{position:absolute;inset:0;z-index:70;background:var(--bg);overflow:hidden;
+    /* .view subtracts the rail from its own centring and offsets itself by it
+       at ≥768. There is no rail inside the overlay, so zero it or the column
+       sits off-centre. --view-bottom is the tab bar's clearance, which is
+       likewise absent here. */
+    --rail-w:0px;--view-bottom:clamp(24px,6vh,44px);
+    --ob-wash:.26;--ob-wash-2:.19;
+    /* One measured column, capped like a .view. Padding on #obroot cannot do
+       this: .obwrap is absolute, and inset:0 resolves against the padding box,
+       so the wrap spans the padding and the cap is ignored. The gutter is
+       carried per-element instead, and .obview reaches the same number through
+       .view's own --vmax centring so the head and the body stay flush.
+       Collapses to 0 below the cap, so no breakpoint is needed. */
+    --ob-side:max(0px,calc((100% - 620px) / 2));}
+  #obroot[hidden]{display:none;}
+  [data-theme="light"] #obroot{--ob-wash:.13;--ob-wash-2:.10;}
+
+  .obwrap{position:absolute;inset:0;display:flex;flex-direction:column;}
+  /* One wash, painted once and never animated. A gradient this large is the
+     most expensive thing on a budget Android GPU and this one is decoration,
+     so it gets a static paint and no compositing layer of its own. */
+  .obwrap::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;
+    height:min(46vh,380px);pointer-events:none;
+    background:
+      radial-gradient(120% 82% at 14% -10%,rgba(58,134,255,var(--ob-wash)),transparent 62%),
+      radial-gradient(92% 64% at 98% 2%,rgba(138,111,209,var(--ob-wash-2)),transparent 66%);}
+
+  /* header: back affordance + phase rail */
+  .obhead{position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;gap:13px;
+    padding:calc(var(--top-inset) + 18px) calc(var(--text-gutter) + var(--ob-side)) 0;}
+  .obback{width:33px;height:33px;margin-left:-3px;border-radius:17px;flex-shrink:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;will-change:transform;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);}
+  .obback svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;}
+  .obprog{flex:1;min-width:0;}
+  .obprog .segs{display:flex;gap:5px;}
+  .obprog .segs i{flex:1;height:3px;border-radius:2px;background:var(--surface-sunk);overflow:hidden;}
+  /* Animating width would be a layout animation. The fill is a full-width
+     child scaled on X instead, so the rail stays on the compositor. It is a
+     keyframe rather than a transition because each step replaces the markup,
+     and a transition has nothing to transition from. */
+  .obprog .segs i span{display:block;height:100%;border-radius:2px;background:var(--blue);transform:scaleX(0);}
+  .obprog .segs i.done span{transform:scaleX(1);background:var(--label-3);}
+  .obprog .segs i.now span{transform-origin:left center;animation:obfill .32s var(--spring) both;}
+  @keyframes obfill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  .obprog .ph{margin-top:8px;font-size:var(--fs-sec);font-weight:600;text-transform:uppercase;
+    letter-spacing:.055em;color:var(--label-3);}
+
+  /* step body */
+  .obview{position:relative;z-index:1;inset:auto;flex:1;min-height:0;
+    --vmax:620px;padding-top:clamp(10px,3vw,16px);}
+
+  /* Step entrance. Transform and opacity only, on the 200ms disclosure budget —
+     a step change is a disclosure. Children rise in a short stagger that caps
+     at five waves; past that it stops reading as arrival and starts reading as
+     a loading state. */
+  @keyframes obstep{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .obview > *{animation:obstep .26s var(--spring) both;}
+  .obview > :nth-child(1){animation-delay:.01s;}
+  .obview > :nth-child(2){animation-delay:.05s;}
+  .obview > :nth-child(3){animation-delay:.09s;}
+  .obview > :nth-child(4){animation-delay:.13s;}
+  .obview > :nth-child(n+5){animation-delay:.17s;}
+  /* Every moving part here is a keyframe with fill-mode both, so collapsing the
+     duration is not enough on its own: the delay still holds content at
+     opacity 0 through its whole stagger, and even at 0.01s there is a frame
+     before the first tick where the element is painted invisible. Removed
+     outright instead — with no animation the elements sit at their own style,
+     which is already the finished state. */
+  [data-motion="reduce"] .obview > *,
+  [data-motion="reduce"] .obprog .segs i.now span,
+  [data-motion="reduce"] .obseal{animation:none !important;}
+  [data-motion="reduce"] .obprog .segs i.now span{transform:scaleX(1);}
+
+  /* landing hero */
+  .obhero{padding:clamp(16px,5vw,26px) var(--text-gutter) 0;}
+  .obwordmark{display:flex;align-items:center;gap:9px;margin-bottom:clamp(22px,7.5vw,36px);}
+  .obwordmark .g{width:23px;height:23px;border-radius:7px;flex-shrink:0;
+    background:linear-gradient(155deg,#5AA0FF,#2E74E8);box-shadow:inset 0 1px 0 rgba(255,255,255,.3);
+    display:flex;align-items:center;justify-content:center;}
+  .obwordmark .g svg{width:13px;height:13px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  .obwordmark .n{font-size:14.5px;font-weight:600;letter-spacing:-.012em;}
+  .obhero h1{margin:0;font-size:clamp(29px,8.4vw,40px);font-weight:700;letter-spacing:-.042em;line-height:1.06;}
+  .obhero h1 em{font-style:normal;color:var(--blue);}
+  .obhero .sub{margin-top:12px;font-size:clamp(14.5px,4vw,16.5px);line-height:1.48;color:var(--label-2);max-width:30em;}
+
+  /* The seven cause hues, named. Categorical and equal-weight, exactly as they
+     are in the app — no bar lengths and no counts, because there is no student
+     data at this point and a chart shape here would be inventing some. */
+  .obspec{display:flex;flex-wrap:wrap;gap:6px;margin:0 var(--text-gutter);}
+  .obspec span{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 9px;border-radius:12px;
+    background:var(--surface);border:.5px solid var(--hairline);
+    font-size:12px;font-weight:500;color:var(--label-2);letter-spacing:-.005em;}
+  .obspec span::before{content:"";width:7px;height:7px;border-radius:2.5px;background:var(--c);flex-shrink:0;}
+
+  /* A labelled field. The account step used to borrow a settings row for the
+     label and the Library's search box for the input, which is most of why it
+     read as a preferences screen rather than a welcome. */
+  .obfields{margin:0 var(--gutter);display:flex;flex-direction:column;gap:11px;}
+  .obfield{background:var(--surface);border:.5px solid var(--hairline);border-radius:17px;
+    padding:12px 15px 13px;transition:border-color .12s ease;}
+  [data-theme="light"] .obfield{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obfield:focus-within{border-color:var(--blue);}
+  .obfield .k{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obfield input{display:block;width:100%;margin-top:5px;padding:0;background:none;border:none;outline:none;
+    font-family:inherit;font-size:16.5px;font-weight:500;color:var(--label);letter-spacing:-.02em;}
+  .obfield input::placeholder{color:var(--label-3);font-weight:400;letter-spacing:-.01em;}
+  .obfield .hint{margin-top:7px;font-size:12px;line-height:1.45;color:var(--label-3);}
+  /* The code field accepts a 6-digit code or a whole pasted link, so it cannot
+     be six boxes. Tabular figures and wide tracking give it the same
+     at-a-glance shape without breaking the paste. */
+  .obfield.obcode{text-align:center;}
+  .obfield.obcode input{font-size:clamp(21px,6vw,25px);font-weight:600;letter-spacing:.2em;text-align:center;}
+  .obfield.obcode input::placeholder{font-size:14.5px;font-weight:400;letter-spacing:-.01em;}
+
+  /* Provider sign-in, above the typed path on the account step.
+     Both buttons sit on our own neutral surface rather than each brand's button
+     colour: two saturated slabs stacked above the fields would outrank the
+     step's own primary action, and a black Apple button beside a white Google
+     one is two design languages arguing. Google's mark keeps its four colours,
+     which its brand terms require and which are not our palette making a
+     claim; Apple's is currentColor, which resolves to exactly the black-on-light
+     and white-on-dark pair Apple specifies. */
+  .obalt{margin:0 var(--gutter) 13px;display:flex;flex-direction:column;gap:9px;}
+  .obalt .btn{padding:14px;border-radius:18px;font-size:15.5px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label);}
+  [data-theme="light"] .obalt .btn{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obalt .btn svg{width:18px;height:18px;flex-shrink:0;}
+  .obalt .btn .apl{fill:currentColor;}
+  /* A hairline with "or" through it, not a heading. Neither path is the
+     recommended one — whichever the parent already has is the fast one. */
+  .obor{margin:0 var(--gutter) 13px;display:flex;align-items:center;gap:11px;
+    font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--label-3);}
+  .obor::before,.obor::after{content:"";flex:1;height:.5px;background:var(--hairline);}
+
+  /* A statement panel: the app talking, where .card is the app reporting. */
+  .obpanel{margin:0 var(--gutter);padding:clamp(17px,4.6vw,21px);border-radius:var(--r-card);
+    background:var(--surface);border:.5px solid var(--hairline);}
+  [data-theme="light"] .obpanel{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
+  .obpanel.tint{background:rgba(58,134,255,.09);border-color:rgba(58,134,255,.22);box-shadow:none;}
+  .obpanel .line{font-size:var(--fs-insight);font-weight:600;letter-spacing:-.024em;line-height:1.34;text-wrap:balance;}
+  .obpanel .line em{font-style:normal;color:var(--blue);}
+  .obpanel .body{margin-top:11px;font-size:13.5px;line-height:1.52;color:var(--label-2);}
+
+  /* One action group per step, so the primary button lands in the same place
+     every time and the spacing stops coming from a per-screen inline margin. */
+  .obfoot{margin:24px var(--gutter) 4px;display:flex;flex-direction:column;gap:2px;}
+  .obfoot .btn.primary{padding:16px;border-radius:19px;}
+
+  /* The only acknowledgment in the flow, and it lands after the work rather
+     than during it — 320ms, the recompute budget, spent once. */
+  .obseal{width:46px;height:46px;border-radius:16px;margin-bottom:16px;
+    background:rgba(48,209,88,.16);display:flex;align-items:center;justify-content:center;
+    animation:obseal .32s var(--spring) both;}
+  .obseal svg{width:23px;height:23px;fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  @keyframes obseal{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:none}}
+
+  /* Choice rows carry a chevron in the flow. In Scan a .method row is the whole
+     screen so it needs no affordance; inside a sequence of steps the interface
+     has to say which taps move you forward. */
+  #obroot .method .chev{opacity:.28;}
+  #obroot .list + .subnote{margin-top:11px;}
+  /* Cause hues stay on the landing motif, where they mean causes. Everywhere
+     else in the flow an icon is blue for accent, amber for attention or green
+     for something already settled — spending the cause palette on decoration
+     would weaken the one place it carries meaning.
+
+     The names are ic-* rather than bare letters because .method's own text
+     column is .b: a tone called "b" inherits flex:1 from it and the 38px icon
+     tile stretches across the row. */
+  #obroot .ic-b{background:rgba(58,134,255,.16);}
+  #obroot .ic-b svg{stroke:var(--blue);}
+  #obroot .ic-g{background:rgba(48,209,88,.16);}
+  #obroot .ic-g svg{stroke:var(--green);}
+  #obroot .ic-a{background:rgba(255,159,10,.16);}
+  #obroot .ic-a svg{stroke:var(--amber);}
+  #obroot .ic-n{background:var(--surface-sunk);}
+  #obroot .ic-n svg{stroke:var(--label-3);}
+  /* Headline to first block: .greet's 2px is tuned for a view that opens on a
+     dense card, not for a step that opens on a field or a statement. */
+  #obroot .greet{padding-bottom:14px;}
+  /* Subject chips wrap rather than scroll: a picker you can scroll past is a
+     picker where a subject gets missed. It is static here, so it also drops the
+     opaque strip the sticky version needs — that would cut across the wash. */
+  #obroot .filterbar{flex-wrap:wrap;overflow:visible;background:none;padding-right:var(--gutter);}
+  #obroot .filterbar::after{display:none;}
+  /* The dead ends carry their back affordance in the header, so the paragraph
+     is the last thing in the card and its button gap is spare. */
+  #obroot .estate p:last-child{margin-bottom:0;}
+  /* .chip.n's sunk grey turns muddy on the tinted panel. */
+  #obroot .obpanel.tint .chip.n{background:rgba(58,134,255,.16);color:var(--blue);}
+
+  @media (hover:hover) and (pointer:fine){
+    .obback:hover{color:var(--label);}
+    #obroot .method:hover .chev{opacity:.6;}
+  }
+  /* The global reduce-motion rule collapses transitions but not animations, and
+     every moving part of the flow is a keyframe. The OS setting alone has to be
+     enough — [data-motion] only covers the in-app toggle. */
+  @media (prefers-reduced-motion:reduce){
+    .obview > *,.obprog .segs i.now span,.obseal{animation:none !important;}
+    .obprog .segs i.now span{transform:scaleX(1);}
+  }
+
+  /* ── onboarding: the student half ──
+     Steps 1-6 are the parent's, and they are dense on purpose — a parent wants
+     to finish that, not savour it. Steps 7-8 are the student's first minute in
+     the app and are paced the opposite way: one idea per screen, one forward
+     action, and enough empty space that the four screens don't read as a queue
+     of tasks to get through.
+
+     There is deliberately no step indicator. "Nothing competing with the
+     forward action" rules out a second thing to look at, and a 1-of-4 counter
+     turns four calm screens into a progress bar — which is the gamified
+     pattern this project has already decided against.
+
+     Composed entirely from existing tokens: the h1 scale, the estate icon
+     treatment, the body size and the standard gutters. No new scale, no new
+     hue, no new radius. */
+  .view.calmview{padding-top:var(--top-inset);padding-bottom:0;}
+  .calm{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;
+    padding:0 var(--text-gutter);}
+  .calm .top{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(24px,7vh,56px) 0;}
+  .calm .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);
+    display:flex;align-items:center;justify-content:center;margin-bottom:clamp(20px,4vh,30px);}
+  .calm .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;
+    stroke-linecap:round;stroke-linejoin:round;}
+  .calm h2{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.036em;
+    line-height:1.1;text-wrap:balance;}
+  .calm p{margin:15px 0 0;font-size:var(--fs-body,15px);line-height:1.55;color:var(--label-2);
+    max-width:34ch;}
+  .calm .foot{flex:0 0 auto;padding-bottom:max(clamp(18px,4vh,34px),var(--bot-inset));}
+  .calm .foot .btn{margin:0;}
+  .calm .foot .btn.plain{margin-top:4px;}
+
+  /* ── Devanagari ──
+     The consent notice is available in Hindi because a notice a parent cannot
+     read has not informed them. Onest carries no Devanagari, so those
+     codepoints fall through to whatever face the device ships — Onest still
+     wins for the latin digits and punctuation inside the same string.
+
+     Deliberately not a webfont: choosing one is a design-system decision that
+     hasn't been taken, and this text has to render with no network. The metrics
+     will not match Onest exactly. Legibility of a legal notice beats matching. */
+  [lang="hi"]{font-family:'Onest',"Noto Sans Devanagari","Noto Sans","Nirmala UI",
+    "Mangal",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;}
+
+  /* Sheet extras used by the generic sheet opener. */
+  .sheet .sh-choices{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+  .sheet .sh-choice{padding:13px 15px;border-radius:15px;background:var(--surface-sunk);
+    font-size:15.5px;font-weight:500;letter-spacing:-.015em;cursor:pointer;will-change:transform;}
+  .sheet .sh-input{margin-top:16px;}
+  .sheet .sh-input input{width:100%;background:var(--field);border:none;outline:none;border-radius:14px;
+    padding:13px 14px;font-family:inherit;font-size:15.5px;color:var(--label);letter-spacing:-.015em;}
+
+  /* Stop single-word orphans in the headlines now that widths vary. */
+  .greet h1,.insight .line,.estate h4,.sheet h4,.proc .hd{text-wrap:balance;}
+
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
