@@ -175,6 +175,7 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
         glare: liveGate.glare,
         fill: liveGate.fill,
         page_long_edge: liveGate.pageLongEdge,
+        skew: liveGate.skew,
         steady: liveGate.steady,
         blocking: liveGate.blocking,
       } : null,

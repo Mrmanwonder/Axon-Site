@@ -75,6 +75,16 @@ export const QUALITY = {
   // the glossy ridge of a fresh ink stroke.
   GLARE_V: 0.94,
   GLARE_S: 0.12,
+  // Two different bars for the same measurement, on purpose. GLARE_WARN is
+  // the live gate's blocking line — asking for a retake costs nothing while
+  // the page is still in front of the student, so it fires early. GLARE_FAIL
+  // is where scorePage() actually marks the *submitted* page unreadable —
+  // forgiving a level between the two, because a page already through the
+  // gate and conditioned is a page that costs a trip back to the schoolbag
+  // to redo, and the honest line for "genuinely unreadable" sits higher than
+  // the honest line for "worth one more try while it's easy". Not a stale
+  // holdover; recalibrate both together against the golden set (§4.5 of the
+  // scan audit) rather than merging them into one number.
   GLARE_WARN: 0.005,
   GLARE_FAIL: 0.035,
   // Any single channel pinned at maximum. Distinct from glare: a page can clip

@@ -115,6 +115,25 @@ longer a defensible differentiator and the honest fallback is upload-first with
 a competent-but-modest in-app camera. Pick one; the failure case is claiming
 best-in-class capture on a stack that can't deliver it.
 
+**Resolved, 2026-08:** stays pure web, not a from-scratch rewrite either way.
+The root cause traced through a real production failure turned out to be
+narrower than "the container is wrong" — the shutter was grabbing a
+compressed video frame via canvas instead of a real photographic still, with
+no re-validation between the live gate saying "go" and the frame actually
+submitted. `capture.js` now takes the real still `ImageCapture.takePhoto()`
+offers where the platform has it (Chromium/Android), with the old canvas
+grab as a graded fallback (settle delay added, since that path had none) —
+this closes most of the gap the Capacitor recommendation above was reaching
+for, at a fraction of the cost of a rewrite. iOS Safari does not implement
+`ImageCapture.takePhoto()` as of this writing and stays on the canvas-grab
+path. Capture path is now recorded per page (`conditioning_meta.capture_path`),
+so this is revisited with real numbers rather than argued again from
+scratch: if production data shows iOS capture quality still meaningfully
+lagging Android after this change, that is the trigger to bring Capacitor +
+`VNDocumentCameraViewController` back for iOS specifically — a scoped,
+evidence-driven decision about one platform's capture step, not the whole
+container question reopened.
+
 ### Upload
 
 Stays, permanently, as a first-class path — not a fallback. Gallery, files, and
