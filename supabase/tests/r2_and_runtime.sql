@@ -209,7 +209,7 @@ begin
                     format('%s swept', v_swept));
   perform public._t('and the failure is worded for the student',
                     (select status_reason from public.extraction_run
-                      where id = 'aaaaaaaa-0000-4000-8000-000000000011') like '%try again%');
+                      where id = 'aaaaaaaa-0000-4000-8000-000000000011') ilike '%again%');
 end $$;
 
 do $$
@@ -223,6 +223,68 @@ begin
   select private.sweep_stuck_runs() into v_swept;
   perform public._t('a run waiting on the student is never swept', v_swept = 0,
                     format('%s swept', v_swept));
+end $$;
+
+-- ── a sweep never claims data loss when the pages are actually stored ──────
+-- The bug a production trace caught: a page fully conditioned, uploaded and
+-- persisted is not "nothing was saved" just because a sweep failed the run
+-- around it. Paper A above no longer exists at this point in the file (the
+-- r2_deletion tests deleted it on purpose), so this is its own paper and
+-- page, on student A's still-live guardian.
+
+insert into public.paper (id, student_id, type, tier, date_taken, subject) values
+ ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-03','Physics');
+
+insert into public.paper_page (id, paper_id, student_id, page_number, source_kind, status,
+                               r2_bucket, r2_key, mask_key, original_key, preprocess_version)
+values ('aaaaaaaa-0000-4000-8000-000000000006','aaaaaaaa-0000-4000-8000-000000000005',
+        'aaaaaaaa-0000-4000-8000-000000000002',1,'upload','stored','derived',
+        'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-000000000005/page/1-Zm9vYmFyYmF6cXV4Cg.webp',
+        'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-000000000005/mask/1-Zm9vYmFyYmF6cXV4Cg.png',
+        'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-000000000005/raw/1-Zm9vYmFyYmF6cXV4Cg.heic',
+        'v2');
+
+insert into public.extraction_run (id, paper_id, student_id, status, pipeline_version,
+                                   started_at, heartbeat_at)
+values ('aaaaaaaa-0000-4000-8000-000000000012','aaaaaaaa-0000-4000-8000-000000000005',
+        'aaaaaaaa-0000-4000-8000-000000000002','content','1.0.0',
+        now() - interval '1 hour', null);
+
+do $$
+declare v_reason text;
+begin
+  perform private.sweep_stuck_runs();
+  select status_reason into v_reason from public.extraction_run
+   where id = 'aaaaaaaa-0000-4000-8000-000000000012';
+  perform public._t('a stuck run over a paper with stored pages never says nothing was saved',
+                    coalesce(v_reason, '') !~* 'nothing was saved|lost', coalesce(v_reason, '<null>'));
+  perform public._t('and says the pages are kept',
+                    coalesce(v_reason, '') ~* 'kept', coalesce(v_reason, '<null>'));
+end $$;
+
+insert into public.extraction_run (id, paper_id, student_id, status, pipeline_version)
+values ('aaaaaaaa-0000-4000-8000-000000000013','aaaaaaaa-0000-4000-8000-000000000005',
+        'aaaaaaaa-0000-4000-8000-000000000002','structure','1.0.0');
+
+do $$
+declare v_reason text; v_swept integer;
+begin
+  perform public.pgmq_send('axon_structure',
+    jsonb_build_object('run_id', 'aaaaaaaa-0000-4000-8000-000000000013'));
+  -- Five reads (the dead-letter threshold's default) to run read_ct up without
+  -- waiting out a real visibility timeout.
+  for i in 1..5 loop perform public.pgmq_read('axon_structure', 0, 1); end loop;
+
+  select private.sweep_dead_letters() into v_swept;
+  perform public._t('a dead-lettered message over a paper with stored pages is swept',
+                    v_swept >= 1, format('%s swept', v_swept));
+
+  select status_reason into v_reason from public.extraction_run
+   where id = 'aaaaaaaa-0000-4000-8000-000000000013';
+  perform public._t('and its failure never says nothing was saved either',
+                    coalesce(v_reason, '') !~* 'nothing was saved|lost', coalesce(v_reason, '<null>'));
+  perform public._t('and it too says the pages are kept',
+                    coalesce(v_reason, '') ~* 'kept', coalesce(v_reason, '<null>'));
 end $$;
 
 -- ── the queues exist ───────────────────────────────────────────────────────

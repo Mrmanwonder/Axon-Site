@@ -297,6 +297,7 @@ Three suites, all runnable without a Supabase project or an API key:
 ```bash
 psql -d axon -f supabase/local/shim.sql     # then apply migrations/, then tests/
 deno test --allow-env supabase/functions/_shared/pipeline_test.ts
+deno test --allow-env supabase/functions/_shared/worker_test.ts
 node --test harness/metrics.test.mjs
 node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
 npm test                                    # bench/golden.test.mjs + harness/metrics.test.mjs

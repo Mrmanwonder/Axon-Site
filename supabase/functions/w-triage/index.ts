@@ -9,7 +9,7 @@
 // found here rather than rediscovered per page, and the paper is downgraded a
 // confidence tier from that point.
 
-import { failRun, type RouteOverride, serveWorker } from '../_shared/worker.ts';
+import { failRun, failRunHonestly, type RouteOverride, serveWorker } from '../_shared/worker.ts';
 import { callModel } from '../_shared/openrouter.ts';
 import { presignGet } from '../_shared/r2.ts';
 import { QUALITY } from '../_shared/contract.ts';
@@ -161,5 +161,12 @@ serveWorker(async ({ sb, msg, beat }) => {
 
   return { detail: { classification: parsed.classification, pages: allPages?.length ?? 0 } };
 }, async ({ sb, msg }) => {
-  await failRun(sb, msg.run_id, 'We could not tell what this document is. Nothing was saved — try again.');
+  // This is the catch-all for anything handle() threw that wasn't the
+  // specific "no pages" case above — a model timeout, a malformed response,
+  // a network blip talking to OpenRouter. None of those mean the photo was
+  // lost: by this point the page already conditioned client-side, uploaded to
+  // R2 and landed in paper_page with a real r2_key, which is what let
+  // paper-submit create this run in the first place. Saying "nothing was
+  // saved" here was simply false in the common case — checked, not assumed.
+  await failRunHonestly(sb, msg.run_id, 'checking this document');
 });
