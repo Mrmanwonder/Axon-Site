@@ -6,15 +6,23 @@
 // order actually holds — in particular that no question is explained before its
 // mark has survived reconciliation.
 //
+// Stages 3 to 8 run on Cloudflare (`mastery-*`, behind the `mastery-api` Worker)
+// rather than as Supabase Edge Functions — a sixteen-page booklet's structure
+// and content passes do not fit inside Supabase's 2-second CPU cap, and that is
+// the whole reason this backend exists. Once `paper-submit` hands a run to that
+// queue, this module has nothing left to call — it watches `extraction_run.status`
+// change underneath it and narrates what it sees.
+//
 // Progress is reported per page and by name. "Reading page 3 of 6" tells someone
 // waiting on a 4G connection that something is happening and roughly how much is
 // left; a spinner tells them nothing, and a generic bar tells them something
 // false. There is no bar and no spinner anywhere in here.
 
-import { createPaper, uploadScannedPage } from '../papers.js';
+import { sb } from '../supabase.js';
+import { createPaper, tierForType, uploadScannedPage } from '../papers.js';
 import { processPage, makeProxy } from './device.js';
 import { addPage, markUploaded, pendingPages, saveDraft } from './drafts.js';
-import { contentPass, explainQuestion, finalize, pool, structurePass } from './functions.js';
+import { pool, reviewComplete, submitPaper } from './functions.js';
 import { CAPTURE } from './contract.js';
 
 /**
@@ -31,39 +39,92 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
     throw new Error(`A paper can hold ${CAPTURE.MAX_PAGES} pages. Start a second one for the rest.`);
   }
 
-  if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing)) {
-    throw new Error('That page is not in this booklet any more.');
-  }
+if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing)) {
+  throw new Error('That page is not in this booklet any more.');
+}
 
-  const pageNumber = replacing ?? draft.pages.length + 1;
+const pageNumber = replacing ?? draft.pages.length + 1;
   const processed = await processPage(bitmap, { quad, pageNumber });
   const proxy = await makeProxy(processed.blob);
 
-  const page = {
-    blob: processed.blob,
-    // Computed from the decoded pixels before the page was encoded, which is the
-    // whole reason it exists: a faint thin stroke the lossy page loses is still
-    // at full strength here. See bench/README.md.
-    mask: processed.mask,
-    proxy,
-    width: processed.width,
-    height: processed.height,
-    quality: processed.quality,
-    meta: { ...processed.meta, coverage: processed.coverage },
-    teacher_marks: processed.teacher_marks,
-    margin_band: processed.margin_band,
-    layer_fallback: processed.layer_fallback,
-  };
+const page = {
+  blob: processed.blob,
+  // Computed from the decoded pixels before the page was encoded, which is the
+  // whole reason it exists: a faint thin stroke the lossy page loses is still
+  // at full strength here. See bench/README.md.
+  mask: processed.mask,
+  proxy,
+  width: processed.width,
+  height: processed.height,
+  quality: processed.quality,
+  meta: { ...processed.meta, coverage: processed.coverage },
+  teacher_marks: processed.teacher_marks,
+  margin_band: processed.margin_band,
+  layer_fallback: processed.layer_fallback,
+};
 
-  if (replacing !== null) {
-    draft.pages = draft.pages.map((p) => (p.page_number === replacing
-      ? { ...p, ...page, page_number: replacing, uploaded: false } : p));
-    await saveDraft(draft);
-  } else {
-    await addPage(draft, page);
+if (replacing !== null) {
+  draft.pages = draft.pages.map((p) => (p.page_number === replacing
+                                        ? { ...p, ...page, page_number: replacing, uploaded: false } : p));
+  await saveDraft(draft);
+} else {
+  await addPage(draft, page);
+}
+
+return { draft, page: draft.pages.find((p) => p.page_number === pageNumber) };
+}
+
+// extraction_status, in order. Everything before 'needs_review' is server work
+// this module only watches; 'needs_review' is where it hands control to the
+// student, and 'rejected'/'failed' are the ways it can end before that.
+const STAGE_FOR_STATUS = {
+  queued: 'structure',
+  triaging: 'structure',
+  structure: 'structure',
+  content: 'content',
+  attribution: 'content',
+  reconciliation: 'reconcile',
+  adjudicating: 'reconcile',
+};
+
+const MESSAGE_FOR_STATUS = {
+  queued: 'Waiting to start',
+  triaging: 'Checking this is a marked paper',
+  structure: 'Finding the questions',
+  content: 'Reading the answers and the marking',
+  attribution: 'Matching the marks to the questions',
+  reconciliation: 'Checking the marks add up',
+  adjudicating: 'Checking the marks add up',
+};
+
+const REVIEW_POLL_MS = 1500;
+const REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Watch a run until it reaches a state the student needs to act on, or a refusal. */
+async function waitForReview(runId, say) {
+  const startedAt = Date.now();
+  let lastStatus = null;
+
+for (;;) {
+  const { data: run, error } = await sb
+  .from('extraction_run')
+  .select('status, status_reason')
+  .eq('id', runId)
+  .single();
+  if (error) throw error;
+
+  if (run.status !== lastStatus) {
+    lastStatus = run.status;
+    say(STAGE_FOR_STATUS[run.status] ?? 'structure', MESSAGE_FOR_STATUS[run.status] ?? 'Working through the paper');
   }
 
-  return { draft, page: draft.pages.find((p) => p.page_number === pageNumber) };
+  if (['needs_review', 'rejected', 'failed', 'ready', 'committed'].includes(run.status)) return run;
+
+  if (Date.now() - startedAt > REVIEW_TIMEOUT_MS) {
+    throw new Error('This is taking longer than expected. Your pages are saved — check back on this paper shortly.');
+  }
+  await new Promise((resolve) => setTimeout(resolve, REVIEW_POLL_MS));
+}
 }
 
 /**
@@ -78,91 +139,98 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
 export async function ingest({ studentId, draft, paperType, dateTaken, onProgress }) {
   const say = (stage, message, extra = {}) => onProgress?.({ stage, message, ...extra });
 
-  if (!draft.pages.length) throw new Error('There are no pages to send yet.');
+if (!draft.pages.length) throw new Error('There are no pages to send yet.');
 
-  // ── the paper row ────────────────────────────────────────────────────────
+// ── the paper row ────────────────────────────────────────────────────────
 
-  let paperId = draft.paper_id;
-  if (!paperId) {
-    const paper = await createPaper({
-      studentId,
-      type: paperType ?? draft.paper_type,
-      dateTaken: dateTaken ?? new Date().toISOString().slice(0, 10),
-    });
-    paperId = paper.id;
-    draft.paper_id = paperId;
-    draft.paper_type = paper.type;
-    await saveDraft(draft);
-  }
+let paperId = draft.paper_id;
+  const type = paperType ?? draft.paper_type;
+  const taken = dateTaken ?? new Date().toISOString().slice(0, 10);
 
-  // ── stages 0-2 are already done; upload what has not landed ──────────────
+if (!paperId) {
+  const paper = await createPaper({ studentId, type, dateTaken: taken });
+  paperId = paper.id;
+  draft.paper_id = paperId;
+  draft.paper_type = paper.type;
+  await saveDraft(draft);
+}
 
-  const pending = pendingPages(draft);
+// A retry after a dropped connection must submit the same paper the same
+// way, or the server sees a second booklet rather than the rest of the
+// first one. One id, made once, kept for the life of the draft.
+if (!draft.idempotency_key) {
+  draft.idempotency_key = crypto.randomUUID();
+  await saveDraft(draft);
+}
+
+// ── stages 0-2 are already done; upload what has not landed ──────────────
+
+const pending = pendingPages(draft);
   const total = draft.pages.length;
   for (const page of pending) {
     say('upload', `Sending page ${page.page_number} of ${total}`, { page: page.page_number, of: total });
-    await uploadScannedPage({ studentId, paperId, page });
-    await markUploaded(draft, page.page_number);
+    const uploaded = await uploadScannedPage({ studentId, paperId, page });
+    await markUploaded(draft, page.page_number, uploaded);
   }
 
-  const pages = draft.pages.map((p) => ({
-    page_number: p.page_number,
-    storage_path: `${studentId}/${paperId}/${p.page_number}.jpg`,
-    proxy_path: p.proxy ? `${studentId}/${paperId}/${p.page_number}.proxy.jpg` : null,
-    mask_path: p.mask ? `${studentId}/${paperId}/${p.page_number}.mask.png` : null,
-    width: p.width,
-    height: p.height,
-    quality: p.quality,
-    conditioning_meta: p.meta,
-    layer_fallback: p.layer_fallback,
-    teacher_marks: p.teacher_marks,
-    margin_band: p.margin_band,
-  }));
+const pages = draft.pages.map((p) => ({
+  page_number: p.page_number,
+  source_kind: 'upload',
+  r2_bucket: p.r2_bucket,
+  r2_key: p.r2_key,
+  mask_key: p.mask_key ?? null,
+  bytes: p.bytes ?? p.blob?.size ?? null,
+  width: p.width,
+  height: p.height,
+  preprocess_version: p.meta?.preprocess_version,
+  quality_verdict: p.quality?.verdict,
+  quality_signals: p.quality?.signals,
+  conditioning_meta: p.meta,
+  layer_fallback: p.layer_fallback,
+  teacher_marks: p.teacher_marks,
+}));
 
-  // ── stage 3, and the run ─────────────────────────────────────────────────
+// ── hand the booklet to the pipeline ─────────────────────────────────────
 
-  say('structure', `Finding the questions across ${total} page${total === 1 ? '' : 's'}`);
-  const structure = await structurePass({ paper_id: paperId, pages });
-
-  if (structure.refused) {
-    // Not a graded exam paper, or nothing gradeable on it. The paper is kept and
-    // the refusal is said plainly — dutifully extracting a textbook page into
-    // the analytics would quietly degrade every insight downstream.
-    return { paperId, runId: structure.run_id, refused: true, message: structure.message };
-  }
-
-  const regions = structure.regions ?? [];
-  say('structure', `${regions.length} question${regions.length === 1 ? '' : 's'} found`, {
-    page: total, of: total,
+say('structure', `Finding the questions across ${total} page${total === 1 ? '' : 's'}`);
+  const submission = await submitPaper({
+    student_id: studentId,
+    type,
+    tier: tierForType(type),
+    date_taken: taken,
+    paper_id: paperId,
+    idempotency_key: draft.idempotency_key,
+    pages,
   });
 
-  // ── stage 4, per question ────────────────────────────────────────────────
+// ── watch it move through triage, structure, content and reconciliation ──
 
-  let read = 0;
-  const contentResults = await pool(regions, 3, async (region) => {
-    const result = await contentPass(structure.run_id, region.id);
-    read++;
-    say('content', `Reading question ${read} of ${regions.length}`, { page: read, of: regions.length });
-    return result;
-  });
+const run = await waitForReview(submission.run_id, say);
 
-  // ── stages 6 and 7 ───────────────────────────────────────────────────────
-
-  say('reconcile', 'Checking the marks add up');
-  const finished = await finalize(structure.run_id);
-
+if (run.status === 'rejected' || run.status === 'failed') {
   return {
     paperId,
-    runId: structure.run_id,
-    refused: false,
-    regions,
-    content: contentResults,
-    reconciliation: finished.reconciliation,
-    tier: finished.tier,
-    tier_note: finished.tier_note,
-    counts: finished.counts,
+    runId: submission.run_id,
+    refused: true,
+    message: run.status_reason || 'We could not read this paper. The pages are kept.',
   };
 }
+
+const { data: regions, error: regionsError } = await sb
+  .from('question_region')
+  .select('id, order_index, question_label')
+  .eq('run_id', submission.run_id)
+  .order('order_index');
+  if (regionsError) throw regionsError;
+
+say('reconcile', `${regions.length} question${regions.length === 1 ? '' : 's'} found`, { page: total, of: total });
+
+return { paperId, runId: submission.run_id, refused: false, regions: regions ?? [] };
+}
+
+const EXPLAIN_POLL_MS = 1500;
+const EXPLAIN_TIMEOUT_MS = 5 * 60 * 1000;
+const EXPLAIN_SETTLED = new Set(['done', 'skipped', 'failed']);
 
 /**
  * Stage 8, over a whole paper.
@@ -171,13 +239,40 @@ export async function ingest({ studentId, draft, paperType, dateTaken, onProgres
  * student should be reading question 1's explanation while question 9 is still
  * generating, and the paper is worth opening the moment the marks are in.
  * `onQuestion` fires per question as each lands.
+ *
+ * One call starts every explanation the server is willing to run
+ * (`review-complete` refuses if anything on the paper still needs the
+ * student's eyes); this then just watches `question_region.explain_status`
+ * per region so callers keep the same per-question landing they had before.
  */
 export async function explainPaper({ runId, regions, onQuestion }) {
-  let done = 0;
-  return pool(regions, 2, async (region) => {
-    const result = await explainQuestion(runId, region.id);
-    done++;
-    onQuestion?.({ ...result, region, done, of: regions.length });
-    return result;
-  });
+  if (!regions?.length) return [];
+
+await reviewComplete({ run_id: runId });
+
+const pending = new Map(regions.map((r) => [r.id, r]));
+  const startedAt = Date.now();
+  const results = [];
+
+while (pending.size) {
+  const { data: rows, error } = await sb
+  .from('question_region')
+  .select('id, explain_status')
+  .in('id', [...pending.keys()]);
+  if (error) throw error;
+
+  for (const row of rows ?? []) {
+    if (!EXPLAIN_SETTLED.has(row.explain_status)) continue;
+    const region = pending.get(row.id);
+    pending.delete(row.id);
+    results.push(row);
+    onQuestion?.({ regionId: row.id, status: row.explain_status, region, done: regions.length - pending.size, of: regions.length });
+  }
+
+  if (!pending.size) break;
+  if (Date.now() - startedAt > EXPLAIN_TIMEOUT_MS) break; // whatever landed stays visible; the rest catches up on refresh
+  await new Promise((resolve) => setTimeout(resolve, EXPLAIN_POLL_MS));
+}
+
+return results;
 }
