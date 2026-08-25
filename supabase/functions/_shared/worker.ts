@@ -15,6 +15,7 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { failure, isServiceCall, json, serviceClient } from './http.ts';
 import { ModelError } from './openrouter.ts';
+import { honestFailureReason } from './failure_messages.ts';
 
 export interface WorkerMessage {
   msg_id: number;
@@ -109,6 +110,31 @@ export function isRetryable(error: unknown): boolean {
 export async function failRun(sb: SupabaseClient, runId: string | undefined, reason: string): Promise<void> {
   if (!runId) return;
   await sb.rpc('run_advance', { p_run_id: runId, p_to: 'failed', p_reason: reason });
+}
+
+/**
+ * `failRun`, but for a catch-all handler that does not itself know whether
+ * this run's pages made it to storage. Checks `paper_page.r2_key` rather than
+ * assuming — see `honestFailureReason` in failure_messages.ts for why that
+ * distinction matters and why it's tested separately from this.
+ */
+export async function failRunHonestly(
+  sb: SupabaseClient,
+  runId: string | undefined,
+  stageDescription: string,
+): Promise<void> {
+  if (!runId) return;
+  const { data: run } = await sb.from('extraction_run').select('paper_id').eq('id', runId).maybeSingle();
+
+  let pagesStored = false;
+  if (run?.paper_id) {
+    const { count } = await sb.from('paper_page')
+      .select('id', { count: 'exact', head: true })
+      .eq('paper_id', run.paper_id).not('r2_key', 'is', null);
+    pagesStored = (count ?? 0) > 0;
+  }
+
+  await failRun(sb, runId, honestFailureReason(stageDescription, pagesStored));
 }
 
 /**

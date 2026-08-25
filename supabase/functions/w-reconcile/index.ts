@@ -10,7 +10,7 @@
 // temptation would live. A clean-looking paper that is quietly fictional is the
 // worst thing this system could produce.
 
-import { failRun, serveWorker } from '../_shared/worker.ts';
+import { failRun, failRunHonestly, serveWorker } from '../_shared/worker.ts';
 import { reconcile, type RegionMarks } from '../_shared/reconcile.ts';
 import { assess, numberingSoundness } from '../_shared/confidence.ts';
 
@@ -109,5 +109,9 @@ serveWorker(async ({ sb, msg }) => {
   await sb.rpc('run_advance', { p_run_id: runId, p_to: 'needs_review', p_reason: result.message });
   return { detail: { reconciled: true, questions: regions.length } };
 }, async ({ sb, msg }) => {
-  await failRun(sb, msg.run_id, 'We could not finish checking this paper\'s marks. Nothing was saved — try again.');
+  // By the time reconciliation runs, structure and content have already
+  // completed — the questions, marks and teacher remarks this catch-all might
+  // interrupt are already sitting in question_region. "Nothing was saved" was
+  // never true here; it's the arithmetic pass that failed, not the read.
+  await failRunHonestly(sb, msg.run_id, "checking this paper's marks");
 });
