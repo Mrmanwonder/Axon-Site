@@ -145,6 +145,7 @@ export function Err({ message }: { message?: string | null }) {
 
 export function Field({
   id, label, value, onChange, placeholder, hint, autoComplete, className, type = "text", onEnter,
+  inputMode, maxLength,
 }: {
   id: string;
   label: string;
@@ -156,6 +157,11 @@ export function Field({
   className?: string;
   type?: string;
   onEnter?: () => void;
+  /** "numeric" for the OTP field — the large numeric keypad iOS and Android
+      both show, and what makes `autoComplete="one-time-code"` actually take
+      effect on iOS Safari. */
+  inputMode?: "text" | "numeric" | "email" | "tel";
+  maxLength?: number;
 }) {
   return (
     <div className={"obfield " + (className ?? "")}>
@@ -166,6 +172,8 @@ export function Field({
         value={value}
         placeholder={placeholder}
         autoComplete={autoComplete ?? "off"}
+        inputMode={inputMode}
+        maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); } }}
       />

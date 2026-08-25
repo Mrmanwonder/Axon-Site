@@ -30,16 +30,17 @@
    have meant knowingly porting a bug.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import {
-  sb, sendOtp, verifyOtp, currentSession,
+  sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   getVerificationAdapter, listPurposes, recordConsent,
   BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
   PAPER_TYPES,
+  isPasskeySupported, signInWithPasskey, registerPasskey, PASSKEY_MESSAGE,
 } from "../data/modules";
 import type { Guardian, Student } from "../data/modules";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
@@ -48,8 +49,19 @@ import Switch from "../components/Switch";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
+  | "passkeyOffer"
   | "age" | "adult" | "verify" | "consent" | "plan" | "student"
   | "firstRun" | "firstUpload";
+
+/* Offered once per device, ever — never re-prompted on a later sign-in. If
+   dismissed, the only way back to it is Settings → Security → Passkeys. */
+const PASSKEY_OFFER_KEY = "mastery.passkeyOfferSeen";
+const passkeyOfferSeen = () => {
+  try { return localStorage.getItem(PASSKEY_OFFER_KEY) === "1"; } catch { return true; }
+};
+const markPasskeyOfferSeen = () => {
+  try { localStorage.setItem(PASSKEY_OFFER_KEY, "1"); } catch { /* private mode */ }
+};
 
 /* Back is offered only where returning cannot strand the flow or undo something
    already written. Nothing past consent has a way back: consent is recorded,
@@ -134,6 +146,25 @@ export default function Onboarding() {
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
 
+  const [busyPasskey, setBusyPasskey] = useState(false);
+  const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
+  /* What to do once the passkey-offer interstitial is dismissed or accepted —
+     set by whichever call site interposed it, per the module note above. */
+  const afterPasskeyOffer = useRef<(() => void) | null>(null);
+
+  // ── OTP autofill and resend cooldown ──
+  const OTP_RESEND_COOLDOWN_S = 30;
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpSentAt, setOtpSentAt] = useState<number | null>(null);
+  const [cooldownNow, setCooldownNow] = useState(() => Date.now());
+  const otpCooldownRemaining = otpSentAt === null ? 0
+    : Math.max(0, OTP_RESEND_COOLDOWN_S - Math.floor((cooldownNow - otpSentAt) / 1000));
+  useEffect(() => {
+    if (step !== "otp" || otpCooldownRemaining <= 0) return;
+    const t = setInterval(() => setCooldownNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [step, otpCooldownRemaining]);
+
   /* Held across re-renders so a validation error does not wipe what was already
      typed and picked. Being made to re-enter a name because one subject was
      missed is the flow calling the user careless. */
@@ -151,6 +182,21 @@ export default function Onboarding() {
      merely redundant: nothing stops a second `student` insert, so it silently
      creates a duplicate profile every time they sign back in, while the flow
      looks like a login that never finishes. That was the "can't log in" bug. */
+  /* Interposes the passkey offer ahead of whatever step or completion would
+     otherwise happen next, but only the first time this device sees it — see
+     `passkeyOfferSeen`. Every call site below that used to `go(...)` or
+     `finishOnboarding(...)` directly now routes through this instead, so the
+     offer shows up after every confirmed sign-in path: fresh OTP, the
+     link/nameOnly path, and a returning guardian's passkey sign-in alike. */
+  const proceedOrOfferPasskey = useCallback((next: () => void) => {
+    if (isPasskeySupported() && !passkeyOfferSeen()) {
+      afterPasskeyOffer.current = next;
+      go("passkeyOffer");
+    } else {
+      next();
+    }
+  }, [go]);
+
   const continueAsGuardian = useCallback(async (g: Guardian) => {
     const { data: existing, error: e1 } = await sb
       .from("student").select("*")
@@ -163,15 +209,51 @@ export default function Onboarding() {
       const st = existing[0];
       const { data: subjectRows } = await sb
         .from("student_subject").select("subject").eq("student_id", st.id);
-      await finishOnboarding({
+      const finish = () => void finishOnboarding({
         guardian: g,
         student: { ...st, subjects: (subjectRows ?? []).map((r: { subject: string }) => r.subject) },
       });
+      proceedOrOfferPasskey(finish);
       return;
     }
-    if (!(g as Guardian & { verified_at?: string }).verified_at) return go("age");
-    go("consent");
-  }, [finishOnboarding, go]);
+    const hasVerified = !!(g as Guardian & { verified_at?: string }).verified_at;
+    proceedOrOfferPasskey(() => go(hasVerified ? "consent" : "age"));
+  }, [finishOnboarding, go, proceedOrOfferPasskey]);
+
+  /* The OTP step's "Continue" action, hoisted out so auto-submit (below) and
+     the button can share it without duplicating the guardian upsert. */
+  const verifyOtpCode = useCallback(async (raw: string) => {
+    if (!raw.trim()) return setError("Enter the code we sent.");
+    if (otpBusy) return;
+    hapticFirm();
+    setOtpBusy(true);
+    try {
+      await verifyOtp(contact.trim(), raw.trim());
+      // Guardian row first: it holds no student data, so it is safe before
+      // consent.
+      const sess = await currentSession() as SessionUser;
+      const { data, error: e } = await sb.from("guardian").upsert(
+        { auth_user_id: sess.user!.id, name: parentName, contact },
+        { onConflict: "auth_user_id" },
+      ).select().single();
+      if (e) throw e;
+      setGuardian(data);
+      await continueAsGuardian(data);
+    } catch (e) { fail(e, "That code did not work."); }
+    finally { setOtpBusy(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact, parentName, otpBusy, continueAsGuardian]);
+
+  /* Auto-submit the instant a 6-digit numeric code is complete — typed,
+     pasted, or autofilled from the iOS QuickType bar — rather than making the
+     student make a separate tap once autofill has already done the work. A
+     pasted magic link is much longer than 6 characters and is handled by the
+     "Continue" button instead, via verifyOtp's own link-parsing. */
+  useEffect(() => {
+    if (step !== "otp" || otpBusy) return;
+    if (/^\d{6}$/.test(code.trim())) void verifyOtpCode(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, step]);
 
   /* Purposes are fetched when that step opens, not at mount. The optional ones
      must never arrive pre-ticked, so their default comes from `is_required` and
@@ -286,13 +368,59 @@ export default function Onboarding() {
       if (!parentName.trim()) return setError("We need your name.");
       if (!contact.trim()) return setError("Enter an email address or phone number.");
       hapticFirm();
-      try { await sendOtp(contact.trim()); go("otp"); }
+      try {
+        await sendOtp(contact.trim());
+        setOtpSentAt(Date.now());
+        setCooldownNow(Date.now());
+        go("otp");
+      }
       catch (e) { fail(e, "That code could not be sent."); }
+    };
+
+    /* Discoverable-credential sign-in: no email typed, the authenticator
+       resolves the account. This only ever succeeds for someone who has
+       already registered a passkey on this device, which means they already
+       have a guardian row — so on success this goes straight through the
+       same routing a returning OTP sign-in uses. A cancelled OS prompt and
+       "no passkey here" both fall straight back to the fields already on
+       this screen, per the plain-language outcomes in passkeys.ts. */
+    const usePasskey = async () => {
+      if (busyPasskey) return;
+      hapticFirm();
+      setBusyPasskey(true);
+      setPasskeyNote(null);
+      try {
+        const result = await signInWithPasskey();
+        if (result.outcome === "ok") {
+          const g = await currentGuardian();
+          if (!g) {
+            setPasskeyNote("Signed in, but we couldn't find your account — use your email or phone below.");
+            return;
+          }
+          setGuardian(g);
+          await continueAsGuardian(g);
+          return;
+        }
+        if (result.outcome === "cancelled") return;
+        setPasskeyNote(PASSKEY_MESSAGE[result.outcome] ?? "Passkey sign-in didn't work.");
+      } catch (e) { fail(e, "Passkey sign-in didn't work."); }
+      finally { setBusyPasskey(false); }
     };
 
     return (
       <Shell {...shellProps} title="Create your account">
         <Err message={error} />
+        {isPasskeySupported() && (
+          <>
+            <div className="obalt">
+              <PressBox as="button" type="button" className="btn primary" onClick={() => void usePasskey()}>
+                {busyPasskey ? "Checking…" : "Sign in with a passkey"}
+              </PressBox>
+            </div>
+            {passkeyNote && <div className="subnote">{passkeyNote}</div>}
+            <div className="obor">or</div>
+          </>
+        )}
         {/* "Continue with" rather than "Sign in with": a parent arriving here
             does not have an account yet, and Apple's guidelines allow it. */}
         <div className="obalt">
@@ -334,31 +462,17 @@ export default function Onboarding() {
   }
 
   if (step === "otp") {
-    const verify = async () => {
-      if (!code.trim()) return setError("Enter the code we sent.");
-      hapticFirm();
-      try {
-        await verifyOtp(contact.trim(), code.trim());
-        // Guardian row first: it holds no student data, so it is safe before
-        // consent.
-        const sess = await currentSession() as SessionUser;
-        const { data, error: e } = await sb.from("guardian").upsert(
-          { auth_user_id: sess.user!.id, name: parentName, contact },
-          { onConflict: "auth_user_id" },
-        ).select().single();
-        if (e) throw e;
-        setGuardian(data);
-        await continueAsGuardian(data);
-      } catch (e) { fail(e, "That code did not work."); }
-    };
-
     return (
       <Shell {...shellProps} title="Check your email">
         <Err message={error} />
         <div className="obfields">
+          {/* inputMode="numeric" is what makes autoComplete="one-time-code"
+              actually trigger the iOS QuickType autofill suggestion; no
+              maxLength, because a pasted magic link is longer than 6 chars
+              and still has to fit here — see the subnote below. */}
           <Field id="ob-code" label="Your code" className="obcode" value={code} onChange={setCode}
                  placeholder="6 digits, or paste the link" autoComplete="one-time-code"
-                 onEnter={() => void verify()} />
+                 inputMode="numeric" onEnter={() => void verifyOtpCode(code)} />
         </div>
         <div className="subnote">
           Sent to {contact}. If the email contains a link rather than a code, paste
@@ -366,15 +480,27 @@ export default function Onboarding() {
           app has already opened it.
         </div>
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" onClick={() => void verify()}>
-            Continue
+          <PressBox as="button" type="button" className="btn primary" disabled={otpBusy}
+                    onClick={() => void verifyOtpCode(code)}>
+            {otpBusy ? "Checking…" : "Continue"}
           </PressBox>
-          <PressBox as="button" type="button" className="btn plain" onClick={async () => {
-            hapticTick();
-            try { await sendOtp(contact.trim()); setError("Sent again."); }
-            catch (e) { fail(e, "That could not be sent."); }
-          }}>
-            Send it again
+          {/* Plain text, not a prominent button — resending is available, not
+              the default thing to reach for — and disabled during a short
+              cooldown so a mistap can't fire a flurry of emails. */}
+          <PressBox
+            as="button" type="button" className="btn plain"
+            disabled={otpCooldownRemaining > 0}
+            onClick={async () => {
+              hapticTick();
+              try {
+                await sendOtp(contact.trim());
+                setOtpSentAt(Date.now());
+                setCooldownNow(Date.now());
+                setError("Sent again.");
+              } catch (e) { fail(e, "That could not be sent."); }
+            }}
+          >
+            {otpCooldownRemaining > 0 ? `Resend in ${otpCooldownRemaining}s` : "Send it again"}
           </PressBox>
         </div>
       </Shell>
@@ -417,6 +543,52 @@ export default function Onboarding() {
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" onClick={() => void save()}>
             Continue
+          </PressBox>
+        </div>
+      </Shell>
+    );
+  }
+
+  /* Calm, dismissible, once. Reached only through `proceedOrOfferPasskey`
+     immediately after a confirmed sign-in — never as the first thing a new
+     parent sees, per the ordering constraint in passkeys.ts: registering a
+     passkey requires an existing, confirmed, non-anonymous user. No rail: it
+     is not a numbered step in the flow, it is an interstitial on top of one. */
+  if (step === "passkeyOffer") {
+    const resume = () => {
+      markPasskeyOfferSeen();
+      const next = afterPasskeyOffer.current;
+      afterPasskeyOffer.current = null;
+      setError(null);
+      next?.();
+    };
+    const setUp = async () => {
+      hapticFirm();
+      setBusyPasskey(true);
+      try {
+        const result = await registerPasskey();
+        if (result.outcome === "ok") { resume(); return; }
+        if (result.outcome === "cancelled") return; // both options stay visible
+        setError(PASSKEY_MESSAGE[result.outcome] ?? "That didn't work.");
+      } catch (e) { fail(e, "That didn't work."); }
+      finally { setBusyPasskey(false); }
+    };
+    return (
+      <Shell {...shellProps} title="Skip typing a code next time">
+        <Err message={error} />
+        <div className="obpanel tint">
+          <div className="body" style={{ marginTop: 0 }}>
+            Set up a passkey using Face ID, Touch ID, or your device&rsquo;s
+            screen lock. Next time you sign in on this device, that&rsquo;s all it takes.
+          </div>
+        </div>
+        <div className="obfoot">
+          <PressBox as="button" type="button" className="btn primary" disabled={busyPasskey}
+                    onClick={() => void setUp()}>
+            {busyPasskey ? "Setting up…" : "Set up a passkey"}
+          </PressBox>
+          <PressBox as="button" type="button" className="btn plain" onClick={() => { hapticTick(); resume(); }}>
+            Not now
           </PressBox>
         </div>
       </Shell>
