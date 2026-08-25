@@ -158,7 +158,15 @@ export async function markUploaded(draft, pageNumber, extra = {}) {
   return saveDraft(draft);
 }
 
-/** What a resume has left to do. */
+/**
+ * What a resume has left to do.
+ *
+ * A page flagged `uploaded` from a draft started before this device last
+ * updated is not trustworthy on its own — the field it is trusted for,
+ * `r2_key`, is what the server actually needs, and an older build could set
+ * `uploaded` without ever setting it. Re-checking both is what makes a stale
+ * draft resumable instead of stuck failing paper-submit forever.
+ */
 export function pendingPages(draft) {
-  return draft.pages.filter((p) => !p.uploaded);
+    return draft.pages.filter((p) => !p.uploaded || !p.r2_key);
 }
