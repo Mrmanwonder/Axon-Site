@@ -220,6 +220,15 @@ export const listSubjects = papersMod.listSubjects as unknown as (
   studentId: string,
 ) => Promise<Cached<{ subject: string; syllabus_code: string }[]>>;
 
+// ── passkeys ───────────────────────────────────────────────────────────────
+// Already TypeScript, so re-exported directly rather than cast — the untyped
+// boundary above is only for the plain ES modules.
+export {
+  isPasskeySupported, registerPasskey, signInWithPasskey,
+  listPasskeys, renamePasskey, deletePasskey, PASSKEY_MESSAGE,
+} from "../../lib/auth/passkeys";
+export type { Passkey, PasskeyOutcome } from "../../lib/auth/passkeys";
+
 // ── account ────────────────────────────────────────────────────────────────
 export const exportMyData = accountMod.exportMyData as (g: Guardian) => Promise<unknown>;
 export const downloadJson = accountMod.downloadJson as (name: string, data: unknown) => void;

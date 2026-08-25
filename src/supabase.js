@@ -27,6 +27,12 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     // rather than a code. With this false, clicking that link did nothing: the
     // session arrives in the URL fragment and was being ignored.
     detectSessionInUrl: true,
+    // Passkeys are a beta API and off by default; this is the client-side half
+    // of the opt-in. The other half is `[auth.passkey] enabled = true` in the
+    // Supabase project itself — see supabase/config.toml. All calls into this
+    // surface are isolated in src/lib/auth/passkeys.ts, never called directly
+    // from a component, so a beta API shape change has one place to fix.
+    experimental: { passkey: true },
   },
 });
 

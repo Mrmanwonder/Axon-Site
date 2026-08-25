@@ -151,7 +151,38 @@ What is not available, in any environment: relaxing `PROVIDER_POLICY` globally.
 It is a constant in `_shared/openrouter.ts`, not configuration, and there is no
 environment variable that changes it.
 
-## 6 · Check it
+## 6 · Passkeys
+
+Off by default — see `supabase/config.toml`. Before switching Authentication →
+Passkeys on for `dlgcqieyevoebefhcggi` (or setting `rp_id` to anything but
+`localhost`):
+
+1. Confirm the production Netlify domain is final. `rp_id` is bound into
+   every passkey a parent registers; changing it later invalidates all of
+   them, with no migration.
+2. Set `rp_display_name = "Mastery"`, `rp_id` to the bare domain (no scheme,
+   no port, no path), and `rp_origins` to every origin the app is actually
+   served from, in the Dashboard's Passkey settings.
+3. Only then flip `enabled = true`.
+
+## 7 · OTP email template
+
+The email `signInWithOtp` sends is a Dashboard setting (Authentication →
+Email Templates → Magic Link), not something this repo can check in. Two
+things to set there, both purely about iOS's autofill heuristic — nothing
+tricky, just formatting that helps it find the code:
+
+- **Subject line contains the word "code" and the app name**, e.g.
+  `Your Mastery sign-in code: {{ .Token }}`.
+- **The code sits alone on its own line in the body**, not folded into a
+  sentence — `{{ .Token }}` on its own line, with the word "code" nearby.
+
+The template must contain `{{ .Token }}` (not only `{{ .ConfirmationURL }}`)
+or `signInWithOtp` sends a link instead of a code — `src/supabase.js` already
+depends on this for the paste-the-link fallback. Keep the email otherwise
+bare: no marketing content, it is a trust-sensitive transactional message.
+
+## 8 · Check it
 
 ```sql
 select stage, primary_model, prompt_version, enabled from public.model_route;

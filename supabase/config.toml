@@ -1,0 +1,31 @@
+# Local/CI parity for project settings that otherwise live only in the
+# Supabase Dashboard. Currently just the passkey feature flag — nothing else
+# in this project is configured through the CLI, so there is no [api], [db]
+# etc. here on purpose; adding those sections would imply this file drives
+# local development, which it does not yet.
+#
+# `rp_id` is the Relying Party ID: it is cryptographically bound into every
+# passkey a parent registers. Changing it later invalidates every passkey
+# already set up, with no migration path — so it must be the real production
+# bare domain (no scheme, no port, no path) before `enabled` goes to `true`
+# in the Dashboard for the production project. Confirm the Netlify domain is
+# final before doing that; see supabase/DEPLOY.md.
+#
+# `enabled = false` here is deliberate until that domain is confirmed. This
+# file only affects local `supabase start` / CI — the production project's
+# Passkey toggle is set separately in Authentication → Passkeys in the
+# Dashboard, and must stay off there too until rp_id is final.
+[auth.passkey]
+enabled = false
+
+[auth.webauthn]
+# User-facing name shown inside the OS passkey prompt — parent-facing UI we
+# don't control the styling of, so this must read as the product name.
+rp_display_name = "Mastery"
+# TODO before enabling in production: replace with the real bare domain,
+# e.g. "mastery.app" — not "https://mastery.app", not "www.mastery.app"
+# unless that is genuinely the domain parents land on.
+rp_id = "localhost"
+rp_origins = ["http://localhost:5173"]
+# If a native Android app is ever built, its origin is added here separately,
+# in the android:apk-key-hash:<...> form — it cannot share the web origin.

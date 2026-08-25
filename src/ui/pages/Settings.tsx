@@ -18,16 +18,20 @@
      here means "this ends the session", not "this is dangerous".
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../data/AppProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
-import { exportMyData, downloadJson, deleteAccount, sb } from "../data/modules";
+import {
+  exportMyData, downloadJson, deleteAccount, sb,
+  isPasskeySupported, registerPasskey, listPasskeys, renamePasskey, deletePasskey,
+  PASSKEY_MESSAGE,
+} from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
-import type { Prefs } from "../data/modules";
+import type { Prefs, Passkey } from "../data/modules";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -59,6 +63,16 @@ export default function Settings() {
   const toast = useToast();
   const { openSheet } = useSheetControls();
   const [busy, setBusy] = useState<string | null>(null);
+  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const passkeySupported = isPasskeySupported();
+
+  const loadPasskeys = () => {
+    if (!guardian || !passkeySupported) return;
+    listPasskeys().then(setPasskeys).catch(() => { /* the list panel just stays empty */ });
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadPasskeys, [guardian, passkeySupported]);
 
   const name = student?.first_name ?? guardian?.name ?? "";
   const initial = (name || "?")[0]?.toUpperCase() ?? "?";
@@ -113,6 +127,92 @@ export default function Settings() {
         </div>
       </div>
       <div className="note">Removing a subject archives its analysis rather than deleting it.</div>
+
+      {passkeySupported && (
+        <>
+          <div className="sectitle">Security</div>
+          <div className="list">
+            {(passkeys ?? []).map((pk) => (
+              <PressBox
+                key={pk.id}
+                as="button" type="button" className="srow noicon" data-interactive=""
+                disabled={passkeyBusy}
+                onClick={() => {
+                  hapticTick();
+                  openSheet({
+                    title: pk.friendly_name || "Passkey",
+                    body: `Added ${new Date(pk.created_at).toLocaleDateString()}. Renaming or removing takes effect immediately — no extra sign-in needed.`,
+                    choices: [
+                      { label: "Rename", value: "rename" },
+                      { label: "Remove this passkey", value: "remove" },
+                    ],
+                    onChoice: async (choice) => {
+                      if (choice === "rename") {
+                        openSheet({
+                          title: "Rename this passkey",
+                          input: { id: `pk-${pk.id}`, placeholder: pk.friendly_name ?? "Passkey" },
+                          primary: "Save name",
+                          onConfirm: async (value) => {
+                            const name = value.trim();
+                            if (!name) return;
+                            setPasskeyBusy(true);
+                            try {
+                              await renamePasskey(pk.id, name);
+                              loadPasskeys();
+                              toast("Renamed.");
+                            } catch (e) { toast((e as Error).message || "That could not be renamed.", "warn"); }
+                            finally { setPasskeyBusy(false); }
+                          },
+                        });
+                        return;
+                      }
+                      if (choice === "remove") {
+                        setPasskeyBusy(true);
+                        try {
+                          await deletePasskey(pk.id);
+                          loadPasskeys();
+                          toast("Passkey removed.");
+                        } catch (e) { toast((e as Error).message || "That could not be removed.", "warn"); }
+                        finally { setPasskeyBusy(false); }
+                      }
+                    },
+                  });
+                }}
+              >
+                <div className="lbl">
+                  {pk.friendly_name || "Passkey"}
+                  <small>Added {new Date(pk.created_at).toLocaleDateString()}</small>
+                </div>
+                <Chevron />
+              </PressBox>
+            ))}
+            <PressBox
+              as="button" type="button" className="srow noicon" data-interactive=""
+              disabled={!guardian || passkeyBusy}
+              onClick={async () => {
+                hapticFirm();
+                setPasskeyBusy(true);
+                try {
+                  const result = await registerPasskey();
+                  if (result.outcome === "ok") {
+                    loadPasskeys();
+                    toast("Passkey added.");
+                  } else if (result.outcome !== "cancelled") {
+                    toast(PASSKEY_MESSAGE[result.outcome] ?? "That didn't work.", "warn");
+                  }
+                } catch (e) { toast((e as Error).message || "That didn't work.", "warn"); }
+                finally { setPasskeyBusy(false); }
+              }}
+            >
+              <div className="lbl">Add a passkey<small>Face ID, Touch ID, or your device's screen lock</small></div>
+              <Chevron />
+            </PressBox>
+          </div>
+          <div className="note">
+            Renaming or removing a passkey takes effect immediately — no extra sign-in needed.
+          </div>
+        </>
+      )}
 
       <div className="sectitle">Notifications</div>
       <div className="list">
