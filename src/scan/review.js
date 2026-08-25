@@ -34,7 +34,7 @@ export async function loadReview(runId) {
       sb.from('question_region')
         .select('id, order_index, question_label, question_text, student_answer, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, student_confirmed_at, student_corrected, page_spans')
         .eq('run_id', runId).order('order_index'),
-      sb.from('paper_page').select('page_number, storage_path, quality_verdict, layer_fallback, status')
+      sb.from('paper_page').select('page_number, r2_key, quality_verdict, layer_fallback, status')
         .eq('paper_id', run.paper_id).order('page_number'),
       sb.from('region_explanation').select('region_id, cause, body, do_this_next, marks_lost, scheme_source, scheme_version')
         .eq('run_id', runId),
@@ -47,7 +47,7 @@ export async function loadReview(runId) {
   const questions = await Promise.all((regions ?? []).map(async (r) => {
     const span = (r.page_spans ?? [])[0];
     const page = span ? pageByNumber.get(span.page) : null;
-    const crop = page?.storage_path && span ? await cropUrl(page.storage_path, span.box) : null;
+    const crop = page?.r2_key && span ? await cropUrl(run.paper_id, span.page, span.box) : null;
     const explanation = byRegion.get(r.id) ?? null;
 
     return {

@@ -63,8 +63,8 @@ export async function listDrafts(studentId) {
   const db = await open();
   const all = await tx(db, 'readonly', (store) => store.getAll());
   return (all ?? [])
-    .filter((d) => d.student_id === studentId && d.pages.length)
-    .sort((a, b) => b.updated_at - a.updated_at);
+  .filter((d) => d.student_id === studentId && d.pages.length)
+  .sort((a, b) => b.updated_at - a.updated_at);
 }
 
 export async function saveDraft(draft) {
@@ -80,12 +80,12 @@ export async function deleteDraft(id) {
 }
 
 /**
- * Add a page to a draft.
- *
- * The conditioned bytes are stored, not the raw frame: conditioning is the
- * expensive part and it has already happened, and storing the original as well
- * would double a booklet's footprint on a phone that may not have the room.
- */
+* Add a page to a draft.
+*
+* The conditioned bytes are stored, not the raw frame: conditioning is the
+* expensive part and it has already happened, and storing the original as well
+* would double a booklet's footprint on a phone that may not have the room.
+*/
 export async function addPage(draft, page) {
   draft.pages.push({
     page_number: draft.pages.length + 1,
@@ -120,14 +120,14 @@ export async function movePage(draft, from, to) {
 }
 
 /**
- * Give pages their positions, and un-send anything whose position changed.
- *
- * Storage is keyed by page number, so a page that has already been uploaded as
- * page 3 and is now page 4 is not uploaded — the bytes sitting at page 4 are
- * somebody else's. Carrying the `uploaded` flag through a renumber left the
- * booklet silently out of order after a reorder that followed a failed upload,
- * and nothing would ever have re-sent it.
- */
+* Give pages their positions, and un-send anything whose position changed.
+*
+* Storage is keyed by page number, so a page that has already been uploaded as
+* page 3 and is now page 4 is not uploaded — the bytes sitting at page 4 are
+* somebody else's. Carrying the `uploaded` flag through a renumber left the
+* booklet silently out of order after a reorder that followed a failed upload,
+* and nothing would ever have re-sent it.
+*/
 function renumber(pages) {
   return pages.map((p, i) => {
     const page_number = i + 1;
@@ -138,14 +138,23 @@ function renumber(pages) {
 /** Replace one page in place — a retake, keeping its position in the booklet. */
 export async function replacePage(draft, pageNumber, page) {
   draft.pages = draft.pages.map((p) => (p.page_number === pageNumber
-    ? { ...p, ...page, page_number: pageNumber, uploaded: false }
-    : p));
+                                        ? { ...p, ...page, page_number: pageNumber, uploaded: false }
+                                        : p));
   return saveDraft(draft);
 }
 
-export async function markUploaded(draft, pageNumber) {
+/**
+* Mark a page sent, and keep what it was sent as.
+*
+* `extra` carries where the bytes actually landed — the R2 bucket and key for
+* the page and its mask. Without persisting that alongside `uploaded`, a
+* connection dropped between upload and submit would strand pages that had
+* already reached storage: `pendingPages` would correctly not re-send them, but
+* nothing would remember where they went.
+*/
+export async function markUploaded(draft, pageNumber, extra = {}) {
   draft.pages = draft.pages.map((p) =>
-    (p.page_number === pageNumber ? { ...p, uploaded: true } : p));
+    (p.page_number === pageNumber ? { ...p, ...extra, uploaded: true } : p));
   return saveDraft(draft);
 }
 

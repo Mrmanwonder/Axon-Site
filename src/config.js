@@ -1,12 +1,17 @@
 // Client configuration.
 //
-// The publishable key is designed to ship inside the client — it carries no
-// authority of its own. Every table has RLS with no policy for `anon`, so this
+// The publishable key is designed to ship inside the client, it carries no
+// authority of its own. Every table has RLS with no policy for anon, so this
 // key on its own reaches nothing; it is the signed-in session that grants
 // access. Committing it is intended, not an oversight.
 
 export const SUPABASE_URL = 'https://dlgcqieyevoebefhcggi.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WZCc08bBepIIIgdsuiuYCA_5isUL0ED';
+
+// The pipeline itself, stages 3 through 8, runs here, not in a Supabase Edge
+// Function. It is a Cloudflare Worker so a sixteen-page booklet's structure and
+// content passes are not fighting a 2-second CPU cap; see CLOUDFLARE_WORKERS.md.
+export const MASTERY_API_URL = 'https://mastery-api.tanmay-harkawat.workers.dev';
 
 // Version of the consent notice text currently shown in the UI. Bump this
 // whenever the wording or the set of purposes changes: every consent_event
