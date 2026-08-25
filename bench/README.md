@@ -16,6 +16,7 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
 | `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
 | `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
+| `golden-report.mjs` | The same fixtures again, as a false-accept/false-reject rate report instead of pass/fail — `node bench/golden-report.mjs` |
 
 Serve the repo and open them, or drive them with Playwright:
 
@@ -53,6 +54,16 @@ non-page scene. That last one is a known, currently-passing false accept —
 detection *more* permissive is caught even though this one specific gap isn't
 closed yet. Fixing quad-detector accuracy itself is out of scope for that
 pass — see the audit's own phasing.
+
+`golden-report.mjs` runs the same fixtures and prints the false-accept and
+false-reject rates directly, plus a per-fixture quality-gate breakdown, for
+looking at after a threshold change rather than only finding out a pinned
+assertion broke. The two real viewfinder frames currently sit close to the
+blur line — one scores under `BLUR_WARN` — which reads as the detector
+being marginal on real phones, but is a screenshot-of-a-screenshot artifact
+of those specific fixtures (a phone's own screen re-captured, then encoded
+again) rather than evidence about camera stills; worth knowing before acting
+on it, not a finding to chase.
 
 ---
 
