@@ -44,6 +44,13 @@ export const CAPTURE = {
   // The page must fill this share of the viewport before auto-capture will fire.
   // Below it the page is too far away to hold 300 DPI after warping.
   MIN_FILL: 0.35,
+  // Paused between "the gate said go" and the frame actually grabbed, on the
+  // canvas-grab fallback path only. A live stream's autofocus is asynchronous;
+  // grabbing with zero wait after a focus-affecting event (tap-to-focus, or
+  // just arriving at "Ready") is grabbing mid-focus. `ImageCapture.takePhoto()`
+  // does not need this — it reconfigures the camera hardware for the shot and
+  // returns once that pass is done.
+  SETTLE_MS: 200,
 };
 
 // ── quality gate ───────────────────────────────────────────────────────────
@@ -68,6 +75,16 @@ export const QUALITY = {
   // the glossy ridge of a fresh ink stroke.
   GLARE_V: 0.94,
   GLARE_S: 0.12,
+  // Two different bars for the same measurement, on purpose. GLARE_WARN is
+  // the live gate's blocking line — asking for a retake costs nothing while
+  // the page is still in front of the student, so it fires early. GLARE_FAIL
+  // is where scorePage() actually marks the *submitted* page unreadable —
+  // forgiving a level between the two, because a page already through the
+  // gate and conditioned is a page that costs a trip back to the schoolbag
+  // to redo, and the honest line for "genuinely unreadable" sits higher than
+  // the honest line for "worth one more try while it's easy". Not a stale
+  // holdover; recalibrate both together against the golden set (§4.5 of the
+  // scan audit) rather than merging them into one number.
   GLARE_WARN: 0.005,
   GLARE_FAIL: 0.035,
   // Any single channel pinned at maximum. Distinct from glare: a page can clip

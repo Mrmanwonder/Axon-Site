@@ -2,13 +2,14 @@
 //
 // The viewfinder, the gate in front of the shutter, and the tray behind it.
 //
-// The container question in SCANNING_SYSTEM.md §3 is still open — a native
-// document scanner behind Capacitor would do this better than any web build can,
-// and until that is decided this is the competent-but-modest in-app camera the
-// document names as the honest fallback. Everything below the capture boundary
-// is unaffected by that choice: what this produces is a conditioned page, a
-// teacher-mark map and a quality verdict, and a native scanner would produce the
-// same three things.
+// The container question in SCANNING_SYSTEM.md §3 is resolved: pure web, not a
+// native rewrite — see the resolution note there. What was actually wrong was
+// narrower than the container — the shutter grabbed a compressed video frame
+// instead of a real photographic still — and `ImageCapture.takePhoto()` closes
+// most of that gap on Chromium/Android, with the old canvas grab surviving as
+// the iOS Safari fallback. Everything below the capture boundary is unaffected
+// either way: what this produces is a conditioned page, a teacher-mark map and
+// a quality verdict, and a native scanner would produce the same three things.
 //
 // Two rules shape all of it. The gate assists, it never blocks: auto-capture can
 // refuse, the shutter never does. And the quality verdict happens here, while
@@ -16,13 +17,28 @@
 // seconds later at review usually means the page is simply lost.
 
 import { CAPTURE, QUALITY } from './contract.js';
-import { releaseCamera, requestCamera } from './camera.js';
-import { detectQuad, easeQuad, scaleQuad } from './edges.js';
-import { blurScore, glareInQuad, toGray } from './quality.js';
+import { releaseCamera, requestCamera, requestContinuousFocus } from './camera.js';
+import { detectQuad, easeQuad, isPageShaped, scaleQuad } from './edges.js';
+import { paperScore } from './quad.js';
+import { blurScore, glareInQuad, skewDegrees, toGray } from './quality.js';
 import { quadDrift, quadFill, quadSize } from './geometry.js';
 
 const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
 const DETECT_MAX_INTERVAL_MS = 320;
+// The quad the live gate found ran on a 240px proxy of a video frame; the
+// still that actually gets warped can be many times that resolution, taken
+// through a different path entirely on the ImageCapture route. Re-verifying
+// against a downscaled copy of the *actual* captured still — rather than
+// trusting a quad rescaled 15x from a much smaller frame — is cheap (one
+// small canvas, once per shot, not in the live loop) and catches the case
+// where the live proxy's guess does not hold up against what was really
+// there. Same working size as the live proxy search, for the same reason:
+// paperScore's neutrality test does not need more.
+const VERIFY_LONG_EDGE = 320;
+// Mirrors the gate `detectQuad` itself applies in edges.js — see the comment
+// there for how it was calibrated (every real page fixture scored 0.96+, a
+// photo of the floor scored 0.68).
+const VERIFY_PAPER_MIN = 0.85;
 // The share of the main thread the search is allowed to take. Finding the page
 // is not worth a viewfinder that stutters — on the phones this is built for, a
 // fixed cadence means the search sets the frame rate, and the frame rate is what
@@ -91,6 +107,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let armed = true;         // disarms after a shot so one steady page is one page
   let state = blankState();
 
+  // ImageCapture.takePhoto() interrupts the stream, reconfigures the camera
+  // hardware and returns a genuine sensor-resolution still — not a frame grab
+  // off the live video element. Detected once per camera session, because
+  // probing it costs a real round trip and the answer does not change mid
+  // session. Null on any browser that lacks the API (notably iOS Safari,
+  // as of this writing) or whose track refuses it; shoot() falls back to the
+  // canvas grab either way.
+  let imageCapture = null;
+  let capturePath = 'canvas-grab';
+
   const proxy = document.createElement('canvas');
   const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
 
@@ -101,6 +127,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       pageLongEdge: 0,
       sharpness: 0,
       glare: 0,
+      skew: 0,
       steady: false,
       /** What the student is told, right now. One line, actionable. */
       hint: 'Lay the page flat and fit all four corners in the frame',
@@ -128,6 +155,24 @@ export function createCapture({ video, overlay, onState, onShot }) {
     armed = true;
     loop();
     detect();
+
+    const track = stream.getVideoTracks?.()[0] ?? null;
+    imageCapture = null;
+    capturePath = 'canvas-grab';
+    if (track && typeof ImageCapture !== 'undefined') {
+      try {
+        const candidate = new ImageCapture(track);
+        // Some implementations construct successfully but throw the first time
+        // they are actually asked anything — this is the cheapest real probe.
+        await candidate.getPhotoCapabilities();
+        imageCapture = candidate;
+        capturePath = 'image-capture';
+      } catch {
+        imageCapture = null;
+        capturePath = 'canvas-grab';
+      }
+    }
+    if (track) requestContinuousFocus(track);
   }
 
   function stop() {
@@ -139,6 +184,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     video.srcObject = null;
     quad = lastDetection = steadyAnchor = null;
     steadySince = heldSince = consecutiveFinds = 0;
+    imageCapture = null;
+    capturePath = 'canvas-grab';
     // Clear the shared request too, or the next visit adopts a stream whose
     // tracks have already been stopped and shows a black viewfinder.
     releaseCamera();
@@ -194,6 +241,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.fill = quadFill(found, pw, ph);
     next.sharpness = blurScore(toGray(frame), pw, ph);
     next.glare = glareInQuad(frame, found);
+    // Angle-only, so scale-invariant — this reads the same on the 240px
+    // search proxy as it would on the full frame.
+    next.skew = skewDegrees(found);
     consecutiveFinds++;
 
     // How big the page will be once it is warped flat, in the camera's own
@@ -229,6 +279,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     } else if (next.sharpness < QUALITY.BLUR_WARN) {
       next.blocking = 'focus';
       next.hint = 'Hold still — the page is not sharp yet';
+    } else if (next.skew > QUALITY.SKEW_WARN_DEG) {
+      // Advisory, never blocking: perspective correction handles ordinary
+      // tilt at capture, and refusing the shutter over an angle it can
+      // already fix would be the gate asking for something the photo does
+      // not actually need.
+      next.hint = 'Square the page up a little if you can';
     } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
       // Advisory, never blocking. Resolution is the one gate condition the
       // student may be unable to satisfy: it depends on what sensor the browser
@@ -321,23 +377,77 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   // ── the shutter ──────────────────────────────────────────────────────────
 
-  async function shoot(auto = false) {
-    if (!running || !video.videoWidth) return null;
+  /**
+   * A real photographic still where the platform can give one, a video-frame
+   * grab where it can't. The primary path never touches the `<video>` element
+   * at all — `takePhoto()` talks to the camera hardware directly, at whatever
+   * resolution `getPhotoCapabilities()` reported, with a real per-shot
+   * autofocus/exposure pass. The fallback is the old canvas grab, with a
+   * settle delay inserted because that path previously grabbed with zero wait
+   * after "the gate says go" and a live stream's autofocus is asynchronous.
+   */
+  async function grabStill() {
+    if (imageCapture) {
+      try {
+        const blob = await imageCapture.takePhoto();
+        return { bitmap: await createImageBitmap(blob), path: 'image-capture' };
+      } catch {
+        // A track that advertised photo capabilities but refused the actual
+        // shot (seen on some Android/Chromium builds) — fall through rather
+        // than losing the page.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, CAPTURE.SETTLE_MS));
+    if (!video.videoWidth) return null;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
-    const bitmap = await createImageBitmap(canvas);
+    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab' };
+  }
 
-    // The quad travels with the frame so conditioning can warp it. Full-frame
-    // coordinates, because the quad on screen is the smoothed display copy.
-    const shotQuad = lastDetection && video.videoWidth
+  /**
+   * Does the quad the live gate found still hold up against the frame that
+   * was actually captured? A rescaled 240px guess is exactly that — a guess —
+   * and warping the page through a bad one is worse than not warping it at
+   * all. Failing this does not retry detection at full resolution (a Hough
+   * search over an eight-megapixel image is not a per-shot cost this budget
+   * can absorb); it falls back to no quad, which conditionPage already
+   * handles by resampling without perspective correction rather than warping
+   * through a shape that turned out not to be there.
+   */
+  async function verifyQuad(bitmap, quad) {
+    const scale = Math.min(1, VERIFY_LONG_EDGE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const scaled = scaleQuad(quad, { width: bitmap.width, height: bitmap.height }, { width: w, height: h });
+    if (!isPageShaped(scaled, w, h)) return false;
+    return paperScore(ctx.getImageData(0, 0, w, h), scaled).paper >= VERIFY_PAPER_MIN;
+  }
+
+  async function shoot(auto = false) {
+    if (!running || !video.videoWidth) return null;
+    const captured = await grabStill();
+    if (!captured) return null;
+    const { bitmap, path } = captured;
+
+    // The quad travels with the frame so conditioning can warp it. Scaled into
+    // the captured still's own pixel space, which is the video's for a canvas
+    // grab but is whatever the sensor actually returned for takePhoto() — the
+    // two are not always the same size.
+    let shotQuad = lastDetection
       ? scaleQuad(lastDetection,
           { width: proxy.width, height: proxy.height },
-          { width: video.videoWidth, height: video.videoHeight })
+          { width: bitmap.width, height: bitmap.height })
       : null;
 
-    const shot = { bitmap, quad: shotQuad, auto, gate: { ...state } };
+    if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
+
+    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, gate: { ...state } };
     onShot?.(shot);
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.
@@ -352,6 +462,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     get state() { return state; },
     setAutoCapture(on) { autoCapture = !!on; armed = true; },
     get autoCapture() { return autoCapture; },
+    /** 'image-capture' or 'canvas-grab' — which shutter path this session is using. */
+    get capturePath() { return capturePath; },
     /** Whether a camera exists at all. Upload is a first-class path, not a fallback. */
     supported: !!navigator.mediaDevices?.getUserMedia,
   };

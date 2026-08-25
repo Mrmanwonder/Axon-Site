@@ -1,7 +1,9 @@
 # bench/
 
-Measurement, not tests. These answer questions where the honest answer is a
-number and the tempting answer is an opinion.
+Mostly measurement, not tests — these answer questions where the honest
+answer is a number and the tempting answer is an opinion. `golden.test.mjs`
+is the one exception: real fixtures, real pass/fail assertions, wired into
+`npm test`.
 
 | What | Run it |
 | --- | --- |
@@ -12,6 +14,8 @@ number and the tempting answer is an opinion.
 | `viewfinder.html` + `viewfinder.mjs` | The real capture controller against a page-on-a-desk scene streamed from a canvas |
 | `capture.test.mjs` | The steadiness window and the shutter decision, as pure functions |
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
+| `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
+| `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
 
 Serve the repo and open them, or drive them with Playwright:
 
@@ -23,6 +27,32 @@ node --test bench/capture.test.mjs
 
 Playwright is not vendored — there is no `package.json` and `AGENTS.md` keeps it
 that way. Point `PLAYWRIGHT_HOME` at an install you already have.
+
+## golden.test.mjs
+
+`detectQuad`, `paperScore` and `scorePage` are pure functions with no DOM
+dependency, so the only thing that ever stood between "measured by hand in a
+browser" and "checked in CI" was a way to decode a real JPEG into the plain
+`{data, width, height}` shape they expect. `decode.mjs` does that with
+`sharp` — a devDependency used only here, never shipped to the browser
+bundle — and `golden.test.mjs` runs the real fixtures below through the real
+detector and gate, pinned to today's measured behaviour:
+
+```bash
+node --test bench/golden.test.mjs   # or: npm test, alongside harness/
+```
+
+This is a first instance of the golden-set harness `scansystemredesign.md`
+§4.5 asks for, not the thing in full — that wants a checked-in corpus
+spanning the whole failure taxonomy (blurry, glared, low-resolution, blank,
+ungraded, non-schoolwork...), and this repo has real photographs for only a
+slice of that so far: five real captured pages across a skew/tilt range, the
+two real viewfinder frames the live gate actually sees, and one deliberate
+non-page scene. That last one is a known, currently-passing false accept —
+`golden.test.mjs` pins it rather than hiding it, so a change that makes
+detection *more* permissive is caught even though this one specific gap isn't
+closed yet. Fixing quad-detector accuracy itself is out of scope for that
+pass — see the audit's own phasing.
 
 ---
 

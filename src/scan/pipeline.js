@@ -32,9 +32,9 @@ import { CAPTURE } from './contract.js';
  * quality verdict comes from and the verdict is only useful while the paper is
  * still in front of the student.
  *
- * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number}} args
+ * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number, capturePath?:string, liveGate?:Object}} args
  */
-export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
+export async function acceptPage({ draft, bitmap, quad, replacing = null, capturePath = null, liveGate = null }) {
   if (draft.pages.length >= CAPTURE.MAX_PAGES && replacing === null) {
     throw new Error(`A paper can hold ${CAPTURE.MAX_PAGES} pages. Start a second one for the rest.`);
   }
@@ -44,7 +44,7 @@ if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing))
 }
 
 const pageNumber = replacing ?? draft.pages.length + 1;
-  const processed = await processPage(bitmap, { quad, pageNumber });
+  const processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate });
   const proxy = await makeProxy(processed.blob);
 
 const page = {

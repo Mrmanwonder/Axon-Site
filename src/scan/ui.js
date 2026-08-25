@@ -160,20 +160,25 @@ async function takePage(shot, replacing = null) {
 
     const { page } = await acceptPage({
       draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
+      capturePath: shot.capturePath ?? null, liveGate: shot.gate ?? null,
     });
+
+    await paintTray();
 
     // The verdict is delivered now, while the paper is still in front of the
     // student. The same words forty seconds later usually mean a lost page.
+    // A fail interrupts rather than badges: losing the page bytes costs
+    // nothing, losing the moment the paper is still in hand costs everything.
+    // Retake is the default action; keeping the page is the explicit second
+    // choice, never the primary one.
     if (page.quality?.verdict === 'fail') {
-      toast(page.quality.reasons[0] ?? 'That page came out badly — worth taking again.', 'warn');
+      offerRetake(page);
     } else if (page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
     }
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
-
-    await paintTray();
   } catch (error) {
     toast(error.message || 'That page could not be prepared.', 'warn');
   } finally {
@@ -192,6 +197,31 @@ async function paintTray() {
     pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) })),
     { onPage: openPageActions, onDone: sendPaper },
   );
+}
+
+/**
+ * The page just taken failed the quality gate on its actual, conditioned
+ * pixels — not the live proxy's guess. Interrupt now, while the paper is
+ * still in front of the student, rather than leaving it as a badge in the
+ * tray the student may not even notice. Retake is the primary choice; keeping
+ * a page we already know is bad is the explicit secondary one.
+ */
+function offerRetake(page) {
+  const reason = page.quality?.reasons?.[0] ?? 'That page came out too badly to read.';
+  host.openSheet({
+    title: `Page ${page.page_number}`,
+    body: reason,
+    items: [],
+    choices: [
+      { label: 'Take it again now', value: 'retake' },
+      { label: 'Use it anyway', value: 'keep' },
+    ],
+    onChoice: (choice) => {
+      if (choice !== 'retake') return;
+      toast(`Point at page ${page.page_number} and take it again.`);
+      S.retaking = page.page_number;
+    },
+  });
 }
 
 /**

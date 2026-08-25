@@ -1,11 +1,11 @@
 // Live page-edge detection for the viewfinder.
 //
-// SCANNING_SYSTEM.md §3 is blunt about the container: a PWA is the wrong place
-// for a camera that is meant to be a differentiator, because both native
-// platforms ship a document scanner that already does this well and on the web
-// it is all yours to build. That decision is still open. Until it is made, this
-// is the honest web answer — no OpenCV, no six-week project, and no pretence
-// that it is VisionKit.
+// SCANNING_SYSTEM.md §3's container question is resolved as pure web — see the
+// resolution note there. This is the honest web answer — no OpenCV, no
+// six-week project, and no pretence that it is VisionKit — and it stays: the
+// gap that actually mattered was the shutter grabbing a video frame instead of
+// a real photographic still, which `capture.js` now fixes at the capture step
+// rather than by replacing this detector.
 //
 // The first version of this thresholded on brightness and took the largest
 // bright region. Tested against real frames from a real desk it failed on every

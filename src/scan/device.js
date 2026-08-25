@@ -34,9 +34,9 @@ function ensureWorker() {
  * Condition one page and separate its layers.
  *
  * @param {ImageBitmap} source
- * @param {{quad?:Array, pageNumber?:number}} options
+ * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object}} options
  */
-export async function processPage(source, { quad = null, pageNumber = 1 } = {}) {
+export async function processPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null } = {}) {
   const w = ensureWorker();
   if (w) {
     const id = nextId++;
@@ -44,16 +44,16 @@ export async function processPage(source, { quad = null, pageNumber = 1 } = {}) 
       pending.set(id, resolve);
       // The bitmap is transferred rather than copied. A copy of an
       // eight-megapixel frame is tens of megabytes moved for nothing.
-      w.postMessage({ id, source, quad, pageNumber }, [source]);
+      w.postMessage({ id, source, quad, pageNumber, capturePath, liveGate }, [source]);
     });
     if (!result.ok) throw new Error(result.error);
     return result;
   }
-  return processOnThisThread(source, { quad, pageNumber });
+  return processOnThisThread(source, { quad, pageNumber, capturePath, liveGate });
 }
 
-async function processOnThisThread(source, { quad, pageNumber }) {
-  const conditioned = await conditionPage(source, { quad, pageNumber });
+async function processOnThisThread(source, { quad, pageNumber, capturePath, liveGate }) {
+  const conditioned = await conditionPage(source, { quad, pageNumber, capturePath, liveGate });
   // No content layer — see the note in worker.js. A full pass over the page to
   // build something nothing downstream reads.
   // conditionPage has already run stage 2 and encoded the mask it produced.
