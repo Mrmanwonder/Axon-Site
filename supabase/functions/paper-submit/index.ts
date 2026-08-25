@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
   if (run?.status === 'queued') {
     const { error: queueError } = await admin.rpc('pgmq_send', {
-      queue_name: 'mastery_triage',
+      queue_name: 'axon_triage',
       msg: { run_id: runId },
     });
     if (queueError) {

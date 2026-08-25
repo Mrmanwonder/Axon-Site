@@ -3,7 +3,7 @@
 
    `src/scan/ui.js` owns the flow and knows the ten stages in order. This owns
    the surfaces it paints into. The two meet at the `host` object handed to
-   `initScanUI`, which replaced the `window.__mastery*` globals — nothing about
+   `initScanUI`, which replaced the `window.__axon*` globals — nothing about
    the pipeline moved.
 
    Everything the flow pushes lands in state here: the viewfinder hint, the tray,

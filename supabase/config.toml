@@ -21,9 +21,9 @@ enabled = false
 [auth.webauthn]
 # User-facing name shown inside the OS passkey prompt — parent-facing UI we
 # don't control the styling of, so this must read as the product name.
-rp_display_name = "Mastery"
+rp_display_name = "Axon"
 # TODO before enabling in production: replace with the real bare domain,
-# e.g. "mastery.app" — not "https://mastery.app", not "www.mastery.app"
+# e.g. "axon.app" — not "https://axon.app", not "www.axon.app"
 # unless that is genuinely the domain parents land on.
 rp_id = "localhost"
 rp_origins = ["http://localhost:5173"]

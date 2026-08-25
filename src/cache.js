@@ -8,7 +8,7 @@
 //
 // Consent deliberately does not come through here — it is always read live.
 
-const DB_NAME = 'mastery.cache.v1';
+const DB_NAME = 'axon.cache.v1';
 const STORE = 'reads';
 
 let dbPromise = null;

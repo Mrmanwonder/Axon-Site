@@ -80,7 +80,7 @@ and its relatives want binarized, grayscale, high-contrast input because their
 front end is a connected-component analyser. Feeding them a photograph is
 genuinely bad. That's where "+5–15% from binarization" comes from.
 
-Mastery feeds **vision-language models a photograph of coloured handwriting**.
+Axon feeds **vision-language models a photograph of coloured handwriting**.
 Those models were trained on natural images. A "scanner-ified" page is out of
 distribution for them in a way a clean photo is not.
 

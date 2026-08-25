@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE CONSEQUENCE SHEET
 
-   `__masteryOpenSheet` as a React provider. The copy rules make this a specific
+   `__axonOpenSheet` as a React provider. The copy rules make this a specific
    kind of surface and not a generic modal:
 
    · It never asks "are you sure?". It states what will happen and offers the
@@ -52,7 +52,7 @@ export function useSheetControls(): SheetValue {
   return v;
 }
 
-const SHEET_STATE = "mastery.sheet";
+const SHEET_STATE = "axon.sheet";
 
 export function SheetProvider({ children }: { children: ReactNode }) {
   const [cfg, setCfg] = useState<SheetConfig | null>(null);

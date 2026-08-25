@@ -191,7 +191,7 @@
    styles, so the distinction survives greyscale and colourblindness.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* ── the mastery-map ramp ──
+  /* ── the axon-map ramp ──
      The one place a ramp is legitimate: these are two ends of a SINGLE hue
      standing for "how much of this chapter has been seen", not a scale from
      good to bad. It stays blue at both ends for that reason — a green-to-red

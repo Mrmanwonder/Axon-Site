@@ -6,7 +6,7 @@
 // are, so this is geometry.
 //
 // This is where the product's central claim is either true or false. Everything
-// Mastery says it knows follows from each teacher mark being bound to the answer
+// Axon says it knows follows from each teacher mark being bound to the answer
 // it refers to, and that answer to its question.
 
 import type { MarkClass, MarkShape, TeacherMarkInput } from './contract.ts';

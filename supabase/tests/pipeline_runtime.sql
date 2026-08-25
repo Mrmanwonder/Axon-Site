@@ -116,14 +116,14 @@ begin
 
   -- A paper with no questions goes to reconciliation rather than going quiet.
   perform public._t('a structure pass that found nothing enqueues reconciliation',
-                    exists (select 1 from pgmq.q_mastery_reconcile
+                    exists (select 1 from pgmq.q_axon_reconcile
                              where message ->> 'run_id' = v_run::text));
 
   -- Called twice, as two workers finishing together would.
   perform public._t('a second call does not advance it again',
                     not public.advance_after_structure(v_run));
   perform public._t('and did not enqueue reconciliation twice',
-                    (select count(*) from pgmq.q_mastery_reconcile
+                    (select count(*) from pgmq.q_axon_reconcile
                       where message ->> 'run_id' = v_run::text) = 1);
 end $$;
 
@@ -264,14 +264,14 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111"}';
 
 do $$ begin begin
-  perform public.pgmq_send('mastery_content', '{"run_id":"x"}'::jsonb);
+  perform public.pgmq_send('axon_content', '{"run_id":"x"}'::jsonb);
   perform public._t('a student cannot enqueue work', false, 'call succeeded');
 exception when insufficient_privilege then
   perform public._t('a student cannot enqueue work', true);
 end; end $$;
 
 do $$ begin begin
-  perform public.pgmq_read('mastery_content', 30, 1);
+  perform public.pgmq_read('axon_content', 30, 1);
   perform public._t('a student cannot read a queue', false, 'call succeeded');
 exception when insufficient_privilege then
   perform public._t('a student cannot read a queue', true);

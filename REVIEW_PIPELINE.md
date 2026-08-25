@@ -289,13 +289,13 @@ minted per model call. Storage RLS mirrors the table policies.
 ## 5. Queues
 
 ```sql
-select pgmq.create('mastery_triage');
-select pgmq.create('mastery_structure');
-select pgmq.create('mastery_content');
-select pgmq.create('mastery_explain');
+select pgmq.create('axon_triage');
+select pgmq.create('axon_structure');
+select pgmq.create('axon_content');
+select pgmq.create('axon_explain');
 
 select cron.schedule(
-  'mastery-tick', '10 seconds',
+  'axon-tick', '10 seconds',
   $$ select net.http_post(
        url := 'https://<ref>.supabase.co/functions/v1/queue-tick',
        headers := jsonb_build_object(
@@ -392,7 +392,7 @@ Deno.serve(async (req) => {
   if (error) return json({ error: 'create_failed' }, 500)
 
   await admin.rpc('pgmq_send', {
-    queue_name: 'mastery_triage',
+    queue_name: 'axon_triage',
     msg: { paper_id: paper.id }
   })
 
@@ -412,10 +412,10 @@ worker, and returns. It does not do work itself; it does not await workers.
 
 ```ts
 const QUEUES = [
-  { name: 'mastery_triage',    fn: 'w-triage',    batch: 5  },
-  { name: 'mastery_structure', fn: 'w-structure', batch: 20 },
-  { name: 'mastery_content',   fn: 'w-content',   batch: 30 },
-  { name: 'mastery_explain',   fn: 'w-explain',   batch: 20 },
+  { name: 'axon_triage',    fn: 'w-triage',    batch: 5  },
+  { name: 'axon_structure', fn: 'w-structure', batch: 20 },
+  { name: 'axon_content',   fn: 'w-content',   batch: 30 },
+  { name: 'axon_explain',   fn: 'w-explain',   batch: 20 },
 ]
 
 Deno.serve(async () => {
@@ -578,8 +578,8 @@ export async function callModel(opts: CallOpts) {
     headers: {
       Authorization: `Bearer ${Deno.env.get('OPENROUTER_API_KEY')}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://mastery.app',
-      'X-Title': 'Mastery'
+      'HTTP-Referer': 'https://axon.app',
+      'X-Title': 'Axon'
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(90_000)
@@ -1300,7 +1300,7 @@ Project rules, read by every agent. Keep it short and absolute — a long rules
 file gets skimmed.
 
 ```markdown
-# Mastery — backend
+# Axon — backend
 
 Supabase Edge Functions (Deno), Postgres, OpenRouter. Read
 REVIEW_PIPELINE.md and SCANNING_SYSTEM.md before writing code.

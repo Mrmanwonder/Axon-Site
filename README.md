@@ -1,4 +1,4 @@
-# Mastery
+# Axon
 
 A responsive web app that shows a Cambridge (CAIE) student exactly where their marks
 go — built from the original single-file device-frame prototype, now a real site rather
@@ -103,7 +103,7 @@ shown against the pixels it came from, and the student decides.
 ## Running the checks
 
 ```bash
-psql -d mastery -f supabase/local/shim.sql     # then migrations/, then tests/
+psql -d axon -f supabase/local/shim.sql     # then migrations/, then tests/
 deno test --allow-env supabase/functions/_shared/pipeline_test.ts
 node --test harness/metrics.test.mjs
 node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
@@ -122,8 +122,8 @@ Real routing needs a CDN-level rewrite: every path falls back to `/index.html` w
 than 404ing before React ever runs.
 
 The four edge functions in `supabase/functions/` deploy separately and need
-`ANTHROPIC_API_KEY` set on the project. `MASTERY_MODEL_STRUCTURE`,
-`MASTERY_MODEL_CONTENT` and `MASTERY_MODEL_EXPLANATION` override the models per stage;
+`ANTHROPIC_API_KEY` set on the project. `AXON_MODEL_STRUCTURE`,
+`AXON_MODEL_CONTENT` and `AXON_MODEL_EXPLANATION` override the models per stage;
 the defaults are a small model for finding boundaries and a frontier one for reading
 handwriting, which is the cost lever `SCANNING_SYSTEM.md` §15 names.
 

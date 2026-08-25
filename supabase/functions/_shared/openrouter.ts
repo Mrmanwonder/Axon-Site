@@ -277,8 +277,8 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
       headers: {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': Deno.env.get('MASTERY_SITE_URL') ?? 'https://mastery.app',
-        'X-Title': 'Mastery',
+        'HTTP-Referer': Deno.env.get('AXON_SITE_URL') ?? 'https://axon.app',
+        'X-Title': 'Axon',
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),

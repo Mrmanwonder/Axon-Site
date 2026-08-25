@@ -27,7 +27,7 @@ supabase secrets set --project-ref dlgcqieyevoebefhcggi \
   R2_ENDPOINT=https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com \
   R2_BUCKET_ORIGINALS=axon-originals \
   R2_BUCKET_DERIVED=axon-derived \
-  MASTERY_SITE_URL=https://<the deployed site>
+  AXON_SITE_URL=https://<the deployed site>
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected
@@ -88,10 +88,10 @@ select private.schedule_pipeline_tick(
 Check it took:
 
 ```sql
-select jobname, schedule, active from cron.job where jobname = 'mastery-tick';
+select jobname, schedule, active from cron.job where jobname = 'axon-tick';
 ```
 
-To stop the pipeline without undeploying anything: `select cron.unschedule('mastery-tick');`
+To stop the pipeline without undeploying anything: `select cron.unschedule('axon-tick');`
 
 ## 5 · Models
 
@@ -160,7 +160,7 @@ Passkeys on for `dlgcqieyevoebefhcggi` (or setting `rp_id` to anything but
 1. Confirm the production Netlify domain is final. `rp_id` is bound into
    every passkey a parent registers; changing it later invalidates all of
    them, with no migration.
-2. Set `rp_display_name = "Mastery"`, `rp_id` to the bare domain (no scheme,
+2. Set `rp_display_name = "Axon"`, `rp_id` to the bare domain (no scheme,
    no port, no path), and `rp_origins` to every origin the app is actually
    served from, in the Dashboard's Passkey settings.
 3. Only then flip `enabled = true`.
@@ -173,7 +173,7 @@ things to set there, both purely about iOS's autofill heuristic — nothing
 tricky, just formatting that helps it find the code:
 
 - **Subject line contains the word "code" and the app name**, e.g.
-  `Your Mastery sign-in code: {{ .Token }}`.
+  `Your Axon sign-in code: {{ .Token }}`.
 - **The code sits alone on its own line in the body**, not folded into a
   sentence — `{{ .Token }}` on its own line, with the word "code" nearby.
 

@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#000000" id="themeColor">
-<meta name="description" content="Mastery — see exactly where your marks go.">
-<title>Mastery</title>
+<meta name="description" content="Axon — see exactly where your marks go.">
+<title>Axon</title>
 
 <!-- The face is font-display: block, so it must arrive early or the first paint
      is blank text. Before the port it was a data URI inside this document and
@@ -25,7 +25,7 @@
      LOCAL_KEY in src/prefs.js. */
   (function () {
     try {
-      var p = JSON.parse(localStorage.getItem('mastery.prefs.v1') || '{}');
+      var p = JSON.parse(localStorage.getItem('axon.prefs.v1') || '{}');
       var theme = (p.theme === 'light' || p.theme === 'dark')
         ? p.theme
         : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
