@@ -11,7 +11,7 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { cropUrl } from './crops.js';
+import { cropUrl, primeR2Urls } from './crops.js';
 
 /**
  * Everything the review screen needs for one run.
@@ -34,7 +34,7 @@ export async function loadReview(runId) {
       sb.from('question_region')
         .select('id, order_index, question_label, question_text, student_answer, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, student_confirmed_at, student_corrected, page_spans')
         .eq('run_id', runId).order('order_index'),
-      sb.from('paper_page').select('page_number, storage_path, quality_verdict, layer_fallback, status')
+      sb.from('paper_page').select('page_number, storage_path, r2_bucket, r2_key, mask_key, quality_verdict, layer_fallback, status')
         .eq('paper_id', run.paper_id).order('page_number'),
       sb.from('region_explanation').select('region_id, cause, body, do_this_next, marks_lost, scheme_source, scheme_version')
         .eq('run_id', runId),
@@ -44,10 +44,18 @@ export async function loadReview(runId) {
   const byRegion = new Map((explanations ?? []).map((e) => [e.region_id, e]));
   const pageByNumber = new Map((pages ?? []).map((p) => [p.page_number, p]));
 
+  // R2 pages need one batched call for a signed URL per page (the signing
+  // secret is a Worker secret); Supabase Storage pages sign their own
+  // per-path, lazily, inside cropUrl. Priming costs nothing when a paper has
+  // no R2 pages — primeR2Urls no-ops on an empty list.
+  primeR2Urls(run.paper_id, (pages ?? []).filter((p) => !p.storage_path && p.r2_key).map((p) => p.page_number));
+
   const questions = await Promise.all((regions ?? []).map(async (r) => {
     const span = (r.page_spans ?? [])[0];
     const page = span ? pageByNumber.get(span.page) : null;
-    const crop = page?.storage_path && span ? await cropUrl(page.storage_path, span.box) : null;
+    const crop = page && span
+      ? await cropUrl({ ...page, paper_id: run.paper_id }, span.box)
+      : null;
     const explanation = byRegion.get(r.id) ?? null;
 
     return {

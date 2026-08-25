@@ -4,17 +4,29 @@
 // in the student's hands and 10 back on the server. This is the thing that walks
 // them in order, keeps the student told which one is running, and makes sure the
 // order actually holds — in particular that no question is explained before its
-// mark has survived reconciliation.
+// mark has survived review.
 //
 // Progress is reported per page and by name. "Reading page 3 of 6" tells someone
 // waiting on a 4G connection that something is happening and roughly how much is
 // left; a spinner tells them nothing, and a generic bar tells them something
 // false. There is no bar and no spinner anywhere in here.
+//
+// Rewired for workers/README.md's Cloudflare pipeline (was: synchronous
+// extract-structure / extract-content / extract-finalize Edge Functions).
+// Pages upload straight to R2 on presigned PUTs instead of Supabase Storage,
+// paper-submit queues stage 3 and returns immediately, and ingest() waits on
+// extraction_run's own status rather than getting stages 3–6's results back
+// in a response. Stage 8 (explainPaper, below) no longer runs right after
+// ingest — REVIEW_PIPELINE.md §3 and the deployed w-explain worker both
+// refuse to explain a question the student has not confirmed, so starting it
+// before review is not a UI choice, it is a call the server no-ops. It now
+// runs once review has nothing outstanding — see ui.js's call site.
 
-import { createPaper, uploadScannedPage } from '../papers.js';
+import { createPaper } from '../papers.js';
+import { putToR2, reviewComplete, submitPaper, uploadComplete, uploadIntent } from '../mastery.js';
 import { processPage, makeProxy } from './device.js';
 import { addPage, markUploaded, pendingPages, saveDraft } from './drafts.js';
-import { contentPass, explainQuestion, finalize, pool, structurePass } from './functions.js';
+import { messageForStatus, pollRun } from './functions.js';
 import { CAPTURE } from './contract.js';
 
 /**
@@ -37,6 +49,10 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
 
   const pageNumber = replacing ?? draft.pages.length + 1;
   const processed = await processPage(bitmap, { quad, pageNumber });
+  // makeProxy still runs — it's what the review screen's fast preview uses
+  // before the full page is fetchable — but the proxy itself is not uploaded
+  // any more: mastery-structure reads the full page directly, per
+  // workers/structure/src/index.ts, and has no proxy_path column to read.
   const proxy = await makeProxy(processed.blob);
 
   const page = {
@@ -57,7 +73,7 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
 
   if (replacing !== null) {
     draft.pages = draft.pages.map((p) => (p.page_number === replacing
-      ? { ...p, ...page, page_number: replacing, uploaded: false } : p));
+      ? { ...p, ...page, page_number: replacing, uploaded: false, r2_page_key: null, r2_mask_key: null } : p));
     await saveDraft(draft);
   } else {
     await addPage(draft, page);
@@ -67,11 +83,54 @@ export async function acceptPage({ draft, bitmap, quad, replacing = null }) {
 }
 
 /**
- * Send a draft up and run the server stages over it.
+ * Upload one page's bytes to R2 and confirm they landed.
+ *
+ * Two objects per page at most — the page itself, and its red-ink mask where
+ * one exists. Presigned PUTs (STORAGE_R2.md §5): bytes go straight to R2,
+ * never through mastery-api.
+ */
+async function uploadPageToR2({ studentId, paperId, page }) {
+  const objects = [{
+    kind: 'page', name: page.page_number,
+    content_type: page.blob.type || 'image/jpeg', bytes: page.blob.size,
+  }];
+  if (page.mask) {
+    objects.push({
+      kind: 'mask', name: page.page_number, content_type: 'image/png', bytes: page.mask.size,
+    });
+  }
+
+  const { objects: minted } = await uploadIntent({ studentId, paperId, objects });
+  const pageObj = minted.find((o) => o.kind === 'page');
+  const maskObj = minted.find((o) => o.kind === 'mask');
+
+  const uploads = [];
+  const { etag: pageEtag } = await putToR2(pageObj.url, page.blob, page.blob.type || 'image/jpeg');
+  uploads.push({ bucket: pageObj.bucket, key: pageObj.key, bytes: page.blob.size, etag: pageEtag });
+
+  if (maskObj) {
+    const { etag: maskEtag } = await putToR2(maskObj.url, page.mask, 'image/png');
+    uploads.push({ bucket: maskObj.bucket, key: maskObj.key, bytes: page.mask.size, etag: maskEtag });
+  }
+
+  const { missing } = await uploadComplete({ paperId, uploads });
+  if (missing?.length) {
+    throw new Error(missing[0].reason || `Page ${page.page_number} did not finish uploading. Try again.`);
+  }
+
+  return { pageKey: pageObj.key, maskKey: maskObj?.key ?? null };
+}
+
+/**
+ * Send a draft up and start the server pipeline.
  *
  * Resumable at page granularity: a draft that was half uploaded when the
  * connection dropped picks up at the first page that has not landed, and nothing
- * is captured or uploaded twice.
+ * is captured or uploaded twice. Waits for the run to reach `needs_review` (or a
+ * refusal) before returning — everything from stage 3 through reconciliation now
+ * happens off in Cloudflare Queues, so "done uploading" and "ready to read" are
+ * no longer the same moment the way they were with the synchronous Edge
+ * Functions.
  *
  * @param {(event: {stage:string, message:string, page?:number, of?:number}) => void} onProgress
  */
@@ -81,6 +140,10 @@ export async function ingest({ studentId, draft, paperType, dateTaken, onProgres
   if (!draft.pages.length) throw new Error('There are no pages to send yet.');
 
   // ── the paper row ────────────────────────────────────────────────────────
+  // Created here, directly, exactly as before — mastery-api's upload-intent
+  // needs a real paper_id to check ownership against and to key R2 objects
+  // under, so the paper has to exist before the first byte goes up. See
+  // 20260825050000_submit_paper_accept_existing_draft.sql.
 
   let paperId = draft.paper_id;
   if (!paperId) {
@@ -101,83 +164,72 @@ export async function ingest({ studentId, draft, paperType, dateTaken, onProgres
   const total = draft.pages.length;
   for (const page of pending) {
     say('upload', `Sending page ${page.page_number} of ${total}`, { page: page.page_number, of: total });
-    await uploadScannedPage({ studentId, paperId, page });
-    await markUploaded(draft, page.page_number);
+    const { pageKey, maskKey } = await uploadPageToR2({ studentId, paperId, page });
+    await markUploaded(draft, page.page_number, { pageKey, maskKey });
   }
 
   const pages = draft.pages.map((p) => ({
     page_number: p.page_number,
-    storage_path: `${studentId}/${paperId}/${p.page_number}.jpg`,
-    proxy_path: p.proxy ? `${studentId}/${paperId}/${p.page_number}.proxy.jpg` : null,
-    mask_path: p.mask ? `${studentId}/${paperId}/${p.page_number}.mask.png` : null,
-    width: p.width,
-    height: p.height,
-    quality: p.quality,
+    r2_bucket: 'derived',
+    r2_key: p.r2_page_key,
+    mask_key: p.r2_mask_key,
+    bytes: p.blob?.size,
+    preprocess_version: 'v2',
+    quality_verdict: p.quality?.verdict,
+    quality_signals: p.quality?.signals ?? {},
     conditioning_meta: p.meta,
     layer_fallback: p.layer_fallback,
-    teacher_marks: p.teacher_marks,
-    margin_band: p.margin_band,
+    teacher_marks: p.teacher_marks ?? [],
   }));
 
-  // ── stage 3, and the run ─────────────────────────────────────────────────
+  // ── file the paper; stage 3 starts the moment this returns ──────────────
 
-  say('structure', `Finding the questions across ${total} page${total === 1 ? '' : 's'}`);
-  const structure = await structurePass({ paper_id: paperId, pages });
+  say('structure', `Filing ${total} page${total === 1 ? '' : 's'}`);
+  const submitted = await submitPaper({
+    student_id: studentId,
+    paper_id: paperId,
+    type: draft.paper_type ?? paperType,
+    subject: draft.subject ?? null,
+    date_taken: dateTaken ?? new Date().toISOString().slice(0, 10),
+    pages,
+    idempotency_key: crypto.randomUUID(),
+  });
 
-  if (structure.refused) {
-    // Not a graded exam paper, or nothing gradeable on it. The paper is kept and
-    // the refusal is said plainly — dutifully extracting a textbook page into
-    // the analytics would quietly degrade every insight downstream.
-    return { paperId, runId: structure.run_id, refused: true, message: structure.message };
+  const runId = submitted.run_id;
+
+  // ── wait for triage through reconciliation ───────────────────────────────
+
+  const run = await pollRun(runId, {
+    onStatus: (status) => say(stageKeyFor(status), messageForStatus(status), { page: total, of: total }),
+  });
+
+  if (run.status === 'rejected') {
+    return { paperId, runId, refused: true, message: run.status_reason ?? 'This does not look like a marked exam paper.' };
+  }
+  if (run.status === 'failed') {
+    throw new Error(run.status_reason ?? 'We could not finish reading this paper. Try again.');
   }
 
-  const regions = structure.regions ?? [];
-  say('structure', `${regions.length} question${regions.length === 1 ? '' : 's'} found`, {
-    page: total, of: total,
-  });
+  return { paperId, runId, refused: false };
+}
 
-  // ── stage 4, per question ────────────────────────────────────────────────
-
-  let read = 0;
-  const contentResults = await pool(regions, 3, async (region) => {
-    const result = await contentPass(structure.run_id, region.id);
-    read++;
-    say('content', `Reading question ${read} of ${regions.length}`, { page: read, of: regions.length });
-    return result;
-  });
-
-  // ── stages 6 and 7 ───────────────────────────────────────────────────────
-
-  say('reconcile', 'Checking the marks add up');
-  const finished = await finalize(structure.run_id);
-
-  return {
-    paperId,
-    runId: structure.run_id,
-    refused: false,
-    regions,
-    content: contentResults,
-    reconciliation: finished.reconciliation,
-    tier: finished.tier,
-    tier_note: finished.tier_note,
-    counts: finished.counts,
-  };
+/** Maps an extraction_run status onto the progress rail's four named steps. */
+function stageKeyFor(status) {
+  if (['queued', 'triaging'].includes(status)) return 'upload';
+  if (status === 'structure') return 'structure';
+  if (['content', 'attribution'].includes(status)) return 'content';
+  return 'reconcile'; // reconciliation, adjudicating, needs_review, ready, ...
 }
 
 /**
- * Stage 8, over a whole paper.
- *
- * Deliberately separate from ingest and deliberately not awaited by it: a
- * student should be reading question 1's explanation while question 9 is still
- * generating, and the paper is worth opening the moment the marks are in.
- * `onQuestion` fires per question as each lands.
+ * Stage 8, over a whole paper. Called once review has nothing outstanding —
+ * see ui.js — never eagerly after ingest. mastery-api's /review-complete
+ * refuses (409) while any question still needs the student's eyes, and
+ * w-explain's own gate skips a question with no student_confirmed_at even if
+ * it somehow got queued anyway. Explanations then land on their own schedule
+ * via explain-queue; the caller is expected to keep polling question_region /
+ * region_explanation the way review.js already does for corrections.
  */
-export async function explainPaper({ runId, regions, onQuestion }) {
-  let done = 0;
-  return pool(regions, 2, async (region) => {
-    const result = await explainQuestion(runId, region.id);
-    done++;
-    onQuestion?.({ ...result, region, done, of: regions.length });
-    return result;
-  });
+export async function explainPaper(runId) {
+  return reviewComplete(runId);
 }

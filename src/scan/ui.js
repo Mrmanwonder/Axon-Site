@@ -15,6 +15,16 @@
 
 import { createCapture } from './capture.js';
 import { acceptPage, explainPaper, ingest } from './pipeline.js';
+
+// Explanations land one at a time over several seconds, off in explain-queue
+// — there is no single response to await any more, so the review screen
+// polls for them the same way it already polls corrections in, just on an
+// interval instead of a one-shot debounce. Two minutes covers twenty
+// questions at the pipeline's own pace with room to spare; if it is still
+// running past that the paper is still readable, just not fully explained
+// yet, and the poll stopping is not a failure worth surfacing.
+const EXPLAIN_POLL_MS = 3000;
+const EXPLAIN_POLL_TIMEOUT_MS = 2 * 60_000;
 import { createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
@@ -28,7 +38,16 @@ const S = {
   run: null,
   review: null,
   busy: false,
+  explainStarted: false,
+  explainPollTimer: null,
 };
+
+function stopExplainPolling() {
+  if (S.explainPollTimer) {
+    clearInterval(S.explainPollTimer);
+    S.explainPollTimer = null;
+  }
+}
 
 /**
  * The surfaces this flow paints into, and the primitives it needs.
@@ -349,16 +368,12 @@ async function run(paperType) {
     // undefined. The schema already expects this — a rescan starts a new run
     // over the same paper.
     firm();
+    S.explainStarted = false;
     await openReview(result.runId);
-
-    // Stage 8 runs after the paper is already open and readable, and paints
-    // each question in as it lands. A student should be reading question 1
-    // while question 9 is still being worked out.
-    explainPaper({
-      runId: result.runId,
-      regions: result.regions,
-      onQuestion: () => scheduleReviewRefresh(),
-    }).catch(() => { /* a failed explanation leaves the marks intact and visible */ });
+    // Stage 8 does not start here. w-explain refuses a question with no
+    // student_confirmed_at, and mastery-api's /review-complete refuses (409)
+    // while anything is still outstanding — see refreshReview(), which starts
+    // it the moment there is nothing left to check.
   } catch (error) {
     host.renderProgress({
       heading: 'That did not finish',
@@ -397,6 +412,26 @@ async function refreshReview() {
   if (!S.runId) return;
   S.review = await loadReview(S.runId);
   const paper = S.review.paper;
+
+  // The moment nothing is outstanding, and not before: mastery-api's
+  // /review-complete refuses (409) while any question still needs the
+  // student's eyes, and starting it earlier would just be a call that fails.
+  // Once it succeeds, explanations land on their own schedule in
+  // explain-queue, so poll for them rather than awaiting a result that was
+  // never coming back in this response.
+  if (S.review.outstanding === 0 && !S.explainStarted) {
+    S.explainStarted = true;
+    explainPaper(S.runId)
+      .then(() => {
+        const startedAt = Date.now();
+        stopExplainPolling();
+        S.explainPollTimer = setInterval(() => {
+          if (Date.now() - startedAt > EXPLAIN_POLL_TIMEOUT_MS) { stopExplainPolling(); return; }
+          refreshReview().catch(() => { /* try again on the next tick */ });
+        }, EXPLAIN_POLL_MS);
+      })
+      .catch(() => { S.explainStarted = false; /* a retry (e.g. another confirm) can try again */ });
+  }
 
   /* The old renderer rebuilt the list from innerHTML on every refresh, so the
      scroll position had to be saved and put back around it — losing a student's
@@ -494,6 +529,7 @@ function handleReviewAction(id, action) {
       primary: 'Take it again',
       onConfirm: () => {
         host.closeReview();
+        stopExplainPolling();
         releaseCrops();
         S.retaking = question.pageNumber;
         // Back to the camera, which is where the next thing they do happens.
@@ -517,6 +553,7 @@ async function save() {
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
     host.closeReview();
+    stopExplainPolling();
     releaseCrops();
     S.runId = null;
     // Now the pages have done their job.

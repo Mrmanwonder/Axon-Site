@@ -8,6 +8,14 @@
 export const SUPABASE_URL = 'https://dlgcqieyevoebefhcggi.supabase.co';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_WZCc08bBepIIIgdsuiuYCA_5isUL0ED';
 
+// The Cloudflare Workers pipeline. CLOUDFLARE_WORKERS.md / workers/README.md.
+// mastery-api is the one worker the client ever talks to directly — it mints
+// R2 presigned uploads, files the paper, and starts explanations after
+// review. Everything past that (triage through explain) is queue-driven and
+// the client never calls it: progress comes from reading extraction_run and
+// question_region through Supabase, the same RLS-scoped session either way.
+export const MASTERY_API_URL = 'https://mastery-api.tanmay-harkawat.workers.dev';
+
 // Version of the consent notice text currently shown in the UI. Bump this
 // whenever the wording or the set of purposes changes: every consent_event
 // records it, so a historical decision stays tied to what was actually agreed.

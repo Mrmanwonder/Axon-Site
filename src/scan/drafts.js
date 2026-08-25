@@ -100,6 +100,11 @@ export async function addPage(draft, page) {
     margin_band: page.margin_band ?? null,
     layer_fallback: page.layer_fallback ?? null,
     uploaded: false,
+    // Set once the page lands in R2 (workers/README.md's pipeline). Kept on
+    // the page so a resumed draft remembers every earlier page's key, not
+    // just the ones uploaded in the current ingest() call.
+    r2_page_key: null,
+    r2_mask_key: null,
   });
   return saveDraft(draft);
 }
@@ -143,9 +148,11 @@ export async function replacePage(draft, pageNumber, page) {
   return saveDraft(draft);
 }
 
-export async function markUploaded(draft, pageNumber) {
+export async function markUploaded(draft, pageNumber, r2Keys = {}) {
   draft.pages = draft.pages.map((p) =>
-    (p.page_number === pageNumber ? { ...p, uploaded: true } : p));
+    (p.page_number === pageNumber
+      ? { ...p, uploaded: true, r2_page_key: r2Keys.pageKey ?? p.r2_page_key, r2_mask_key: r2Keys.maskKey ?? p.r2_mask_key }
+      : p));
   return saveDraft(draft);
 }
 

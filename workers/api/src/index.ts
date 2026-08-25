@@ -13,7 +13,7 @@
 import { CORS, clientFor, failure, json, readJson, serviceClient } from '../../shared/http.ts';
 import {
   BUCKET_FOR, type Bucket, headObject, type ObjectKind, objectKey,
-  presignPut, PUT_TTL_SECONDS, verifyAssetSignature,
+  presignPut, PUT_TTL_SECONDS, signAssetUrl, verifyAssetSignature,
 } from '../../shared/r2.ts';
 import { PIPELINE_VERSION } from '../../shared/contract.ts';
 import type { Env } from '../../shared/env.ts';
@@ -46,6 +46,7 @@ export default {
         case '/upload-intent': return await uploadIntent(req, env);
         case '/upload-complete': return await uploadComplete(req, env);
         case '/review-complete': return await reviewComplete(req, env);
+        case '/page-asset-urls': return await pageAssetUrls(req, env);
         default: return failure('not found', 404);
       }
     } catch (cause) {
@@ -103,13 +104,22 @@ interface PageInput {
   quality_signals?: Record<string, unknown>;
   conditioning_meta?: Record<string, unknown>;
   layer_fallback?: string | null;
+  teacher_marks?: unknown[];
 }
 
 interface SubmitBody {
   student_id: string;
+  // Set when the client already created the paper row itself (to get a real
+  // id to key R2 uploads under, via upload-intent — see
+  // src/scan/pipeline.js). submit_paper finishes that row instead of minting
+  // a second one; see 20260825050000_submit_paper_accept_existing_draft.sql.
+  paper_id?: string | null;
   type: string;
   tier?: 'tier_1' | 'tier_2';
-  subject: string;
+  // Nullable at the schema level (paper.subject), and the client has no
+  // subject-selection UI yet — nothing forces a value here that the DB
+  // itself does not require.
+  subject?: string | null;
   date_taken?: string;
   pages: PageInput[];
   idempotency_key: string;
@@ -122,7 +132,7 @@ async function paperSubmit(req: Request, env: Env): Promise<Response> {
   if (!user) return failure('Sign in first.', 401);
 
   const body = await readJson<SubmitBody>(req);
-  if (!body?.student_id || !body?.subject || !body?.type || !body?.idempotency_key) {
+  if (!body?.student_id || !body?.type || !body?.idempotency_key) {
     return failure('That paper is missing something we need to file it.');
   }
   if (!Array.isArray(body.pages) || !body.pages.length) return failure('A paper needs at least one page.');
@@ -136,12 +146,13 @@ async function paperSubmit(req: Request, env: Env): Promise<Response> {
     p_type: body.type,
     p_tier: body.tier ?? 'tier_1',
     p_date_taken: body.date_taken ?? null,
-    p_subject: body.subject,
+    p_subject: body.subject ?? null,
     p_pages: body.pages,
     p_idempotency_key: body.idempotency_key,
     p_reported_total: body.reported_total ?? null,
     p_stated_maximum: body.stated_maximum ?? null,
     p_pipeline_version: PIPELINE_VERSION,
+    p_paper_id: body.paper_id ?? null,
   });
 
   if (error) return failure('We could not save that paper. Nothing was lost — try again.', 500, error.message);
@@ -270,6 +281,45 @@ async function uploadComplete(req: Request, env: Env): Promise<Response> {
   }
 
   return json({ confirmed, missing }, missing.length ? 409 : 200);
+}
+
+// ── page-asset-urls ────────────────────────────────────────────────────────
+// Pages live in R2, not Supabase Storage, so the review screen's crops
+// (src/scan/crops.js) need a signed URL the same shape as the one every
+// worker mints for itself via imageRef — but the HMAC secret is a Worker
+// secret, never shipped to the client, so the client asks for one instead of
+// minting it. Ownership is proven the same way every other route here proves
+// it: the query runs as the caller, through RLS, so a page belonging to
+// another student's paper simply is not among the rows returned.
+
+interface PageAssetBody { paper_id: string; page_numbers: number[] }
+
+async function pageAssetUrls(req: Request, env: Env): Promise<Response> {
+  const user = clientFor(req, env);
+  if (!user) return failure('Sign in first.', 401);
+
+  const body = await readJson<PageAssetBody>(req);
+  if (!body?.paper_id || !Array.isArray(body.page_numbers) || !body.page_numbers.length) {
+    return failure('Which pages?');
+  }
+
+  const { data: pages, error } = await user
+    .from('paper_page')
+    .select('page_number, r2_bucket, r2_key, mask_key')
+    .eq('paper_id', body.paper_id)
+    .in('page_number', body.page_numbers);
+  if (error) return failure('We could not look up those pages.', 500, error.message);
+
+  const urls: Record<number, { url: string | null; mask_url: string | null }> = {};
+  for (const page of pages ?? []) {
+    const bucket = (page.r2_bucket ?? 'derived') as Bucket;
+    urls[page.page_number as number] = {
+      url: page.r2_key ? await signAssetUrl(env, bucket, page.r2_key as string) : null,
+      mask_url: page.mask_key ? await signAssetUrl(env, bucket, page.mask_key as string) : null,
+    };
+  }
+
+  return json({ urls });
 }
 
 // ── review-complete ──────────────────────────────────────────────────────────
