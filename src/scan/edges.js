@@ -120,16 +120,22 @@ export function detectQuad(img, { minFill = 0.16 } = {}) {
           if (!isPageShaped(quad, width, height)) continue;
 
           const paper = paperScore(img, quad);
-          // How much of the inside is actually paper. Measured across the real
-          // capture fixtures this is the one signal that separates a page from
-          // everything else on a desk: every real page scored 0.96 or better and
-          // a photograph of the floor scored 0.68.
+          // How much of the inside is actually paper. This is the one signal
+          // that separates a page from most of the rest of a desk: every real
+          // page in bench/golden.test.mjs's fixtures scores 0.96 or better.
+          //
+          // It is not a clean separation, though — bench/golden.test.mjs also
+          // pins a known false accept: a photo of an empty floor (no page in
+          // shot at all) currently scores 0.92, comfortably over this line.
+          // That was measured, not assumed, once golden.test.mjs made it
+          // possible to run this against real fixtures as an actual check
+          // rather than eyeballing bench/detect.html by hand — see that test
+          // file for the up-to-date numbers and why closing this gap is
+          // deferred rather than guessed at with a higher threshold here.
           //
           // A tone step across the edge looked like it should work too and does
-          // not — the floor scored 0.84 on it, higher than a real page held
-          // close enough to fill the frame. It stays in the ranking score, where
-          // being wrong costs nothing, and out of the gate, where it cost real
-          // pages.
+          // not — it stays in the ranking score, where being wrong costs
+          // nothing, and out of the gate, where it cost real pages.
           if (paper.paper < 0.85) continue;
 
           const votes = vertical[i].votes + vertical[j].votes +
