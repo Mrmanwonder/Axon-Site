@@ -1,6 +1,5 @@
 {
   "name": "axon-site",
-  "type": "javascript",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-20",
   "vars": {
@@ -14,3 +13,5 @@
     "enabled": true
   }
 }
+
+
