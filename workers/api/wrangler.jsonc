@@ -15,7 +15,5 @@
       { "binding": "TRIAGE_QUEUE", "queue": "triage-queue" },
       { "binding": "EXPLAIN_QUEUE", "queue": "explain-queue" }
     ]
-  },
-
-  "limits": { "cpu_ms": 20000 }
+  }
 }

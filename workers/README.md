@@ -1,5 +1,17 @@
 # workers/
 
+**Status: deployed.** All 8 scripts are live, all 12 queues exist, all
+secrets are set, and the required migration
+(`20260824120000_cloudflare_queue_fanout`) is applied to the Supabase
+project. What's documented below as "setup" is what was actually done to get
+here — kept as the record of how to reproduce or redeploy, not a future TODO.
+
+Not yet done: a real paper has not been run through the live pipeline
+end to end. The deploy is verified reachable (the asset route round-trips
+its HMAC correctly) but not yet exercised with an actual scan, and the
+Supabase-side cutover (disabling the old Edge Function path, pointing the
+client at `mastery-api`) has not happened — see **Cutover** below.
+
 The Cloudflare Workers runtime for the review pipeline, per
 [`CLOUDFLARE_WORKERS.md`](../CLOUDFLARE_WORKERS.md) at the repo root. Ported
 from `supabase/functions/{w-triage,w-structure,w-content,w-reconcile,
@@ -54,6 +66,13 @@ transition) and why the sweep's existing stuck-run cron is what closes that
 gap, not a new mechanism.
 
 ## Setup
+
+**`limits.cpu_ms` requires a Workers Paid plan** — the Free plan rejects it
+outright (`CPU limits are not supported for the Free plan`). It's a cost
+guard, not a functional requirement (per §0 above, `fetch` I/O doesn't count
+against CPU time regardless of plan), so it's not in any `wrangler.jsonc`
+here. Add it back per script once the account is on Paid, if you want the
+guard.
 
 ```sh
 cd workers

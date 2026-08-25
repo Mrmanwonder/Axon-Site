@@ -17,7 +17,5 @@
       "max_concurrency": 10,
       "dead_letter_queue": "reconcile-dlq"
     }]
-  },
-
-  "limits": { "cpu_ms": 15000 }
+  }
 }

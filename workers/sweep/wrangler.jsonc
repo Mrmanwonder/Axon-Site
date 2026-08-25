@@ -10,7 +10,5 @@
     { "binding": "DERIVED", "bucket_name": "axon-derived" }
   ],
 
-  "triggers": { "crons": ["*/15 * * * *"] },
-
-  "limits": { "cpu_ms": 30000 }
+  "triggers": { "crons": ["*/15 * * * *"] }
 }

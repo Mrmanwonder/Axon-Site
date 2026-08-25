@@ -14,7 +14,5 @@
       "max_concurrency": 10,
       "dead_letter_queue": "explain-dlq"
     }]
-  },
-
-  "limits": { "cpu_ms": 60000 }
+  }
 }

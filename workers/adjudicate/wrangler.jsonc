@@ -14,7 +14,5 @@
       "max_concurrency": 5,
       "dead_letter_queue": "adjudicate-dlq"
     }]
-  },
-
-  "limits": { "cpu_ms": 60000 }
+  }
 }
