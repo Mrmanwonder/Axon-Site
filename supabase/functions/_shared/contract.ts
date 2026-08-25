@@ -10,6 +10,18 @@ export const PIPELINE_VERSION = '1.0.0';
 
 export const TEACHER_INK = 'red';
 
+// Mirror of the QUALITY thresholds in src/scan/contract.js's `QUALITY` — the
+// subset the server needs to read a page's own quality_verdict/quality_signals
+// honestly rather than re-deriving them. Change both, or neither.
+export const QUALITY = {
+  BLUR_WARN: 0.22,
+  BLUR_FAIL: 0.10,
+  GLARE_WARN: 0.005,
+  GLARE_FAIL: 0.035,
+  RESOLUTION_WARN: 1800,
+  RESOLUTION_FAIL: 1000,
+};
+
 export type MarkShape = 'stroke' | 'crossing' | 'enclosure' | 'glyph' | 'blob' | 'unknown';
 
 export type MarkClass =

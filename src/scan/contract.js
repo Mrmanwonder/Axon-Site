@@ -44,6 +44,13 @@ export const CAPTURE = {
   // The page must fill this share of the viewport before auto-capture will fire.
   // Below it the page is too far away to hold 300 DPI after warping.
   MIN_FILL: 0.35,
+  // Paused between "the gate said go" and the frame actually grabbed, on the
+  // canvas-grab fallback path only. A live stream's autofocus is asynchronous;
+  // grabbing with zero wait after a focus-affecting event (tap-to-focus, or
+  // just arriving at "Ready") is grabbing mid-focus. `ImageCapture.takePhoto()`
+  // does not need this — it reconfigures the camera hardware for the shot and
+  // returns once that pass is done.
+  SETTLE_MS: 200,
 };
 
 // ── quality gate ───────────────────────────────────────────────────────────

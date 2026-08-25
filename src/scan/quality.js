@@ -221,11 +221,15 @@ export function scorePage(img, { longEdge = null } = {}) {
     reasons.push('Parts of this page are over-exposed, which flattens red pen into the paper.');
   }
 
-  // Advisory, never a fail. Resolution is the one condition a student's hardware
-  // may make unreachable, and a gate that fires on everything teaches them to
-  // ignore it.
-  const resVerdict = pageLongEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
-  if (resVerdict === 'warn') {
+  // Below RESOLUTION_FAIL there is no honest route back to 300 DPI at all —
+  // that is a fail, not advice. Between RESOLUTION_FAIL and RESOLUTION_WARN is
+  // still only a warn: a student's hardware may not be able to clear the warn
+  // line, and a gate that fires on everything teaches them to ignore it.
+  const resVerdict = pageLongEdge < QUALITY.RESOLUTION_FAIL ? 'fail'
+    : pageLongEdge < QUALITY.RESOLUTION_WARN ? 'warn' : 'ok';
+  if (resVerdict === 'fail') {
+    reasons.push('This photo is too small to read the marking. Move closer and take it again.');
+  } else if (resVerdict === 'warn') {
     reasons.push('Smaller than we would like — closer next time means we read the marking better.');
   }
 

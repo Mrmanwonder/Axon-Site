@@ -16,7 +16,7 @@
 // seconds later at review usually means the page is simply lost.
 
 import { CAPTURE, QUALITY } from './contract.js';
-import { releaseCamera, requestCamera } from './camera.js';
+import { releaseCamera, requestCamera, requestContinuousFocus } from './camera.js';
 import { detectQuad, easeQuad, scaleQuad } from './edges.js';
 import { blurScore, glareInQuad, toGray } from './quality.js';
 import { quadDrift, quadFill, quadSize } from './geometry.js';
@@ -91,6 +91,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let armed = true;         // disarms after a shot so one steady page is one page
   let state = blankState();
 
+  // ImageCapture.takePhoto() interrupts the stream, reconfigures the camera
+  // hardware and returns a genuine sensor-resolution still — not a frame grab
+  // off the live video element. Detected once per camera session, because
+  // probing it costs a real round trip and the answer does not change mid
+  // session. Null on any browser that lacks the API (notably iOS Safari,
+  // as of this writing) or whose track refuses it; shoot() falls back to the
+  // canvas grab either way.
+  let imageCapture = null;
+  let capturePath = 'canvas-grab';
+
   const proxy = document.createElement('canvas');
   const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
 
@@ -128,6 +138,24 @@ export function createCapture({ video, overlay, onState, onShot }) {
     armed = true;
     loop();
     detect();
+
+    const track = stream.getVideoTracks?.()[0] ?? null;
+    imageCapture = null;
+    capturePath = 'canvas-grab';
+    if (track && typeof ImageCapture !== 'undefined') {
+      try {
+        const candidate = new ImageCapture(track);
+        // Some implementations construct successfully but throw the first time
+        // they are actually asked anything — this is the cheapest real probe.
+        await candidate.getPhotoCapabilities();
+        imageCapture = candidate;
+        capturePath = 'image-capture';
+      } catch {
+        imageCapture = null;
+        capturePath = 'canvas-grab';
+      }
+    }
+    if (track) requestContinuousFocus(track);
   }
 
   function stop() {
@@ -139,6 +167,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     video.srcObject = null;
     quad = lastDetection = steadyAnchor = null;
     steadySince = heldSince = consecutiveFinds = 0;
+    imageCapture = null;
+    capturePath = 'canvas-grab';
     // Clear the shared request too, or the next visit adopts a stream whose
     // tracks have already been stopped and shows a black viewfinder.
     releaseCamera();
@@ -321,23 +351,52 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   // ── the shutter ──────────────────────────────────────────────────────────
 
-  async function shoot(auto = false) {
-    if (!running || !video.videoWidth) return null;
+  /**
+   * A real photographic still where the platform can give one, a video-frame
+   * grab where it can't. The primary path never touches the `<video>` element
+   * at all — `takePhoto()` talks to the camera hardware directly, at whatever
+   * resolution `getPhotoCapabilities()` reported, with a real per-shot
+   * autofocus/exposure pass. The fallback is the old canvas grab, with a
+   * settle delay inserted because that path previously grabbed with zero wait
+   * after "the gate says go" and a live stream's autofocus is asynchronous.
+   */
+  async function grabStill() {
+    if (imageCapture) {
+      try {
+        const blob = await imageCapture.takePhoto();
+        return { bitmap: await createImageBitmap(blob), path: 'image-capture' };
+      } catch {
+        // A track that advertised photo capabilities but refused the actual
+        // shot (seen on some Android/Chromium builds) — fall through rather
+        // than losing the page.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, CAPTURE.SETTLE_MS));
+    if (!video.videoWidth) return null;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
-    const bitmap = await createImageBitmap(canvas);
+    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab' };
+  }
 
-    // The quad travels with the frame so conditioning can warp it. Full-frame
-    // coordinates, because the quad on screen is the smoothed display copy.
-    const shotQuad = lastDetection && video.videoWidth
+  async function shoot(auto = false) {
+    if (!running || !video.videoWidth) return null;
+    const captured = await grabStill();
+    if (!captured) return null;
+    const { bitmap, path } = captured;
+
+    // The quad travels with the frame so conditioning can warp it. Scaled into
+    // the captured still's own pixel space, which is the video's for a canvas
+    // grab but is whatever the sensor actually returned for takePhoto() — the
+    // two are not always the same size.
+    const shotQuad = lastDetection
       ? scaleQuad(lastDetection,
           { width: proxy.width, height: proxy.height },
-          { width: video.videoWidth, height: video.videoHeight })
+          { width: bitmap.width, height: bitmap.height })
       : null;
 
-    const shot = { bitmap, quad: shotQuad, auto, gate: { ...state } };
+    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, gate: { ...state } };
     onShot?.(shot);
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.
@@ -352,6 +411,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     get state() { return state; },
     setAutoCapture(on) { autoCapture = !!on; armed = true; },
     get autoCapture() { return autoCapture; },
+    /** 'image-capture' or 'canvas-grab' — which shutter path this session is using. */
+    get capturePath() { return capturePath; },
     /** Whether a camera exists at all. Upload is a first-class path, not a fallback. */
     supported: !!navigator.mediaDevices?.getUserMedia,
   };

@@ -19,15 +19,36 @@
  * conditioning targets, and the reason every capture used to come back flagged.
  * The frames cost more to condition, which is the right trade: the pixels are
  * the handwriting.
+ *
+ * 4032x3024 matches a modern phone sensor's own output rather than the older
+ * 3264x2448 figure — `ideal`, not `min`/`exact`, because a request the hardware
+ * cannot meet must down-negotiate rather than fail the whole stream.
  */
 export const CAMERA_CONSTRAINTS = {
   video: {
     facingMode: { ideal: 'environment' },
-    width: { ideal: 3264 },
-    height: { ideal: 2448 },
+    width: { ideal: 4032 },
+    height: { ideal: 3024 },
   },
   audio: false,
 };
+
+/**
+ * Ask the track to keep focusing continuously, where the platform exposes the
+ * control at all. Best-effort: most iOS and many desktop browsers have no
+ * `focusMode` capability, and a track that cannot do this should keep
+ * streaming rather than throw.
+ */
+export async function requestContinuousFocus(track) {
+  try {
+    const caps = track?.getCapabilities?.();
+    if (!caps?.focusMode?.includes('continuous')) return false;
+    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const cameraSupported = () => !!navigator.mediaDevices?.getUserMedia;
 

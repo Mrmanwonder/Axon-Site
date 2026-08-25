@@ -99,9 +99,9 @@ async function encodeMask({ data, width, height }) {
  * Condition one captured or uploaded page.
  *
  * @param {ImageBitmap|HTMLImageElement|HTMLCanvasElement} source
- * @param {{quad?:Array, pageNumber?:number}} options
+ * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object}} options
  */
-export async function conditionPage(source, { quad = null, pageNumber = 1 } = {}) {
+export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null } = {}) {
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
 
@@ -159,6 +159,25 @@ export async function conditionPage(source, { quad = null, pageNumber = 1 } = {}
       // survive this step even by accident. Capture time and device belong in
       // the database, not in the file.
       exif_stripped: true,
+      // 'image-capture' (a real sensor-resolution still) or 'canvas-grab' (a
+      // frame off the live video element), or null for an upload that never
+      // went through capture.js at all. Carried through so production data can
+      // show, per path, whether the live gate's read agrees with this page's
+      // final score — see quality.live_gate below.
+      capture_path: capturePath,
+      // The live gate's own read of this exact frame, at the moment the
+      // shutter fired — for comparing against `quality` above, which is scored
+      // on the conditioned image. The two are computed at different scales on
+      // purpose; logging both side by side is how that gap gets measured
+      // instead of assumed.
+      live_gate: liveGate ? {
+        sharpness: liveGate.sharpness,
+        glare: liveGate.glare,
+        fill: liveGate.fill,
+        page_long_edge: liveGate.pageLongEdge,
+        steady: liveGate.steady,
+        blocking: liveGate.blocking,
+      } : null,
     },
     // Handed on rather than re-decoded: stage 2 has already read exactly this,
     // and decoding the file we just wrote would measure the encoder.

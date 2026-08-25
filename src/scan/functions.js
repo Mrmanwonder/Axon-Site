@@ -12,6 +12,36 @@
 import { currentSession } from '../supabase.js';
 import { MASTERY_API_URL } from '../config.js';
 
+// One request-level timeout and one retry, for the transient case: a blip on a
+// 4G connection, not the R2-CORS-shaped bug that used to surface here. Every
+// resilience feature above this layer (idempotency keys, resumable per-page
+// drafts) already assumes a request either lands or fails cleanly — a single
+// unguarded `fetch()` with no timeout meant a stalled connection surfaced as a
+// long silent hang rather than either of those.
+const REQUEST_TIMEOUT_MS = 20000;
+const RETRY_DELAY_MS = 1200;
+
+/** fetch(), but bounded and retried once on a network-level failure. */
+async function resilientFetch(url, init) {
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      // A response that came back with a bad status is not caught here — only
+      // a request that never got a response at all (offline, DNS, aborted).
+      // Retrying a request the server already received and is acting on would
+      // be the wrong fix; the idempotency key upstream is what makes that safe
+      // if it does happen, not this loop.
+      if (attempt > 0) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 async function post(path, body) {
   const session = await currentSession();
   if (!session) {
@@ -22,7 +52,7 @@ async function post(path, body) {
 
 let res;
   try {
-    res = await fetch(`${MASTERY_API_URL}${path}`, {
+    res = await resilientFetch(`${MASTERY_API_URL}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -75,7 +105,7 @@ export const pageAssetUrls = (body) => post('/page-asset-urls', body);
 export async function putObject(url, blob, contentType) {
   let res;
   try {
-    res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    res = await resilientFetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
   } catch {
     throw new Error('The upload was interrupted. Check your connection and try again.');
   }
