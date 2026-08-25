@@ -5,9 +5,9 @@
 
    The pre-port `index.html` carries a fully populated Home: "14 papers",
    "You're losing most marks to unstated assumptions", "7 marks lost". Those are
-   the prototype's invented numbers. `__masteryHomeEmpty` exists to swap them for
+   the prototype's invented numbers. `__axonHomeEmpty` exists to swap them for
    the empty state — and nothing in `src/` has ever called it. `AGENTS.md`
-   documents `__masteryRenderHome` as one of the render bridges; it was never
+   documents `__axonRenderHome` as one of the render bridges; it was never
    implemented either.
 
    The effect on the shipping app is that a student who has just signed up and

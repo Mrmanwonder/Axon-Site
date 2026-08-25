@@ -1,7 +1,7 @@
 {
-  "name": "mastery",
+  "name": "axon",
   "version": "0.1.0",
-  "description": "Mastery — a study companion for CBSE students in classes 9-12.",
+  "description": "Axon — a study companion for CBSE students in classes 9-12.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

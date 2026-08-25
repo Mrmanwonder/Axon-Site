@@ -73,8 +73,8 @@ comment on column public.paper.idempotency_key is
 -- call, but it still has to survive the worker that runs it dying halfway, and
 -- a queue is the only thing here that guarantees that.
 do $$ begin
-  if not exists (select 1 from pgmq.list_queues() where queue_name = 'mastery_reconcile') then
-    perform pgmq.create('mastery_reconcile');
+  if not exists (select 1 from pgmq.list_queues() where queue_name = 'axon_reconcile') then
+    perform pgmq.create('axon_reconcile');
   end if;
 end $$;
 
@@ -261,7 +261,7 @@ begin
     select id from public.question_region
      where run_id = p_run_id and extract_status = 'pending' order by order_index
   loop
-    perform pgmq.send('mastery_content',
+    perform pgmq.send('axon_content',
       jsonb_build_object('run_id', p_run_id, 'region_id', v_region.id));
     v_queued := v_queued + 1;
   end loop;
@@ -270,7 +270,7 @@ begin
   -- extract, and going quiet here is exactly the invisible failure hard rule 4
   -- forbids. Send it straight to reconciliation, which will say so.
   if v_queued = 0 then
-    perform pgmq.send('mastery_reconcile', jsonb_build_object('run_id', p_run_id));
+    perform pgmq.send('axon_reconcile', jsonb_build_object('run_id', p_run_id));
   end if;
   return true;
 end; $$;
@@ -289,7 +289,7 @@ begin
   end if;
 
   perform public.run_advance(p_run_id, 'attribution');
-  perform pgmq.send('mastery_reconcile', jsonb_build_object('run_id', p_run_id));
+  perform pgmq.send('axon_reconcile', jsonb_build_object('run_id', p_run_id));
   return true;
 end; $$;
 
@@ -399,7 +399,7 @@ begin
      order by (r.marks_available - r.marks_awarded) desc, r.order_index
   loop
     update public.question_region set explain_status = 'queued' where id = v_region.id;
-    perform pgmq.send('mastery_explain',
+    perform pgmq.send('axon_explain',
       jsonb_build_object('run_id', p_run_id, 'region_id', v_region.id));
     v_queued := v_queued + 1;
   end loop;

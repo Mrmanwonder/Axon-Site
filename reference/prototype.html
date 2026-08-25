@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#000000" id="themeColor">
-<meta name="description" content="Mastery — see exactly where your marks go.">
-<title>Mastery</title>
+<meta name="description" content="Axon — see exactly where your marks go.">
+<title>Axon</title>
 <style>
   /* Onest, the prototype's typeface, embedded as the latin variable subset.
      Self-hosted rather than pulled from Google: it removes two external
@@ -150,7 +150,7 @@
   .cz .n{flex:1;font-size:13px;color:var(--label-2);letter-spacing:-.01em;}
   .cz .v{font-size:13px;font-weight:600;color:var(--label);}
 
-  /* mastery map */
+  /* axon map */
   .mapcard{padding:18px 18px 14px;}
   .maprow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
   .maprow:last-of-type{margin-bottom:0;}
@@ -1065,7 +1065,7 @@
       </section>
 
       <section class="isec">
-      <div class="sectitle">Concept mastery</div>
+      <div class="sectitle">Concept Axon</div>
       <div class="card mapcard">
         <div class="maprow"><span class="ch">Kinematics</span><span class="cells"><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.85)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.12)"></i></span></div>
         <div class="maprow"><span class="ch">Laws of Motion</span><span class="cells"><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.40)"></i><i style="background:rgba(58,134,255,.55)"></i><i style="background:rgba(58,134,255,.70)"></i><i style="background:rgba(58,134,255,.25)"></i></span></div>
@@ -1327,7 +1327,7 @@
       <div style="margin-top:14px"></div>
       <!-- The single sanctioned use of red in the interface. -->
       <div class="list"><div class="srow noicon" id="set-signout"><div class="lbl" style="color:var(--red)">Sign out</div></div></div>
-      <div class="sfoot">Mastery 2.4.1 · Build 3120</div>
+      <div class="sfoot">Axon 2.4.1 · Build 3120</div>
     </div>
 
     <!-- ══════════════ WARNING SHEET ══════════════ -->
@@ -1530,7 +1530,7 @@ function pick(i){
   // Scan tab is on screen and stops the moment it isn't. Leaving it running
   // behind another tab costs battery and, more to the point, leaves a camera
   // on in a student's bedroom because they navigated away.
-  if(i===2!==wasScan) window.__masteryScanVisible && window.__masteryScanVisible(i===2);
+  if(i===2!==wasScan) window.__axonScanVisible && window.__axonScanVisible(i===2);
 }
 function animateInsights(){
   setTimeout(()=>{
@@ -1558,7 +1558,7 @@ document.querySelectorAll('.sw:not([data-managed])').forEach((sw,i)=>{
    a demo one. State is the caller's business; this only animates. */
 let __swKey=0;
 const __swKeys=new WeakMap();
-window.__masterySwitch=function(el,on){
+window.__axonSwitch=function(el,on){
   if(!el) return;
   if(!__swKeys.has(el)){ __swKeys.set(el,'msw'+(__swKey++)); seed(__swKeys.get(el), on?1:0); }
   const key=__swKeys.get(el), th=el.querySelector('.th');
@@ -1746,7 +1746,7 @@ bindActivation();
 /* Anything rendered after boot — the review screen's chips, the tray — carries
    data-activates and is bound the same way. A div that responds to a tap and
    not to Enter is a control half the people who need it cannot use. */
-window.__masteryBindActivation = bindActivation;
+window.__axonBindActivation = bindActivation;
 document.getElementById('refractlayer').addEventListener('keydown',e=>{
   const fwd=isRail()?'ArrowDown':'ArrowRight', back=isRail()?'ArrowUp':'ArrowLeft';
   if(e.key!==fwd&&e.key!==back) return;
@@ -1783,11 +1783,11 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(layoutTabs);
    and the modules call them.
    ══════════════════════════════════════════════════════════════════════════ */
 
-window.__masteryHaptic = { tick: hapticTick, firm: hapticFirm };
+window.__axonHaptic = { tick: hapticTick, firm: hapticFirm };
 
 // Press springs are attached at boot, so markup rendered later (onboarding,
 // sheet choices) needs them bound too.
-window.__masteryRebindPress = function(scope){
+window.__axonRebindPress = function(scope){
   (scope||document).querySelectorAll('.press').forEach(el=>{
     if(el.dataset.pressBound) return;
     el.dataset.pressBound='1';
@@ -1803,7 +1803,7 @@ window.__masteryRebindPress = function(scope){
 // appearance toggle get this at boot from the `.tab,.themebtn` binding above;
 // onboarding's buttons are divs created later, so they need the same treatment
 // or the whole flow is unreachable from a keyboard.
-window.__masteryRebindKeys = function(scope){
+window.__axonRebindKeys = function(scope){
   (scope||document).querySelectorAll('[role="button"],[role="switch"]').forEach(el=>{
     if(el.dataset.keyBound) return;
     el.dataset.keyBound='1';
@@ -1816,7 +1816,7 @@ window.__masteryRebindKeys = function(scope){
 // Which Home the student sees. Home is the one tab that can be legitimately
 // empty for a brand-new account, and an empty dashboard of zeroes would be a
 // chart built on no data — so it swaps for a single call to action instead.
-window.__masteryHomeEmpty = function(empty, name){
+window.__axonHomeEmpty = function(empty, name){
   homeEmpty = !!empty;
   if(name) document.getElementById('v0bGreet').textContent = name;
   if(current===0){
@@ -1825,7 +1825,7 @@ window.__masteryHomeEmpty = function(empty, name){
   }
 };
 
-window.__masteryOpenDisclosure = function(d){
+window.__axonOpenDisclosure = function(d){
   const p=d.querySelector('.panel');
   if(!p||d.classList.contains('open')) return;
   d.classList.add('open');
@@ -1835,7 +1835,7 @@ window.__masteryOpenDisclosure = function(d){
 /* Generic sheet. Same spring, scrim and geometry as the board/class warning —
    the app layer supplies copy, an optional input, and optional choice rows. */
 let sheetConfirm=null, sheetChoice=null;
-window.__masteryOpenSheet = function(cfg){
+window.__axonOpenSheet = function(cfg){
   sheetConsequential = cfg.primaryClass === 'primary' && !cfg.choices;
   sheetConfirm = cfg.onConfirm || null;
   sheetChoice  = cfg.onChoice  || null;
@@ -1856,7 +1856,7 @@ window.__masteryOpenSheet = function(cfg){
     extras.querySelectorAll('[data-choice]').forEach(el=>el.addEventListener('click',()=>{
       hapticTick(); const v=el.dataset.choice; closeSheet(); sheetChoice&&sheetChoice(v);
     }));
-    window.__masteryRebindPress(extras);
+    window.__axonRebindPress(extras);
   }
 
   // Choices are the action, so the primary button would be a second way to do
@@ -1900,13 +1900,13 @@ const num = n => Number.isInteger(n) ? String(n) : Number(n).toFixed(1);
 
 /* The camera's two surfaces, handed over rather than found by the module, so
    the markup stays owned by this file. */
-window.__masteryScanSurface = () => ({
+window.__axonScanSurface = () => ({
   hero: document.getElementById('scanHero'),
   video: document.getElementById('scanVideo'),
   overlay: document.getElementById('scanOverlay')
 });
 
-window.__masteryCameraLive = function(on, phase){
+window.__axonCameraLive = function(on, phase){
   const hero=document.getElementById('scanHero');
   if(!hero) return;
   hero.dataset.camera = on ? 'on' : 'off';
@@ -1917,15 +1917,15 @@ window.__masteryCameraLive = function(on, phase){
    modules have finished loading. It exists so the screen says something true
    during the seconds the permission sheet is coming up, instead of showing a
    dead viewfinder and an instruction about corners. */
-window.__masteryCameraStarting = function(){
-  window.__masteryCameraLive(false, 'starting');
+window.__axonCameraStarting = function(){
+  window.__axonCameraLive(false, 'starting');
   const hint=document.getElementById('scanHint');
   if(hint){ hint.textContent='Starting the camera…'; delete hint.dataset.blocking; }
 };
 
 /* One line, and amber is the entire vocabulary of attention in the viewfinder.
    Red is the teacher's pen and the sign-out row; it appears nowhere else. */
-window.__masteryRenderHint = function(state){
+window.__axonRenderHint = function(state){
   const el=document.getElementById('scanHint');
   if(!el) return;
   el.textContent = state.hint;
@@ -1933,7 +1933,7 @@ window.__masteryRenderHint = function(state){
   else delete el.dataset.blocking;
 };
 
-window.__masteryRenderTray = function(pages, handlers){
+window.__axonRenderTray = function(pages, handlers){
   const tray=document.getElementById('scanTray');
   const scroll=document.getElementById('trayScroll');
   const count=document.getElementById('trayCount');
@@ -1958,8 +1958,8 @@ window.__masteryRenderTray = function(pages, handlers){
     hapticTick();
     handlers && handlers.onPage && handlers.onPage(Number(el.dataset.page));
   }));
-  window.__masteryRebindPress(scroll);
-  window.__masteryBindActivation(scroll);
+  window.__axonRebindPress(scroll);
+  window.__axonBindActivation(scroll);
 
   const done=document.getElementById('trayDone');
   if(done && handlers && handlers.onDone){ done.onclick = () => { hapticFirm(); handlers.onDone(); }; }
@@ -1967,7 +1967,7 @@ window.__masteryRenderTray = function(pages, handlers){
 
 /* Progress names the step and the page. There is no bar, because nobody knows
    how long this takes and a bar would be a confident guess. */
-window.__masteryRenderProgress = function(model){
+window.__axonRenderProgress = function(model){
   const host=document.getElementById('scanProgress');
   const panel=document.getElementById('scanBelow');
   if(!host) return;
@@ -1996,10 +1996,10 @@ window.__masteryRenderProgress = function(model){
 
   const card=document.getElementById('progressCard');
   if(card && model.onOpen) card.onclick = model.onOpen;
-  window.__masteryRebindPress(host);
+  window.__axonRebindPress(host);
 };
 
-window.__masteryRenderDrafts = function(drafts, handlers){
+window.__axonRenderDrafts = function(drafts, handlers){
   const list=document.getElementById('draftsList');
   const icon=document.getElementById('draftsIcon');
   if(!list) return;
@@ -2023,10 +2023,10 @@ window.__masteryRenderDrafts = function(drafts, handlers){
     hapticTick(); closeDrafts();
     handlers && handlers.onResume && handlers.onResume(el.dataset.resume);
   }));
-  window.__masteryRebindPress(list);
+  window.__axonRebindPress(list);
 };
 
-window.__masteryDraftToast = function(draft, handlers){
+window.__axonDraftToast = function(draft, handlers){
   const toast=document.getElementById('draftToast');
   const sub=document.getElementById('draftToastSub');
   const go=document.getElementById('draftToastGo');
@@ -2043,7 +2043,7 @@ window.__masteryDraftToast = function(draft, handlers){
    Unsure and unreadable first. Every field against its own crop. The
    correction ladder is pick → type → rescan, and the alternatives picker is
    the landing state because it is the one-tap common case. */
-window.__masteryRenderReview = function(model, handlers){
+window.__axonRenderReview = function(model, handlers){
   const body=document.getElementById('reviewBody');
   const title=document.getElementById('rvTitle');
   const save=document.getElementById('rvSave');
@@ -2150,7 +2150,7 @@ window.__masteryRenderReview = function(model, handlers){
     }));
   });
 
-  window.__masteryBindActivation(body);
+  window.__axonBindActivation(body);
   const confirmClean=document.getElementById('rvConfirmClean');
   if(confirmClean && handlers && handlers.onConfirmClean){
     confirmClean.onclick = () => { hapticFirm(); handlers.onConfirmClean(); };
@@ -2160,17 +2160,17 @@ window.__masteryRenderReview = function(model, handlers){
     confirmAll.onclick = () => { hapticFirm(); handlers.onSave(); };
   }
   if(save && handlers && handlers.onSave){ save.onclick = () => { hapticFirm(); handlers.onSave(); }; }
-  window.__masteryRebindPress(body);
+  window.__axonRebindPress(body);
 };
 
-window.__masteryOpenReview = openReview;
-window.__masteryCloseReview = closeReview;
+window.__axonOpenReview = openReview;
+window.__axonCloseReview = closeReview;
 /* Navigation belongs to this file, so the modules ask rather than reach for the
    tab bar themselves. Retaking a page from the review screen has to put the
    student back in front of the camera. */
-window.__masteryGoto = pick;
+window.__axonGoto = pick;
 
-window.__masteryRenderLibrary = function(papers, opts){
+window.__axonRenderLibrary = function(papers, opts){
   const list=document.getElementById('libraryList');
   const count=document.getElementById('libraryCount');
   if(!list) return;
@@ -2194,7 +2194,7 @@ window.__masteryRenderLibrary = function(papers, opts){
       <svg class="chev" viewBox="0 0 7 12" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l5 5-5 5"/></svg>
     </div>`;
   }).join('');
-  window.__masteryRebindPress(list);
+  window.__axonRebindPress(list);
 };
 </script>
 

@@ -13,9 +13,9 @@
 -- still has to hold on the real thing, where auth and storage have their own
 -- constraints, triggers and grants.
 --
---   createdb mastery && psql -d mastery -f supabase/local/shim.sql
---   for f in supabase/migrations/*.sql; do psql -d mastery -v ON_ERROR_STOP=1 -f "$f"; done
---   psql -d mastery -f supabase/tests/rls_and_hard_rules.sql
+--   createdb axon && psql -d axon -f supabase/local/shim.sql
+--   for f in supabase/migrations/*.sql; do psql -d axon -v ON_ERROR_STOP=1 -f "$f"; done
+--   psql -d axon -f supabase/tests/rls_and_hard_rules.sql
 -- ============================================================================
 
 -- Roles are cluster-wide, not per-database, so a rebuilt database finds them

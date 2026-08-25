@@ -18,13 +18,13 @@ database, production included.
 ## The bridge that used to exist
 
 `index.html` owned the design system and `src/` owned data and flow, and the two
-met at a set of `window.__mastery*` globals — ten of them by the end. None of
+met at a set of `window.__axon*` globals — ten of them by the end. None of
 them survive the React port: components import the primitives directly, and
 `src/scan/ui.js` takes a `host` object from `initScanUI` instead.
 
 Two hazards that bridge existed to manage are worth carrying forward:
 
-- `__masteryRebindPress` existed because press springs were bound at load and
+- `__axonRebindPress` existed because press springs were bound at load and
   had to be re-bound after any DOM injection. `PressBox` owns its own spring, so
   there is nothing to rebind — but a press effect written as a bare `useEffect`
   over a list would reintroduce exactly that bug.
@@ -38,8 +38,8 @@ Two rules the render bridges were meant to hold, which the screens hold now:
 
 - A surface with no data says so. It never falls back to the numbers the
   prototype was built with — those read as this student's marks, which is the
-  most confident lie the interface can tell. `__masteryHomeEmpty` was never
-  called by anything, and `__masteryRenderHome` / `__masteryRenderInsights` were
+  most confident lie the interface can tell. `__axonHomeEmpty` was never
+  called by anything, and `__axonRenderHome` / `__axonRenderInsights` were
   never implemented, so on the pre-port build a brand-new student was shown
   fourteen papers and seven marks lost. Home and Insights read from
   `papers.js` now, and loading, empty and failed are three different states.
@@ -253,7 +253,7 @@ break by accident.
 
 | Function | Job |
 | --- | --- |
-| `paper-submit` | Idempotent create, then one message on `mastery_triage` |
+| `paper-submit` | Idempotent create, then one message on `axon_triage` |
 | `upload-intent` / `upload-complete` | Presigned PUTs out, server-side HEAD back |
 | `queue-tick` | Dispatch, and the two sweeps that make a stall visible |
 | `w-triage` → `w-structure` → `w-content` → `w-reconcile` → `w-adjudicate` | Stages 3–7 |
@@ -295,7 +295,7 @@ break by accident.
 Three suites, all runnable without a Supabase project or an API key:
 
 ```bash
-psql -d mastery -f supabase/local/shim.sql     # then apply migrations/, then tests/
+psql -d axon -f supabase/local/shim.sql     # then apply migrations/, then tests/
 deno test --allow-env supabase/functions/_shared/pipeline_test.ts
 node --test harness/metrics.test.mjs
 node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example

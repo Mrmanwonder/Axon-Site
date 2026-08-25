@@ -1,6 +1,6 @@
 # SCANNING_SYSTEM.md
 
-The ingestion pipeline. This is the highest-risk subsystem in Mastery and the
+The ingestion pipeline. This is the highest-risk subsystem in Axon and the
 one every other feature depends on — Insights, Library, and every explanation
 are downstream of whatever this produces. If mark attribution is wrong, the
 analytics are confidently wrong, which is worse than absent.
@@ -26,7 +26,7 @@ A graded exam paper has three layers stacked on top of each other:
 
 The product isn't "read the page." It's **bind layer 3 to layer 2 to layer 1** —
 attribute each teacher mark to the answer region it refers to, and that answer
-region to its question. Everything Mastery claims to know follows from that
+region to its question. Everything Axon claims to know follows from that
 binding being right.
 
 ### The hard rule this creates

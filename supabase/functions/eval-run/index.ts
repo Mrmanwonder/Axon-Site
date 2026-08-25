@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       golden_id: paperId,
     });
 
-    await sb.rpc('pgmq_send', { queue_name: 'mastery_triage', msg: { run_id: run.id } });
+    await sb.rpc('pgmq_send', { queue_name: 'axon_triage', msg: { run_id: run.id } });
     started.push({ paper_id: paper.id, run_id: run.id });
   }
 

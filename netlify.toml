@@ -1,4 +1,4 @@
-# Mastery is a Vite + React app. The build emits to dist/, which holds only what
+# Axon is a Vite + React app. The build emits to dist/, which holds only what
 # belongs on the web — the Constitution specs, the blueprint, the design
 # reference images, bench/, harness/ and reference/ are all in the repo and none
 # of them are fetchable from the public site.

@@ -39,9 +39,9 @@ alter table public.paper_page
   add column if not exists structure_status   text  not null default 'pending';
 
 comment on column public.paper_page.r2_key is
-  'Key of the conditioned page in mastery-derived. Carries a 16-byte nonce: presigned URLs go to third parties, so key structure must not be an enumeration surface if one leaks.';
+  'Key of the conditioned page in axon-derived. Carries a 16-byte nonce: presigned URLs go to third parties, so key structure must not be an enumeration surface if one leaks.';
 comment on column public.paper_page.original_key is
-  'The raw capture or source PDF page in mastery-originals. Expires after 30 days by bucket lifecycle rule, so this may name an object that is gone — never a load-bearing read path.';
+  'The raw capture or source PDF page in axon-originals. Expires after 30 days by bucket lifecycle rule, so this may name an object that is gone — never a load-bearing read path.';
 comment on column public.paper_page.mask_key is
   'The red-ink mask from IMAGE_PIPELINE stage 2, PNG and lossless. Sent alongside the page because lossy encoding costs a faint 1px tick most of its pixels, and a half-tick is partial credit.';
 comment on column public.paper_page.sha256 is
@@ -91,7 +91,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 comment on column public.question_region.crop_key is
-  'Rendered crop in mastery-derived, keyed by question id. Hard rule 4 is a UI promise before it is a data one: every field can be shown against the pixels it was read from, including the ones we could not read.';
+  'Rendered crop in axon-derived, keyed by question id. Hard rule 4 is a UI promise before it is a data one: every field can be shown against the pixels it was read from, including the ones we could not read.';
 
 -- ── extraction_run · runtime state ─────────────────────────────────────────
 -- The spec hangs status off the paper. It hangs off the run here, because a
@@ -291,7 +291,7 @@ begin
   -- The whole prefix is going. Child rows are about to cascade, and enqueuing
   -- their individual keys as well would be thousands of redundant DELETEs
   -- against a prefix that one walk already covers.
-  perform set_config('mastery.deleting_paper', '1', true);
+  perform set_config('axon.deleting_paper', '1', true);
   return old;
 end; $$;
 
@@ -311,7 +311,7 @@ declare
   v_field  text;
   v_key    text;
 begin
-  if coalesce(current_setting('mastery.deleting_paper', true), '') = '1' then
+  if coalesce(current_setting('axon.deleting_paper', true), '') = '1' then
     return old;
   end if;
 
@@ -404,8 +404,8 @@ do $$
 declare q text;
 begin
   foreach q in array array[
-    'mastery_triage', 'mastery_structure', 'mastery_content',
-    'mastery_adjudicate', 'mastery_explain', 'mastery_r2_delete'
+    'axon_triage', 'axon_structure', 'axon_content',
+    'axon_adjudicate', 'axon_explain', 'axon_r2_delete'
   ] loop
     if not exists (select 1 from pgmq.list_queues() where queue_name = q) then
       perform pgmq.create(q);
@@ -423,7 +423,7 @@ create or replace function private.schedule_pipeline_tick(
   p_service_key   text,
   p_schedule      text default '10 seconds'
 ) returns text language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_job text := 'mastery-tick';
+declare v_job text := 'axon-tick';
 begin
   if p_functions_url is null or p_service_key is null then
     raise exception 'both the functions URL and the service key are required';
@@ -464,8 +464,8 @@ declare
   v_swept integer := 0;
 begin
   foreach v_queue in array array[
-    'mastery_triage', 'mastery_structure', 'mastery_content',
-    'mastery_adjudicate', 'mastery_explain'
+    'axon_triage', 'axon_structure', 'axon_content',
+    'axon_adjudicate', 'axon_explain'
   ] loop
     for v_msg in
       execute format(

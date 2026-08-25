@@ -314,7 +314,7 @@ export default function Settings() {
             try {
               toast("Gathering your data…");
               downloadJson(
-                `mastery-data-${new Date().toISOString().slice(0, 10)}.json`,
+                `axon-data-${new Date().toISOString().slice(0, 10)}.json`,
                 await exportMyData(guardian),
               );
               toast("Downloaded.");

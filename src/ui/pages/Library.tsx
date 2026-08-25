@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    LIBRARY — the archive
 
-   A direct port of `__masteryRenderLibrary`, which was one of the two render
+   A direct port of `__axonRenderLibrary`, which was one of the two render
    bridges that actually got built. The behaviour is preserved down to the
    details that carry meaning:
 

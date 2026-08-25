@@ -11,7 +11,7 @@
 // picks up at the first page that has not — per page, with no re-capture and no
 // re-upload of what already landed.
 
-const DB_NAME = 'mastery-scan';
+const DB_NAME = 'axon-scan';
 const DB_VERSION = 1;
 const STORE = 'drafts';
 

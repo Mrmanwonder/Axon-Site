@@ -55,7 +55,7 @@ type Step =
 
 /* Offered once per device, ever — never re-prompted on a later sign-in. If
    dismissed, the only way back to it is Settings → Security → Passkeys. */
-const PASSKEY_OFFER_KEY = "mastery.passkeyOfferSeen";
+const PASSKEY_OFFER_KEY = "axon.passkeyOfferSeen";
 const passkeyOfferSeen = () => {
   try { return localStorage.getItem(PASSKEY_OFFER_KEY) === "1"; } catch { return true; }
 };
@@ -293,7 +293,7 @@ export default function Onboarding() {
         <div className="obhero">
           <div className="obwordmark">
             <span className="g"><Icon d={ICONS.trend} /></span>
-            <span className="n">Mastery</span>
+            <span className="n">Axon</span>
           </div>
           <h1>See exactly where the <em>marks went</em>.</h1>
           <div className="sub">

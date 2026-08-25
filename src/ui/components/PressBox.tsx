@@ -2,7 +2,7 @@
    PRESS
 
    The prototype bound a spring-driven scale to every `.press` element at load
-   and rebound it after any DOM injection (__masteryRebindPress). In React the
+   and rebound it after any DOM injection (__axonRebindPress). In React the
    binding belongs to the component, so there is nothing to rebind and nothing
    to drift.
 

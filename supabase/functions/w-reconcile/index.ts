@@ -100,7 +100,7 @@ serveWorker(async ({ sb, msg }) => {
     // find one; it may honestly find nothing. Either way the marks stand.
     await sb.rpc('run_advance', { p_run_id: runId, p_to: 'adjudicating' });
     await sb.rpc('pgmq_send', {
-      queue_name: 'mastery_adjudicate',
+      queue_name: 'axon_adjudicate',
       msg: { run_id: runId },
     });
     return { detail: { reconciled: false, delta: result.delta } };

@@ -231,8 +231,8 @@ do $$
 declare v_missing text[];
 begin
   select array_agg(q) into v_missing from unnest(array[
-    'mastery_triage','mastery_structure','mastery_content',
-    'mastery_adjudicate','mastery_explain','mastery_r2_delete']) q
+    'axon_triage','axon_structure','axon_content',
+    'axon_adjudicate','axon_explain','axon_r2_delete']) q
   where not exists (select 1 from pgmq.list_queues() lq where lq.queue_name = q);
   perform public._t('every queue the dispatcher reads exists', v_missing is null,
                     coalesce(array_to_string(v_missing, ', '), ''));

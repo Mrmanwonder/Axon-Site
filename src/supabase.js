@@ -98,7 +98,7 @@ export async function signInWithProvider(provider) {
   if (error) throw error;
 }
 
-const ATTEMPT_KEY = 'mastery.oauthAttempt';
+const ATTEMPT_KEY = 'axon.oauthAttempt';
 
 /**
  * True when the failure is the provider not being switched on in the Supabase

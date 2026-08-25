@@ -98,7 +98,7 @@
   .cz .n{flex:1;font-size:13px;color:var(--label-2);letter-spacing:-.01em;}
   .cz .v{font-size:13px;font-weight:600;color:var(--label);}
 
-  /* mastery map */
+  /* axon map */
   .mapcard{padding:18px 18px 14px;}
   .maprow{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
   .maprow:last-of-type{margin-bottom:0;}

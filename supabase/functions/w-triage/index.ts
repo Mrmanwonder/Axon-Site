@@ -99,7 +99,7 @@ serveWorker(async ({ sb, msg, beat }) => {
 
   for (const page of allPages ?? []) {
     await sb.rpc('pgmq_send', {
-      queue_name: 'mastery_structure',
+      queue_name: 'axon_structure',
       msg: { run_id: runId, page_id: page.id },
     });
   }

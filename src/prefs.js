@@ -11,7 +11,7 @@
 
 import { sb } from './supabase.js';
 
-const LOCAL_KEY = 'mastery.prefs.v1';
+const LOCAL_KEY = 'axon.prefs.v1';
 
 export const DEFAULTS = {
   theme: 'system',

@@ -10,7 +10,7 @@
 // is the only module that knows the ten stages and their order, and rewriting
 // it as components would have put the pipeline at risk for no gain — the DOM
 // coupling was never in the flow, only in the render calls, which are now the
-// host's job. What changed is that those calls went from `window.__mastery*`
+// host's job. What changed is that those calls went from `window.__axon*`
 // globals to an injected object; nothing about the order did.
 
 import { createCapture } from './capture.js';

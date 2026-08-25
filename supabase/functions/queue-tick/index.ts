@@ -15,13 +15,13 @@ import { failure, isServiceCall, json, serviceClient } from '../_shared/http.ts'
 interface QueueSpec { name: string; fn: string; batch: number }
 
 const QUEUES: QueueSpec[] = [
-  { name: 'mastery_triage', fn: 'w-triage', batch: 5 },
-  { name: 'mastery_structure', fn: 'w-structure', batch: 20 },
-  { name: 'mastery_content', fn: 'w-content', batch: 30 },
-  { name: 'mastery_reconcile', fn: 'w-reconcile', batch: 10 },
-  { name: 'mastery_adjudicate', fn: 'w-adjudicate', batch: 5 },
-  { name: 'mastery_explain', fn: 'w-explain', batch: 20 },
-  { name: 'mastery_r2_delete', fn: 'w-r2-delete', batch: 5 },
+  { name: 'axon_triage', fn: 'w-triage', batch: 5 },
+  { name: 'axon_structure', fn: 'w-structure', batch: 20 },
+  { name: 'axon_content', fn: 'w-content', batch: 30 },
+  { name: 'axon_reconcile', fn: 'w-reconcile', batch: 10 },
+  { name: 'axon_adjudicate', fn: 'w-adjudicate', batch: 5 },
+  { name: 'axon_explain', fn: 'w-explain', batch: 20 },
+  { name: 'axon_r2_delete', fn: 'w-r2-delete', batch: 5 },
 ];
 
 /**
