@@ -1,0 +1,19 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  // The Cloudflare Workers Builds Git integration for the "axon-site" project
+  // runs `npm run build` then `npx wrangler versions upload` against the repo
+  // root. Without this file that upload has nothing to deploy — no `main`
+  // entry point and no declared assets directory — and fails with "Missing
+  // entry-point to Worker script or to assets directory". This is a static
+  // Vite SPA with no server-side Worker code, so Workers Static Assets is the
+  // whole story: build to dist/, serve it.
+  "name": "axon-site",
+  "compatibility_date": "2026-08-20",
+  "assets": {
+    "directory": "./dist",
+    // React Router client-side routes (e.g. /library/<paper>/<question>) have
+    // to resolve on a cold load, not 404 at the edge before React mounts.
+    // Same behaviour as the `/* -> /index.html` redirect in netlify.toml.
+    "not_found_handling": "single-page-application"
+  }
+}
