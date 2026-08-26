@@ -1,7 +1,7 @@
 {
   "name": "axon",
   "version": "0.1.0",
-  "description": "Axon — a study companion for CBSE students in classes 9-12.",
+  "description": "Axon — a study companion for Cambridge (CAIE) students, IGCSE through A Level.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
