@@ -17,6 +17,7 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
 | `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
 | `golden-report.mjs` | The same fixtures again, as a false-accept/false-reject rate report instead of pass/fail — `node bench/golden-report.mjs` |
+| `verdict-agreement.mjs` + `.test.mjs` | Whether the live capture gate ever waves through a shot the final `scorePage()` then fails — see below |
 
 Serve the repo and open them, or drive them with Playwright:
 
@@ -64,6 +65,33 @@ being marginal on real phones, but is a screenshot-of-a-screenshot artifact
 of those specific fixtures (a phone's own screen re-captured, then encoded
 again) rather than evidence about camera stills; worth knowing before acting
 on it, not a finding to chase.
+
+## verdict-agreement.mjs / .test.mjs
+
+The redesign plan's acceptance criterion was "95% live/final verdict
+agreement". Measured directly, a naive symmetric agreement score turns out to
+be the wrong thing to chase against this codebase's *current* design: the
+live gate is deliberately more sensitive to glare than the final check
+(`GLARE_WARN` vs `GLARE_FAIL` in `contract.js`) because blocking the shutter
+is free while the paper is still in the student's hands, and a page already
+through the gate costs a trip back to the schoolbag to redo. On the six real
+fixtures this repo has today, that shows up as a 4/6 "live blocked, final
+would have accepted" rate — which is the gate working as designed, not a
+defect, and reporting it as a failure would push a future change toward
+loosening the live gate to chase a number.
+
+The disagreement that actually matters is the other direction: the live gate
+says "Ready" and the final check on the resulting still rejects it anyway —
+the exact failure the gate exists to prevent. `verdict-agreement.mjs` reports
+both rates and names which one is directional-only; `verdict-agreement.test.mjs`
+pins the one that counts (`falseGo`) at zero. Both call the real
+`liveGateVerdict()` extracted from `capture.js`'s own `step()`, not a
+reimplementation that could drift from what a phone actually runs.
+
+```bash
+node bench/verdict-agreement.mjs        # the report
+node --test bench/verdict-agreement.test.mjs   # the pinned check, also in npm test
+```
 
 ---
 

@@ -29,6 +29,7 @@ import assert from 'node:assert/strict';
 import { detectQuad } from '../src/scan/edges.js';
 import { paperScore } from '../src/scan/quad.js';
 import { scorePage } from '../src/scan/quality.js';
+import { QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
 
 // Matches the live gate's own search width (capture.js's PROXY_WIDTH) and the
@@ -61,6 +62,38 @@ for (const name of REAL_PAGES) {
     const gate = scorePage(native, { longEdge: Math.max(native.width, native.height) });
     assert.ok(gate.signals.sharpness >= 0.9,
       `sharpness ${gate.signals.sharpness} on ${name} — a real, in-focus page scored soft`);
+  });
+}
+
+// RESOLUTION_FAIL is wired into scorePage()'s verdict (audit 2026-08-26
+// finding 7 flagged this as defined but never checked; re-verified false —
+// see quality.js's resVerdict) but nothing before this pinned it against a
+// real photograph, only against synthetic dimensions. `page-tilted.jpg` and
+// `page-straight.jpg` are real, in-focus, low-glare pages at native
+// resolution (per the test above) — downsampling them, genuinely, below
+// RESOLUTION_FAIL is the one honest way to produce "a low-resolution-only
+// capture" a golden set can check: real content, every other signal still
+// in its ok/warn band, so a fail here can only be coming from resolution.
+for (const name of ['page-tilted.jpg', 'page-straight.jpg']) {
+  test(`a genuinely low-resolution capture of ${name} fails on resolution alone`, async () => {
+    // Downsampled, not upsampled: both fixtures are already ~850-1000px
+    // native, so anything at or above that width would be interpolated
+    // *up*, which softens the image and would make this a blur test by
+    // accident. 500px is a real capture a long way under the phone's own
+    // sensor, the same way a student photographing from across a desk
+    // would produce one.
+    const small = await decodeFixture(name, { resizeWidth: 500 });
+    const gate = scorePage(small, { longEdge: Math.max(small.width, small.height) });
+
+    assert.equal(gate.verdict, 'fail', `expected a low-res capture of ${name} to fail, got ${gate.verdict}`);
+    assert.ok(gate.signals.long_edge < QUALITY.RESOLUTION_FAIL,
+      `long_edge ${gate.signals.long_edge} is not actually below RESOLUTION_FAIL — this test would be measuring nothing`);
+    // Isolate resolution as the actual cause: blur and glare must still be
+    // clean, or a 'fail' here would be ambiguous about why.
+    assert.ok(gate.signals.sharpness >= QUALITY.BLUR_WARN,
+      `sharpness ${gate.signals.sharpness} on the downsampled ${name} also failed — this is no longer isolating resolution`);
+    assert.ok(gate.signals.glare <= QUALITY.GLARE_FAIL,
+      `glare ${gate.signals.glare} on the downsampled ${name} also failed — this is no longer isolating resolution`);
   });
 }
 

@@ -83,6 +83,44 @@ export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFo
 }
 
 /**
+ * What the live gate says about one search result: block the shutter, or let
+ * it through with a hint. Pure and exported for the same reason `steadyWindow`
+ * and `shouldAutoCapture` are — this is the actual decision a student's phone
+ * makes every ~80ms, and it is also the only piece of that decision this repo
+ * can check against `scorePage()`'s final verdict on a real captured still
+ * (bench/verdict-agreement.mjs). Reimplementing the ordering in a bench script
+ * instead of extracting it would measure agreement against a copy that can
+ * silently drift from what the phone actually runs.
+ *
+ * Ordered by what the student should fix first. Glare comes before sharpness
+ * because a washed-out red tick reads as no tick at all — the page looks fine
+ * and the marks are simply gone. Skew and resolution are advisory only, never
+ * blocking: perspective correction handles ordinary tilt, and resolution is
+ * the one condition a student's hardware may not be able to satisfy at all —
+ * see the callers in `step()` for why blocking on either would be worse than
+ * letting the shot through and flagging it in the tray.
+ */
+export function liveGateVerdict({ glare, fill, sharpness, skew, pageLongEdge, steady }) {
+  if (glare > QUALITY.GLARE_WARN) {
+    return { blocking: 'glare', hint: 'Light is bouncing off the page — tilt it slightly away from the light' };
+  }
+  if (fill < CAPTURE.MIN_FILL) {
+    return { blocking: 'distance', hint: 'Move closer so the page fills more of the frame' };
+  }
+  if (sharpness < QUALITY.BLUR_WARN) {
+    return { blocking: 'focus', hint: 'Hold still — the page is not sharp yet' };
+  }
+  if (skew > QUALITY.SKEW_WARN_DEG) {
+    return { blocking: null, hint: 'Square the page up a little if you can' };
+  }
+  if (pageLongEdge < QUALITY.RESOLUTION_WARN) {
+    return { blocking: null, hint: 'Closer if you can — more of the page means we read it better' };
+  }
+  if (!steady) return { blocking: null, hint: 'Hold still' };
+  return { blocking: null, hint: 'Ready' };
+}
+
+/**
  * @param {Object} options
  * @param {HTMLVideoElement} options.video
  * @param {HTMLCanvasElement} options.overlay
@@ -266,40 +304,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
     quad = easeQuad(quad, scaleQuad(found, { width: pw, height: ph }, { width: vw, height: vh }));
 
     // ── the gate ───────────────────────────────────────────────────────────
-    // Ordered by what the student should fix first. Glare comes before
-    // sharpness because a washed-out red tick reads as no tick at all — the
-    // page looks fine and the marks are simply gone.
-
-    if (next.glare > QUALITY.GLARE_WARN) {
-      next.blocking = 'glare';
-      next.hint = 'Light is bouncing off the page — tilt it slightly away from the light';
-    } else if (next.fill < CAPTURE.MIN_FILL) {
-      next.blocking = 'distance';
-      next.hint = 'Move closer so the page fills more of the frame';
-    } else if (next.sharpness < QUALITY.BLUR_WARN) {
-      next.blocking = 'focus';
-      next.hint = 'Hold still — the page is not sharp yet';
-    } else if (next.skew > QUALITY.SKEW_WARN_DEG) {
-      // Advisory, never blocking: perspective correction handles ordinary
-      // tilt at capture, and refusing the shutter over an angle it can
-      // already fix would be the gate asking for something the photo does
-      // not actually need.
-      next.hint = 'Square the page up a little if you can';
-    } else if (next.pageLongEdge < QUALITY.RESOLUTION_WARN) {
-      // Advisory, never blocking. Resolution is the one gate condition the
-      // student may be unable to satisfy: it depends on what sensor the browser
-      // handed over, and plenty of Android browsers cap getUserMedia far below
-      // what the camera can do. Blocking on it means a phone that cannot reach
-      // the threshold never auto-captures at all — the shutter simply stops
-      // working, with a hint telling the student to do something they are
-      // already doing. The page is taken, and the quality gate flags it in the
-      // tray, which is where a judgement the student can act on belongs.
-      next.hint = 'Closer if you can — more of the page means we read it better';
-    } else if (!next.steady) {
-      next.hint = 'Hold still';
-    } else {
-      next.hint = 'Ready';
-    }
+    // See liveGateVerdict() above for the ordering and the reasoning behind
+    // it — kept as one implementation rather than repeated here.
+    const verdict = liveGateVerdict(next);
+    next.blocking = verdict.blocking;
+    next.hint = verdict.hint;
 
     // How long the page has been continuously found with nothing blocking. The
     // clock runs on the gate, not on stillness, so it survives the jitter that

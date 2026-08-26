@@ -9,8 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldAutoCapture, steadyWindow } from '../src/scan/capture.js';
-import { CAPTURE } from '../src/scan/contract.js';
+import { liveGateVerdict, shouldAutoCapture, steadyWindow } from '../src/scan/capture.js';
+import { CAPTURE, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
 // A page quad, and the same page with every corner nudged by `px`.
@@ -101,4 +101,57 @@ test('patience does not override the gate', () => {
     shouldAutoCapture({ ...ready, steady: false, heldFor: 60000, blocking: 'focus' }),
     false,
   );
+});
+
+// ── the live gate's own verdict ─────────────────────────────────────────────
+// Extracted out of capture.js's step() so it can be checked directly, and so
+// bench/verdict-agreement.mjs is comparing the actual decision a phone makes
+// against scorePage()'s final verdict — not a hand-copied reimplementation of
+// it that could quietly drift.
+
+// Every signal comfortably inside its "ok" band — nothing should block or
+// even earn advice beyond steadiness.
+const clean = {
+  glare: 0, fill: CAPTURE.MIN_FILL + 0.1, sharpness: QUALITY.BLUR_WARN + 0.1,
+  skew: 0, pageLongEdge: QUALITY.RESOLUTION_WARN + 100, steady: true,
+};
+
+test('every signal clean and steady reads Ready', () => {
+  assert.deepEqual(liveGateVerdict(clean), { blocking: null, hint: 'Ready' });
+});
+
+test('not yet steady, otherwise clean, blocks nothing but says so', () => {
+  const v = liveGateVerdict({ ...clean, steady: false });
+  assert.equal(v.blocking, null);
+  assert.equal(v.hint, 'Hold still');
+});
+
+test('glare over the live line blocks, ahead of every other check', () => {
+  const v = liveGateVerdict({
+    ...clean, glare: QUALITY.GLARE_WARN + 0.001,
+    fill: 0, sharpness: 0, skew: 999, pageLongEdge: 0, steady: false,
+  });
+  assert.equal(v.blocking, 'glare');
+});
+
+test('too far away blocks on distance, once glare is clear', () => {
+  const v = liveGateVerdict({ ...clean, fill: CAPTURE.MIN_FILL - 0.01 });
+  assert.equal(v.blocking, 'distance');
+});
+
+test('soft focus blocks, once distance and glare are clear', () => {
+  const v = liveGateVerdict({ ...clean, sharpness: QUALITY.BLUR_WARN - 0.01 });
+  assert.equal(v.blocking, 'focus');
+});
+
+test('skew past the warn line is advisory, never blocking', () => {
+  const v = liveGateVerdict({ ...clean, skew: QUALITY.SKEW_WARN_DEG + 1 });
+  assert.equal(v.blocking, null);
+  assert.match(v.hint, /square/i);
+});
+
+test('low resolution is advisory, never blocking — a student may not be able to clear it', () => {
+  const v = liveGateVerdict({ ...clean, pageLongEdge: QUALITY.RESOLUTION_WARN - 1 });
+  assert.equal(v.blocking, null);
+  assert.match(v.hint, /closer/i);
 });
