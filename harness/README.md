@@ -9,7 +9,8 @@ that stops being run, and this one has to survive a year of constant pipeline
 changes.
 
 ```bash
-node --test harness/metrics.test.mjs                       # the metrics themselves
+node --test harness/metrics.test.mjs                        # the metrics themselves
+node harness/validate-goldenset.mjs                          # schema + coverage check on harness/goldenset/
 node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
 node harness/run.mjs harness/runs/2026-08-20.json --baseline harness/runs/2026-08-13.json
 ```
@@ -95,6 +96,17 @@ that is safe to keep in the repository. The pages they refer to are not.
 One file per paper in `harness/goldenset/`. `harness/example/` holds a synthetic
 one so the shape is unambiguous; it lives outside the golden set on purpose,
 because a set with an invented paper in it measures nothing.
+
+Run `node harness/validate-goldenset.mjs` after adding files here — it checks
+each one against the schema below (a malformed label file fails quietly at
+`run.mjs` time otherwise, as a wrong score rather than an error) and reports
+coverage against the twenty-paper / four-subject / five-bad-case minimum this
+section and `SCANNING_SYSTEM.md` §18 both specify. It reads structurally where
+it can (a `diagram` region, a question spanning 3+ pages, a total that doesn't
+sum) and falls back to a keyword match against `paper.notes` where the schema
+has no field for the thing at all (a green-pen or pencil marker, a
+glare-damaged page) — labelled as a keyword match, not represented as
+something more certain than it is.
 
 ```jsonc
 {

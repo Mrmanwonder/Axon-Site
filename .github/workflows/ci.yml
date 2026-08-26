@@ -1,0 +1,74 @@
+name: CI
+
+# Audit Finding 9 / Perfection Plan Phase 4.1: none of this codebase's own
+# "confirmed" vs. "carried" vs. "untested" distinctions matter if the test
+# suites it already has don't run automatically. This job runs npm test
+# (bench/*.test.mjs + harness/*.test.mjs) and the pgTAP-style suites in
+# supabase/tests/*.sql on every push and pull request.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node-tests:
+    name: npm test (bench + harness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+
+  sql-tests:
+    name: supabase/tests/*.sql
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Boots the full local stack (Postgres + GoTrue, etc.) so the auth.users
+      # rows every suite's fixtures insert into actually resolve, then applies
+      # every migration in supabase/migrations/ from a clean database — the
+      # same schema this project runs in production.
+      - name: Start local Supabase stack and apply migrations
+        run: |
+          supabase start
+          supabase db reset --local
+
+      # Each file in supabase/tests/ is a self-contained, rolled-back suite
+      # that ends with `select count(*) ... as failed from public._r`. Run
+      # every one and fail the job if any suite reports failed > 0, instead
+      # of relying on someone reading the output by hand.
+      - name: Run SQL test suites
+        run: |
+          set -e
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          status=0
+          for f in supabase/tests/*.sql; do
+            echo "::group::$f (human-readable)"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f" || true
+            echo "::endgroup::"
+
+            # Every suite's second-to-last statement is
+            # `select count(*) as total, ... as passed, ... as failed from public._r`,
+            # immediately before the failing-rows detail select and the closing
+            # `rollback;`. Re-run in a fresh transaction, unaligned/tuples-only, and
+            # read just that first line so pass/fail is judged by a number, not by
+            # scanning printed output.
+            counts="$(psql "$DB_URL" -t -A -F'|' -v ON_ERROR_STOP=1 -f "$f" | grep -E '^[0-9]+\|[0-9]+\|[0-9]+$' | head -n1)"
+            failed="$(echo "$counts" | cut -d'|' -f3)"
+            if [ -z "$failed" ] || [ "$failed" != "0" ]; then
+              echo "::error file=$f::${failed:-unparseable}} assertion(s) failed in $f (counts line: '$counts')"
+              status=1
+            fi
+          done
+          exit $status
