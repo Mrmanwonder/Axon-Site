@@ -162,11 +162,24 @@ serveWorker(async ({ sb, msg, beat }) => {
   await sb.rpc('advance_after_content', { p_run_id: runId });
   return { detail: { awarded: awarded.value, available: available.value } };
 }, async ({ sb, msg }) => {
+  // Hard rule 4: a region we could not read says so, rather than leaving the
+  // student to guess why a question came back blank. ReviewSheet already
+  // reads confidence_signals.unreadable_reason (falling back to a generic
+  // line only when nothing was ever written there) — this is the one place
+  // in the content pass that was leaving it unset.
+  const regionId = msg.region_id as string;
+  const { data: region } = await sb
+    .from('question_region').select('confidence_signals').eq('id', regionId).maybeSingle();
+
   await sb.from('question_region').update({
     extract_status: 'failed',
     confidence_tier: 'unreadable',
     needs_review: true,
+    confidence_signals: {
+      ...(region?.confidence_signals as object ?? {}),
+      unreadable_reason: 'We could not read this question just now. The page is kept — check back on this paper, or try scanning it again.',
+    },
     updated_at: new Date().toISOString(),
-  }).eq('id', msg.region_id as string);
+  }).eq('id', regionId);
   await sb.rpc('advance_after_content', { p_run_id: msg.run_id });
 });
