@@ -19,7 +19,7 @@
 import { CONDITIONING } from './contract.js';
 import { warpPerspective, quadSize } from './geometry.js';
 import { separateLayers } from './layers.js';
-import { scorePage } from './quality.js';
+import { reconcileWithInk, scorePage } from './quality.js';
 
 /** Pixels on the long edge a page of this size represents, capped and never grown. */
 export function targetSize(width, height, longEdge = CONDITIONING.PAGE_LONG_EDGE) {
@@ -132,8 +132,12 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
 
   // ── nothing touches tone ─────────────────────────────────────────────────
 
-  const quality = scorePage(img);
+  const rawQuality = scorePage(img);
   const layers = separateLayers(img);
+  // See quality.js's `reconcileWithInk` for why: a glare-only fail is checked
+  // against whether the red-ink layer actually survived on this same image,
+  // rather than trusted on page-coverage share alone.
+  const quality = reconcileWithInk(rawQuality, layers.teacher.components.length);
 
   const { blob, type } = await encodeBest(toSurface(img));
   const maskBlob = await encodeMask(layers.mask);
