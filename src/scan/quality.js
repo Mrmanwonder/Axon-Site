@@ -247,3 +247,54 @@ export function scorePage(img, { longEdge = null } = {}) {
 }
 
 const round = (n) => Math.round(n * 10000) / 10000;
+
+/**
+ * Reconcile a glare-only fail against what layer separation actually found.
+ *
+ * `glareScore` measures the *share of the page* that reads as bright and
+ * colourless. On a well-exposed photo of mostly-blank paper that share is
+ * routinely 0.85–0.95 — not because the marking is unreadable, but because most
+ * of an exam page legitimately *is* bright, colourless paper background. The raw
+ * metric cannot tell "the background is white" from "the ink is gone," which is
+ * exactly the distinction that matters: two real submissions traced on
+ * 2026-08-26 scored glare 0.94–0.94 (comfortably past GLARE_FAIL) and one of
+ * them had already had 144 real teacher marks recovered by `separateLayers` on
+ * the very same pixels — the pipeline's own downstream stage contradicting the
+ * verdict this stage handed up.
+ *
+ * `separateLayers` runs on the identical `img` right next to `scorePage` in
+ * `conditionPage` and answers the question `glareScore` cannot: is the red-ink
+ * layer actually still there? If a meaningful number of teacher marks survived
+ * layer separation, the marking was not, in fact, washed out — whatever the raw
+ * page-coverage share says — so a glare-only fail is downgraded to a warn
+ * instead of blocking a genuinely readable page.
+ *
+ * This does not touch the glare *metric* itself (that needs the golden-set
+ * recalibration `scan-system-redesign-plan.md` §4.5 and §4.2 already call for,
+ * not a guessed constant) — it corrects the *verdict* using a signal the
+ * pipeline was already computing and already had, right beside it, and simply
+ * wasn't consulting. A page can still fail for glare with zero marks
+ * found — that is exactly the case this check is meant to still catch.
+ */
+export function reconcileWithInk(quality, teacherMarkCount) {
+  const GLARE_FAIL_REASON = 'Light is washing out part of the page. Tilt it away from the light and take it again.';
+  const glareWasTheOnlyFail = quality.reasons.includes(GLARE_FAIL_REASON)
+    && quality.verdict === 'fail'
+    && !quality.reasons.some((r) => r !== GLARE_FAIL_REASON
+      && !r.startsWith('A little glare') // its own warn wording, not a fail from elsewhere
+      && !r.startsWith('Slightly soft')
+      && !r.startsWith('Parts of this page'));
+
+  // A handful of stray marks proves nothing (margin noise, a torn edge); a real
+  // page of teacher marking does not survive layer separation by accident.
+  const MEANINGFUL_MARK_COUNT = 3;
+  if (!glareWasTheOnlyFail || teacherMarkCount < MEANINGFUL_MARK_COUNT) return quality;
+
+  return {
+    ...quality,
+    verdict: 'warn',
+    reasons: quality.reasons.map((r) => (r === GLARE_FAIL_REASON
+      ? 'Bright lighting on this page, but the marking still came through — worth a second look if anything looks faint.'
+      : r)),
+  };
+}

@@ -28,7 +28,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detectQuad } from '../src/scan/edges.js';
 import { paperScore } from '../src/scan/quad.js';
-import { scorePage } from '../src/scan/quality.js';
+import { reconcileWithInk, scorePage } from '../src/scan/quality.js';
 import { QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
 
@@ -102,6 +102,52 @@ for (const name of ['viewfinder-a.jpg', 'viewfinder-b.jpg']) {
     const proxy = await decodeFixture(name, { crop: VIEWFINDER_FEED, resizeWidth: PROXY_W });
     const quad = detectQuad(proxy);
     assert.ok(quad, `no quad found in a real viewfinder frame with a page in it (${name})`);
+  });
+}
+
+// Real submissions, traced live in production on 2026-08-26: two pages of a
+// genuine marked CS exam, uploaded (no camera in this environment, so no
+// quad/warp — the same code path an `<input type=file>` upload takes). Both
+// scored glare 0.94+ (well past GLARE_FAIL 0.035) and both hard-failed with
+// "Light is washing out part of these pages" — on a real, readable paper.
+// glare-blown-background-2.png's page went on to have 144 real teacher marks
+// recovered in production (extraction_run row fc030c2a-...); glare-blown-
+// background-1.png recovered zero. That is the pair reconcileWithInk exists
+// to tell apart: page 2 should downgrade to warn, page 1 should stay fail.
+//
+// The raw glare score itself is pinned here against the fixture directly —
+// that reproduces almost exactly (glare 0.93-0.94 locally vs 0.94-0.945 in
+// production for both pages), so it survives a plain Node/sharp decode fine.
+// separateLayers' mark *count* does not: run locally under sharp at every
+// scale tried (native, 900px proxy, and conditionPage's own target scale) it
+// finds 0 marks on both fixtures, including page 2's real 144 — almost
+// certainly a decode-level difference between sharp and a browser canvas's
+// getImageData on this specific PNG (ICC/alpha handling is the leading
+// suspect, not yet root-caused) rather than anything wrong with the ink
+// itself. So this test pins reconcileWithInk's own contract directly against
+// the raw glare-only fail this fixture produces, using the real production
+// mark count as input rather than a local (and here, unreliable) re-derivation
+// of it — separateLayers' fixture-level accuracy is tracked as a separate,
+// still-open item, not silently declared fine by loosening this assertion.
+for (const [name, productionMarkCount] of [
+  ['glare-blown-background-1.png', 0],
+  ['glare-blown-background-2.png', 144],
+]) {
+  test(`glare-only verdict on ${name} is reconciled against its real production mark count`, async () => {
+    const native = await decodeFixture(name);
+    const raw = scorePage(native, { longEdge: Math.max(native.width, native.height) });
+    assert.ok(raw.signals.glare > 0.5,
+      `fixture no longer exercises the case — glare ${raw.signals.glare} is not the blown-background scenario this pins`);
+    assert.strictEqual(raw.verdict, 'fail', 'fixture no longer starts as a raw fail — nothing to reconcile');
+
+    const reconciled = reconcileWithInk(raw, productionMarkCount);
+    if (productionMarkCount >= 3) {
+      assert.strictEqual(reconciled.verdict, 'warn',
+        'production recovered real marks on this exact page — a glare-only fail should have been downgraded');
+    } else {
+      assert.strictEqual(reconciled.verdict, 'fail',
+        'production recovered no marks on this exact page — reconcileWithInk must not silently pass it');
+    }
   });
 }
 
