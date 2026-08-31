@@ -83,52 +83,39 @@
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE GLASS SWITCH
+   THE SWITCH
 
-   Overrides the flat switch in system.css. The thumb is a lens sitting proud of
-   the track, and the track refracts through it — the same material as the nav's
-   highlight, driven by the same displacement engine, so the interface has one
-   kind of glass rather than two that merely resemble each other.
+   Overrides the flat switch in system.css with the same shape, corrected
+   proportions, and the motion the earlier "liquid glass" version invented
+   never had: an elastic squash-stretch of the thumb as it crosses the track,
+   which is what makes the reference read as a soft solid rather than a rigid
+   disc sliding on a rail.
 
-   The geometry lives in Switch.tsx (SWITCH_METRICS) because the displacement
-   map has to be generated at exactly the thumb's size. The numbers below must
-   match it.
+   There is no lens here, no displacement map, no tint. The thumb is opaque
+   white (an opaque near-white in dark mode is wrong — it stays true white in
+   both themes, which is what makes it read as glossy plastic rather than a
+   themed surface). That was the wrong direction the last pass took, chasing a
+   description rather than the actual reference.
 
-   Everything here is static. The only thing that animates is the thumb's
-   transform, which is what the motion rules allow and what a mid-tier Android
-   can actually hold at 60fps.
+   The squash-stretch is `transform: scale()` driven by the spring's own
+   velocity, the same technique `TabNav` already uses for the tab pill's
+   travel — so this is not a new kind of motion in the interface, it is the
+   existing one applied to a second control. Only `transform` and `background`
+   animate, which is what the motion rules allow.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .sw {
-  width: 56px;
-  height: 38px;
+  width: 51px;
+  height: 31px;
   position: relative;
   flex-shrink: 0;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  /* The thumb overhangs on every side, so nothing here may clip. */
-  overflow: visible;
-}
-
-/* The refracted layer: the track, and nothing else. Thinner than the control so
-   the glass has room to sit proud of it. The filter is attached from the
-   component, so the map and the thumb cannot disagree about position. */
-.sw .swglass {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 5px;
-  height: 28px;
-  border-radius: 14px;
-  /* Clipped to the capsule so the displacement cannot smear past the track. */
-  overflow: hidden;
 }
 
 .sw .tr {
   position: absolute;
   inset: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--track-off);
   transition: background var(--d-recompute) ease;
 }
@@ -137,128 +124,55 @@
   background: var(--green);
 }
 
-/* ── the lens ──
-   Barely any fill, because the whole point is that the track shows THROUGH it.
-   What reads as glass is the edge: a bright specular along the top and the
-   bottom where the light enters and bounces back, a softer one down the sides,
-   and a faint inner brightening that lifts the green seen through the middle so
-   the lens looks like it gathers light rather than merely covering some. */
+/* The thumb nearly fills the track — a couple of pixels of margin on every
+   side, not the wide overhang the glass version had. Opaque white, always,
+   in both themes: a switch thumb reads as a physical object, not a surface
+   that takes the theme's colour. */
 .sw .th {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 46px;
-  height: 38px;
-  border-radius: 19px;
-  will-change: transform;
-
-  /* The lens is TINTED, not merely transparent, and that is what makes the
-     overhang work. The track ends inside the glass, so a purely see-through
-     thumb has nothing to refract past that edge and tears against it. Carrying
-     the track's own colour through the glass — lighter, because a lens gathers
-     light — means the boundary the refraction bends is green against green,
-     which is what a real lens over a coloured surface looks like. */
-  background-color: color-mix(in srgb, var(--track-off) 82%, white);
-  background-image:
-    linear-gradient(158deg,
-      rgba(255, 255, 255, .34) 0%,
-      rgba(255, 255, 255, .14) 26%,
-      rgba(255, 255, 255, .05) 52%,
-      rgba(255, 255, 255, .10) 74%,
-      rgba(255, 255, 255, .30) 100%);
-  transition: background-color var(--d-recompute) ease;
-
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 14px;
+  background: var(--p-white);
   box-shadow:
-    /* the specular rim — thicker top and bottom, which is where the light is */
-    inset 0 1.6px 0 rgba(255, 255, 255, .98),
-    inset 0 -1.6px 0 rgba(255, 255, 255, .82),
-    inset 1.4px 0 0 rgba(255, 255, 255, .52),
-    inset -1.4px 0 0 rgba(255, 255, 255, .52),
-    /* a second, softer inner light so the edge has depth rather than a hairline */
-    inset 0 3px 6px -2px rgba(255, 255, 255, .55),
-    inset 0 -3px 6px -2px rgba(255, 255, 255, .38),
-    /* the glass body, lifting it off the track */
-    0 1px 2px rgba(0, 0, 0, .20),
-    0 5px 12px rgba(0, 0, 0, .18),
-    0 12px 28px rgba(0, 0, 0, .14);
-
+    0 3px 8px rgba(0, 0, 0, .18),
+    0 1px 2px rgba(0, 0, 0, .14),
+    0 0 0 .5px rgba(0, 0, 0, .06);
+  will-change: transform;
+  transform-origin: center;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* The lens picks up what it is sitting on. Amber would be wrong here and red is
-   the sign-out row, so this is the one colour it can take: the track's own. */
-.sw.on .th {
-  background-color: color-mix(in srgb, var(--green) 84%, white);
-  box-shadow:
-    inset 0 1.6px 0 rgba(255, 255, 255, .98),
-    inset 0 -1.6px 0 rgba(255, 255, 255, .82),
-    inset 1.4px 0 0 rgba(255, 255, 255, .52),
-    inset -1.4px 0 0 rgba(255, 255, 255, .52),
-    inset 0 3px 6px -2px rgba(255, 255, 255, .55),
-    inset 0 -3px 6px -2px rgba(255, 255, 255, .38),
-    0 0 0 .5px color-mix(in srgb, var(--green) 55%, transparent),
-    0 1px 2px rgba(0, 0, 0, .20),
-    0 5px 12px rgba(0, 0, 0, .18),
-    0 10px 26px color-mix(in srgb, var(--green) 26%, transparent);
-}
-
-/* Light mode's background is bright enough that a purely white rim disappears
-   into it; the glass needs a faint dark edge to hold its shape. */
-[data-theme="light"] .sw .th {
-  box-shadow:
-    inset 0 1.6px 0 rgba(255, 255, 255, .98),
-    inset 0 -1.6px 0 rgba(255, 255, 255, .70),
-    inset 1.4px 0 0 rgba(255, 255, 255, .48),
-    inset -1.4px 0 0 rgba(255, 255, 255, .48),
-    inset 0 3px 6px -2px rgba(255, 255, 255, .50),
-    0 0 0 .5px rgba(28, 28, 40, .12),
-    0 1px 2px rgba(28, 28, 40, .16),
-    0 5px 12px rgba(28, 28, 40, .14),
-    0 12px 28px rgba(28, 28, 40, .10);
-}
-
-[data-theme="light"] .sw.on .th {
-  box-shadow:
-    inset 0 1.6px 0 rgba(255, 255, 255, .98),
-    inset 0 -1.6px 0 rgba(255, 255, 255, .70),
-    inset 1.4px 0 0 rgba(255, 255, 255, .48),
-    inset -1.4px 0 0 rgba(255, 255, 255, .48),
-    inset 0 3px 6px -2px rgba(255, 255, 255, .50),
-    0 0 0 .5px color-mix(in srgb, var(--green) 45%, transparent),
-    0 1px 2px rgba(28, 28, 40, .16),
-    0 5px 12px rgba(28, 28, 40, .14),
-    0 10px 26px color-mix(in srgb, var(--green) 22%, transparent);
-}
-
 /* ── the state glyphs ──
-   Not decoration. A glass thumb has far less contrast against its track than a
-   solid white disc did, so position and colour carry less of the state than they
-   used to and these carry the rest. They survive greyscale, which is the same
-   reason confidence is a form and not a hue. */
+   Not in the reference, which relies on colour and position alone. Kept
+   because CLAUDE.md's confidence rule — form before colour, so state survives
+   greyscale — applies here too, and a consent switch in particular should not
+   depend on a student correctly perceiving green versus grey. */
 .sw .gI {
   width: 2px;
-  height: 13px;
+  height: 12px;
   border-radius: 1px;
-  background: var(--p-white);
+  background: var(--green);
   opacity: 0;
   transition: opacity var(--d-state) ease var(--d-state);
-  box-shadow: 0 0 4px rgba(0, 0, 0, .40);
 }
 
 .sw.on .gI {
-  opacity: .95;
+  opacity: 1;
 }
 
 .sw .gO {
   position: absolute;
   top: 50%;
-  right: 8px;
+  right: 7px;
   transform: translateY(-50%);
   width: 9px;
   height: 9px;
-  border: 1.6px solid rgba(255, 255, 255, .55);
+  border: 1.6px solid rgba(255, 255, 255, .5);
   border-radius: 50%;
   opacity: 1;
   transition: opacity var(--d-state) ease;
@@ -275,8 +189,8 @@
 
 .sw:focus-visible {
   outline: var(--focus-ring);
-  outline-offset: 4px;
-  border-radius: 22px;
+  outline-offset: 3px;
+  border-radius: 18px;
 }
 
 /* Disabled and in-flight both mean "your tap will not land yet", so they look
