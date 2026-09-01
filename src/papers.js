@@ -13,7 +13,6 @@
 // scanning, that needs a connection.
 
 import { sb } from './supabase.js';
-import { PAPERS_BUCKET } from './config.js';
 import { readThrough } from './cache.js';
 import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 
@@ -65,51 +64,15 @@ export async function createPaper({ studentId, type, dateTaken }) {
   return data;
 }
 
-/**
-* Upload page images or a PDF for a paper.
-*
-* Path is papers/<student_id>/<paper_id>/<n>.<ext>, which is the shape the
-* storage policy enforces: the first segment must be a student the signed-in
-* guardian owns.
-*
-* @param {Object} args
-* @param {File[]} args.files
-* @param {(done:number,total:number)=>void} [args.onProgress]
-*/
-export async function uploadPages({ studentId, paperId, files, onProgress }) {
-  requireOnline('Uploading');
-  const pages = [];
-
-for (let i = 0; i < files.length; i++) {
-  const file = files[i];
-  const pageNumber = i + 1;
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `${studentId}/${paperId}/${pageNumber}.${ext}`;
-
-  const { error: upErr } = await sb.storage
-  .from(PAPERS_BUCKET)
-  .upload(path, file, { contentType: file.type || undefined, upsert: true });
-  if (upErr) throw upErr;
-
-  const { data, error } = await sb
-  .from('paper_page')
-  .insert({
-    paper_id: paperId,
-    student_id: studentId,
-    page_number: pageNumber,
-    source_kind: 'upload',
-    storage_path: path,
-    status: 'stored',
-  })
-  .select()
-  .single();
-  if (error) throw error;
-
-  pages.push(data);
-  onProgress?.(pageNumber, files.length);
-}
-  return pages;
-}
+// `uploadPages()` used to live here: it put a file straight into Supabase
+// Storage and inserted a `paper_page` row itself, with `source_kind: 'upload'`
+// and no conditioning, no layer separation and no quality verdict. It had no
+// callers left in the app, but it had written 43 of the 56 rows in production
+// that have no `quality_verdict` at all — pages the pipeline then had to read
+// with none of the signal every other page carries (AXON_FIX_BRIEF.md §7.1
+// question 4). Removed rather than fixed: the upload path is `acceptUploads`
+// in src/scan/ui.js, which gives a gallery photo exactly what a captured page
+// gets, and a second way in that skips stage 1 is not a fallback, it is a hole.
 
 /**
 * Record a shared link as a page.
@@ -171,40 +134,71 @@ const { data, error } = await sb
 * @param {{studentId:string, paperId:string, page:Object}} args
 * @returns {{r2_bucket:string, r2_key:string, mask_key:string|null, bytes:number}}
 */
+const EXT_FOR_TYPE = { 'image/webp': 'webp', 'image/png': 'png', 'image/heic': 'heic', 'image/jpeg': 'jpg' };
+
 export async function uploadScannedPage({ studentId, paperId, page }) {
   requireOnline('Uploading');
 
 const pageType = page.blob.type || 'image/jpeg';
-  const pageExt = pageType === 'image/webp' ? 'webp' : pageType === 'image/png' ? 'png' : 'jpg';
+  const ext = (type) => EXT_FOR_TYPE[type] ?? 'jpg';
 
-const objects = [
-  { kind: 'page', name: `p${page.page_number}.${pageExt}`, content_type: pageType, bytes: page.blob.size },
+// Four objects now, in two buckets. The page and its mask are derivatives and
+// go to axon-derived; the original goes to axon-originals, which is what makes
+// a bad warp or a bad encode recoverable rather than final (§7.6.4). The
+// thumbnail is the cheapest large latency win in the system — triage asks "is
+// this a marked exam paper", and it was being sent full pages to answer it.
+const wanted = [
+  { kind: 'page', name: `p${page.page_number}.${ext(pageType)}`, content_type: pageType, blob: page.blob },
   ];
   if (page.mask) {
-    objects.push({ kind: 'mask', name: `p${page.page_number}.mask.png`, content_type: 'image/png', bytes: page.mask.size });
+    wanted.push({ kind: 'mask', name: `p${page.page_number}.mask.png`, content_type: 'image/png', blob: page.mask });
+  }
+  if (page.thumb) {
+    wanted.push({ kind: 'thumb', name: `p${page.page_number}.thumb.jpg`, content_type: 'image/jpeg', blob: page.thumb });
+  }
+  if (page.original) {
+    const originalType = page.original_type || page.original.type || 'image/jpeg';
+    // An original in a type the upload endpoint will not mint a key for is not
+    // silently dropped — it is skipped and said so in the return, so the gap is
+    // visible in `original_key` being null rather than invisible.
+    if (EXT_FOR_TYPE[originalType]) {
+      wanted.push({ kind: 'raw', name: `p${page.page_number}.original.${ext(originalType)}`, content_type: originalType, blob: page.original });
+    }
   }
 
-const intent = await uploadIntent({ student_id: studentId, paper_id: paperId, objects });
-  const pageObj = intent?.objects?.find((o) => o.kind === 'page' && o.name === objects[0].name);
-  const maskObj = page.mask ? intent?.objects?.find((o) => o.kind === 'mask' && o.name === objects[1].name) : null;
-  if (!pageObj) throw new Error('The page could not be prepared for upload.');
+const intent = await uploadIntent({
+  student_id: studentId,
+  paper_id: paperId,
+  objects: wanted.map((o) => ({ kind: o.kind, name: o.name, content_type: o.content_type, bytes: o.blob.size })),
+});
 
-await putObject(pageObj.url, page.blob, pageType);
-  if (page.mask) {
-    if (!maskObj) throw new Error('The page markings could not be prepared for upload.');
-    await putObject(maskObj.url, page.mask, 'image/png');
+const minted = new Map();
+  for (const want of wanted) {
+    const got = intent?.objects?.find((o) => o.kind === want.kind && o.name === want.name);
+    if (got) minted.set(want.kind, { ...got, blob: want.blob, content_type: want.content_type });
   }
+  // The page itself is the one object there is no version of this that works
+  // without. The rest each get their own check below, so a missing mask is a
+  // named failure rather than a page that quietly arrives with no fine detail.
+  if (!minted.has('page')) throw new Error('The page could not be prepared for upload.');
+  if (page.mask && !minted.has('mask')) throw new Error('The page markings could not be prepared for upload.');
 
-const uploads = [{ key: pageObj.key, bucket: pageObj.bucket, bytes: page.blob.size }];
-  if (maskObj) uploads.push({ key: maskObj.key, bucket: maskObj.bucket, bytes: page.mask.size });
+const uploads = [];
+  for (const [, object] of minted) {
+    await putObject(object.url, object.blob, object.content_type);
+    uploads.push({ key: object.key, bucket: object.bucket, bytes: object.blob.size });
+  }
   await uploadComplete({ paper_id: paperId, uploads });
 
-return {
-  r2_bucket: pageObj.bucket,
-  r2_key: pageObj.key,
-  mask_key: maskObj?.key ?? null,
-  bytes: page.blob.size,
-};
+const pageObj = minted.get('page');
+  return {
+    r2_bucket: pageObj.bucket,
+    r2_key: pageObj.key,
+    mask_key: minted.get('mask')?.key ?? null,
+    thumb_key: minted.get('thumb')?.key ?? null,
+    original_key: minted.get('raw')?.key ?? null,
+    bytes: page.blob.size,
+  };
 }
 
 /**

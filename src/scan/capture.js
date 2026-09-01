@@ -467,8 +467,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function grabStill() {
     if (imageCapture) {
       try {
+        // `takePhoto()` hands back the encoder's own bytes. Those are the
+        // original — kept and carried up rather than decoded and dropped, so
+        // §7.6.4's "never discard the original" costs nothing on this path.
         const blob = await imageCapture.takePhoto();
-        return { bitmap: await createImageBitmap(blob), path: 'image-capture' };
+        return { bitmap: await createImageBitmap(blob), path: 'image-capture', original: blob };
       } catch {
         // A track that advertised photo capabilities but refused the actual
         // shot (seen on some Android/Chromium builds) — fall through rather
@@ -481,7 +484,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
-    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab' };
+    // No encoder bytes on this path — the frame came off a video element — so
+    // the original has to be made. q95 rather than the pipeline's own 0.92:
+    // this is the copy a mistake gets recovered from, and it should be the
+    // least degraded thing stored, not merely as good as the derivative.
+    const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab', original };
   }
 
   /**
@@ -511,7 +519,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!running || !video.videoWidth) return null;
     const captured = await grabStill();
     if (!captured) return null;
-    const { bitmap, path } = captured;
+    const { bitmap, path, original } = captured;
 
     // The quad travels with the frame so conditioning can warp it. Scaled into
     // the captured still's own pixel space, which is the video's for a canvas
@@ -525,7 +533,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
 
-    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, gate: { ...state } };
+    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, original, gate: { ...state } };
     onShot?.(shot);
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.

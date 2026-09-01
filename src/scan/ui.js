@@ -165,6 +165,9 @@ async function takePage(shot, replacing = null) {
     const { page } = await acceptPage({
       draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
       capturePath: shot.capturePath ?? null, liveGate: shot.gate ?? null,
+      // Recorded rather than assumed, on both paths. See CAPTURE.SOURCE_KINDS.
+      sourceKind: shot.sourceKind ?? 'camera',
+      original: shot.original ?? null,
     });
 
     await paintTray();
@@ -184,6 +187,9 @@ async function takePage(shot, replacing = null) {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
   } catch (error) {
+    // A refusal is advice, not a breakage: the page cannot be used and the
+    // message already says what to do instead. Shown the same way a fail
+    // verdict is, while the paper is still on the desk.
     toast(error.message || 'That page could not be prepared.', 'warn');
   } finally {
     S.busy = false;
@@ -658,7 +664,9 @@ export async function acceptUploads(files) {
   for (const file of images) {
     try {
       const bitmap = await createImageBitmap(file);
-      await takePage({ bitmap, quad: null, auto: false });
+      // The file itself is the original — already the least degraded copy
+      // there is, so nothing is re-encoded to produce one.
+      await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file });
     } catch {
       toast(`${file.name} could not be opened.`, 'warn');
     }

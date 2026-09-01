@@ -24,6 +24,14 @@ import { processPage, makeProxy } from './device.js';
 import { addPage, markUploaded, pendingPages, saveDraft } from './drafts.js';
 import { pool, reviewComplete, submitPaper } from './functions.js';
 import { CAPTURE } from './contract.js';
+import { refusalFor } from './conditioning.js';
+
+/** Thrown when a page cannot be used at all, with the reason already written
+    for the student. Distinguished from an ordinary failure so the caller can
+    show it as advice rather than as something that went wrong. */
+export class PageRefused extends Error {
+  constructor(message) { super(message); this.name = 'PageRefused'; this.refused = true; }
+}
 
 /**
  * Condition a captured frame, separate its layers, and put it in the draft.
@@ -32,9 +40,13 @@ import { CAPTURE } from './contract.js';
  * quality verdict comes from and the verdict is only useful while the paper is
  * still in front of the student.
  *
- * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number, capturePath?:string, liveGate?:Object}} args
+ * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number,
+ *         capturePath?:string, liveGate?:Object, sourceKind?:string, original?:Blob}} args
  */
-export async function acceptPage({ draft, bitmap, quad, replacing = null, capturePath = null, liveGate = null }) {
+export async function acceptPage({
+  draft, bitmap, quad, replacing = null,
+  capturePath = null, liveGate = null, sourceKind = null, original = null,
+}) {
   if (draft.pages.length >= CAPTURE.MAX_PAGES && replacing === null) {
     throw new Error(`A paper can hold ${CAPTURE.MAX_PAGES} pages. Start a second one for the rest.`);
   }
@@ -43,8 +55,16 @@ if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing))
   throw new Error('That page is not in this booklet any more.');
 }
 
+// The resolution floor, checked before any of the expensive work rather than
+// after it (AXON_FIX_BRIEF.md §7.2). Conditioning caps and never upscales, so a
+// source under the floor cannot produce a page at the floor — running the warp,
+// the layer separation and two encodes first would only spend several seconds
+// arriving at the same answer.
+const refusal = refusalFor(bitmap.width || bitmap.naturalWidth, bitmap.height || bitmap.naturalHeight, quad);
+if (refusal) throw new PageRefused(refusal);
+
 const pageNumber = replacing ?? draft.pages.length + 1;
-  const processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate });
+  const processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate, sourceKind });
   const proxy = await makeProxy(processed.blob);
 
 const page = {
@@ -53,6 +73,16 @@ const page = {
   // whole reason it exists: a faint thin stroke the lossy page loses is still
   // at full strength here. See bench/README.md.
   mask: processed.mask,
+  // 512px, for triage. See CONDITIONING.THUMB_LONG_EDGE.
+  thumb: processed.thumb,
+  // The bytes exactly as the camera or the file gave them: no warp, no
+  // resample, no re-encode. §7.6.4 — never discard the original, so mistakes
+  // are recoverable server-side. It is held in the draft only until it has
+  // been uploaded, and `markUploaded` drops it then; keeping originals for the
+  // life of an offline booklet would roughly triple its footprint on a phone
+  // that may not have the room.
+  original: original ?? null,
+  original_type: original?.type ?? null,
   proxy,
   width: processed.width,
   height: processed.height,
@@ -61,6 +91,7 @@ const page = {
   teacher_marks: processed.teacher_marks,
   margin_band: processed.margin_band,
   layer_fallback: processed.layer_fallback,
+  source_kind: sourceKind,
 };
 
 if (replacing !== null) {
@@ -175,10 +206,18 @@ const pending = pendingPages(draft);
 
 const pages = draft.pages.map((p) => ({
   page_number: p.page_number,
-  source_kind: 'upload',
+  // Recorded, not assumed. This was the literal string 'upload' on every page
+  // ever submitted, camera captures included, which made the one question the
+  // scanner's own telemetry exists to answer — is the camera path ever taken —
+  // unanswerable (AXON_FIX_BRIEF.md §7.1). A draft written by an older build
+  // has no source kind to report and says 'upload', which is what it was
+  // recorded as; it is not re-guessed here.
+  source_kind: p.source_kind ?? p.meta?.source_kind ?? 'upload',
   r2_bucket: p.r2_bucket,
   r2_key: p.r2_key,
   mask_key: p.mask_key ?? null,
+  original_key: p.original_key ?? null,
+  thumb_key: p.thumb_key ?? null,
   bytes: p.bytes ?? p.blob?.size ?? null,
   width: p.width,
   height: p.height,
