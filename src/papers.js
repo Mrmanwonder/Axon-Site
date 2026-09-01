@@ -231,6 +231,7 @@ const STATUS_FOR_RUN = {
   queued: 'scanning',
   triaging: 'scanning',
   structure: 'reading',
+  cropping: 'reading',
   content: 'reading',
   attribution: 'reading',
   reconciliation: 'reading',

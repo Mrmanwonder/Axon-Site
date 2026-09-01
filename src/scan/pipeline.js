@@ -112,6 +112,7 @@ const STAGE_FOR_STATUS = {
   queued: 'structure',
   triaging: 'structure',
   structure: 'structure',
+  cropping: 'structure',
   content: 'content',
   attribution: 'content',
   reconciliation: 'reconcile',
@@ -122,6 +123,12 @@ const MESSAGE_FOR_STATUS = {
   queued: 'Waiting to start',
   triaging: 'Checking this is a marked paper',
   structure: 'Finding the questions',
+  // The crop stage (AXON_FIX_BRIEF.md §8) cuts each question out of its page
+  // so the next stage sends one question rather than one whole booklet. Named
+  // as what it is for the student — "cropping" is our word, not theirs — and
+  // given its own line rather than left to fall through to the generic
+  // "Working through the paper", which would be true of every stage.
+  cropping: 'Getting each question ready to read',
   content: 'Reading the answers and the marking',
   attribution: 'Matching the marks to the questions',
   reconciliation: 'Checking the marks add up',
