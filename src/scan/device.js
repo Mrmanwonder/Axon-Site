@@ -46,7 +46,11 @@ export async function processPage(source, { quad = null, pageNumber = 1, capture
       // eight-megapixel frame is tens of megabytes moved for nothing.
       w.postMessage({ id, source, quad, pageNumber, capturePath, liveGate, sourceKind }, [source]);
     });
-    if (!result.ok) throw new Error(result.error);
+    if (!result.ok) {
+      const error = new Error(result.error);
+      error.refused = !!result.refused;
+      throw error;
+    }
     return result;
   }
   return processOnThisThread(source, { quad, pageNumber, capturePath, liveGate, sourceKind });

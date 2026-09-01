@@ -175,3 +175,29 @@ second gate catches two, misses one, and fires on every ruled page.
 So anisotropy is kept as a recorded signal and used only to choose between "the
 phone moved" and "too blurred to read" — the two need different actions from the
 student — and it decides nothing on its own.
+
+## `enhance.test.mjs` — the rescue path
+
+`node --test bench/enhance.test.mjs`
+
+`src/scan/enhance.js` brings a page that arrives under the resolution floor up
+to it, rather than refusing it outright. That is only acceptable because of two
+properties, and an argument in a comment is not worth much, so both are checked
+directly:
+
+- **It cannot disturb the red separation.** Every operation is a per-pixel
+  scalar gain on RGB, and `colour.js`'s shipping redness measure is a ratio a
+  scalar cancels out of. Measured: under 1.5% drift across the whole range
+  paper, faint pen and bold pen occupy, and under 1% of a real page's pixels
+  move by more than 5%.
+- **It cannot invent detail.** The sharpening is clamped to each pixel's own
+  neighbourhood range, so no output value can fall outside what genuinely
+  occurred beside it. Checked over a few hundred thousand real pixels; an
+  unclamped unsharp mask fails it immediately, which is the point.
+
+There is a third band of drift the tests pin rather than hide: below luma 15 the
+epsilon guarding `redRatio`'s divide dominates and the ratio moves by several
+per cent. Those pixels are ink by luma alone (`RED.INK_LUMA_MAX`), so nothing
+downstream turns on it — and that test exists because the first version of this
+comment claimed the drift was "well under a thousandth" everywhere, and the
+measurement said otherwise.

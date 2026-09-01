@@ -64,7 +64,18 @@ const refusal = refusalFor(bitmap.width || bitmap.naturalWidth, bitmap.height ||
 if (refusal) throw new PageRefused(refusal);
 
 const pageNumber = replacing ?? draft.pages.length + 1;
-  const processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate, sourceKind });
+  let processed;
+  try {
+    processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate, sourceKind });
+  } catch (error) {
+    // The second half of the floor. `refusalFor` above answers what size alone
+    // can answer; conditioning answers the rest, on evidence, once it has the
+    // pixels — a page between the hard floor and the target is refused only if
+    // the detail genuinely is not there to bring back. Either way the student
+    // gets a reason and an action, not a stack trace.
+    if (error?.refused) throw new PageRefused(error.message);
+    throw error;
+  }
   const proxy = await makeProxy(processed.blob);
 
 const page = {

@@ -46,6 +46,11 @@ self.onmessage = async (event) => {
   } catch (error) {
     // The page is never silently lost. The caller keeps it in the tray, flagged,
     // and the student can retake it while the paper is still in front of them.
-    self.postMessage({ id, ok: false, error: error.message });
+    //
+    // `refused` travels with the message because an Error does not survive
+    // structured cloning: without it a refusal — a page that cannot be used,
+    // with the reason already written for the student — would arrive on the
+    // other side indistinguishable from a crash, and be shown as one.
+    self.postMessage({ id, ok: false, error: error.message, refused: !!error.refused });
   }
 };

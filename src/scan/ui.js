@@ -20,6 +20,7 @@ import {
 import { createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
+import { RESCUED_NOTICE } from './enhance.js';
 import { PAPER_TYPES, tierForType } from '../papers.js';
 
 const S = {
@@ -186,6 +187,11 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
+    // A rescued page is told about. It was under the resolution floor, it has
+    // been brought up to it, and the student is the one who can tell whether
+    // that worked — so they are told plainly and pointed at the one thing to
+    // check. Never phrased as an apology and never as a question.
+    if (page.meta?.enhance?.applied) toast(RESCUED_NOTICE);
   } catch (error) {
     // A refusal is advice, not a breakage: the page cannot be used and the
     // message already says what to do instead. Shown the same way a fail

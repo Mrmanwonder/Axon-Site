@@ -209,6 +209,59 @@ export const CONDITIONING = {
   PREPROCESS_VERSION: 'v2',
 };
 
+// ── stage 1.5 · rescue ─────────────────────────────────────────────────────
+// Only ever runs on a page that arrives under CONDITIONING.MIN_LONG_EDGE. A page
+// that clears the floor is not touched. See src/scan/enhance.js for why every
+// operation there is a per-pixel scalar gain, and bench/enhance.test.mjs for the
+// measurements these numbers come from.
+
+export const ENHANCE = {
+  // The largest upscale that is still resampling rather than inventing. At 1.5x
+  // roughly half the output pixels are interpolated and a stroke two source
+  // pixels wide becomes three, which the model reads fine. Past this the
+  // arithmetic stops being kind: at 2x a 1200px page is being asked to stand in
+  // for a 2400px one, and there is no honest version of that.
+  //
+  // With MIN_LONG_EDGE at 2400 this puts the real refusal line at 1600px.
+  MAX_SCALE: 1.5,
+  // Small *and* soft is the case nothing recovers. Sharpening restores contrast
+  // to edges that survived; it cannot restore an edge the lens or the shake
+  // already took. Measured at the page's own scale, so it is the same number
+  // the gate reports. Set at BLUR_WARN: a page we would have warned about at
+  // full size has nothing spare to give up to an upscale.
+  MIN_SOURCE_SHARPNESS: 0.45,
+
+  // ── illumination flattening ──────────────────────────────────────────────
+  // The field is estimated at this long edge. A lighting gradient has no high
+  // frequencies by definition, so measuring it at full resolution is paying for
+  // detail that is immediately blurred away.
+  FIELD_LONG_EDGE: 256,
+  // Blur radius as a share of the decimated field's long edge. Large on
+  // purpose: anything small enough to follow a paragraph of handwriting is
+  // measuring the writing, not the light on it, and dividing that out would
+  // flatten the ink along with the shadow.
+  FIELD_RADIUS_SHARE: 0.12,
+  // The reference level, as a percentile of the field. Not the maximum: one
+  // stray bright cell would set the target for the whole page and every gain
+  // would sit pinned against the no-clip clamp.
+  FIELD_REFERENCE: 0.9,
+  // A very dark corner is a shadow, not an under-exposure to be undone by a
+  // factor of four. Past about 1.6x the gain is amplifying sensor noise into
+  // something that reads as paper texture — and texture on paper is what the
+  // red mask has to tell ink apart from.
+  GAIN_MIN: 0.85,
+  GAIN_MAX: 1.6,
+
+  // ── detail restoration ───────────────────────────────────────────────────
+  // Unsharp mask, clamped to the local neighbourhood's own range so it cannot
+  // overshoot into a stroke nobody wrote (enhance.js explains why that clamp is
+  // the whole safety argument). Radius 2 at 2400px is about the width of a
+  // ballpoint stroke, which is the feature being restored; amount 1.1 is where
+  // measured recovery of the red-ink layer stopped improving on the corpus.
+  SHARPEN_RADIUS: 2,
+  SHARPEN_AMOUNT: 1.1,
+};
+
 // ── stage 2 · layer separation ─────────────────────────────────────────────
 
 export const RED = {
