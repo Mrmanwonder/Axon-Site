@@ -30,9 +30,9 @@ import {
   sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
   loadPrefs, savePrefs, readLocal,
   readConsentState, recordConsent, withdrawConsent,
-  listPapers,
+  listPapers, paperProgress,
 } from "./modules";
-import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper } from "./modules";
+import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
 
 
 /** What the boot sequence concluded about who this is. */
@@ -55,6 +55,13 @@ type AppValue = {
 
   papers: Paper[];
   papersStale: boolean;
+  /** paper_id -> its current (most recent) run's live status. A paper with
+      no entry here has no run in flight — either it has committed attempts
+      already, or nothing has ever been submitted for it. Not stale-tolerant
+      the way `papers` is: a paper mid-pipeline is exactly the case where an
+      old read actively misleads, so a failed fetch here just leaves the
+      previous map in place rather than substituting a guess. */
+  progress: Map<string, ProgressRow>;
   refreshLibrary: () => Promise<void>;
 
   online: boolean;
@@ -97,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [consent, setConsentState] = useState<ConsentState>({});
   const [papers, setPapers] = useState<Paper[]>([]);
   const [papersStale, setPapersStale] = useState(false);
+  const [progress, setProgress] = useState<Map<string, ProgressRow>>(new Map());
   const [online, setOnline] = useState(() => navigator.onLine);
 
   const pendingPaperType = useRef<string | null>(null);
@@ -162,6 +170,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPapersStale(!!stale);
     } catch {
       /* the cached view stays on screen */
+    }
+    try {
+      setProgress(await paperProgress(student.id));
+    } catch {
+      /* not stale-tolerant the way papers is, but a live status you can't
+         reach right now is not a reason to blank out one you already had */
     }
   }, [student]);
 
@@ -245,11 +259,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gate, providerError, session, guardian, student,
     prefs, setPref,
     consent, refreshConsent, setConsent,
-    papers, papersStale, refreshLibrary,
+    papers, papersStale, progress, refreshLibrary,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, providerError, session, guardian, student, prefs, setPref,
-    consent, refreshConsent, setConsent, papers, papersStale, refreshLibrary,
+    consent, refreshConsent, setConsent, papers, papersStale, progress, refreshLibrary,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);
 

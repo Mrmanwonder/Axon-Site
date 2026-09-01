@@ -228,27 +228,72 @@ say('reconcile', `${regions.length} question${regions.length === 1 ? '' : 's'} f
 return { paperId, runId: submission.run_id, refused: false, regions: regions ?? [] };
 }
 
+/**
+ * The most recent extraction_run for a paper, if any.
+ *
+ * Used to re-enter review or report progress on a paper the student left
+ * mid-flow — the draft only ever remembers `paper_id`; the run itself is
+ * looked up fresh rather than persisted, so it is never stale.
+ */
+export async function currentRunForPaper(paperId) {
+  const { data, error } = await sb
+    .from('extraction_run')
+    .select('id, status, status_reason')
+    .eq('paper_id', paperId)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** A run's regions, for `watchExplanations` — used when re-entering review
+    on a run that was already `ingest()`-ed in a previous session. */
+export async function regionsForRun(runId) {
+  const { data, error } = await sb
+    .from('question_region')
+    .select('id, order_index, question_label')
+    .eq('run_id', runId)
+    .order('order_index');
+  if (error) throw error;
+  return data ?? [];
+}
+
 const EXPLAIN_POLL_MS = 1500;
 const EXPLAIN_TIMEOUT_MS = 5 * 60 * 1000;
 const EXPLAIN_SETTLED = new Set(['done', 'skipped', 'failed']);
 
 /**
- * Stage 8, over a whole paper.
+ * Stage 8's gate, and only its gate.
+ *
+ * `review-complete` refuses (409) while any region on the run still needs the
+ * student's eyes — which is guaranteed at the moment a scan finishes, before
+ * review has happened at all. Call this only once review is actually done:
+ * after the outstanding-count guard passes, from `save()`. Calling it any
+ * earlier is not a race, it is certain to 409, every time — that was the
+ * whole bug (see AXON_FIX_BRIEF.md §4.A1).
+ *
+ * On success the server has already started every explanation it is willing
+ * to run; use `watchExplanations` to wait for them.
+ */
+export async function startExplanations(runId) {
+  return reviewComplete({ run_id: runId });
+}
+
+/**
+ * Watch a paper's explanations land. Does not start them — call
+ * `startExplanations` first and only once it has resolved.
  *
  * Deliberately separate from ingest and deliberately not awaited by it: a
- * student should be reading question 1's explanation while question 9 is still
- * generating, and the paper is worth opening the moment the marks are in.
- * `onQuestion` fires per question as each lands.
- *
- * One call starts every explanation the server is willing to run
- * (`review-complete` refuses if anything on the paper still needs the
- * student's eyes); this then just watches `question_region.explain_status`
- * per region so callers keep the same per-question landing they had before.
+ * student should be reading question 1's explanation while question 9 is
+ * still generating. `onQuestion` fires per question as each lands, so a
+ * caller that wants to paint the review screen while this runs still can;
+ * `save()` is the one caller that also awaits the whole thing, so it knows
+ * when every region has settled and it is safe to commit (see
+ * AXON_FIX_BRIEF.md §6.2 — commit only after explanations, not before).
  */
-export async function explainPaper({ runId, regions, onQuestion }) {
+export async function watchExplanations({ runId, regions, onQuestion }) {
   if (!regions?.length) return [];
-
-await reviewComplete({ run_id: runId });
 
 const pending = new Map(regions.map((r) => [r.id, r]));
   const startedAt = Date.now();

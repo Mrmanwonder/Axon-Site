@@ -217,6 +217,66 @@ export async function pageAssetUrl(paperId, pageNumber) {
   return urls?.[pageNumber] ?? urls?.[String(pageNumber)] ?? { url: null, mask_url: null };
 }
 
+/**
+ * The five states AXON_FIX_BRIEF.md §6.5 asks the Library to show, derived
+ * from `extraction_run.status` via the `paper_progress` view. A paper with
+ * committed attempts never needs this — it renders as a normal, finished row
+ * — so this only covers the states between upload and commit, plus the two
+ * ways a run can end without one.
+ */
+export const PAPER_STATUS = {
+  scanning: { label: 'Scanning', tone: 'wait' },
+  reading: { label: 'Reading', tone: 'wait' },
+  needs_review: { label: 'Needs your eyes', tone: 'attention' },
+  ready: { label: 'Ready to save', tone: 'attention' },
+  failed: { label: "Couldn't read this one", tone: 'stopped' },
+  rejected: { label: 'Not read', tone: 'stopped' },
+};
+
+const STATUS_FOR_RUN = {
+  queued: 'scanning',
+  triaging: 'scanning',
+  structure: 'reading',
+  content: 'reading',
+  attribution: 'reading',
+  reconciliation: 'reading',
+  adjudicating: 'reading',
+  needs_review: 'needs_review',
+  explaining: 'ready',
+  ready: 'ready',
+  failed: 'failed',
+  rejected: 'rejected',
+};
+
+/** extraction_status (the raw enum) -> a PAPER_STATUS key. Null for
+    'committed' — a committed paper has no in-flight status to show. */
+export function statusKeyForRun(rawStatus) {
+  return STATUS_FOR_RUN[rawStatus] ?? null;
+}
+
+/**
+ * Every paper's live progress, one row per paper — the current (most recent)
+ * run only. Not cached: a paper mid-pipeline is exactly the case where a
+ * stale read is actively misleading, and this is cheap (one view, indexed
+ * by student).
+ */
+export async function paperProgress(studentId) {
+  const { data, error } = await sb
+    .from('paper_progress')
+    .select('paper_id,status,status_reason,started_at,pages_total,pages_done,questions_total,questions_done,questions_needing_you')
+    .eq('student_id', studentId)
+    .order('started_at', { ascending: false });
+  if (error) throw error;
+
+  const byPaper = new Map();
+  for (const row of data ?? []) {
+    // Most recent only — a paper can have several runs (retries); order by
+    // started_at desc above means the first one seen per paper_id is it.
+    if (!byPaper.has(row.paper_id)) byPaper.set(row.paper_id, row);
+  }
+  return byPaper;
+}
+
 /** Library list — cached so it survives offline. */
 export async function listPapers(studentId) {
   return readThrough(`papers:${studentId}`, async () => {
@@ -236,13 +296,14 @@ export async function readPaper(studentId, paperId) {
     const { data, error } = await sb
     .from('paper')
     .select(
-      `id,type,tier,date_taken,
+      `id,type,tier,date_taken,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
-      student_attempt(id,question_label,marks_awarded,max_marks,marks_source,
+      student_attempt(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
       teacher_remark,extraction_confidence,student_confirmed_at,
       mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,
-      confidence,student_confirmed_at,student_rejected_at))`,
+      confidence,student_confirmed_at,student_rejected_at)),
+      question_region(committed_attempt_id,page_spans,crop_key)`,
       )
     .eq('student_id', studentId)
     .eq('id', paperId)

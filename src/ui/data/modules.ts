@@ -186,6 +186,110 @@ export const parsePaperLink = papersMod.parsePaperLink as (raw: string) => strin
 export const PAPER_TYPES = papersMod.PAPER_TYPES as { value: string; label: string }[];
 export const paperTypeLabel = papersMod.paperTypeLabel as (type: string) => string;
 
+/** The five in-flight states AXON_FIX_BRIEF.md §6.5 asks the Library to
+    show, keyed by what `paperProgress` reports. A committed paper needs
+    none of these — it renders as a normal, finished row. */
+export type PaperStatusKey =
+  | "scanning" | "reading" | "needs_review" | "ready" | "failed" | "rejected";
+export const PAPER_STATUS = papersMod.PAPER_STATUS as Record<
+  PaperStatusKey, { label: string; tone: "wait" | "attention" | "stopped" }
+>;
+/** The raw extraction_status enum value -> a PaperStatusKey, or null for
+    'committed' (nothing in-flight to show). */
+export const statusKeyForRun = papersMod.statusKeyForRun as (
+  rawStatus: string,
+) => PaperStatusKey | null;
+
+export type ProgressRow = {
+  paper_id: string;
+  /** The raw extraction_status enum value — narrower than PaperStatusKey; map it with STATUS_FOR_RUN-equivalent logic, or just use `.tone`/`.label` from PAPER_STATUS after mapping in papers.js. */
+  status: string;
+  status_reason: string | null;
+  started_at: string;
+  pages_total: number;
+  pages_done: number;
+  questions_total: number;
+  questions_done: number;
+  questions_needing_you: number;
+};
+
+/** One row per paper — the current (most recent) run's live status. Not
+    cached: a paper mid-pipeline is exactly the case a stale read misleads. */
+export const paperProgress = papersMod.paperProgress as unknown as (
+  studentId: string,
+) => Promise<Map<string, ProgressRow>>;
+
+export type MarkLossEvent = {
+  id: string;
+  cause: string | null;
+  marks_lost: number | null;
+  ai_explanation: string | null;
+  do_this_next: string | null;
+  confidence: "confirmed" | "likely" | "unsure";
+  student_confirmed_at: string | null;
+  student_rejected_at: string | null;
+};
+
+export type StudentAttempt = {
+  id: string;
+  question_label: string | null;
+  question_text: string | null;
+  student_answer: string | null;
+  marks_awarded: number | null;
+  max_marks: number | null;
+  marks_source: "teacher_pen" | "official_scheme";
+  teacher_remark: string | null;
+  extraction_confidence: "confirmed" | "likely" | "unsure";
+  student_confirmed_at: string | null;
+  mark_loss_event: MarkLossEvent[];
+};
+
+export type PaperPage = {
+  page_number: number;
+  source_kind: string;
+  status: string;
+  storage_path: string | null;
+  source_url: string | null;
+  r2_bucket: string | null;
+  r2_key: string | null;
+  mask_key: string | null;
+};
+
+export type QuestionRegionRef = {
+  committed_attempt_id: string | null;
+  page_spans: { page: number; box: { x: number; y: number; w: number; h: number } }[] | null;
+  crop_key: string | null;
+};
+
+export type PaperDetail = {
+  id: string;
+  type: string;
+  tier: string | null;
+  date_taken: string;
+  subject: string | null;
+  reported_total: number | null;
+  stated_maximum: number | null;
+  total_awarded: number | null;
+  total_available: number | null;
+  reconciled: boolean | null;
+  paper_page: PaperPage[];
+  page_unreadable: { page_number: number; reason: string; storage_path: string | null }[];
+  student_attempt: StudentAttempt[];
+  question_region: QuestionRegionRef[];
+};
+
+/** One paper with its attempts and losses — the analysis, cached for offline. */
+export const readPaper = papersMod.readPaper as unknown as (
+  studentId: string,
+  paperId: string,
+) => Promise<Cached<PaperDetail>>;
+
+/** Signed URLs for a stored page and its mask. */
+export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (
+  paperId: string,
+  pageNumber: number,
+) => Promise<{ url: string | null; mask_url: string | null }>;
+
 /* ── the analytics reads ──
    These exist in papers.js and, as of this port, nothing had ever called them.
    That is why Home and Insights were still showing the prototype's numbers on
