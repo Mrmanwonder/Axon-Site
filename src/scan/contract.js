@@ -24,6 +24,13 @@ export const TEACHER_INK = 'red';
 export const CAPTURE = {
   ACCEPTED_TYPES: ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'application/pdf'],
   MAX_PAGES: 25,
+  // Where a page actually came from, recorded rather than assumed. `source_kind`
+  // was hardcoded to 'upload' on every page ever submitted, camera captures
+  // included, which made the one question the scanner's own telemetry exists to
+  // answer — is the camera path ever taken — unanswerable (AXON_FIX_BRIEF.md
+  // §7.1). These are the `page_source` enum's values; the database is the
+  // authority on the list and this mirrors it.
+  SOURCE_KINDS: /** @type {const} */ (['camera', 'upload', 'pdf', 'link']),
   // Auto-capture fires only when the quad has held still this long. Shorter and
   // it fires mid-adjustment; longer and it feels broken and people reach for the
   // shutter, which is fine but wastes the feature.
@@ -42,8 +49,16 @@ export const CAPTURE = {
   // the stillness test. The gate assists; it does not get to refuse forever.
   PATIENCE_MS: 3500,
   // The page must fill this share of the viewport before auto-capture will fire.
-  // Below it the page is too far away to hold 300 DPI after warping.
-  MIN_FILL: 0.35,
+  // Raised from 0.35 per AXON_FIX_BRIEF.md §7.3. It is not a resolution proxy —
+  // the gate checks the projected long edge directly now — it is a framing one:
+  // below this the page is small enough in frame that the quad is being fitted
+  // to a few hundred pixels and the corner it finds is a guess.
+  MIN_FILL: 0.6,
+  // Searches in a row that must have found the page before auto-capture will
+  // fire. A detector locked onto something large and wrong is extremely stable,
+  // so stability alone is not evidence; several finds running is. §7.3 asks for
+  // about five.
+  CONSECUTIVE_FINDS: 5,
   // Paused between "the gate said go" and the frame actually grabbed, on the
   // canvas-grab fallback path only. A live stream's autofocus is asynchronous;
   // grabbing with zero wait after a focus-affecting event (tap-to-focus, or
@@ -57,11 +72,46 @@ export const CAPTURE = {
 // Scored at capture, while the paper is still physically in front of the
 // student. Catching a bad page at review, once the booklet is back in a bag, is
 // a materially worse experience and often means the page is simply lost.
+//
+// Every threshold below was re-derived on 2026-09-01 against the real corpus in
+// bench/fixtures/ — five photographs of marked pages, two production-scale
+// scans actually submitted by a student, and synthesised failures built from
+// those same pages. The numbers behind each one are written next to it. The
+// previous set was not derived from anything, and three of the four metrics it
+// gated on were measuring the wrong quantity — see AXON_FIX_BRIEF.md §7.4 and
+// the notes in quality.js.
 
 export const QUALITY = {
-  // Variance of the Laplacian, normalised to 0–1 against this ceiling.
-  BLUR_NORMALISER: 900,
-  BLUR_WARN: 0.22,
+  // ── sharpness ────────────────────────────────────────────────────────────
+  // The page is resampled so its long edge is exactly this before sharpness is
+  // measured, which is what makes the number mean the same thing on a 240px
+  // viewfinder proxy and on a 2400px conditioned page. Without it the metric
+  // was not merely imprecise, it was inverted: the same fixture read 1.0000 at
+  // 240px and 0.1393 at 1400px, because downscaling concentrates high-frequency
+  // energy. That single defect broke both ends at once — the live gate's blur
+  // check could never fire (everything looks sharp at 240px) while the final
+  // gate warned on pages that were fine (AXON_FIX_BRIEF.md §B7).
+  MEASURE_LONG_EDGE: 1400,
+  // Sharpness is the 80th percentile of Laplacian variance over 128px patches,
+  // not the whole-page variance. Whole-page variance mixes written areas with
+  // blank paper, so a lightly-used page scored as "blurred" for having little
+  // on it. A patch with less than MEASURE_MIN_RANGE of luma spread carries no
+  // focus information at all and is dropped rather than counted as soft.
+  MEASURE_PATCH: 128,
+  MEASURE_MIN_RANGE: 24,
+  MEASURE_QUANTILE: 0.8,
+  // Laplacian variance, normalised to 0-1 against this ceiling. Real in-focus
+  // pages at production scale measure 4693 and 6017 raw (the two submitted
+  // pages in bench/fixtures/), so 2000 puts a good page at 1.0 with room to
+  // spare rather than pinning the interesting range against the ceiling.
+  BLUR_NORMALISER: 2000,
+  // Gaussian blur sweep on those same two pages at the pipeline's own 2400px
+  // target: sigma 1.0 -> raw 2200/2656, sigma 1.5 -> 852/944, sigma 2.0 ->
+  // 311/340, sigma 3.0 -> 52/50. Warn sits at raw 900 (about sigma 1.5, the
+  // point where softness is visible), fail at raw 200 (about sigma 2.2, past
+  // which thin pen strokes stop surviving). Deliberately lenient at the fail
+  // line: a false reject on a good page is the worst failure this product has.
+  BLUR_WARN: 0.45,
   BLUR_FAIL: 0.10,
   // Not a gate. Measured, directional anisotropy cannot tell a shaken page from
   // a ruled one, and misses diagonal shake entirely — while plain
@@ -69,33 +119,54 @@ export const QUALITY = {
   // It survives only to choose between "the phone moved" and "too blurred",
   // which is worth getting right because the two need different actions.
   ANISOTROPY_HINT: 0.35,
-  // Specular highlight: bright and colourless. IMAGE_PIPELINE.md §7 is stricter
-  // than the old threshold, and right to be — a blown highlight is unrecoverable,
-  // there is no information under it to enhance, and it lands preferentially on
-  // the glossy ridge of a fresh ink stroke.
-  GLARE_V: 0.94,
+
+  // ── glare ────────────────────────────────────────────────────────────────
+  // Glare is a *local* anomaly: a patch of the page markedly brighter than the
+  // rest of that same page. The old measure counted bright, colourless pixels
+  // absolutely, which is a description of white paper, not of glare — every
+  // digital scan scored 0.94+ and production told a student who had submitted a
+  // clean scan to "tilt it away from the light". Measured instead against the
+  // page's own illumination field: cells of GLARE_CELL px, base = the median
+  // cell, and a cell counts as blown when it clears both the lift above that
+  // base and an absolute floor, and has no colour left in it.
+  GLARE_CELL: 32,
+  GLARE_LIFT: 24,
+  GLARE_FLOOR: 235,
   GLARE_S: 0.12,
-  // Two different bars for the same measurement, on purpose. GLARE_WARN is
-  // the live gate's blocking line — asking for a retake costs nothing while
-  // the page is still in front of the student, so it fires early. GLARE_FAIL
-  // is where scorePage() actually marks the *submitted* page unreadable —
-  // forgiving a level between the two, because a page already through the
-  // gate and conditioned is a page that costs a trip back to the schoolbag
-  // to redo, and the honest line for "genuinely unreadable" sits higher than
-  // the honest line for "worth one more try while it's easy". Not a stale
-  // holdover; recalibrate both together against the golden set (§4.5 of the
-  // scan audit) rather than merging them into one number.
-  GLARE_WARN: 0.005,
-  GLARE_FAIL: 0.035,
-  // Any single channel pinned at maximum. Distinct from glare: a page can clip
-  // red without clipping to white, which is precisely the teacher's ink going.
-  CLIP_WARN: 0.02,
-  // Long edge in pixels after warping. Still a placeholder until the golden set
-  // can measure where extraction actually degrades — but advisory, never
-  // blocking, because it is the one gate a student's hardware may make
-  // unreachable.
-  RESOLUTION_WARN: 1800,
-  RESOLUTION_FAIL: 1000,
+  // All seven real fixtures — five photographs and both submitted scans —
+  // measure exactly 0.0000. Compositing a saturating specular blob onto a real
+  // photograph gives 0.0050 at 3% of the page, 0.0161 at 8%, 0.0323 at 18%.
+  // Warn is therefore about 2.5% of the page blown, fail about 11%.
+  GLARE_WARN: 0.004,
+  GLARE_FAIL: 0.02,
+
+  // ── exposure ─────────────────────────────────────────────────────────────
+  // Distinct from glare, and the reason both exist: glare finds a bright patch
+  // on an otherwise normal page, and a uniformly over-exposed page has no
+  // bright patch to find. What that page does have is ink driven into the paper
+  // — a channel pinned at 255 while the pixel still has colour left, which is a
+  // red stroke losing its red. Neutral white paper is not that and is not
+  // counted, which is the whole difference from the old measure (the two
+  // submitted scans went from 0.92 to 0.0002).
+  CLIP_CHROMA: 24,
+  // Real photographs of marked pages measure 0.0115-0.0375. Lifting exposure on
+  // one of them gives 0.1146 at x1.15 and 0.1497 at x1.30. 0.06 separates the
+  // two populations with room on both sides.
+  CLIP_WARN: 0.06,
+  // 255 minus the page's own base level. Recorded, not gated: it is what lets a
+  // refusal explain that a page is uniformly blown rather than locally glared.
+  // The same exposure sweep takes it from 64 (correct) to 14 (x1.30) to 4 (x1.80).
+  HEADROOM_LOW: 12,
+
+  // ── resolution ───────────────────────────────────────────────────────────
+  // Long edge in pixels after warping. The floor is enforced at capture now
+  // (CONDITIONING.MIN_LONG_EDGE), so these two are the backstop for pages that
+  // reach scoring another way. RESOLUTION_FAIL is MEASURE_LONG_EDGE on purpose:
+  // below the scale sharpness is defined at, the sharpness number is being read
+  // off an upsample and cannot be trusted, so there is nothing honest left to
+  // say about the page.
+  RESOLUTION_WARN: 2400,
+  RESOLUTION_FAIL: 1400,
   // Corner angles further than this from square. A prompt to square up, not a
   // refusal: perspective correction handles a great deal of tilt, and the
   // warning is for the case where it will have to stretch one end badly.
@@ -114,6 +185,19 @@ export const CONDITIONING = {
   // region would have had inside a full-page image — while being smaller.
   PAGE_LONG_EDGE: 2400,
   CROP_LONG_EDGE: 1500,
+  // The floor, and it is a refusal rather than a warning (AXON_FIX_BRIEF.md
+  // §7.2). `targetSize` caps and never upscales — by design, since inventing
+  // pixels would only move the failure downstream — so a source smaller than
+  // this cannot produce a page at this size and there is nothing to be done
+  // with it but say so while the paper is still in front of the student. It is
+  // the same number as PAGE_LONG_EDGE: the guarantee is that a conditioned page
+  // is *exactly* the target size, never a shortfall nobody was told about.
+  MIN_LONG_EDGE: 2400,
+  // A 512px copy of the page, written alongside it. Triage asks "is this a
+  // marked exam paper", which a thumbnail settles, and sending full pages to
+  // answer it is the single largest avoidable latency in the pipeline
+  // (AXON_FIX_BRIEF.md §7.5).
+  THUMB_LONG_EDGE: 512,
   // Quality, not a search. The old build walked JPEG quality down while
   // measuring how much red survived, which was fighting a problem the format
   // was creating. One encode, no re-encode. See bench/README.md.

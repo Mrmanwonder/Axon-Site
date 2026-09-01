@@ -13,9 +13,9 @@
 import { conditionPage } from './conditioning.js';
 
 self.onmessage = async (event) => {
-  const { id, source, quad, pageNumber, capturePath, liveGate } = event.data;
+  const { id, source, quad, pageNumber, capturePath, liveGate, sourceKind } = event.data;
   try {
-    const conditioned = await conditionPage(source, { quad, pageNumber, capturePath, liveGate });
+    const conditioned = await conditionPage(source, { quad, pageNumber, capturePath, liveGate, sourceKind });
     // No content layer. It is a full extra pass over the page to build a
   // red-suppressed copy, and nothing downstream reads it: what gets uploaded
   // is the conditioned page, and the server crops its regions from that. It
@@ -31,6 +31,7 @@ self.onmessage = async (event) => {
       ok: true,
       blob: conditioned.blob,
       mask: conditioned.maskBlob,
+      thumb: conditioned.thumbBlob,
       width: conditioned.width,
       height: conditioned.height,
       quality: conditioned.quality,

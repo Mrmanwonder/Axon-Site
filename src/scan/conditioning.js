@@ -27,6 +27,43 @@ export function targetSize(width, height, longEdge = CONDITIONING.PAGE_LONG_EDGE
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/**
+ * The long edge this source will actually produce, before the cap is applied.
+ *
+ * With a quad it is the warped page's own long edge, which is what the page
+ * will be — not the frame's. A 4032px still of a page held at arm's length
+ * produces a page a good deal smaller than 4032, and the difference is exactly
+ * the case the floor exists to catch.
+ */
+export function projectedLongEdge(sourceWidth, sourceHeight, quad = null) {
+  if (quad) {
+    const natural = quadSize(quad);
+    return Math.round(Math.max(natural.width, natural.height));
+  }
+  return Math.max(sourceWidth, sourceHeight);
+}
+
+/**
+ * Why this page cannot be used, or null.
+ *
+ * A refusal, not a warning, and it belongs here rather than in the quality gate
+ * (AXON_FIX_BRIEF.md §7.2). `targetSize` caps and never upscales — deliberately,
+ * because inventing pixels only moves the failure downstream to a model that
+ * then reads invented detail — so a source below the floor cannot produce a page
+ * at the floor and there is nothing to do with it but say so, now, while the
+ * paper is still on the desk.
+ *
+ * Worded as a fact and an action, never as a question. The consequence is
+ * stated; the student is not asked to confirm anything.
+ */
+export function refusalFor(sourceWidth, sourceHeight, quad = null) {
+  const projected = projectedLongEdge(sourceWidth, sourceHeight, quad);
+  if (projected >= CONDITIONING.MIN_LONG_EDGE) return null;
+  return quad
+    ? `This page came out ${projected}px across and we need at least ${CONDITIONING.MIN_LONG_EDGE}px to read the marking. Move the phone closer so the page fills the frame, and take it again.`
+    : `This image is ${projected}px on its longest side and we need at least ${CONDITIONING.MIN_LONG_EDGE}px to read the marking. A photo straight from the camera roll usually clears that; one that has been through a chat app usually does not.`;
+}
+
 // ── browser plumbing ───────────────────────────────────────────────────────
 
 function surface(width, height) {
@@ -82,6 +119,23 @@ function toBlobAny(canvas, cb) {
   else canvas.toBlob(cb);
 }
 
+/**
+ * A 512px copy of the page.
+ *
+ * Written for triage, which asks "is this a marked exam paper" — a question a
+ * thumbnail settles and which was being answered by sending full pages, at
+ * 27-43 seconds a paper (AXON_FIX_BRIEF.md §7.5). Encoded as JPEG rather than
+ * through `encodeBest`: it is small enough that WebP's size advantage is
+ * irrelevant, and JPEG is the one format every path can decode.
+ */
+async function encodeThumb(img) {
+  const target = targetSize(img.width, img.height, CONDITIONING.THUMB_LONG_EDGE);
+  const from = toSurface(img);
+  const c = surface(target.width, target.height);
+  c.getContext('2d').drawImage(from, 0, 0, target.width, target.height);
+  return encode(c, 'image/jpeg', 0.8);
+}
+
 /** The soft mask as a PNG. Lossless on purpose — it is the fine detail. */
 async function encodeMask({ data, width, height }) {
   const c = surface(width, height);
@@ -99,9 +153,9 @@ async function encodeMask({ data, width, height }) {
  * Condition one captured or uploaded page.
  *
  * @param {ImageBitmap|HTMLImageElement|HTMLCanvasElement} source
- * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object}} options
+ * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object, sourceKind?:string}} options
  */
-export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null } = {}) {
+export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
 
@@ -141,10 +195,12 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
 
   const { blob, type } = await encodeBest(toSurface(img));
   const maskBlob = await encodeMask(layers.mask);
+  const thumbBlob = await encodeThumb(img);
 
   return {
     blob,
     maskBlob,
+    thumbBlob,
     width: img.width,
     height: img.height,
     quality,
@@ -153,7 +209,27 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       preprocess_version: CONDITIONING.PREPROCESS_VERSION,
       page_number: pageNumber,
       warped,
+      // The conditioned page's own pixel dimensions.
+      //
+      // Load-bearing, and absent from every page ever written before today.
+      // Structure and content convert the model's boxes off a 0-1000 normalised
+      // grid into page pixels, and with nothing to convert against they fell
+      // back to a hardcoded 2400x3200 — so every box on every page was scaled
+      // against a page shape that was, in general, not the page's. Those boxes
+      // are the crop stage's entire input, which is why this is written down
+      // before anything is cropped with them.
+      width: img.width,
+      height: img.height,
       source_size: { width: sw, height: sh },
+      // The corners the homography was built from, in the source image's own
+      // pixels. Kept so the warp can be reproduced — or undone — server-side
+      // from the original, which is the only thing that makes "never discard
+      // the original" worth anything.
+      quad: quad ? quad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+      // 'camera' | 'upload' | 'pdf' | 'link'. Mirrors the `source_kind` column
+      // rather than duplicating a judgement: both are written from the same
+      // value at the same moment.
+      source_kind: sourceKind,
       encoded_type: type,
       encode_quality: CONDITIONING.ENCODE_QUALITY,
       bytes: blob?.size ?? 0,
