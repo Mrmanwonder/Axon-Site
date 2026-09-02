@@ -5,6 +5,14 @@ functions read secrets at cold start, and the tick has nowhere to call until
 they exist.
 
 The schema is already applied to `dlgcqieyevoebefhcggi`, and both buckets exist.
+Applied is not the same as complete: on 2026-09-02 the entitlements/billing
+migration turned out never to have reached that project, and `billing-checkout`
+had been answering "No guardian account for this session." to a guardian whose
+account was fine. Before trusting a deploy, diff what is actually applied:
+
+```sql
+select version, name from supabase_migrations.schema_migrations order by version;
+```
 The functions are not deployed, and cannot usefully be until step 1 is done —
 every one of them would cold-start and immediately throw on a missing
 environment variable.
@@ -48,6 +56,33 @@ On the OpenRouter account itself, two settings that are not code:
   paper.
 - **A spend cap.** A loop in a worker is a bill, and the queue will retry.
 
+### Billing secrets
+
+Absent from the list above until 2026-09-02, which is how they came to be
+unset while `billing-checkout` was live and failing. The functions read them at
+cold start:
+
+```bash
+supabase secrets set --project-ref dlgcqieyevoebefhcggi \
+  STRIPE_SECRET_KEY=sk_... \
+  STRIPE_WEBHOOK_SECRET=whsec_... \
+  STRIPE_PRICE_MONTHLY=price_... \
+  STRIPE_PRICE_ANNUAL=price_... \
+  MASTERY_APP_ORIGIN=https://<the deployed site>
+```
+
+`STRIPE_PRICE_*` are the price ids from the Stripe account the secret key
+belongs to — test-mode keys with live-mode price ids fail at Checkout, and the
+two accounts do not share ids. `MASTERY_APP_ORIGIN` is the origin Stripe returns
+the payer to; it is separate from `AXON_SITE_URL` because the pipeline and
+billing can point at different deploys.
+
+There is no annual price in either Stripe account as of 2026-09-02, so
+`STRIPE_PRICE_ANNUAL` has nothing to point at yet. `billing-checkout` answers
+that case with "The yearly plan isn't set up yet. Monthly is available now."
+rather than a 500 — create the price and set the secret and the yearly option
+starts working with no code change.
+
 ## 2 · Buckets
 
 `axon-originals` and `axon-derived`, both in APAC, both empty. One thing is
@@ -67,7 +102,8 @@ presigned URLs only.
 supabase functions deploy --project-ref dlgcqieyevoebefhcggi \
   paper-submit upload-intent upload-complete review-complete \
   queue-tick w-triage w-structure w-content w-reconcile \
-  w-adjudicate w-explain w-r2-delete eval-run
+  w-adjudicate w-explain w-r2-delete eval-run \
+  billing-checkout billing-portal stripe-webhook
 ```
 
 `queue-tick`, the six `w-*` workers and `eval-run` authenticate on the service
