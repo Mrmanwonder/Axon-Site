@@ -7,7 +7,7 @@
 // another student's paper. Stripe carries no Supabase user JWT -- there is no
 // caller session to build an RLS-scoped client from -- so this function has no
 // other way to run. The blast radius is kept narrow on purpose: every write
-// below touches only public.guardian's five subscription columns and
+// below touches only public.guardian's four subscription columns and
 // public.stripe_event, by primary key, from fields Stripe itself reports.
 // Nothing here ever reads or writes a paper, an attempt, a mark or an
 // explanation.
@@ -20,8 +20,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
 import { CORS, json } from '../_shared/http.ts';
 import { planForPriceId, stripeClient } from '../_shared/stripe.ts';
-
-const GRACE_PERIOD_DAYS = 7;
 
 function serviceClient() {
   return createClient(
@@ -82,7 +80,6 @@ Deno.serve(async (req) => {
             subscription_status: 'canceled',
             subscription_plan: null,
             subscription_renews_at: null,
-            subscription_grace_until: null,
           }).eq('id', guardianId);
         }
         break;
@@ -92,16 +89,20 @@ Deno.serve(async (req) => {
         const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
         if (!customerId) break;
         const { data: guardian } = await sb.from('guardian')
-          .select('id, subscription_grace_until').eq('stripe_customer_id', customerId).single();
+          .select('id, subscription_status').eq('stripe_customer_id', customerId).single();
         if (!guardian) break;
-        // Only set the grace deadline on the FIRST failure of a billing cycle
-        // -- a retry that also fails must not keep pushing the deadline out,
-        // or the 7-day grace period the thesis specifies never actually ends.
-        if (!guardian.subscription_grace_until) {
-          await sb.from('guardian').update({
-            subscription_status: 'past_due',
-            subscription_grace_until: new Date(Date.now() + GRACE_PERIOD_DAYS * 86_400_000).toISOString(),
-          }).eq('id', guardian.id);
+        // A failed payment ends Pro entitlement here, on the first failure --
+        // there is no grace window (see migration 0024). Stripe's Smart
+        // Retries keep running; a retry that succeeds arrives as
+        // customer.subscription.updated with status active and restores Pro
+        // through applySubscriptionState below.
+        //
+        // Guarded on the current status so a late-arriving failed invoice for
+        // an already-canceled subscription cannot resurrect it as past_due,
+        // which would read to the parent as "your payment failed" about a
+        // subscription they deliberately ended.
+        if (guardian.subscription_status !== 'canceled') {
+          await sb.from('guardian').update({ subscription_status: 'past_due' }).eq('id', guardian.id);
         }
         break;
       }
@@ -130,9 +131,6 @@ async function guardianIdFor(sb: ReturnType<typeof serviceClient>, subscription:
 async function applySubscriptionState(
   sb: ReturnType<typeof serviceClient>, guardianId: string, subscription: Stripe.Subscription,
 ) {
-  const { data: current } = await sb.from('guardian')
-    .select('subscription_status, subscription_grace_until').eq('id', guardianId).single();
-
   const priceId = subscription.items.data[0]?.price?.id ?? null;
   const plan = planForPriceId(priceId);
   const periodEnd = subscription.current_period_end
@@ -163,15 +161,8 @@ async function applySubscriptionState(
     subscription_status: status,
     subscription_plan: plan,
     subscription_renews_at: periodEnd,
-    // A subscription reporting healthy again (e.g. the retry succeeded)
-    // clears any grace deadline from a previous failure. Staying past_due
-    // across repeat deliveries keeps the ORIGINAL deadline -- same reasoning
-    // as invoice.payment_failed below: a retry must not keep pushing the
-    // 7-day grace window out indefinitely.
-    subscription_grace_until: status === 'past_due'
-      ? (current?.subscription_status === 'past_due' && current.subscription_grace_until
-          ? current.subscription_grace_until
-          : new Date(Date.now() + GRACE_PERIOD_DAYS * 86_400_000).toISOString())
-      : null,
+    // Status is the whole story now: past_due resolves to the free tier the
+    // moment it is written, and active/trialing restores Pro the moment the
+    // retry clears. Nothing is deferred, so there is no deadline to carry.
   }).eq('id', guardianId);
 }

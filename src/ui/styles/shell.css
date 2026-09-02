@@ -53,6 +53,24 @@
 .fchip { background: var(--surface); border: .5px solid var(--hairline); }
 .fchip.active { background: var(--accent); border-color: transparent; color: var(--p-white); }
 
+/* A card can be a button too — Home's "needs a quick check", Settings' payment
+   notice. It is not in the reset above because the reset flattens background
+   and border, and .card carries both; those are re-asserted here instead. The
+   port lost the prototype's left-aligned copy on `.card.attention` exactly this
+   way: it became a <button> and inherited the UA `text-align: center`.
+   Nothing about the box is set here — margin and display stay with .card and
+   .attention, so this cannot quietly reshape a card it is added to. */
+.card[data-interactive] {
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  background: var(--surface);
+  border: .5px solid var(--hairline);
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(100% - var(--gutter) * 2);
+}
+
 /* Rows are buttons now, so they need the block layout a div had by default. */
 .srow[data-interactive],
 .row[data-interactive],

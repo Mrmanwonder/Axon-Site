@@ -26,19 +26,92 @@ literal, checkable spec (Parts 1 and 5 of the workstream instructions):
 - `src/entitlements.js`, `src/billing.js` — thin client wrappers. Load-bearing
   comment in both: entitlements gate nothing by themselves (RLS does), and
   `billing.js` exists to be imported only from a parent surface.
-- `supabase/tests/entitlements_and_billing.sql` — 28 assertions, all passing
+- `supabase/tests/entitlements_and_billing.sql` — 39 assertions, all passing
   against a from-scratch migration replay (see below): free-tier depth is never
   gated on a recent paper, an old paper still lists in the library, cross-subject
   rows return zero rows to Postgres itself for a free account (not just a hidden
   UI element), the existence-only teaser is visible regardless of tier, the
   `max_student_profiles` trigger fires only from the parent-driven "add a
-  student" path, and the past_due grace period holds and then expires correctly.
+  student" path, and a past_due account loses Pro immediately while keeping
+  everything the free tier is owed.
 
 Verified end-to-end against a disposable local Postgres (`supabase/local/shim.sql`
 harness already in the repo): all four migrations replay clean from empty, and
 all four test suites (137 assertions total, including the three pre-existing
 ones) pass — `rls_and_hard_rules.sql`, `extraction_pipeline.sql`,
 `ingestion_prefs_erasure.sql` are unaffected by this change.
+
+## Amendment (2026-09-02) — past_due ends Pro immediately
+
+`20260902120000_past_due_ends_pro_immediately.sql` reverses the 7-day grace
+window this pass shipped. A failed payment now ends Pro entitlement at the
+moment Stripe reports it. Decided deliberately, not discovered as a bug — so
+what the original migration's comments describe as the grace period no longer
+holds, and `subscription_grace_until` is dropped rather than left unread.
+
+- `private.guardian_is_pro` is still the only place the line is drawn, so all
+  five gates follow it without being touched.
+- `get_entitlements()` gained `billing_state` — the raw `subscription_status`,
+  carried so the downgrade can be *explained* on the parent surface rather than
+  appearing as an unaccountable loss of features. It is a reason code, never a
+  gate.
+- The webhook no longer computes a deadline in either direction: a failed
+  invoice writes `past_due` on the first failure, and a successful Smart Retry
+  restores Pro on the next `customer.subscription.updated`.
+- Nothing already created under Pro is taken away: a second student profile
+  stays (the limit trigger is INSERT-only), every paper keeps its place in the
+  library, and the student's own scan → understand → act loop is unchanged. What
+  lapses immediately is depth on OLD papers and the four Pro reads.
+
+Two consequences worth naming rather than burying:
+
+- **The parent has to be told.** Built, in the same pass: Settings → Billing
+  renders the failed payment as an amber attention card and routes to the
+  Stripe Customer Portal (see below). `billing_state` is what it reads.
+- **The archive-depth gate is the one downgrade a student can feel.** Still
+  open. It is not a paywall in their app — nothing is upsold, no prompt fires,
+  and the current term stays full-depth — but an old paper they opened last
+  week can lose its per-question detail with no warning and no grace. That is
+  the price of immediacy. The Billing section explains it to the payer; the
+  student's own screens say nothing, which is the right silence but not a
+  complete answer.
+
+## Amendment (2026-09-02) — the parent-facing billing surface
+
+Open item 1 below is now partly closed. What exists:
+
+- **`src/ui/data/useEntitlements.ts`** — one read of `get_entitlements()`, with
+  the same discipline as the analytics reads and a sharper reason for it:
+  "loading" is not "free" and a failed read is not "past due". A claim about
+  someone's money is the last thing this interface may guess at, so a failure
+  renders "we couldn't check", never a state.
+- **Settings → Billing** — plan row, and when `billing_state` is `past_due`, an
+  amber attention card that says the payment didn't go through and opens the
+  Stripe Customer Portal. Amber, not red: red stays reserved for signing out.
+  No pricing card, no plan comparison, no "Upgrade" button — an upgrade prompt
+  is still only ever earned by a genuine detected pattern, and that surface is
+  not built. The portal row is offered only where a Stripe customer exists, so
+  it is never a button that exists to fail.
+- **Onboarding → Choose a plan** — the dead "Billing isn't wired up yet" row now
+  calls `startCheckout` and hands off to Stripe-hosted Checkout, monthly or
+  yearly. No price is printed on our screen: the amount lives in Stripe, and a
+  number typed into our copy goes stale the day pricing changes. The free row
+  no longer calls itself "a free trial" — free is permanent and full-depth per
+  paper, and wording it as a trial promised a cliff that does not exist.
+- **The return from Checkout** — Stripe comes back to `/?billing=success`, by
+  which point the component has been unmounted and every piece of flow state is
+  gone. The flow now resumes from the guardian row at the profile step and
+  strips the query param. Without that, a parent who had just paid was asked
+  for their name again and walked back through consent they had already given.
+- **`.card[data-interactive]`** in `shell.css` — a card that is a `<button>` kept
+  the UA's centred text; the ported `.card.attention` had been centring Home's
+  "needs a quick check" copy since the port. Fixed for both.
+
+Still open: the student's own session is the guardian's session (the guardian is
+the only auth principal), so "parent-facing" here means *this screen*, not a
+separate login. A student who opens Settings can read the billing state. That is
+the honest limit of the current account model, and the alternative — hiding a
+failed payment from the only person holding the phone — is worse.
 
 ## Non-negotiables — how the schema itself holds them
 
@@ -64,7 +137,12 @@ ones) pass — `rls_and_hard_rules.sql`, `extraction_pipeline.sql`,
 
 ## Open items — not built in this pass, flagged rather than skipped silently
 
-1. **No parent billing/account UI exists yet.** `index.html` currently has a
+1. **Partly closed (see the 2026-09-02 amendment above): Settings → Billing and
+   the onboarding plan step now exist.** What is still missing is the parent
+   dashboard proper — the progress report view, the cross-subject teaser render,
+   and the earned upgrade prompt. The original note follows.
+
+   `index.html` currently has a
    Settings screen with one parent-facing toggle (weekly digest) and no
    dashboard, no plan/pricing surface, no "Upgrade" entry point, no
    cross-subject-teaser render, no progress-report view. `src/billing.js` and

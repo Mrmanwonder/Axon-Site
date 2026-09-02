@@ -211,21 +211,61 @@ select public._t('pro guardian cannot see the free guardian''s patterns at all',
 reset role;
 
 -- ══════════════════════════════════════════════════════════════════════════
--- past_due grace period: a card failure does not downgrade mid-grace-window
+-- past_due: a failed payment ends Pro immediately, with no grace window
 -- ══════════════════════════════════════════════════════════════════════════
+-- Guardian A is Pro and, by this point in the suite, has two student profiles.
 
-update public.guardian set subscription_status = 'past_due', subscription_grace_until = now() + interval '3 days'
+update public.guardian set subscription_status = 'past_due'
   where id = 'a0000000-0000-4000-8000-000000000001';
-select public._t('past_due within grace period still resolves to pro',
-  private.guardian_is_pro('a0000000-0000-4000-8000-000000000001'));
 
-update public.guardian set subscription_grace_until = now() - interval '1 hour'
-  where id = 'a0000000-0000-4000-8000-000000000001';
-select public._t('past_due after grace period resolves to free',
+select public._t('past_due resolves to free the moment it is written',
   not private.guardian_is_pro('a0000000-0000-4000-8000-000000000001'));
 
-update public.guardian set subscription_status = 'pro', subscription_grace_until = null
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+
+select public._t('past_due guardian: tier is free',
+  (select tier = 'free' from public.get_entitlements()));
+select public._t('past_due guardian: the downgrade is explained, not silent',
+  (select billing_state = 'past_due' from public.get_entitlements()));
+select public._t('past_due guardian: cross-subject rows are gone at once',
+  (select count(*) = 0 from public.pattern_insight
+   where student_id = 'a0000000-0000-4000-8000-000000000002' and scope = 'cross_subject'));
+select public._t('past_due guardian: the parent progress report is gone at once',
+  (select count(*) = 0 from public.parent_progress_report
+   where student_id = 'a0000000-0000-4000-8000-000000000002'));
+select public._t('past_due guardian: depth on an OLD paper is gone at once',
+  (select count(*) = 0 from public.student_attempt
+   where id = 'a0000000-0000-4000-8000-000000000021'));
+
+-- The half that must NOT change. Losing Pro is losing depth-over-time; it is
+-- never a demotion of the student's own scan -> understand -> act loop.
+select public._t('past_due guardian: the recent paper keeps full depth',
+  (select count(*) = 1 from public.student_attempt
+   where id = 'a0000000-0000-4000-8000-000000000020'));
+select public._t('past_due guardian: the recent paper''s explanation is untouched',
+  (select count(*) = 1 from public.mark_loss_event
+   where id = 'a0000000-0000-4000-8000-000000000030'));
+select public._t('past_due guardian: the old paper still lists in the library',
+  (select count(*) = 1 from public.paper
+   where id = 'a0000000-0000-4000-8000-000000000012'));
+select public._t('past_due guardian: the free single-subject insight still shows',
+  (select count(*) = 1 from public.pattern_insight
+   where student_id = 'a0000000-0000-4000-8000-000000000002' and scope = 'single_subject'));
+select public._t('past_due guardian: the existence-only teaser still shows',
+  (select count(*) = 1 from public.get_cross_subject_signal()));
+select public._t('past_due guardian: both children they already added are kept',
+  (select count(*) = 2 from public.student
+   where guardian_id = 'a0000000-0000-4000-8000-000000000001'));
+
+reset role;
+
+-- A successful Stripe retry writes status back to pro through the same path,
+-- and everything returns with it. Nothing is deferred in either direction.
+update public.guardian set subscription_status = 'pro'
   where id = 'a0000000-0000-4000-8000-000000000001';
+select public._t('a successful retry restores Pro immediately',
+  private.guardian_is_pro('a0000000-0000-4000-8000-000000000001'));
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- stripe_event: nothing but the webhook handler (service_role) may touch it

@@ -16,14 +16,23 @@
    · Sign out is the single sanctioned use of red in the whole interface.
      Deleting an account is more destructive and still is not red, because red
      here means "this ends the session", not "this is dangerous".
+
+   Billing lives here because this screen is the guardian's own account surface
+   — their contact, their consent ledger, their data export, their account.
+   There is deliberately no pricing card, no plan comparison and no "Upgrade"
+   button anywhere in it: an upgrade prompt is only ever earned by a genuine
+   detected pattern, on the parent's dashboard, and none of that is this screen.
+   What this section does is EXPLAIN state the server has already decided —
+   most of all the one state that would otherwise be silent, a failed payment.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
 import { useApp } from "../data/AppProvider";
+import { useEntitlements } from "../data/useEntitlements";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import {
-  exportMyData, downloadJson, deleteAccount, sb,
+  exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isPasskeySupported, registerPasskey, listPasskeys, renamePasskey, deletePasskey,
   PASSKEY_MESSAGE,
 } from "../data/modules";
@@ -58,8 +67,32 @@ function Seg<T extends string>({
   );
 }
 
+/* Plain, parent-facing names for `billing_state`. `past_due` is the only one
+   that needs a sentence rather than a word: it is the state a parent has to be
+   able to act on, and the only one that took something away. */
+const PLAN_LABEL: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  pro_annual: "Pro",
+  past_due: "Paused",
+  canceled: "Free",
+  unknown: "—",
+  failed: "—",
+};
+
+const PLAN_NOTE: Record<string, string> = {
+  free: "Full analysis of every paper, permanently",
+  pro: "Billed monthly",
+  pro_annual: "Billed yearly",
+  past_due: "Pro is paused until the payment is settled",
+  canceled: "Pro has ended. Everything scanned so far is still here.",
+  unknown: "Checking\u2026",
+  failed: "We couldn't check this just now",
+};
+
 export default function Settings() {
   const { guardian, student, prefs, setPref, consent, refreshConsent, setConsent, signOutNow } = useApp();
+  const { state: billingRead, entitlements } = useEntitlements();
   const toast = useToast();
   const { openSheet } = useSheetControls();
   const [busy, setBusy] = useState<string | null>(null);
@@ -76,6 +109,21 @@ export default function Settings() {
 
   const name = student?.first_name ?? guardian?.name ?? "";
   const initial = (name || "?")[0]?.toUpperCase() ?? "?";
+
+  /* "loading", "failed" and a real state are three different things, and the
+     row says which. Reading "free" out of a request that never came back is
+     the one mistake this section cannot make. */
+  const planKey = billingRead === "ready" && entitlements
+    ? entitlements.billingState
+    : billingRead === "failed" ? "failed" : "unknown";
+
+  const toPortal = async () => {
+    hapticTick();
+    try {
+      // Navigates away on success, so there is nothing to report back.
+      await openBillingPortal("/settings");
+    } catch (e) { toast((e as Error).message || "Billing could not be opened.", "warn"); }
+  };
 
   const pref = (key: keyof Prefs) => (next: boolean) => { void setPref({ [key]: next } as Partial<Prefs>); };
 
@@ -127,6 +175,68 @@ export default function Settings() {
         </div>
       </div>
       <div className="note">Removing a subject archives its analysis rather than deleting it.</div>
+
+      {/* ── Billing ──
+          Four states, and the read itself is a fifth. "Loading" is not "free"
+          and a failed read is not "past due": a claim about someone's money is
+          the last thing this interface should guess at, so an unreachable read
+          says so rather than naming a state. */}
+      <div className="sectitle">Billing</div>
+
+      {billingRead === "ready" && entitlements?.billingState === "past_due" && (
+        <PressBox
+          as="button" type="button" className="card attention" data-interactive=""
+          onClick={() => void toPortal()}
+        >
+          <div className="ic">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="2.5" y="5" width="19" height="14" rx="3" />
+              <path d="M2.5 10h19M12 15h5" />
+            </svg>
+          </div>
+          <div className="b">
+            <div className="t1">The last payment didn&rsquo;t go through</div>
+            <div className="t2">Pro is paused until it&rsquo;s settled. Tap to update the card.</div>
+          </div>
+          <Chevron />
+        </PressBox>
+      )}
+
+      <div className="list" style={{ marginTop: 12 }}>
+        <div className="srow noicon">
+          <div className="lbl">
+            Plan
+            <small>{PLAN_NOTE[planKey]}</small>
+          </div>
+          <div className="aux">
+            {PLAN_LABEL[planKey]}
+          </div>
+        </div>
+
+        {/* Only where there is a Stripe customer to open a portal for. A free
+            account has never checked out, and billing-portal answers a 409 —
+            offering the row anyway would be a button that exists to fail. */}
+        {billingRead === "ready" && entitlements && entitlements.billingState !== "free" && (
+          <PressBox
+            as="button" type="button" className="srow noicon" data-interactive=""
+            onClick={() => void toPortal()}
+          >
+            <div className="lbl">
+              {entitlements.billingState === "past_due" ? "Update payment method" : "Manage billing"}
+              <small>Opens Stripe, where the card and the plan are held</small>
+            </div>
+            <Chevron />
+          </PressBox>
+        )}
+      </div>
+      <div className="note">
+        {billingRead === "failed"
+          ? "We couldn't reach billing just now, so this shows nothing rather than a guess. It'll be right on the next load."
+          : entitlements?.billingState === "past_due"
+            ? "Nothing has been deleted. Every paper, mark and explanation is still here, and scanning and each paper's own analysis are unaffected — those are free, always."
+            : "Scanning and each paper's own analysis are free, always. Pro adds the wider lens across papers and subjects."}
+      </div>
+
 
       {passkeySupported && (
         <>
