@@ -13,9 +13,9 @@
 import { conditionPage } from './conditioning.js';
 
 self.onmessage = async (event) => {
-  const { id, source, quad, pageNumber, capturePath, liveGate } = event.data;
+  const { id, source, quad, pageNumber, capturePath, liveGate, sourceKind } = event.data;
   try {
-    const conditioned = await conditionPage(source, { quad, pageNumber, capturePath, liveGate });
+    const conditioned = await conditionPage(source, { quad, pageNumber, capturePath, liveGate, sourceKind });
     // No content layer. It is a full extra pass over the page to build a
   // red-suppressed copy, and nothing downstream reads it: what gets uploaded
   // is the conditioned page, and the server crops its regions from that. It
@@ -31,6 +31,7 @@ self.onmessage = async (event) => {
       ok: true,
       blob: conditioned.blob,
       mask: conditioned.maskBlob,
+      thumb: conditioned.thumbBlob,
       width: conditioned.width,
       height: conditioned.height,
       quality: conditioned.quality,
@@ -45,6 +46,11 @@ self.onmessage = async (event) => {
   } catch (error) {
     // The page is never silently lost. The caller keeps it in the tray, flagged,
     // and the student can retake it while the paper is still in front of them.
-    self.postMessage({ id, ok: false, error: error.message });
+    //
+    // `refused` travels with the message because an Error does not survive
+    // structured cloning: without it a refusal — a page that cannot be used,
+    // with the reason already written for the student — would arrive on the
+    // other side indistinguishable from a crash, and be shown as one.
+    self.postMessage({ id, ok: false, error: error.message, refused: !!error.refused });
   }
 };

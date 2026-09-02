@@ -16,20 +16,38 @@
 // scansystemredesign.md (2026-08-25) §4.5 asks for two numbers tracked
 // continuously: false-accept rate (a bad photo the gate lets through) and
 // false-reject rate (a good photo the gate blocks or warns unnecessarily).
-// This is a first, small instance of that — five real captured pages across
-// the skew/tilt range this repo already had fixtures for, one deliberate
-// negative, and the two real viewfinder frames the live gate actually sees.
-// It is a start, not the golden set described there in full: that needs a
-// checked-in corpus spanning the whole failure taxonomy (blurry, glared,
-// low-resolution, blank, ungraded, non-schoolwork...), which this repo does
-// not have real photographs for yet.
+// This is a first, small instance of that. It is not the golden set described
+// there in full: that needs a checked-in corpus spanning the whole failure
+// taxonomy, which this repo still does not have real photographs for.
+//
+// ── on which fixtures can be held to which threshold ──────────────────────
+//
+// Rewritten 2026-09-01 alongside the quality-gate recalibration
+// (AXON_FIX_BRIEF.md §7.4), and the split below is the substance of it:
+//
+// · `page-*.jpg` and `viewfinder-*.jpg` are **downscaled derivatives** — 700 to
+//   1030px on the long edge. They are real photographs and they are the right
+//   fixtures for geometry (detectQuad, paperScore, skew), which is scale-free.
+//   They are the wrong fixtures for anything absolute about image quality,
+//   because they are far below the resolution floor a real capture must clear
+//   and the pipeline would refuse them outright now. Holding them to the
+//   sharpness thresholds would be calibrating a production gate against
+//   thumbnails.
+//
+// · `glare-blown-background-{1,2}.png` are **real submitted pages at production
+//   scale** (2305x3301, 2250x3301). They are the corpus's only honest anchor
+//   for the absolute measures, and they carry the most important regression pin
+//   in this file — see below.
+//
+// · `glare-specular-synthetic.png` is **synthesised, and labelled as such.**
+//   Explained where it is used.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detectQuad } from '../src/scan/edges.js';
 import { paperScore } from '../src/scan/quad.js';
-import { reconcileWithInk, scorePage } from '../src/scan/quality.js';
-import { QUALITY } from '../src/scan/contract.js';
+import { clipping, glareScore, reconcileWithInk, scorePage, sharpness } from '../src/scan/quality.js';
+import { CONDITIONING, QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
 
 // Matches the live gate's own search width (capture.js's PROXY_WIDTH) and the
@@ -48,6 +66,9 @@ const VIEWFINDER_FEED = { left: 0, top: 110, width: 1440, height: 1075 };
 // job description in one sentence.
 const REAL_PAGES = ['page-tilted.jpg', 'page-straight.jpg', 'page-angled.jpg', 'page-skew.jpg'];
 
+// The two real submissions, at the resolution they were actually submitted at.
+const PRODUCTION_PAGES = ['glare-blown-background-1.png', 'glare-blown-background-2.png'];
+
 for (const name of REAL_PAGES) {
   test(`detectQuad finds the page in ${name}`, async () => {
     const proxy = await decodeFixture(name, { resizeWidth: PROXY_W });
@@ -56,44 +77,165 @@ for (const name of REAL_PAGES) {
     const { paper } = paperScore(proxy, quad);
     assert.ok(paper >= PAPER_MIN, `paper score ${paper} on ${name} — below the gate's own ${PAPER_MIN} line`);
   });
+}
 
-  test(`scorePage does not fail ${name} on blur — this is a sharp scan`, async () => {
-    const native = await decodeFixture(name);
-    const gate = scorePage(native, { longEdge: Math.max(native.width, native.height) });
-    assert.ok(gate.signals.sharpness >= 0.9,
-      `sharpness ${gate.signals.sharpness} on ${name} — a real, in-focus page scored soft`);
+// ── the regression that matters most ───────────────────────────────────────
+//
+// Both of these are real pages a real student submitted on 2026-08-26. Both
+// were hard-failed by the old gate with "Light is washing out part of these
+// pages", on a glare metric that scored 0.94+ — and one of them
+// (glare-blown-background-2.png, extraction_run fc030c2a-...) had already had
+// 144 genuine teacher marks recovered from those very same pixels by
+// `separateLayers`. They are white *scans*, not glared photographs, and the
+// old measure could not tell the two apart because it counted bright colourless
+// pixels absolutely, which is a description of paper.
+//
+// A false reject on a good page is the worst failure this product has. This
+// test is the pin that stops it coming back.
+for (const name of PRODUCTION_PAGES) {
+  test(`a clean production-scale scan passes the gate: ${name}`, async () => {
+    const img = await decodeFixture(name);
+    const q = scorePage(img, { longEdge: Math.max(img.width, img.height) });
+    assert.equal(q.verdict, 'ok',
+      `${name} is a readable page a student actually submitted, and the gate said "${q.verdict}": ${q.reasons.join(' | ')}`);
+    assert.equal(q.signals.glare, 0,
+      `${name} is a scan, not a glared photograph — any nonzero glare here means the metric has drifted back to measuring exposure`);
+    assert.ok(q.signals.clipping < 0.001,
+      `clipping ${q.signals.clipping} on a white scan — the metric is counting paper again, which is the defect it was rewritten to remove`);
   });
 }
 
-// RESOLUTION_FAIL is wired into scorePage()'s verdict (audit 2026-08-26
-// finding 7 flagged this as defined but never checked; re-verified false —
-// see quality.js's resVerdict) but nothing before this pinned it against a
-// real photograph, only against synthetic dimensions. `page-tilted.jpg` and
-// `page-straight.jpg` are real, in-focus, low-glare pages at native
-// resolution (per the test above) — downsampling them, genuinely, below
-// RESOLUTION_FAIL is the one honest way to produce "a low-resolution-only
-// capture" a golden set can check: real content, every other signal still
-// in its ok/warn band, so a fail here can only be coming from resolution.
+// ── sharpness is a property of the paper, not of the pixel count ───────────
+//
+// AXON_FIX_BRIEF.md §B7. The old measure read 1.0000 on a fixture at 240px and
+// 0.1393 on the same fixture at 1400px, because downscaling concentrates
+// high-frequency energy — so the live gate (240px proxy) and the final gate
+// (2400px page) were reading opposite answers off the same paper. The fix is to
+// measure at a fixed page-relative scale; this is what proves it took.
+//
+// The check is deliberately only over the range the pipeline actually operates
+// in. Below the floor the number *should* fall off, because a 1200px page
+// really does hold half the detail, and pretending otherwise would be the
+// original bug wearing a different hat.
+for (const name of PRODUCTION_PAGES) {
+  test(`sharpness reads the same at every resolution above the floor: ${name}`, async () => {
+    const native = await decodeFixture(name);
+    const long = Math.max(native.width, native.height);
+    const atNative = sharpness(native).raw;
+
+    for (const target of [CONDITIONING.MIN_LONG_EDGE, 2800]) {
+      if (target > long) continue;
+      const scaled = await decodeFixture(name, { resizeWidth: Math.round(target * native.width / long) });
+      const atTarget = sharpness(scaled).raw;
+      const drift = Math.abs(atTarget - atNative) / atNative;
+      assert.ok(drift < 0.15,
+        `${name}: raw sharpness ${atNative} at ${long}px but ${atTarget} at ${target}px — ${(drift * 100).toFixed(0)}% drift. The measure is scale-dependent again.`);
+    }
+  });
+
+  test(`sharpness falls honestly below the floor: ${name}`, async () => {
+    const native = await decodeFixture(name);
+    const long = Math.max(native.width, native.height);
+    const small = await decodeFixture(name, { resizeWidth: Math.round(700 * native.width / long) });
+    assert.ok(sharpness(small).raw < sharpness(native).raw / 2,
+      `${name} at 700px measured as sharp as at ${long}px — the metric is not seeing lost detail, which is how it was wrong before`);
+  });
+}
+
+// ── the blur thresholds, against actual blur ───────────────────────────────
+//
+// contract.js states where BLUR_WARN and BLUR_FAIL came from: a Gaussian sweep
+// on these two pages at the pipeline's own 2400px target. This runs the ends of
+// that sweep so the constants cannot drift away from the measurement that
+// produced them.
+for (const name of PRODUCTION_PAGES) {
+  test(`an in-focus page clears BLUR_WARN and a badly blurred one does not: ${name}`, async () => {
+    // Width chosen so the *long* edge lands on the pipeline's own target. These
+    // fixtures are portrait, so passing 2400 as a width would upscale them and
+    // then blur the upscale, which measures the resampler rather than the page.
+    const native = await decodeFixture(name);
+    const atTarget = Math.round(2400 * native.width / Math.max(native.width, native.height));
+
+    const sharpPage = await decodeFixture(name, { resizeWidth: atTarget });
+    const focus = sharpness(sharpPage);
+    assert.ok(focus.score >= QUALITY.BLUR_WARN,
+      `${name} at 2400px scored ${focus.score} (raw ${focus.raw}) — a real in-focus page fell under the warn line`);
+
+    const blurred = await decodeFixture(name, { resizeWidth: atTarget, blur: 3 });
+    const soft = sharpness(blurred);
+    assert.ok(soft.score < QUALITY.BLUR_FAIL,
+      `${name} blurred at sigma 3 still scored ${soft.score} (raw ${soft.raw}) — above the fail line, so nothing is being caught`);
+  });
+}
+
+// ── glare, with a labelled synthetic positive ──────────────────────────────
+//
+// The corpus contains no genuine glare true positive. Both fixtures named
+// "glare-blown" are readable pages: one recovered 144 teacher marks in
+// production and the other recovered zero only because it is tagged
+// `layer_fallback = 'student_wrote_red'`. So a positive had to be made, and it
+// is named for what it is.
+//
+// `glare-specular-synthetic.png` is `page-tilted.jpg` with two saturating white
+// ellipses composited over it in `lighten` mode — which is what a specular
+// reflection physically does: it adds light, it does not replace the page.
+// Everything else about the fixture, including the ink under the blob, is the
+// original photograph. It is a *metric* fixture, not a verdict one: it is well
+// below the resolution floor and would be refused at capture, so only its glare
+// number is asserted here.
+test('a specular highlight is found, and the same page without one is not', async () => {
+  const clean = await decodeFixture('page-tilted.jpg');
+  const glared = await decodeFixture('glare-specular-synthetic.png');
+
+  const before = glareScore(clean);
+  const after = glareScore(glared);
+
+  assert.equal(before.score, 0,
+    `the unmodified photograph measured ${before.score} glare — a clean page must read zero or the positive below proves nothing`);
+  assert.ok(after.score > QUALITY.GLARE_FAIL,
+    `the synthesised highlight measured ${after.score}, at or under GLARE_FAIL ${QUALITY.GLARE_FAIL} — real glare is not being caught`);
+  // The blob only adds light, so if the base level moved the measure is picking
+  // up the composite rather than the highlight.
+  assert.ok(Math.abs(after.base - before.base) <= 4,
+    `page base moved ${before.base} -> ${after.base}; the fixture is no longer isolating a local highlight`);
+});
+
+// ── over-exposure, which glare cannot see ──────────────────────────────────
+//
+// A uniformly blown page has no bright patch for a local measure to find. That
+// case belongs to `clipping`, and the pair below is why both exist.
+test('over-exposure shows up in clipping even where glare stays at zero', async () => {
+  const correct = await decodeFixture('page-tilted.jpg');
+  const hot = await decodeFixture('page-tilted.jpg', { exposure: 1.3 });
+
+  assert.ok(clipping(correct) < QUALITY.CLIP_WARN,
+    `a correctly exposed photograph measured ${clipping(correct)} clipping — over the warn line, so the metric is counting paper`);
+  assert.ok(clipping(hot) > QUALITY.CLIP_WARN,
+    `the same page at x1.30 exposure measured ${clipping(hot)} — under the warn line, so nothing is being caught`);
+  assert.ok(glareScore(hot).headroom < glareScore(correct).headroom,
+    'exposure headroom did not fall on an over-exposed page — the signal that lets a refusal say "bright all over" rather than "tilt it" is not working');
+});
+
+// ── the resolution floor ───────────────────────────────────────────────────
+//
+// This used to assert that a downsampled page failed on resolution *alone*,
+// with sharpness still in its ok band. That assertion is no longer meaningful
+// and its disappearance is the finding, not a loosening: under a scale-invariant
+// sharpness measure, "this page is small" and "this page has no fine detail"
+// are the same physical fact, so both signals fire together by construction.
+// What is still worth pinning is that the floor fires at all, and that it is
+// the floor that fires — the capture step refuses below it, so nothing should
+// be able to reach the pipeline under it.
 for (const name of ['page-tilted.jpg', 'page-straight.jpg']) {
-  test(`a genuinely low-resolution capture of ${name} fails on resolution alone`, async () => {
-    // Downsampled, not upsampled: both fixtures are already ~850-1000px
-    // native, so anything at or above that width would be interpolated
-    // *up*, which softens the image and would make this a blur test by
-    // accident. 500px is a real capture a long way under the phone's own
-    // sensor, the same way a student photographing from across a desk
-    // would produce one.
+  test(`a genuinely low-resolution capture of ${name} is failed by the gate`, async () => {
     const small = await decodeFixture(name, { resizeWidth: 500 });
     const gate = scorePage(small, { longEdge: Math.max(small.width, small.height) });
 
     assert.equal(gate.verdict, 'fail', `expected a low-res capture of ${name} to fail, got ${gate.verdict}`);
     assert.ok(gate.signals.long_edge < QUALITY.RESOLUTION_FAIL,
       `long_edge ${gate.signals.long_edge} is not actually below RESOLUTION_FAIL — this test would be measuring nothing`);
-    // Isolate resolution as the actual cause: blur and glare must still be
-    // clean, or a 'fail' here would be ambiguous about why.
-    assert.ok(gate.signals.sharpness >= QUALITY.BLUR_WARN,
-      `sharpness ${gate.signals.sharpness} on the downsampled ${name} also failed — this is no longer isolating resolution`);
-    assert.ok(gate.signals.glare <= QUALITY.GLARE_FAIL,
-      `glare ${gate.signals.glare} on the downsampled ${name} also failed — this is no longer isolating resolution`);
+    assert.ok(gate.reasons.some((r) => r.includes('too small')),
+      `the refusal did not mention resolution: ${gate.reasons.join(' | ')}`);
   });
 }
 
@@ -105,51 +247,24 @@ for (const name of ['viewfinder-a.jpg', 'viewfinder-b.jpg']) {
   });
 }
 
-// Real submissions, traced live in production on 2026-08-26: two pages of a
-// genuine marked CS exam, uploaded (no camera in this environment, so no
-// quad/warp — the same code path an `<input type=file>` upload takes). Both
-// scored glare 0.94+ (well past GLARE_FAIL 0.035) and both hard-failed with
-// "Light is washing out part of these pages" — on a real, readable paper.
-// glare-blown-background-2.png's page went on to have 144 real teacher marks
-// recovered in production (extraction_run row fc030c2a-...); glare-blown-
-// background-1.png recovered zero. That is the pair reconcileWithInk exists
-// to tell apart: page 2 should downgrade to warn, page 1 should stay fail.
+// ── reconcileWithInk, now a backstop rather than a patch ───────────────────
 //
-// The raw glare score itself is pinned here against the fixture directly —
-// that reproduces almost exactly (glare 0.93-0.94 locally vs 0.94-0.945 in
-// production for both pages), so it survives a plain Node/sharp decode fine.
-// separateLayers' mark *count* does not: run locally under sharp at every
-// scale tried (native, 900px proxy, and conditionPage's own target scale) it
-// finds 0 marks on both fixtures, including page 2's real 144 — almost
-// certainly a decode-level difference between sharp and a browser canvas's
-// getImageData on this specific PNG (ICC/alpha handling is the leading
-// suspect, not yet root-caused) rather than anything wrong with the ink
-// itself. So this test pins reconcileWithInk's own contract directly against
-// the raw glare-only fail this fixture produces, using the real production
-// mark count as input rather than a local (and here, unreliable) re-derivation
-// of it — separateLayers' fixture-level accuracy is tracked as a separate,
-// still-open item, not silently declared fine by loosening this assertion.
-for (const [name, productionMarkCount] of [
-  ['glare-blown-background-1.png', 0],
-  ['glare-blown-background-2.png', 144],
-]) {
-  test(`glare-only verdict on ${name} is reconciled against its real production mark count`, async () => {
-    const native = await decodeFixture(name);
-    const raw = scorePage(native, { longEdge: Math.max(native.width, native.height) });
-    assert.ok(raw.signals.glare > 0.5,
-      `fixture no longer exercises the case — glare ${raw.signals.glare} is not the blown-background scenario this pins`);
-    assert.strictEqual(raw.verdict, 'fail', 'fixture no longer starts as a raw fail — nothing to reconcile');
+// It was written to rescue readable pages from the old glare metric, and both
+// pages it was written for now measure 0.0000 glare and never reach a glare
+// fail at all. So it can no longer be pinned against a fixture — there is no
+// fixture that produces the input any more, which is the point. Its contract is
+// pinned directly instead: given a glare-only fail, a meaningful number of
+// recovered teacher marks downgrades it and no marks does not.
+test('reconcileWithInk downgrades a glare-only fail when the ink survived, and only then', async () => {
+  const glared = await decodeFixture('glare-specular-synthetic.png');
+  const raw = scorePage(glared, { longEdge: CONDITIONING.MIN_LONG_EDGE });
+  assert.equal(raw.verdict, 'fail', 'the synthetic glare fixture no longer produces a fail — nothing to reconcile');
 
-    const reconciled = reconcileWithInk(raw, productionMarkCount);
-    if (productionMarkCount >= 3) {
-      assert.strictEqual(reconciled.verdict, 'warn',
-        'production recovered real marks on this exact page — a glare-only fail should have been downgraded');
-    } else {
-      assert.strictEqual(reconciled.verdict, 'fail',
-        'production recovered no marks on this exact page — reconcileWithInk must not silently pass it');
-    }
-  });
-}
+  assert.equal(reconcileWithInk(raw, 144).verdict, 'warn',
+    'a page whose red layer yielded 144 teacher marks was still refused for glare');
+  assert.equal(reconcileWithInk(raw, 0).verdict, 'fail',
+    'a page whose red layer yielded nothing was let through — reconcileWithInk must not pass a page on no evidence');
+});
 
 test('page-clean.jpg (a room with no page in shot) is a known false accept — pinned, not fixed here', async () => {
   // Quad-detector accuracy is explicitly deferred work (scansystemredesign.md

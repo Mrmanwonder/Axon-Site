@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { liveGateVerdict, shouldAutoCapture, steadyWindow } from '../src/scan/capture.js';
-import { CAPTURE, QUALITY } from '../src/scan/contract.js';
+import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
 // A page quad, and the same page with every corner nudged by `px`.
@@ -86,7 +86,11 @@ test('auto off, or already fired, holds the shutter', () => {
 
 test('one lucky detection is not enough', () => {
   assert.equal(shouldAutoCapture({ ...ready, consecutiveFinds: 1 }), false);
-  assert.equal(shouldAutoCapture({ ...ready, consecutiveFinds: 3 }), false);
+  // Pinned against the constant rather than a literal, so raising the run
+  // length (§7.3 asks for about five) cannot leave this test silently
+  // asserting something weaker than what the phone requires.
+  assert.equal(shouldAutoCapture({ ...ready, consecutiveFinds: CAPTURE.CONSECUTIVE_FINDS - 1 }), false);
+  assert.equal(shouldAutoCapture({ ...ready, consecutiveFinds: CAPTURE.CONSECUTIVE_FINDS }), true);
 });
 
 test('a page held long enough fires even if it never reads as steady', () => {
@@ -112,8 +116,8 @@ test('patience does not override the gate', () => {
 // Every signal comfortably inside its "ok" band — nothing should block or
 // even earn advice beyond steadiness.
 const clean = {
-  glare: 0, fill: CAPTURE.MIN_FILL + 0.1, sharpness: QUALITY.BLUR_WARN + 0.1,
-  skew: 0, pageLongEdge: QUALITY.RESOLUTION_WARN + 100, steady: true,
+  glare: 0, clipping: 0, fill: CAPTURE.MIN_FILL + 0.1, sharpness: QUALITY.BLUR_WARN + 0.1,
+  skew: 0, pageLongEdge: CONDITIONING.MIN_LONG_EDGE + 100, steady: true,
 };
 
 test('every signal clean and steady reads Ready', () => {
@@ -126,22 +130,50 @@ test('not yet steady, otherwise clean, blocks nothing but says so', () => {
   assert.equal(v.hint, 'Hold still');
 });
 
-test('glare over the live line blocks, ahead of every other check', () => {
+// Resolution comes first now, and it is a block rather than advice — the two
+// changes are one change (AXON_FIX_BRIEF.md §7.3). A page that will land under
+// CONDITIONING.MIN_LONG_EDGE is a page `acceptPage` refuses outright, so saying
+// so while moving the phone closer still fixes it is the entire argument for
+// having a live gate. Blocking here still never touches the shutter — it
+// withholds *auto*-capture, and the student can always take the shot.
+test('a page that will land under the capture floor blocks, ahead of every other check', () => {
   const v = liveGateVerdict({
-    ...clean, glare: QUALITY.GLARE_WARN + 0.001,
-    fill: 0, sharpness: 0, skew: 999, pageLongEdge: 0, steady: false,
+    ...clean, pageLongEdge: CONDITIONING.MIN_LONG_EDGE - 1,
+    glare: 1, clipping: 1, fill: 0, sharpness: 0, skew: 999, steady: false,
   });
-  assert.equal(v.blocking, 'glare');
+  assert.equal(v.blocking, 'resolution');
 });
 
-test('too far away blocks on distance, once glare is clear', () => {
+test('too far away blocks on distance, once resolution is clear', () => {
   const v = liveGateVerdict({ ...clean, fill: CAPTURE.MIN_FILL - 0.01 });
   assert.equal(v.blocking, 'distance');
 });
 
-test('soft focus blocks, once distance and glare are clear', () => {
+test('glare over the live line blocks, ahead of exposure and focus', () => {
+  const v = liveGateVerdict({
+    ...clean, glare: QUALITY.GLARE_WARN + 0.001, clipping: 1, sharpness: 0, skew: 999, steady: false,
+  });
+  assert.equal(v.blocking, 'glare');
+});
+
+test('a uniformly over-exposed page blocks on exposure, which glare cannot see', () => {
+  const v = liveGateVerdict({ ...clean, clipping: QUALITY.CLIP_WARN + 0.001 });
+  assert.equal(v.blocking, 'exposure');
+  assert.match(v.hint, /bright/i);
+});
+
+test('soft focus blocks, once resolution, distance and exposure are clear', () => {
   const v = liveGateVerdict({ ...clean, sharpness: QUALITY.BLUR_WARN - 0.01 });
   assert.equal(v.blocking, 'focus');
+});
+
+// Null is "we could not measure this", not "this is zero". The focus window
+// lands on blank paper often enough that treating the two the same would refuse
+// a lightly-written page for being lightly written.
+test('an unmeasurable focus window does not block', () => {
+  const v = liveGateVerdict({ ...clean, sharpness: null });
+  assert.equal(v.blocking, null);
+  assert.equal(v.hint, 'Ready');
 });
 
 test('skew past the warn line is advisory, never blocking', () => {
@@ -150,8 +182,7 @@ test('skew past the warn line is advisory, never blocking', () => {
   assert.match(v.hint, /square/i);
 });
 
-test('low resolution is advisory, never blocking — a student may not be able to clear it', () => {
-  const v = liveGateVerdict({ ...clean, pageLongEdge: QUALITY.RESOLUTION_WARN - 1 });
+test('a page just over the floor is not blocked on resolution', () => {
+  const v = liveGateVerdict({ ...clean, pageLongEdge: CONDITIONING.MIN_LONG_EDGE });
   assert.equal(v.blocking, null);
-  assert.match(v.hint, /closer/i);
 });

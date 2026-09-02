@@ -24,6 +24,14 @@ import { processPage, makeProxy } from './device.js';
 import { addPage, markUploaded, pendingPages, saveDraft } from './drafts.js';
 import { pool, reviewComplete, submitPaper } from './functions.js';
 import { CAPTURE } from './contract.js';
+import { refusalFor } from './conditioning.js';
+
+/** Thrown when a page cannot be used at all, with the reason already written
+    for the student. Distinguished from an ordinary failure so the caller can
+    show it as advice rather than as something that went wrong. */
+export class PageRefused extends Error {
+  constructor(message) { super(message); this.name = 'PageRefused'; this.refused = true; }
+}
 
 /**
  * Condition a captured frame, separate its layers, and put it in the draft.
@@ -32,9 +40,13 @@ import { CAPTURE } from './contract.js';
  * quality verdict comes from and the verdict is only useful while the paper is
  * still in front of the student.
  *
- * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number, capturePath?:string, liveGate?:Object}} args
+ * @param {{draft:Object, bitmap:ImageBitmap, quad:Array|null, replacing?:number,
+ *         capturePath?:string, liveGate?:Object, sourceKind?:string, original?:Blob}} args
  */
-export async function acceptPage({ draft, bitmap, quad, replacing = null, capturePath = null, liveGate = null }) {
+export async function acceptPage({
+  draft, bitmap, quad, replacing = null,
+  capturePath = null, liveGate = null, sourceKind = null, original = null,
+}) {
   if (draft.pages.length >= CAPTURE.MAX_PAGES && replacing === null) {
     throw new Error(`A paper can hold ${CAPTURE.MAX_PAGES} pages. Start a second one for the rest.`);
   }
@@ -43,8 +55,27 @@ if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing))
   throw new Error('That page is not in this booklet any more.');
 }
 
+// The resolution floor, checked before any of the expensive work rather than
+// after it (AXON_FIX_BRIEF.md §7.2). Conditioning caps and never upscales, so a
+// source under the floor cannot produce a page at the floor — running the warp,
+// the layer separation and two encodes first would only spend several seconds
+// arriving at the same answer.
+const refusal = refusalFor(bitmap.width || bitmap.naturalWidth, bitmap.height || bitmap.naturalHeight, quad);
+if (refusal) throw new PageRefused(refusal);
+
 const pageNumber = replacing ?? draft.pages.length + 1;
-  const processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate });
+  let processed;
+  try {
+    processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate, sourceKind });
+  } catch (error) {
+    // The second half of the floor. `refusalFor` above answers what size alone
+    // can answer; conditioning answers the rest, on evidence, once it has the
+    // pixels — a page between the hard floor and the target is refused only if
+    // the detail genuinely is not there to bring back. Either way the student
+    // gets a reason and an action, not a stack trace.
+    if (error?.refused) throw new PageRefused(error.message);
+    throw error;
+  }
   const proxy = await makeProxy(processed.blob);
 
 const page = {
@@ -53,6 +84,16 @@ const page = {
   // whole reason it exists: a faint thin stroke the lossy page loses is still
   // at full strength here. See bench/README.md.
   mask: processed.mask,
+  // 512px, for triage. See CONDITIONING.THUMB_LONG_EDGE.
+  thumb: processed.thumb,
+  // The bytes exactly as the camera or the file gave them: no warp, no
+  // resample, no re-encode. §7.6.4 — never discard the original, so mistakes
+  // are recoverable server-side. It is held in the draft only until it has
+  // been uploaded, and `markUploaded` drops it then; keeping originals for the
+  // life of an offline booklet would roughly triple its footprint on a phone
+  // that may not have the room.
+  original: original ?? null,
+  original_type: original?.type ?? null,
   proxy,
   width: processed.width,
   height: processed.height,
@@ -61,6 +102,7 @@ const page = {
   teacher_marks: processed.teacher_marks,
   margin_band: processed.margin_band,
   layer_fallback: processed.layer_fallback,
+  source_kind: sourceKind,
 };
 
 if (replacing !== null) {
@@ -81,6 +123,7 @@ const STAGE_FOR_STATUS = {
   queued: 'structure',
   triaging: 'structure',
   structure: 'structure',
+  cropping: 'structure',
   content: 'content',
   attribution: 'content',
   reconciliation: 'reconcile',
@@ -91,6 +134,12 @@ const MESSAGE_FOR_STATUS = {
   queued: 'Waiting to start',
   triaging: 'Checking this is a marked paper',
   structure: 'Finding the questions',
+  // The crop stage (AXON_FIX_BRIEF.md §8) cuts each question out of its page
+  // so the next stage sends one question rather than one whole booklet. Named
+  // as what it is for the student — "cropping" is our word, not theirs — and
+  // given its own line rather than left to fall through to the generic
+  // "Working through the paper", which would be true of every stage.
+  cropping: 'Getting each question ready to read',
   content: 'Reading the answers and the marking',
   attribution: 'Matching the marks to the questions',
   reconciliation: 'Checking the marks add up',
@@ -175,10 +224,18 @@ const pending = pendingPages(draft);
 
 const pages = draft.pages.map((p) => ({
   page_number: p.page_number,
-  source_kind: 'upload',
+  // Recorded, not assumed. This was the literal string 'upload' on every page
+  // ever submitted, camera captures included, which made the one question the
+  // scanner's own telemetry exists to answer — is the camera path ever taken —
+  // unanswerable (AXON_FIX_BRIEF.md §7.1). A draft written by an older build
+  // has no source kind to report and says 'upload', which is what it was
+  // recorded as; it is not re-guessed here.
+  source_kind: p.source_kind ?? p.meta?.source_kind ?? 'upload',
   r2_bucket: p.r2_bucket,
   r2_key: p.r2_key,
   mask_key: p.mask_key ?? null,
+  original_key: p.original_key ?? null,
+  thumb_key: p.thumb_key ?? null,
   bytes: p.bytes ?? p.blob?.size ?? null,
   width: p.width,
   height: p.height,
@@ -228,27 +285,72 @@ say('reconcile', `${regions.length} question${regions.length === 1 ? '' : 's'} f
 return { paperId, runId: submission.run_id, refused: false, regions: regions ?? [] };
 }
 
+/**
+ * The most recent extraction_run for a paper, if any.
+ *
+ * Used to re-enter review or report progress on a paper the student left
+ * mid-flow — the draft only ever remembers `paper_id`; the run itself is
+ * looked up fresh rather than persisted, so it is never stale.
+ */
+export async function currentRunForPaper(paperId) {
+  const { data, error } = await sb
+    .from('extraction_run')
+    .select('id, status, status_reason')
+    .eq('paper_id', paperId)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** A run's regions, for `watchExplanations` — used when re-entering review
+    on a run that was already `ingest()`-ed in a previous session. */
+export async function regionsForRun(runId) {
+  const { data, error } = await sb
+    .from('question_region')
+    .select('id, order_index, question_label')
+    .eq('run_id', runId)
+    .order('order_index');
+  if (error) throw error;
+  return data ?? [];
+}
+
 const EXPLAIN_POLL_MS = 1500;
 const EXPLAIN_TIMEOUT_MS = 5 * 60 * 1000;
 const EXPLAIN_SETTLED = new Set(['done', 'skipped', 'failed']);
 
 /**
- * Stage 8, over a whole paper.
+ * Stage 8's gate, and only its gate.
+ *
+ * `review-complete` refuses (409) while any region on the run still needs the
+ * student's eyes — which is guaranteed at the moment a scan finishes, before
+ * review has happened at all. Call this only once review is actually done:
+ * after the outstanding-count guard passes, from `save()`. Calling it any
+ * earlier is not a race, it is certain to 409, every time — that was the
+ * whole bug (see AXON_FIX_BRIEF.md §4.A1).
+ *
+ * On success the server has already started every explanation it is willing
+ * to run; use `watchExplanations` to wait for them.
+ */
+export async function startExplanations(runId) {
+  return reviewComplete({ run_id: runId });
+}
+
+/**
+ * Watch a paper's explanations land. Does not start them — call
+ * `startExplanations` first and only once it has resolved.
  *
  * Deliberately separate from ingest and deliberately not awaited by it: a
- * student should be reading question 1's explanation while question 9 is still
- * generating, and the paper is worth opening the moment the marks are in.
- * `onQuestion` fires per question as each lands.
- *
- * One call starts every explanation the server is willing to run
- * (`review-complete` refuses if anything on the paper still needs the
- * student's eyes); this then just watches `question_region.explain_status`
- * per region so callers keep the same per-question landing they had before.
+ * student should be reading question 1's explanation while question 9 is
+ * still generating. `onQuestion` fires per question as each lands, so a
+ * caller that wants to paint the review screen while this runs still can;
+ * `save()` is the one caller that also awaits the whole thing, so it knows
+ * when every region has settled and it is safe to commit (see
+ * AXON_FIX_BRIEF.md §6.2 — commit only after explanations, not before).
  */
-export async function explainPaper({ runId, regions, onQuestion }) {
+export async function watchExplanations({ runId, regions, onQuestion }) {
   if (!regions?.length) return [];
-
-await reviewComplete({ run_id: runId });
 
 const pending = new Map(regions.map((r) => [r.id, r]));
   const startedAt = Date.now();

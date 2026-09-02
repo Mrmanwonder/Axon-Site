@@ -16,15 +16,70 @@
 // which was fighting a problem the format was creating; that search is gone and
 // the mask carries the fine detail instead. See bench/README.md for why.
 
-import { CONDITIONING } from './contract.js';
+import { CONDITIONING, ENHANCE } from './contract.js';
 import { warpPerspective, quadSize } from './geometry.js';
 import { separateLayers } from './layers.js';
+import { assessRescue, enhancePage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
 
-/** Pixels on the long edge a page of this size represents, capped and never grown. */
-export function targetSize(width, height, longEdge = CONDITIONING.PAGE_LONG_EDGE) {
-  const scale = Math.min(1, longEdge / Math.max(width, height));
+/**
+ * Pixels on the long edge a page of this size represents.
+ *
+ * Capped and never grown, unless a caller explicitly asks — and the only caller
+ * that does is the rescue path, which has already established on evidence that
+ * this particular page can be enlarged honestly (enhance.js). Left to itself
+ * this must never upscale: inventing pixels does not add detail, it just moves
+ * the failure downstream to a model that then reads invented detail as though
+ * it were a teacher's pen.
+ */
+export function targetSize(width, height, longEdge = CONDITIONING.PAGE_LONG_EDGE, allowUpscale = false) {
+  const ratio = longEdge / Math.max(width, height);
+  const scale = allowUpscale ? ratio : Math.min(1, ratio);
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+}
+
+/**
+ * The long edge this source will actually produce, before the cap is applied.
+ *
+ * With a quad it is the warped page's own long edge, which is what the page
+ * will be — not the frame's. A 4032px still of a page held at arm's length
+ * produces a page a good deal smaller than 4032, and the difference is exactly
+ * the case the floor exists to catch.
+ */
+export function projectedLongEdge(sourceWidth, sourceHeight, quad = null) {
+  if (quad) {
+    const natural = quadSize(quad);
+    return Math.round(Math.max(natural.width, natural.height));
+  }
+  return Math.max(sourceWidth, sourceHeight);
+}
+
+/**
+ * Why this page cannot be used at all, decided from its size alone, or null.
+ *
+ * The cheap half of the floor. It runs before anything is decoded or warped, so
+ * it can only answer the question size alone can answer: is this so far under
+ * the floor that no amount of honest processing reaches it?
+ *
+ * The line is `MIN_LONG_EDGE / ENHANCE.MAX_SCALE` — 1600px against a 2400px
+ * floor — and everything between there and the floor goes to `enhance.js`,
+ * which decides on evidence rather than on dimensions. That is the difference
+ * between this and the version it replaces: a page under the floor used to be
+ * refused outright, and a student whose photo had been through a chat app had
+ * nowhere to go. Now most of them are rescued, some are still refused, and the
+ * ones that are refused are refused because the detail genuinely is not there,
+ * not because a number was too small.
+ *
+ * Worded as a fact and an action, never as a question. The consequence is
+ * stated; the student is not asked to confirm anything.
+ */
+export function refusalFor(sourceWidth, sourceHeight, quad = null) {
+  const projected = projectedLongEdge(sourceWidth, sourceHeight, quad);
+  const hardFloor = Math.round(CONDITIONING.MIN_LONG_EDGE / ENHANCE.MAX_SCALE);
+  if (projected >= hardFloor) return null;
+  return quad
+    ? `This page came out ${projected}px across and we need at least ${hardFloor}px to read the marking. Move the phone closer so the page fills the frame, and take it again.`
+    : `This image is ${projected}px on its longest side and we need at least ${hardFloor}px to read the marking. A photo straight from the camera roll usually clears that; one that has been through a chat app usually does not.`;
 }
 
 // ── browser plumbing ───────────────────────────────────────────────────────
@@ -82,6 +137,23 @@ function toBlobAny(canvas, cb) {
   else canvas.toBlob(cb);
 }
 
+/**
+ * A 512px copy of the page.
+ *
+ * Written for triage, which asks "is this a marked exam paper" — a question a
+ * thumbnail settles and which was being answered by sending full pages, at
+ * 27-43 seconds a paper (AXON_FIX_BRIEF.md §7.5). Encoded as JPEG rather than
+ * through `encodeBest`: it is small enough that WebP's size advantage is
+ * irrelevant, and JPEG is the one format every path can decode.
+ */
+async function encodeThumb(img) {
+  const target = targetSize(img.width, img.height, CONDITIONING.THUMB_LONG_EDGE);
+  const from = toSurface(img);
+  const c = surface(target.width, target.height);
+  c.getContext('2d').drawImage(from, 0, 0, target.width, target.height);
+  return encode(c, 'image/jpeg', 0.8);
+}
+
 /** The soft mask as a PNG. Lossless on purpose — it is the fine detail. */
 async function encodeMask({ data, width, height }) {
   const c = surface(width, height);
@@ -99,9 +171,9 @@ async function encodeMask({ data, width, height }) {
  * Condition one captured or uploaded page.
  *
  * @param {ImageBitmap|HTMLImageElement|HTMLCanvasElement} source
- * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object}} options
+ * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object, sourceKind?:string}} options
  */
-export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null } = {}) {
+export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
 
@@ -114,25 +186,80 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
   let img;
   let warped = false;
 
+  // What this page will be before any cap or rescue is applied — the warped
+  // page's own size, which for a quad is not the frame's size.
+  const natural = quad ? quadSize(quad) : { width: sw, height: sh };
+  const naturalLong = Math.max(natural.width, natural.height);
+
+  // ── the resolution floor, decided on evidence ────────────────────────────
+  //
+  // Assessed on the source, before anything has been resampled. A page measured
+  // after an upscale reads soft *because* of the upscale, so assessing there
+  // would refuse every page for the consequence of the operation being
+  // assessed. See enhance.js.
+  //
+  // Only decoded when the answer might be yes. A page over the floor is not a
+  // rescue candidate and never becomes one, so pulling a full-resolution
+  // ImageData out of an eight-megapixel upload to ask a question whose answer
+  // is already known would be tens of megabytes spent on nothing — on the one
+  // path (upload, no quad) that had until now never needed the source at full
+  // size at all.
+  let sourcePixels = quad ? imageDataFrom(source, sw, sh) : null;
+  const rescue = naturalLong >= CONDITIONING.MIN_LONG_EDGE
+    ? { needed: false, possible: false, longEdge: naturalLong, scale: 1 }
+    : assessRescue(sourcePixels ?? (sourcePixels = imageDataFrom(source, sw, sh)), naturalLong);
+  if (rescue.needed && !rescue.possible) {
+    // Not an error in the ordinary sense: the page cannot be used and the
+    // message already says what to do instead. Flagged so the worker boundary
+    // and the UI can tell the two apart.
+    const refusal = new Error(rescue.reason);
+    refusal.refused = true;
+    throw refusal;
+  }
+
+  // A rescued page is resampled *up* to the floor, and that enlargement is
+  // folded into the same single interpolation everything else gets rather than
+  // added as a second pass. Warping and then enlarging is two low-pass filters
+  // over a page that is already short of detail.
+  const targetLongEdge = rescue.possible ? CONDITIONING.MIN_LONG_EDGE : CONDITIONING.PAGE_LONG_EDGE;
+
   if (quad) {
-    const natural = quadSize(quad);
-    const target = targetSize(natural.width, natural.height);
-    const source_ = imageDataFrom(source, sw, sh);
-    const out = warpPerspective(source_, quad, target.width, target.height);
-    if (out) { img = out; warped = true; } else { img = source_; }
+    const target = targetSize(natural.width, natural.height, targetLongEdge, rescue.possible);
+    const out = warpPerspective(sourcePixels, quad, target.width, target.height);
+    if (out) { img = out; warped = true; } else { img = sourcePixels; }
   } else {
     // No quad — an upload, or a native document scanner that already returned a
     // corrected page. §5.1 is explicit that a corrected page must not be
     // corrected again: it has had one good resample and a second is pure loss.
-    const target = targetSize(sw, sh);
+    const target = targetSize(sw, sh, targetLongEdge, rescue.possible);
     img = (target.width === sw && target.height === sh)
-      ? imageDataFrom(source, sw, sh)
+      ? (sourcePixels ?? imageDataFrom(source, sw, sh))
       : imageDataFrom(await resample(source, target), target.width, target.height);
   }
 
-  // ── nothing touches tone ─────────────────────────────────────────────────
+  // ── tone is touched here, and only here, and only for a rescued page ─────
+  //
+  // Conditioning's standing rule is "correct the camera, not the page", and it
+  // still holds for every page that clears the floor: those are not touched at
+  // all. A rescued page is the exception the rule always implied — it has been
+  // enlarged, which costs acutance, and putting that acutance back is
+  // correcting for an operation this pipeline performed. Everything enhance.js
+  // does is a per-pixel scalar gain, which is what keeps the red separation
+  // seeing exactly what it would have seen.
+  let enhancement = null;
+  if (rescue.possible) {
+    const enhanced = enhancePage(img, rescue);
+    img = enhanced.image;
+    enhancement = enhanced.meta;
+  }
 
-  const rawQuality = scorePage(img);
+  // Scored against the page's *true* size, never the rescued one. A rescued
+  // page is upscaled for the model's benefit and reported at the size the
+  // camera actually gave — so it still reads as "smaller than we would like"
+  // and the student is still told. Enhancement changes how a page reads, never
+  // what it is, and a page claiming 2400px when the photograph was 1800px
+  // would be the pipeline lying to its own telemetry.
+  const rawQuality = scorePage(img, { longEdge: Math.min(naturalLong, CONDITIONING.PAGE_LONG_EDGE) });
   const layers = separateLayers(img);
   // See quality.js's `reconcileWithInk` for why: a glare-only fail is checked
   // against whether the red-ink layer actually survived on this same image,
@@ -141,10 +268,12 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
 
   const { blob, type } = await encodeBest(toSurface(img));
   const maskBlob = await encodeMask(layers.mask);
+  const thumbBlob = await encodeThumb(img);
 
   return {
     blob,
     maskBlob,
+    thumbBlob,
     width: img.width,
     height: img.height,
     quality,
@@ -153,7 +282,33 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       preprocess_version: CONDITIONING.PREPROCESS_VERSION,
       page_number: pageNumber,
       warped,
+      // The conditioned page's own pixel dimensions.
+      //
+      // Load-bearing, and absent from every page ever written before today.
+      // Structure and content convert the model's boxes off a 0-1000 normalised
+      // grid into page pixels, and with nothing to convert against they fell
+      // back to a hardcoded 2400x3200 — so every box on every page was scaled
+      // against a page shape that was, in general, not the page's. Those boxes
+      // are the crop stage's entire input, which is why this is written down
+      // before anything is cropped with them.
+      width: img.width,
+      height: img.height,
       source_size: { width: sw, height: sh },
+      // The corners the homography was built from, in the source image's own
+      // pixels. Kept so the warp can be reproduced — or undone — server-side
+      // from the original, which is the only thing that makes "never discard
+      // the original" worth anything.
+      quad: quad ? quad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+      // 'camera' | 'upload' | 'pdf' | 'link'. Mirrors the `source_kind` column
+      // rather than duplicating a judgement: both are written from the same
+      // value at the same moment.
+      source_kind: sourceKind,
+      // Null on every page that cleared the floor, which is almost all of them.
+      // Non-null means this page was under the floor, was judged recoverable on
+      // evidence, and was enlarged and sharpened to reach it — with what was
+      // done and what it achieved recorded, so "we enhanced it" is a claim
+      // production data can check rather than one anyone has to take on trust.
+      enhance: enhancement,
       encoded_type: type,
       encode_quality: CONDITIONING.ENCODE_QUALITY,
       bytes: blob?.size ?? 0,

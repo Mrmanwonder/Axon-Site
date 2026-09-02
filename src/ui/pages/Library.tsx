@@ -1,15 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    LIBRARY — the archive
 
-   A direct port of `__axonRenderLibrary`, which was one of the two render
-   bridges that actually got built. The behaviour is preserved down to the
-   details that carry meaning:
+   A direct port of `__axonRenderLibrary`, extended per AXON_FIX_BRIEF.md §6.5:
+   every paper shows a live status from upload onward, not just "Not read yet"
+   or a real row — Scanning → Reading → Needs your eyes → Ready to save →
+   (committed rows render as before). A failed or rejected paper stays
+   visible, says so, and offers a way back to it, rather than vanishing.
+
+   Three things carried over from the original port, still true and still load
+   bearing:
 
    · The count line states its own sample size, and says so when the copy on
      screen came from the offline cache rather than the network.
-   · A paper with no attempts yet is marked "Not read yet" rather than shown
-     with a silent zero. A zero would read as "nothing lost", which is a
-     different and much more confident claim than "we haven't read this".
+   · A committed paper with no attempts is a different, older bug (should not
+     happen once `progress` covers the in-flight states below); a paper mid-
+     pipeline is no longer shown that way at all — it shows what it's actually
+     doing.
    · Tier is stated in the student's terms — "Scheme-matched" or "Teacher's
      marks" — not as tier_1 / tier_2.
 
@@ -17,15 +23,16 @@
    column would only shorten each row's usable text.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel } from "../data/modules";
+import { paperTypeLabel, PAPER_STATUS, statusKeyForRun } from "../data/modules";
 import { paths } from "../app/paths";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
-    exists. Decorative. */
+    exists. Decorative. thumb_key (AXON_FIX_BRIEF.md §7.2) is still null on
+    every page live — nothing to point this at yet. */
 function Thumb() {
   return (
     <div className="thumb" aria-hidden="true">
@@ -39,7 +46,8 @@ function Thumb() {
 type CountRow = { count: number }[] | undefined;
 
 export default function Library() {
-  const { papers, papersStale } = useApp();
+  const { papers, papersStale, progress } = useApp();
+  const navigate = useNavigate();
 
   return (
     <>
@@ -64,14 +72,12 @@ export default function Library() {
         {papers.map((p) => {
           const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
           const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
-          return (
-            <PressBox
-              as={Link}
-              key={p.id}
-              to={paths.paper(p.id)}
-              className="row"
-              data-interactive=""
-            >
+          const run = progress.get(p.id);
+          const statusKey = run ? statusKeyForRun(run.status) : null;
+          const status = statusKey ? PAPER_STATUS[statusKey] : null;
+
+          const meta = (
+            <>
               <Thumb />
               <div className="b">
                 <div className="t1">{paperTypeLabel(p.type)}</div>
@@ -88,11 +94,53 @@ export default function Library() {
                   <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
                     {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
                   </span>
-                  {/* Not a zero. "We haven't read this" and "nothing was lost"
-                      are different claims and must not look the same. */}
-                  {!questions && <span className="tier uns">Not read yet</span>}
+                  {status
+                    ? (
+                      // "wait" (still being read) is neutral; "attention" and
+                      // "stopped" both use the existing amber .uns treatment —
+                      // red is reserved for signing out, nothing else.
+                      <span className={"tier " + (status.tone === "wait" ? "t1" : "uns")}>
+                        {status.label}
+                      </span>
+                    )
+                    // Not a zero. "We haven't read this" and "nothing was
+                    // lost" are different claims and must not look the same.
+                    : (!questions && <span className="tier uns">Not read yet</span>)}
                 </div>
               </div>
+            </>
+          );
+
+          // A paper mid-pipeline, or one that never produced a committed
+          // attempt, has nothing for PaperOverview to open. Route it back to
+          // Scan instead, where the resumable-draft flow already lives, so
+          // "needs your eyes" / "ready" / "failed" all have a real place to
+          // land rather than a dead link or a misleading empty screen.
+          if (status) {
+            return (
+              <PressBox
+                key={p.id}
+                as="button"
+                type="button"
+                className="row"
+                data-interactive=""
+                onClick={() => navigate(paths.scan)}
+              >
+                {meta}
+                <Chevron />
+              </PressBox>
+            );
+          }
+
+          return (
+            <PressBox
+              as={Link}
+              key={p.id}
+              to={paths.paper(p.id)}
+              className="row"
+              data-interactive=""
+            >
+              {meta}
               <Chevron />
             </PressBox>
           );

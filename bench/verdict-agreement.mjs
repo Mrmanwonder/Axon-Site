@@ -23,11 +23,13 @@
 
 import { detectQuad } from '../src/scan/edges.js';
 import { quadFill, quadSize } from '../src/scan/geometry.js';
-import { blurScore, glareInQuad, scorePage, skewDegrees, toGray } from '../src/scan/quality.js';
+import { focusWindowRect, measureQuad, scorePage, sharpness, skewDegrees } from '../src/scan/quality.js';
 import { liveGateVerdict } from '../src/scan/capture.js';
+import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
 
-const PROXY_W = 240; // capture.js's PROXY_WIDTH
+const PROXY_W = 240;        // capture.js's PROXY_WIDTH
+const FOCUS_WINDOW = 384;   // capture.js's FOCUS_WINDOW
 const VIEWFINDER_FEED = { left: 0, top: 110, width: 1440, height: 1075 };
 
 // The same real fixtures golden.test.mjs and golden-report.mjs use — see
@@ -66,8 +68,7 @@ export async function measure({ name, crop = null }) {
   }
 
   const fill = quadFill(quad, proxy.width, proxy.height);
-  const sharpness = blurScore(toGray(proxy), proxy.width, proxy.height);
-  const glare = glareInQuad(proxy, quad);
+  const exposure = measureQuad(proxy, quad);
   const skew = skewDegrees(quad);
   const size = quadSize(quad);
   // Mirrors capture.js's own `next.pageLongEdge` line exactly: the proxy
@@ -75,18 +76,65 @@ export async function measure({ name, crop = null }) {
   // proxy it was found on.
   const pageLongEdge = Math.round(Math.max(size.width, size.height) * (native.width / proxy.width));
 
+  // Focus the way the phone now measures it: not on the 240px proxy — which is
+  // the defect this whole change exists to remove, since the detail is not in
+  // those pixels at all — but on a native-resolution window of the page
+  // interior, drawn at the canonical scale `scorePage` uses. `focusWindowRect`
+  // is imported rather than reimplemented so this cannot drift from what
+  // capture.js actually cuts.
+  const focus = focusWindow(native, quad, proxy, pageLongEdge);
+
   // Simulating the instant of the shot, once the student has actually held
   // the page still — steadiness is a timing state machine (steadyWindow),
   // not a property of one frame, so it is not what this report is checking.
-  const live = liveGateVerdict({ glare, fill, sharpness, skew, pageLongEdge, steady: true });
+  const live = liveGateVerdict({
+    glare: exposure.glare, clipping: exposure.clipping, fill,
+    sharpness: focus, skew, pageLongEdge, steady: true,
+  });
+
+  // Every condition the gate would have tripped, not just the first one it
+  // returns. The gate short-circuits by design — the student gets one
+  // instruction at a time — but a report that only ever showed the first
+  // blocker would hide the other five behind whichever fixture happens to be
+  // smallest, which is exactly what this corpus does.
+  const blockers = [
+    pageLongEdge < CONDITIONING.MIN_LONG_EDGE ? 'resolution' : null,
+    fill < CAPTURE.MIN_FILL ? 'distance' : null,
+    exposure.glare > QUALITY.GLARE_WARN ? 'glare' : null,
+    exposure.clipping > QUALITY.CLIP_WARN ? 'exposure' : null,
+    focus !== null && focus < QUALITY.BLUR_WARN ? 'focus' : null,
+  ].filter(Boolean);
 
   return {
-    name, quad: true, live, final,
-    signals: { fill, sharpness, glare, skew, pageLongEdge },
+    name, quad: true, live, final, blockers,
+    signals: { fill, sharpness: focus, glare: exposure.glare, clipping: exposure.clipping, skew, pageLongEdge },
     // The one disagreement this report treats as real: the live gate said go
     // and the final check rejected it anyway.
     falseGo: live.blocking === null && final.verdict === 'fail',
   };
+}
+
+/**
+ * The focus window, cut out of the native decode rather than drawn from a video
+ * element. Same rectangle, same canonical scale, same measurement — the only
+ * difference is that a bench script has pixels in an array and a phone has them
+ * in a `<video>`.
+ */
+function focusWindow(native, quadInProxy, proxy, pageLongEdge) {
+  const kx = native.width / proxy.width, ky = native.height / proxy.height;
+  const inFrame = quadInProxy.map((p) => ({ x: p.x * kx, y: p.y * ky }));
+  const rect = focusWindowRect(inFrame, native.width, native.height, pageLongEdge, FOCUS_WINDOW);
+  if (!rect) return null;
+
+  const cut = { data: new Uint8ClampedArray(rect.size * rect.size * 4), width: rect.size, height: rect.size };
+  for (let y = 0; y < rect.size; y++) {
+    const src = ((rect.sy + y) * native.width + rect.sx) * 4;
+    cut.data.set(native.data.subarray(src, src + rect.size * 4), y * rect.size * 4);
+  }
+  // sharpness() takes it from here: the cut is in frame pixels and the ratio to
+  // canonical is target/size, which is what a drawImage into `target` applies.
+  const read = sharpness(cut, { scale: rect.target / rect.size });
+  return read.blank ? null : read.score;
 }
 
 async function main() {
@@ -97,7 +145,10 @@ async function main() {
     if (!r.quad) { console.log(`  ${r.name.padEnd(20)} no quad on the proxy — no live verdict to compare`); continue; }
     const flag = r.falseGo ? '  <-- FALSE "GO" (the case that matters)' : '';
     console.log(
-      `  ${r.name.padEnd(20)} live=${String(r.live.blocking ?? 'go').padEnd(9)} final=${r.final.verdict.padEnd(4)}${flag}`,
+      `  ${r.name.padEnd(20)} live=${String(r.live.blocking ?? 'go').padEnd(10)} final=${r.final.verdict.padEnd(4)}` +
+      `  [sharp=${r.signals.sharpness === null ? 'n/a  ' : r.signals.sharpness.toFixed(3)}` +
+      ` glare=${r.signals.glare.toFixed(4)} clip=${r.signals.clipping.toFixed(4)} long=${r.signals.pageLongEdge}]` +
+      `  all-blockers=${r.blockers.length ? r.blockers.join(',') : 'none'}${flag}`,
     );
   }
 
@@ -107,11 +158,16 @@ async function main() {
 
   console.log('\nRates\n');
   console.log(`  false "go" rate        ${falseGoes.length}/${withQuad.length} — live said Ready, final failed it. This is the number that should stay at 0.`);
-  console.log(`  extra-cautious rate     ${liveBlockedFinalFine.length}/${withQuad.length} — live blocked something the final check would have accepted. Expected: GLARE_WARN is deliberately stricter than GLARE_FAIL (contract.js), so this is the gate costing a free retake, not a defect.`);
+  console.log(`  extra-cautious rate     ${liveBlockedFinalFine.length}/${withQuad.length} — live blocked something the final check would have accepted. Expected: the live gate blocks at the *warn* lines and refuses anything that will land under the capture floor, so this is the gate costing a free retake, not a defect.`);
 
-  console.log('\nThis is six fixtures. Treat the false-"go" rate as directional, not');
-  console.log('calibrated — the number to trust is the one this grows into as more real');
-  console.log('captures land in bench/fixtures/, the same caveat golden-report.mjs makes.');
+  console.log('\nThis is six fixtures, and every one of them is under the capture floor:');
+  console.log('they are downscaled derivatives (~700-1030px), not the 2400px+ pages the');
+  console.log('gate is calibrated for, so "resolution" masks the other conditions in the');
+  console.log('gate column. The all-blockers column is there for that reason — read it');
+  console.log('rather than the live= column when judging the other four. Treat the');
+  console.log('false-"go" rate as directional, not calibrated: the number to trust is the');
+  console.log('one this grows into as real, full-resolution captures land in');
+  console.log('bench/fixtures/, the same caveat golden-report.mjs makes.');
 }
 
 main();

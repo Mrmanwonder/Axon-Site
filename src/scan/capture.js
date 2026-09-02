@@ -16,11 +16,11 @@
 // the paper is still in front of the student, because the same verdict forty
 // seconds later at review usually means the page is simply lost.
 
-import { CAPTURE, QUALITY } from './contract.js';
+import { CAPTURE, CONDITIONING, QUALITY } from './contract.js';
 import { releaseCamera, requestCamera, requestContinuousFocus } from './camera.js';
 import { detectQuad, easeQuad, isPageShaped, scaleQuad } from './edges.js';
 import { paperScore } from './quad.js';
-import { blurScore, glareInQuad, skewDegrees, toGray } from './quality.js';
+import { focusWindowRect, measureQuad, sharpness, skewDegrees } from './quality.js';
 import { quadDrift, quadFill, quadSize } from './geometry.js';
 
 const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
@@ -45,6 +45,16 @@ const VERIFY_PAPER_MIN = 0.85;
 // the student experiences as whether the app works.
 const DETECT_DUTY = 0.3;
 const PROXY_WIDTH = 240;
+// The focus window, in canonical page pixels (QUALITY.MEASURE_LONG_EDGE).
+//
+// Sharpness cannot be read off the 240px search proxy — that was AXON_FIX_BRIEF
+// §B7, and it is not a calibration problem, it is that the detail simply is not
+// there. So focus is measured on a window cut straight out of the video at
+// native resolution and drawn at exactly the scale `scorePage` will measure the
+// submitted page at, which makes the two numbers the same number. Square,
+// centred on the page, and small enough that this stays affordable at ~12Hz on
+// a phone: 384x384 is 147k pixels against the proxy search's own 102k.
+const FOCUS_WINDOW = 384;
 
 /**
  * How long the page has been sitting in one place.
@@ -78,7 +88,7 @@ export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFo
   if (!autoCapture || !armed || blocking) return false;
   // A detector locked onto something large and wrong is extremely stable, so
   // stability alone is not evidence. Several finds running is.
-  if (consecutiveFinds < 4) return false;
+  if (consecutiveFinds < CAPTURE.CONSECUTIVE_FINDS) return false;
   return steady || heldFor >= CAPTURE.PATIENCE_MS;
 }
 
@@ -92,29 +102,52 @@ export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFo
  * instead of extracting it would measure agreement against a copy that can
  * silently drift from what the phone actually runs.
  *
- * Ordered by what the student should fix first. Glare comes before sharpness
- * because a washed-out red tick reads as no tick at all — the page looks fine
- * and the marks are simply gone. Skew and resolution are advisory only, never
- * blocking: perspective correction handles ordinary tilt, and resolution is
- * the one condition a student's hardware may not be able to satisfy at all —
- * see the callers in `step()` for why blocking on either would be worse than
- * letting the shot through and flagging it in the tray.
+ * "Blocking" here means blocking *auto-capture*. The shutter never refuses —
+ * that rule is unchanged, and it is why resolution can be a hard condition on
+ * this side without ever taking the decision away from the student.
+ *
+ * The principle behind the ordering, and behind the whole gate: every rejection
+ * the pipeline currently makes two minutes late, the camera should make
+ * instantly (AXON_FIX_BRIEF.md §7.3). So the conditions here are the same four
+ * `scorePage` will apply to the submitted page, in the order the student should
+ * fix them, and they are computed against the same thresholds:
+ *
+ * · **Resolution first**, because it is the only one that is a refusal further
+ *   down. A page that will land under CONDITIONING.MIN_LONG_EDGE is a page the
+ *   accept step will decline outright, and being told that now — while moving
+ *   the phone six inches closer still fixes it — is the entire argument for
+ *   having a live gate at all. It used to be advisory here and a hard refusal
+ *   later, which is the worst possible arrangement of the two.
+ * · **Glare before sharpness**, because a washed-out red tick reads as no tick
+ *   at all: the page looks fine and the marks are simply gone.
+ * · **Clipping** next, which glare cannot see — a uniformly over-exposed page
+ *   has no bright patch to find, and its ink is going all the same.
+ * · **Skew** stays advisory. Perspective correction handles a great deal of
+ *   tilt, and the warning is for the case where it will have to stretch one end
+ *   badly.
  */
-export function liveGateVerdict({ glare, fill, sharpness, skew, pageLongEdge, steady }) {
-  if (glare > QUALITY.GLARE_WARN) {
-    return { blocking: 'glare', hint: 'Light is bouncing off the page — tilt it slightly away from the light' };
+export function liveGateVerdict({ glare, clipping, fill, sharpness, skew, pageLongEdge, steady }) {
+  if (pageLongEdge < CONDITIONING.MIN_LONG_EDGE) {
+    return { blocking: 'resolution', hint: 'Closer — the page needs to fill more of the frame for us to read the marking' };
   }
   if (fill < CAPTURE.MIN_FILL) {
     return { blocking: 'distance', hint: 'Move closer so the page fills more of the frame' };
   }
-  if (sharpness < QUALITY.BLUR_WARN) {
+  if (glare > QUALITY.GLARE_WARN) {
+    return { blocking: 'glare', hint: 'Light is bouncing off the page — tilt it slightly away from the light' };
+  }
+  if (clipping > QUALITY.CLIP_WARN) {
+    return { blocking: 'exposure', hint: 'Too bright — move into shade, or turn a lamp away from the page' };
+  }
+  // Null means the focus window landed on blank paper and there was nothing to
+  // measure. Not the same as "soft", and not a reason to refuse: a page with
+  // little written on it is a page, and blocking here would refuse it for being
+  // lightly used.
+  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN) {
     return { blocking: 'focus', hint: 'Hold still — the page is not sharp yet' };
   }
   if (skew > QUALITY.SKEW_WARN_DEG) {
     return { blocking: null, hint: 'Square the page up a little if you can' };
-  }
-  if (pageLongEdge < QUALITY.RESOLUTION_WARN) {
-    return { blocking: null, hint: 'Closer if you can — more of the page means we read it better' };
   }
   if (!steady) return { blocking: null, hint: 'Hold still' };
   return { blocking: null, hint: 'Ready' };
@@ -157,14 +190,42 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   const proxy = document.createElement('canvas');
   const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
+  const focus = document.createElement('canvas');
+  focus.width = focus.height = FOCUS_WINDOW;
+  const focusCtx = focus.getContext('2d', { willReadFrequently: true });
+
+  /**
+   * Sharpness of the page interior, at the canonical page scale.
+   *
+   * The rectangle comes from `focusWindowRect`, shared with bench/ so the
+   * agreement report measures the same pixels the phone does. Centred on the
+   * quad's centroid: the centre of an answer page is where the writing is, and
+   * the margins are where it is not.
+   *
+   * Null when the window turned out to be blank. A blank window is not evidence
+   * of anything, and blocking the shutter on it would refuse a lightly-written
+   * page for being lightly written.
+   */
+  function focusInPage(quadInProxy, pw, ph, vw, vh, pageLongEdge) {
+    const inFrame = quadInProxy.map((p) => ({ x: p.x * (vw / pw), y: p.y * (vh / ph) }));
+    const rect = focusWindowRect(inFrame, vw, vh, pageLongEdge, FOCUS_WINDOW);
+    if (!rect) return null;
+    focusCtx.drawImage(video, rect.sx, rect.sy, rect.size, rect.size, 0, 0, rect.target, rect.target);
+    // scale: 1 — these pixels are already at the canonical scale, and letting
+    // sharpness() resample them again would measure the resampler.
+    const read = sharpness(focusCtx.getImageData(0, 0, rect.target, rect.target), { scale: 1 });
+    return read.blank ? null : read.score;
+  }
 
   function blankState() {
     return {
       hasPage: false,
       fill: 0,
       pageLongEdge: 0,
-      sharpness: 0,
+      sharpness: null,
       glare: 0,
+      clipping: 0,
+      headroom: 0,
       skew: 0,
       steady: false,
       /** What the student is told, right now. One line, actionable. */
@@ -277,8 +338,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     next.hasPage = true;
     next.fill = quadFill(found, pw, ph);
-    next.sharpness = blurScore(toGray(frame), pw, ph);
-    next.glare = glareInQuad(frame, found);
+    const exposure = measureQuad(frame, found);
+    next.glare = exposure.glare;
+    next.clipping = exposure.clipping;
+    next.headroom = exposure.headroom;
     // Angle-only, so scale-invariant — this reads the same on the 240px
     // search proxy as it would on the full frame.
     next.skew = skewDegrees(found);
@@ -291,6 +354,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // wrong thing, and it is wrong whenever the frame is mostly desk.
     const size = quadSize(found);
     next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+
+    // Focus, measured on real pixels at the scale the final gate will use.
+    // Null rather than zero when the window landed on blank paper: "we could
+    // not measure this" and "this is out of focus" are different claims and the
+    // gate must not act on the first as though it were the second.
+    next.sharpness = focusInPage(found, pw, ph, vw, vh, next.pageLongEdge);
 
     const window_ = steadyWindow({
       anchor: steadyAnchor, found, width: pw, height: ph,
@@ -398,8 +467,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function grabStill() {
     if (imageCapture) {
       try {
+        // `takePhoto()` hands back the encoder's own bytes. Those are the
+        // original — kept and carried up rather than decoded and dropped, so
+        // §7.6.4's "never discard the original" costs nothing on this path.
         const blob = await imageCapture.takePhoto();
-        return { bitmap: await createImageBitmap(blob), path: 'image-capture' };
+        return { bitmap: await createImageBitmap(blob), path: 'image-capture', original: blob };
       } catch {
         // A track that advertised photo capabilities but refused the actual
         // shot (seen on some Android/Chromium builds) — fall through rather
@@ -412,7 +484,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext('2d').drawImage(video, 0, 0);
-    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab' };
+    // No encoder bytes on this path — the frame came off a video element — so
+    // the original has to be made. q95 rather than the pipeline's own 0.92:
+    // this is the copy a mistake gets recovered from, and it should be the
+    // least degraded thing stored, not merely as good as the derivative.
+    const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    return { bitmap: await createImageBitmap(canvas), path: 'canvas-grab', original };
   }
 
   /**
@@ -442,7 +519,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!running || !video.videoWidth) return null;
     const captured = await grabStill();
     if (!captured) return null;
-    const { bitmap, path } = captured;
+    const { bitmap, path, original } = captured;
 
     // The quad travels with the frame so conditioning can warp it. Scaled into
     // the captured still's own pixel space, which is the video's for a canvas
@@ -456,7 +533,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
 
-    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, gate: { ...state } };
+    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, original, gate: { ...state } };
     onShot?.(shot);
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.

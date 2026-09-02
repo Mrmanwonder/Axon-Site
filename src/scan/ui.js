@@ -14,10 +14,13 @@
 // globals to an injected object; nothing about the order did.
 
 import { createCapture } from './capture.js';
-import { acceptPage, explainPaper, ingest } from './pipeline.js';
+import {
+  acceptPage, currentRunForPaper, ingest, regionsForRun, startExplanations, watchExplanations,
+} from './pipeline.js';
 import { createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
+import { RESCUED_NOTICE } from './enhance.js';
 import { PAPER_TYPES, tierForType } from '../papers.js';
 
 const S = {
@@ -26,8 +29,10 @@ const S = {
   draft: null,
   thumbs: new Map(),   // page number → object URL
   run: null,
+  regions: null,        // this run's question_region rows, for watchExplanations
   review: null,
   busy: false,
+  saving: false,        // true while save() is waiting on explanations before commit
 };
 
 /**
@@ -35,8 +40,8 @@ const S = {
  *
  * Set once by initScanUI. Every entry is a no-op by default so a call that
  * arrives before the screen has mounted goes quiet rather than throwing —
- * `explainPaper` lands questions asynchronously and can outlive the screen that
- * started it.
+ * `watchExplanations` lands questions asynchronously and can outlive the
+ * screen that started it.
  */
 let host = {
   toast() {}, tick() {}, firm() {},
@@ -161,6 +166,9 @@ async function takePage(shot, replacing = null) {
     const { page } = await acceptPage({
       draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
       capturePath: shot.capturePath ?? null, liveGate: shot.gate ?? null,
+      // Recorded rather than assumed, on both paths. See CAPTURE.SOURCE_KINDS.
+      sourceKind: shot.sourceKind ?? 'camera',
+      original: shot.original ?? null,
     });
 
     await paintTray();
@@ -179,7 +187,15 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
+    // A rescued page is told about. It was under the resolution floor, it has
+    // been brought up to it, and the student is the one who can tell whether
+    // that worked — so they are told plainly and pointed at the one thing to
+    // check. Never phrased as an apology and never as a question.
+    if (page.meta?.enhance?.applied) toast(RESCUED_NOTICE);
   } catch (error) {
+    // A refusal is advice, not a breakage: the page cannot be used and the
+    // message already says what to do instead. Shown the same way a fail
+    // verdict is, while the paper is still on the desk.
     toast(error.message || 'That page could not be prepared.', 'warn');
   } finally {
     S.busy = false;
@@ -373,22 +389,18 @@ async function run(paperType) {
     }
 
     S.run = result;
+    S.regions = result.regions;
     // The draft stays until the paper is committed. It holds the conditioned
     // pages, and "Rescan this page" needs them: without it that button landed in
     // an empty draft, tried to replace a page that was not there, and died on an
     // undefined. The schema already expects this — a rescan starts a new run
     // over the same paper.
     firm();
+    // Explanations start only once review is done (save()), never here — the
+    // student has confirmed nothing at this point, and starting them now is
+    // guaranteed to 409 against reviewComplete's outstanding-review gate, every
+    // time. See AXON_FIX_BRIEF.md §4.A1.
     await openReview(result.runId);
-
-    // Stage 8 runs after the paper is already open and readable, and paints
-    // each question in as it lands. A student should be reading question 1
-    // while question 9 is still being worked out.
-    explainPaper({
-      runId: result.runId,
-      regions: result.regions,
-      onQuestion: () => scheduleReviewRefresh(),
-    }).catch(() => { /* a failed explanation leaves the marks intact and visible */ });
   } catch (error) {
     host.renderProgress({
       heading: 'That did not finish',
@@ -407,6 +419,38 @@ async function openReview(runId) {
   S.runId = runId;
   await refreshReview();
   host.openReview();
+}
+
+/**
+ * Re-entry into review after the scan session that started it has ended —
+ * the app was closed, or the student navigated away, while a paper sat at
+ * `needs_review` (or later). The draft only ever remembers `paper_id`; the
+ * run and its regions are resolved fresh here rather than persisted, so
+ * this can never open a stale review.
+ *
+ * @param {string} draftId
+ * @returns {Promise<{state:'reviewing'}|{state:'committed',paperId:string}|{state:'processing'}|{state:'stopped',reason:string|null}|{state:'gone'}>}
+ */
+export async function resumeDraftReview(draftId) {
+  const draft = await readDraft(draftId);
+  if (!draft?.paper_id) return { state: 'gone' };
+
+  const run = await currentRunForPaper(draft.paper_id);
+  if (!run) return { state: 'gone' };
+
+  if (run.status === 'committed') return { state: 'committed', paperId: draft.paper_id };
+  if (run.status === 'failed' || run.status === 'rejected') {
+    return { state: 'stopped', reason: run.status_reason ?? null };
+  }
+  if (!['needs_review', 'explaining', 'ready'].includes(run.status)) {
+    // Still being read server-side — nothing to review yet.
+    return { state: 'processing' };
+  }
+
+  S.draft = draft;
+  S.regions = await regionsForRun(run.id);
+  await openReview(run.id);
+  return { state: 'reviewing' };
 }
 
 /**
@@ -443,9 +487,12 @@ async function refreshReview() {
     delta: S.review.delta,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
+    saving: S.saving,
     saveLabel: S.review.outstanding
       ? `${S.review.outstanding} left to check`
-      : 'Save to Library',
+      : S.saving
+        ? 'Working out where marks were lost…'
+        : 'Save to Library',
     questions: S.review.questions.map((q) => ({
       id: q.id,
       label: q.label,
@@ -534,21 +581,53 @@ function handleReviewAction(id, action) {
   }
 }
 
+/**
+ * Stage 9 → 10, in order: start explanations, wait for them to settle, only
+ * then commit. `commit_extraction_run` copies `region_explanation` into
+ * `mark_loss_event` at the moment it runs — committing right after *starting*
+ * explanations (rather than after they finish) is what left `mark_loss_event`
+ * empty on every paper this app has ever produced. See AXON_FIX_BRIEF.md §6.2.
+ *
+ * A failed or slow explanation pass does not block the marks themselves: this
+ * still commits once explanations have either settled or timed out, so a
+ * paper is never held hostage by stage 8. Whatever landed lands; nothing here
+ * is a silent catch — every failure is logged and told to the student.
+ */
 async function save() {
-  if (!S.runId) return;
+  if (!S.runId || S.saving) return;
   if (S.review?.outstanding) {
     // The server refuses this too — the guard here is so the student hears why
     // from the screen rather than from a rejected request.
     toast(`${S.review.outstanding} question(s) still need a look. They are at the top.`);
     return;
   }
+
+  S.saving = true;
+  await refreshReview();
+
   try {
+    try {
+      await startExplanations(S.runId);
+      await watchExplanations({
+        runId: S.runId,
+        regions: S.regions ?? [],
+        onQuestion: () => scheduleReviewRefresh(),
+      });
+    } catch (error) {
+      // Explanations are a layer on top of the marks, not a precondition for
+      // saving them. Log it, tell the student plainly, and still commit —
+      // the marks are real and confirmed either way.
+      console.error('explanations', error);
+      toast('We could not work out why marks were lost this time. Your marks are still saved.', 'warn');
+    }
+
     const result = await commitRun(S.runId);
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
     host.closeReview();
     releaseCrops();
     S.runId = null;
+    S.regions = null;
     // Now the pages have done their job.
     if (S.draft) {
       await deleteDraft(S.draft.id);
@@ -561,6 +640,9 @@ async function save() {
     await host.refreshLibrary();
   } catch (error) {
     toast(error.message || 'That could not be saved.', 'warn');
+  } finally {
+    S.saving = false;
+    if (S.runId) await refreshReview();
   }
 }
 
@@ -588,7 +670,9 @@ export async function acceptUploads(files) {
   for (const file of images) {
     try {
       const bitmap = await createImageBitmap(file);
-      await takePage({ bitmap, quad: null, auto: false });
+      // The file itself is the original — already the least degraded copy
+      // there is, so nothing is re-encoded to produce one.
+      await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file });
     } catch {
       toast(`${file.name} could not be opened.`, 'warn');
     }

@@ -1,0 +1,22 @@
+-- `source_kind` has been the literal string 'upload' on every page ever
+-- submitted, camera captures included, because the client hardcoded it
+-- (AXON_FIX_BRIEF.md §7.1, question 1). The client now records what actually
+-- happened — but it could only ever have recorded 'upload' or 'link', because
+-- those were the only two values this enum had, and neither of them is what a
+-- page photographed inside the app is.
+--
+-- 'camera'  a page captured through the in-app viewfinder.
+-- 'pdf'     a page extracted from a PDF the student supplied. Nothing produces
+--           this yet — v1 has no PDF path — but the value is added with 'camera'
+--           rather than in a later migration, so the enum states the whole set
+--           of ways a page can arrive rather than growing one value at a time
+--           behind the code that needs it.
+--
+-- 'upload' keeps its meaning: a file the student picked. Existing rows are left
+-- exactly as they are. They were written by a client that did not record this,
+-- so 'upload' is what they were recorded as and re-guessing them now would be
+-- inventing history — the honest reading of those rows is "unknown, recorded as
+-- upload", and `conditioning_meta.capture_path` is the field that can tell them
+-- apart where it is present.
+alter type public.page_source add value if not exists 'camera';
+alter type public.page_source add value if not exists 'pdf';

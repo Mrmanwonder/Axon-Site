@@ -82,20 +82,29 @@ export async function deleteDraft(id) {
 /**
 * Add a page to a draft.
 *
-* The conditioned bytes are stored, not the raw frame: conditioning is the
-* expensive part and it has already happened, and storing the original as well
-* would double a booklet's footprint on a phone that may not have the room.
+* The conditioned bytes are stored, and so is the raw frame — but only until it
+* has been uploaded. Conditioning is the expensive part and it has already
+* happened, so what travels is the conditioned page; the original is kept
+* because §7.6.4 says a mistake must stay recoverable server-side, and it is
+* dropped in `markUploaded` because keeping a booklet's worth of unmodified
+* camera stills would roughly triple its footprint on a phone that may not have
+* the room.
 */
 export async function addPage(draft, page) {
   draft.pages.push({
     page_number: draft.pages.length + 1,
     blob: page.blob,
     mask: page.mask ?? null,
+    thumb: page.thumb ?? null,
+    // Dropped again by markUploaded the moment it lands. See acceptPage.
+    original: page.original ?? null,
+    original_type: page.original_type ?? null,
     proxy: page.proxy ?? null,
     width: page.width,
     height: page.height,
     quality: page.quality,
     meta: page.meta,
+    source_kind: page.source_kind ?? null,
     teacher_marks: page.teacher_marks ?? [],
     margin_band: page.margin_band ?? null,
     layer_fallback: page.layer_fallback ?? null,
@@ -153,8 +162,14 @@ export async function replacePage(draft, pageNumber, page) {
 * nothing would remember where they went.
 */
 export async function markUploaded(draft, pageNumber, extra = {}) {
-  draft.pages = draft.pages.map((p) =>
-    (p.page_number === pageNumber ? { ...p, ...extra, uploaded: true } : p));
+  draft.pages = draft.pages.map((p) => (p.page_number === pageNumber
+    // The original and the thumbnail are dropped here, and only here: they are
+    // in R2 now, `extra` carries the keys, and holding a booklet's worth of
+    // unmodified camera stills in IndexedDB after they have been sent is the
+    // footprint acceptPage's own comment warns about. The conditioned page and
+    // its mask stay — they are what a resume re-sends and what the tray shows.
+    ? { ...p, ...extra, original: null, thumb: null, uploaded: true }
+    : p));
   return saveDraft(draft);
 }
 

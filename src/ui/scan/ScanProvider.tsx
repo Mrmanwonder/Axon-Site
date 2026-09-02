@@ -70,6 +70,10 @@ export type ReviewModel = {
   delta?: { message: string; ours: number; theirs: number } | null;
   outstanding: number;
   cleanCount: number;
+  /** True from the moment Save is tapped until the paper is committed (or the
+      attempt fails) — explanations are generated in this window, before the
+      commit that would otherwise ship with none of them. */
+  saving?: boolean;
   saveLabel: string;
   questions: ReviewQuestion[];
 } | null;
@@ -81,6 +85,13 @@ export type ReviewHandlers = {
   onSave: () => void;
 };
 
+export type ResumeReviewResult =
+  | { state: "reviewing" }
+  | { state: "committed"; paperId: string }
+  | { state: "processing" }
+  | { state: "stopped"; reason: string | null }
+  | { state: "gone" };
+
 type ScanModule = {
   initScanUI: (ctx: unknown, host: unknown) => Promise<void>;
   setPendingPaperType: (t: string | null) => void;
@@ -88,6 +99,7 @@ type ScanModule = {
   setScanVisible: (visible: boolean, camera?: unknown) => void;
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
+  resumeDraftReview: (draftId: string) => Promise<ResumeReviewResult>;
 };
 
 type ScanValue = {

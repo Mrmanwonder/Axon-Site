@@ -28,30 +28,7 @@ import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-
-const CAUSE_HUE: Record<string, string> = {
-  conceptual_gap: "var(--cause-conceptual-gap)",
-  procedural_slip: "var(--cause-procedural-slip)",
-  misread_question: "var(--cause-misread-question)",
-  incomplete: "var(--cause-incomplete)",
-  presentation: "var(--cause-presentation)",
-  keyword_miss: "var(--cause-keyword-miss)",
-  timed_out: "var(--cause-timed-out)",
-};
-
-const CAUSE_LABEL: Record<string, string> = {
-  conceptual_gap: "Concept gap",
-  procedural_slip: "Slip in the working",
-  misread_question: "Misread the question",
-  incomplete: "Left incomplete",
-  presentation: "How it was presented",
-  keyword_miss: "Missing keyword",
-  timed_out: "Ran out of time",
-};
-
-/** Marks are never shown above 28px, and never as a percentage. A whole number
-    stays whole; a half mark keeps its half. */
-const num = (n: number) => (Number.isInteger(n) ? String(n) : Number(n).toFixed(1));
+import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
 
 function Field({ k, v }: { k: string; v?: string | null }) {
   return (
@@ -201,6 +178,7 @@ export default function ReviewSheet() {
         </PressBox>
         <div className="rvtitle">{review.title}</div>
         <PressBox as="button" type="button" className="rvsave"
+                  disabled={!!review.saving} aria-busy={review.saving || undefined}
                   onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>
           Save
         </PressBox>
@@ -255,7 +233,8 @@ export default function ReviewSheet() {
 
         <div style={{ margin: "20px var(--gutter) 4px" }}>
           <PressBox as="button" type="button" className="btn primary"
-                    data-waiting={review.outstanding ? "1" : undefined}
+                    data-waiting={review.outstanding || review.saving ? "1" : undefined}
+                    disabled={!!review.saving} aria-busy={review.saving || undefined}
                     onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>
             {review.saveLabel}
           </PressBox>
