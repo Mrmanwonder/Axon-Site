@@ -26,19 +26,55 @@ literal, checkable spec (Parts 1 and 5 of the workstream instructions):
 - `src/entitlements.js`, `src/billing.js` — thin client wrappers. Load-bearing
   comment in both: entitlements gate nothing by themselves (RLS does), and
   `billing.js` exists to be imported only from a parent surface.
-- `supabase/tests/entitlements_and_billing.sql` — 28 assertions, all passing
+- `supabase/tests/entitlements_and_billing.sql` — 39 assertions, all passing
   against a from-scratch migration replay (see below): free-tier depth is never
   gated on a recent paper, an old paper still lists in the library, cross-subject
   rows return zero rows to Postgres itself for a free account (not just a hidden
   UI element), the existence-only teaser is visible regardless of tier, the
   `max_student_profiles` trigger fires only from the parent-driven "add a
-  student" path, and the past_due grace period holds and then expires correctly.
+  student" path, and a past_due account loses Pro immediately while keeping
+  everything the free tier is owed.
 
 Verified end-to-end against a disposable local Postgres (`supabase/local/shim.sql`
 harness already in the repo): all four migrations replay clean from empty, and
 all four test suites (137 assertions total, including the three pre-existing
 ones) pass — `rls_and_hard_rules.sql`, `extraction_pipeline.sql`,
 `ingestion_prefs_erasure.sql` are unaffected by this change.
+
+## Amendment (2026-09-02) — past_due ends Pro immediately
+
+`20260902120000_past_due_ends_pro_immediately.sql` reverses the 7-day grace
+window this pass shipped. A failed payment now ends Pro entitlement at the
+moment Stripe reports it. Decided deliberately, not discovered as a bug — so
+what the original migration's comments describe as the grace period no longer
+holds, and `subscription_grace_until` is dropped rather than left unread.
+
+- `private.guardian_is_pro` is still the only place the line is drawn, so all
+  five gates follow it without being touched.
+- `get_entitlements()` gained `billing_state` — the raw `subscription_status`,
+  carried so the downgrade can be *explained* on the parent surface rather than
+  appearing as an unaccountable loss of features. It is a reason code, never a
+  gate.
+- The webhook no longer computes a deadline in either direction: a failed
+  invoice writes `past_due` on the first failure, and a successful Smart Retry
+  restores Pro on the next `customer.subscription.updated`.
+- Nothing already created under Pro is taken away: a second student profile
+  stays (the limit trigger is INSERT-only), every paper keeps its place in the
+  library, and the student's own scan → understand → act loop is unchanged. What
+  lapses immediately is depth on OLD papers and the four Pro reads.
+
+Two consequences worth naming rather than burying, both still open:
+
+- **The parent has to be told, and there is no surface to tell them on** (open
+  item 1 below). Until a parent billing screen exists, `billing_state` is
+  carried but rendered nowhere, so a card that fails on Tuesday silently costs
+  the account its Pro reads. Shipping this without that copy is the gap.
+- **The archive-depth gate is the one downgrade a student can feel.** It is not
+  a paywall in their app — nothing is upsold, no prompt fires, and the current
+  term stays full-depth — but an old paper they opened last week can lose its
+  per-question detail with no warning and no grace. That is the price of
+  immediacy, and it argues for the parent-facing warning above landing in the
+  same pass as any real launch.
 
 ## Non-negotiables — how the schema itself holds them
 

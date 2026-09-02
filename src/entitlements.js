@@ -19,6 +19,14 @@ import { sb } from './supabase.js';
  * @property {boolean} parentProgressReports
  * @property {boolean} priorityProcessing
  * @property {number|null} maxStudentProfiles  null means unlimited
+ * @property {'free'|'pro'|'pro_annual'|'past_due'|'canceled'} billingState
+ *   The raw subscription state behind `tier`. It gates nothing — every gate
+ *   reads `tier` and the booleans, which are already resolved. It exists so a
+ *   downgrade can be explained instead of just happening: `past_due` resolves
+ *   to the free tier immediately (a failed payment ends Pro the moment Stripe
+ *   reports it — there is no grace window), and a parent who sees Pro features
+ *   gone is owed the reason. Render that reason on the parent's own account
+ *   surface only, never in the student's app.
  */
 
 /** @returns {Promise<Entitlements>} */
@@ -32,6 +40,7 @@ export async function getEntitlements() {
     parentProgressReports: data.parent_progress_reports,
     priorityProcessing: data.priority_processing,
     maxStudentProfiles: data.max_student_profiles,
+    billingState: data.billing_state,
   };
 }
 
