@@ -25,6 +25,8 @@ import * as consentMod from "../../consent.js";
 import * as papersMod from "../../papers.js";
 import * as accountMod from "../../account.js";
 import * as verificationMod from "../../verification.js";
+import * as entitlementsMod from "../../entitlements.js";
+import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
 
 export type Prefs = {
@@ -332,6 +334,40 @@ export {
   listPasskeys, renamePasskey, deletePasskey, PASSKEY_MESSAGE,
 } from "../../lib/auth/passkeys";
 export type { Passkey, PasskeyOutcome } from "../../lib/auth/passkeys";
+
+// ── entitlements and billing ───────────────────────────────────────────────
+// The guardian's own account surface only. `src/billing.js` says it plainly:
+// neither of these has any business in the student's scan -> understand -> act
+// loop, and UX_MONETIZATION_AUDIT.md tracks that as a standing invariant.
+
+/** The resolved free/Pro line, plus the raw state behind it. Read-only: every
+    gate this describes is already enforced in RLS, server-side. */
+export type Entitlements = {
+  tier: "free" | "pro";
+  crossSubjectPatterns: boolean;
+  fullHistoricalArchive: boolean;
+  parentProgressReports: boolean;
+  priorityProcessing: boolean;
+  /** null = unlimited. */
+  maxStudentProfiles: number | null;
+  /** Why `tier` is what it is — `past_due` is the one that needs explaining.
+      A reason code for parent-facing copy, never a gate. */
+  billingState: "free" | "pro" | "pro_annual" | "past_due" | "canceled";
+};
+
+export const getEntitlements = entitlementsMod.getEntitlements as () => Promise<Entitlements>;
+
+/** Sends the guardian to Stripe-hosted Checkout for the chosen plan. Navigates
+    away, so it never resolves on success; Stripe returns to `${returnTo}?billing=success`
+    (or `…=cancelled`). The price lives in Stripe, not in our copy — so no
+    screen here quotes a number it cannot source. */
+export const startCheckout = billingMod.startCheckout as (
+  plan: "monthly" | "annual", returnTo?: string,
+) => Promise<void>;
+
+/** Sends the guardian to the Stripe-hosted Customer Portal. Navigates away, so
+    it never resolves on success. `return_to` must be an app-relative path. */
+export const openBillingPortal = billingMod.openBillingPortal as (returnTo?: string) => Promise<void>;
 
 // ── account ────────────────────────────────────────────────────────────────
 export const exportMyData = accountMod.exportMyData as (g: Guardian) => Promise<unknown>;

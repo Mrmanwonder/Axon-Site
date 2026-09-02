@@ -87,6 +87,7 @@ export default function Home() {
           as="button"
           type="button"
           className="card attention"
+          data-interactive=""
           onClick={() => navigate(paths.library)}
         >
           <div className="ic">

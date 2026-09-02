@@ -41,6 +41,7 @@ import {
   BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
   PAPER_TYPES,
   isPasskeySupported, signInWithPasskey, registerPasskey, PASSKEY_MESSAGE,
+  startCheckout,
 } from "../data/modules";
 import type { Guardian, Student } from "../data/modules";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
@@ -146,6 +147,11 @@ export default function Onboarding() {
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
 
+  /* Set by the return from Stripe, read by the step it lands on. `null` is the
+     ordinary case: nobody has been to Checkout in this run of the flow. */
+  const [billingReturn, setBillingReturn] = useState<"success" | "cancelled" | null>(null);
+  const [busyCheckout, setBusyCheckout] = useState(false);
+
   const [busyPasskey, setBusyPasskey] = useState(false);
   const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
   /* What to do once the passkey-offer interstitial is dismissed or accepted —
@@ -219,6 +225,39 @@ export default function Onboarding() {
     const hasVerified = !!(g as Guardian & { verified_at?: string }).verified_at;
     proceedOrOfferPasskey(() => go(hasVerified ? "consent" : "age"));
   }, [finishOnboarding, go, proceedOrOfferPasskey]);
+
+  /* ── back from Stripe ──
+     Checkout is a full-page round trip to another origin: this component is
+     unmounted, the app boots again, and every piece of local state the flow was
+     holding is gone. The session and the guardian row survive, so the flow can
+     be picked up from the database rather than restarted — and it must be.
+     Landing back on `nameOnly` would ask a parent who has just paid for their
+     name again and then walk them back through consent they already gave.
+
+     The query param is stripped either way, so a reload or a shared URL cannot
+     replay this. */
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const outcome = params.get("billing");
+    if (outcome !== "success" && outcome !== "cancelled") return;
+
+    params.delete("billing");
+    const rest = params.toString();
+    history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : "") + location.hash);
+
+    setBillingReturn(outcome);
+    if (!s) return; // signed out mid-round-trip; the landing screen is honest.
+
+    (async () => {
+      const g = await currentGuardian();
+      if (!g) return; // nothing paid for yet — leave the flow where it was.
+      setGuardian(g);
+      // Consent and verification are already recorded for anyone who reached
+      // the plan step, so the profile is the only thing still missing.
+      go("student");
+    })().catch(() => { /* the step they landed on still works */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* The OTP step's "Continue" action, hoisted out so auto-submit (below) and
      the button can share it without duplicating the guardian upsert. */
@@ -752,19 +791,60 @@ export default function Onboarding() {
   }
 
   // ── plan, after consent ──────────────────────────────────────────────────
+  /* The one screen in the flow that leaves the app. "Subscribe" hands off to
+     Stripe-hosted Checkout — there is no card form here and there never will
+     be, so no page in this codebase ever touches a card number.
+
+     No price is printed on this screen. The amount lives in Stripe, and a
+     number typed into our copy is a number that goes stale the day pricing
+     changes and quietly lies until someone notices. Stripe's own page states
+     it, tax included, in the payer's currency.
+
+     Free is not a trial and is not worded as one. Every paper a student scans
+     gets its full analysis on the free tier, permanently; Pro adds the lens
+     ACROSS papers. Calling this "a free trial" would promise a cliff that
+     does not exist. */
   if (step === "plan") {
-    const pick = () => { hapticTick(); go("student"); };
+    const skip = () => { hapticTick(); go("student"); };
+    const buy = async (plan: "monthly" | "annual") => {
+      if (busyCheckout) return;
+      hapticFirm();
+      setBusyCheckout(true);
+      setError(null);
+      try {
+        // Navigates away to Stripe, so this does not resolve on success.
+        await startCheckout(plan, "/");
+      } catch (e) {
+        fail(e, "Checkout could not be opened.");
+        setBusyCheckout(false);
+      }
+    };
+
     return (
       <Shell {...shellProps} title="Choose a plan">
+        <Err message={error} />
+        {billingReturn === "cancelled" && (
+          <div className="obpanel tint">
+            <div className="body" style={{ marginTop: 0 }}>
+              Nothing was charged. Free is a complete product, and Pro is here
+              whenever it earns its place.
+            </div>
+          </div>
+        )}
         <div className="list">
-          <Method icon={ICONS.clock} t1="Start a free trial"
-                  t2="Full access. No card needed now." onClick={pick} />
-          <Method icon={ICONS.card} t1="Subscribe now"
-                  t2="Billing isn't wired up yet" onClick={pick} />
+          <Method icon={ICONS.clock} t1="Continue on Free"
+                  t2="Every paper you scan, fully explained. No card." onClick={skip} />
+          <Method icon={ICONS.card} t1="Subscribe to Pro — monthly"
+                  t2={busyCheckout ? "Opening Stripe…" : "Adds the pattern across papers and subjects"}
+                  onClick={() => void buy("monthly")} />
+          <Method icon={ICONS.card} t1="Subscribe to Pro — yearly"
+                  t2={busyCheckout ? "Opening Stripe…" : "The same, billed once a year"}
+                  onClick={() => void buy("annual")} />
         </div>
         <div className="subnote">
-          Payment details are never visible to the student profile. We asked for
-          consent before this step on purpose — paying shouldn&rsquo;t feel like
+          Payment is handled by Stripe, and card details never reach us. Payment
+          details are never visible to the student profile. We asked for consent
+          before this step on purpose — paying shouldn&rsquo;t feel like
           pressure to agree.
         </div>
       </Shell>
@@ -809,6 +889,18 @@ export default function Onboarding() {
     return (
       <Shell {...shellProps} title="The student">
         <Err message={error} />
+        {/* Stripe has taken the payment; our own entitlement row is written by
+            the webhook a moment later. So this says what is actually known —
+            the payment went through — and not "Pro is active", which is a
+            different claim and not ours to make yet. */}
+        {billingReturn === "success" && (
+          <div className="obpanel tint">
+            <div className="body" style={{ marginTop: 0 }}>
+              Payment received. Pro switches on as soon as Stripe confirms it,
+              usually within a few seconds. The profile is the last step.
+            </div>
+          </div>
+        )}
         <div className="obfields">
           <Field id="ob-sname" label="First name" value={studentFirst} onChange={setStudentFirst}
                  placeholder="The student's first name" />
