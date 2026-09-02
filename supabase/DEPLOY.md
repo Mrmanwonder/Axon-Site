@@ -63,25 +63,38 @@ unset while `billing-checkout` was live and failing. The functions read them at
 cold start:
 
 ```bash
+# STRIPE_SECRET_KEY is the SANDBOX account's secret key, from the Dashboard.
 supabase secrets set --project-ref dlgcqieyevoebefhcggi \
-  STRIPE_SECRET_KEY=sk_... \
-  STRIPE_WEBHOOK_SECRET=whsec_... \
-  STRIPE_PRICE_MONTHLY=price_... \
-  STRIPE_PRICE_ANNUAL=price_... \
-  MASTERY_APP_ORIGIN=https://<the deployed site>
+  STRIPE_SECRET_KEY=sk_test_... \
+  STRIPE_PRICE_MONTHLY=price_1U6hpiB8mNE63ebCXIUcPBXn \
+  STRIPE_PRICE_ANNUAL=price_1UBIGWB8mNE63ebCIJTTm3ID \
+  MASTERY_APP_ORIGIN=https://axon-site.tanmay-harkawat.workers.dev
 ```
 
-`STRIPE_PRICE_*` are the price ids from the Stripe account the secret key
-belongs to — test-mode keys with live-mode price ids fail at Checkout, and the
-two accounts do not share ids. `MASTERY_APP_ORIGIN` is the origin Stripe returns
-the payer to; it is separate from `AXON_SITE_URL` because the pipeline and
-billing can point at different deploys.
+Those are the real values for the **sandbox** Stripe account
+(`acct_1U6hlUB8mNE63ebC`) as of 2026-09-02: product `Pro`
+(`prod_V6vhx65z4LuhEa`), $5/month and $40/year, both `tax_behavior: inclusive`.
+Only `STRIPE_SECRET_KEY` has to be filled in by hand — Stripe has no API that
+can hand a key out, so it comes from the Dashboard.
 
-There is no annual price in either Stripe account as of 2026-09-02, so
-`STRIPE_PRICE_ANNUAL` has nothing to point at yet. `billing-checkout` answers
-that case with "The yearly plan isn't set up yet. Monthly is available now."
-rather than a 500 — create the price and set the secret and the yearly option
-starts working with no code change.
+`STRIPE_WEBHOOK_SECRET` is already set: `stripe-setup` registered the endpoint
+at `https://dlgcqieyevoebefhcggi.supabase.co/functions/v1/stripe-webhook`
+(`we_1U6huTB8mNE63ebCdVRfkaNw`, managed by stripe-sync) and it already listens
+to `checkout.session.completed`, all four `customer.subscription.*` events and
+`invoice.payment_failed`. Stripe returns an endpoint's signing secret only when
+it is created, so if it ever needs re-setting, create a new endpoint rather than
+hunting for the old secret.
+
+A price id belongs to the account its secret key belongs to — test-mode keys
+with live-mode price ids fail at Checkout, and the two accounts share nothing.
+`MASTERY_APP_ORIGIN` is the origin Stripe returns the payer to; it is separate
+from `AXON_SITE_URL` because the pipeline and billing can point at different
+deploys. Note that `wrangler.jsonc` sets `AXON_SITE_URL` to `https://axon.app`,
+which does not resolve — the live deploy is the `workers.dev` origin above.
+
+**Live mode is not ready.** The live account (`acct_1U6hkCPiqaubF9ju`) has no
+products and no prices at all, so live-mode Checkout cannot succeed whatever is
+configured here. Mirror the sandbox product and both prices before cutting over.
 
 ## 2 · Buckets
 
