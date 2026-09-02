@@ -16,6 +16,19 @@ import { priceIdFor, stripeClient } from '../_shared/stripe.ts';
 interface Body { plan: 'monthly' | 'annual'; return_to?: string }
 
 Deno.serve(async (req) => {
+  try {
+    return await checkout(req);
+  } catch (err) {
+    // Everything below can throw: a missing secret (stripeClient, priceIdFor),
+    // or Stripe itself. Unhandled, that reaches the client as "Edge Function
+    // returned a non-2xx status code", which tells a parent nothing and sends
+    // whoever debugs it looking in the wrong place. Hard rule 4 applies to
+    // errors as much as to pages: say what is missing.
+    return failure((err as Error).message || 'Checkout could not be started.', 500);
+  }
+});
+
+async function checkout(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   const sb = clientFor(req);
@@ -31,12 +44,38 @@ Deno.serve(async (req) => {
     ? body.return_to
     : '/';
 
-  const { data: guardian } = await sb.from('guardian')
+  const { data: guardian, error: guardianError } = await sb.from('guardian')
     .select('id, name, contact, stripe_customer_id').single();
+  // A failed QUERY and a missing ROW are different answers, and reporting both
+  // as "no guardian account" once cost a day: the billing migration had not
+  // been applied, PostgREST said `column guardian.stripe_customer_id does not
+  // exist`, and the error was dropped on the floor while a parent with a
+  // perfectly good account was told they had none. PGRST116 is the only code
+  // that actually means no row.
+  if (guardianError && guardianError.code !== 'PGRST116') {
+    return failure('Could not read your account.', 500, guardianError.message);
+  }
   if (!guardian) return failure('No guardian account for this session.', 404);
 
   const appOrigin = Deno.env.get('MASTERY_APP_ORIGIN');
   if (!appOrigin) return failure('Checkout is not configured yet.', 500);
+
+  // Resolved before a Stripe Customer is created, and reported in words rather
+  // than by letting priceIdFor throw the name of an environment variable at a
+  // parent. A plan whose price has not been configured yet is a real state --
+  // the annual price may simply not exist in the Stripe account -- and it is
+  // the one thing here a parent can act on: the other plan still works.
+  let priceId: string;
+  try {
+    priceId = priceIdFor(body.plan);
+  } catch {
+    return failure(
+      body.plan === 'annual'
+        ? "The yearly plan isn't set up yet. Monthly is available now."
+        : "The monthly plan isn't set up yet.",
+      503,
+    );
+  }
 
   const stripe = stripeClient();
 
@@ -58,7 +97,7 @@ Deno.serve(async (req) => {
     client_reference_id: guardian.id,
     metadata: { guardian_id: guardian.id },
     subscription_data: { metadata: { guardian_id: guardian.id } },
-    line_items: [{ price: priceIdFor(body.plan), quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     // Stripe Tax handles GST for India-resident customers and the equivalent
     // for other jurisdictions -- see the Stripe Dashboard config, not this
     // code (workstream instructions §2 / §5).
@@ -68,4 +107,4 @@ Deno.serve(async (req) => {
   });
 
   return json({ checkout_url: session.url });
-});
+}
