@@ -17,7 +17,7 @@
 // (Stripe retries on anything but a 2xx) short-circuits on the insert conflict.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import Stripe from 'npm:stripe@17';
+import Stripe from 'npm:stripe@18';
 import { CORS, json } from '../_shared/http.ts';
 import { planForPriceId, stripeClient } from '../_shared/stripe.ts';
 
@@ -133,9 +133,15 @@ async function applySubscriptionState(
 ) {
   const priceId = subscription.items.data[0]?.price?.id ?? null;
   const plan = planForPriceId(priceId);
-  const periodEnd = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
-    : null;
+  // Basil (2025-03-31.basil, pinned in _shared/stripe.ts) removed
+  // current_period_end from Subscription and put it on each subscription ITEM.
+  // Read the item first and keep the legacy field as a fallback, so a redelivery
+  // of an event serialised under the old version still resolves rather than
+  // silently writing a null renewal date -- which would read to a parent as a
+  // subscription with no next payment.
+  const periodEndUnix = subscription.items.data[0]?.current_period_end
+    ?? (subscription as unknown as { current_period_end?: number }).current_period_end;
+  const periodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
 
   let status: 'pro' | 'pro_annual' | 'past_due' | 'canceled' | 'free';
   switch (subscription.status) {

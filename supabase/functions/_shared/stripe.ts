@@ -4,12 +4,25 @@
 // touches this codebase and the checkout surface is Stripe's own polished,
 // trusted one (UX_AND_MONETIZATION_THESIS.md workstream instructions, §2).
 
-import Stripe from 'npm:stripe@17';
+import Stripe from 'npm:stripe@18';
+
+// Pinned, and pinned HERE so all three billing functions speak one version.
+//
+// 2025-03-31.basil is a floor, not a preference: this account has Managed
+// Payments enabled, and Stripe refuses any request on an older version with
+// "Managed Payments is not supported on API version 2024-06-20". The SDK major
+// is bumped with it because the two travel together -- stripe@18 is the one
+// whose types describe Basil.
+//
+// Basil moved current_period_start/end off Subscription and onto its items.
+// stripe-webhook reads that field; see the note there before changing this
+// version again in either direction.
+const API_VERSION = '2025-03-31.basil';
 
 export function stripeClient(): Stripe {
   const key = Deno.env.get('STRIPE_SECRET_KEY');
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set for this function');
-  return new Stripe(key, { apiVersion: '2024-06-20', httpClient: Stripe.createFetchHttpClient() });
+  return new Stripe(key, { apiVersion: API_VERSION, httpClient: Stripe.createFetchHttpClient() });
 }
 
 /** Price id for a plan, from env so this never needs a code change to repoint. */
