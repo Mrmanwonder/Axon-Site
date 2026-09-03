@@ -97,7 +97,15 @@ Those are the real values for the **sandbox** Stripe account
 Only `STRIPE_SECRET_KEY` has to be filled in by hand — Stripe has no API that
 can hand a key out, so it comes from the Dashboard.
 
-`STRIPE_WEBHOOK_SECRET` is already set: `stripe-setup` registered the endpoint
+`STRIPE_WEBHOOK_SECRET` **was not actually set** (verified 2026-09-03: the
+function answers `Webhook is not configured.` to every delivery). That is the
+quietest failure in this whole feature -- Checkout succeeds, the parent is
+charged, and `guardian.subscription_status` never leaves `free`, because the
+event that would set it is rejected before it is read. Reveal the signing secret
+in the Stripe Dashboard (Developers -> Webhooks -> the endpoint below -> reveal)
+and set it.
+
+The endpoint itself exists: `stripe-setup` registered the endpoint
 at `https://dlgcqieyevoebefhcggi.supabase.co/functions/v1/stripe-webhook`
 (`we_1U6huTB8mNE63ebCdVRfkaNw`, managed by stripe-sync) and it already listens
 to `checkout.session.completed`, all four `customer.subscription.*` events and
