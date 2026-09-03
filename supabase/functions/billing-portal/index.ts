@@ -41,8 +41,14 @@ async function portal(req: Request): Promise<Response> {
     return failure('No billing account yet -- start with checkout first.', 409);
   }
 
-  const appOrigin = Deno.env.get('MASTERY_APP_ORIGIN');
-  if (!appOrigin) return failure('Billing is not configured yet.', 500);
+  // Same resolution as billing-checkout: the billing-specific override first,
+  // then the project-wide site origin every other function already reads.
+  const appOrigin = (Deno.env.get('MASTERY_APP_ORIGIN') ?? Deno.env.get('AXON_SITE_URL') ?? '')
+    .trim().replace(/\/+$/, '');
+  if (!appOrigin) {
+    return failure('Billing is not configured yet.', 500,
+      'Set AXON_SITE_URL (or MASTERY_APP_ORIGIN, which overrides it) on the project.');
+  }
 
   const session = await stripeClient().billingPortal.sessions.create({
     customer: guardian.stripe_customer_id,
