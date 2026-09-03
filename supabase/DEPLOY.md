@@ -67,9 +67,27 @@ cold start:
 supabase secrets set --project-ref dlgcqieyevoebefhcggi \
   STRIPE_SECRET_KEY=sk_test_... \
   STRIPE_PRICE_MONTHLY=price_1U6hpiB8mNE63ebCXIUcPBXn \
-  STRIPE_PRICE_ANNUAL=price_1UBIGWB8mNE63ebCIJTTm3ID \
+  STRIPE_PRICE_ANNUAL=price_1UBIGWB8mNE63ebCIJTTm3ID
+```
+
+The origin Stripe returns the payer to is **`AXON_SITE_URL`** — the same secret
+§1 already asks for, and the one `_shared/openrouter.ts` already reads. Billing
+used to demand `MASTERY_APP_ORIGIN` instead, a name from the old "mastery"
+branding that nothing in this repo ever set, which is precisely how it stayed
+unset while every other function worked. `MASTERY_APP_ORIGIN` still wins where
+it is set, as a billing-only override:
+
+```bash
+# Only if billing must return to a different origin than the rest of the app.
+supabase secrets set --project-ref dlgcqieyevoebefhcggi \
   MASTERY_APP_ORIGIN=https://axon-site.tanmay-harkawat.workers.dev
 ```
+
+Whichever is used, check the value: `wrangler.jsonc` carries
+`AXON_SITE_URL: https://axon.app`, which does **not** resolve. If the secret
+holds that value, Checkout will complete and then return the payer to a dead
+domain — the subscription is created either way, but they land nowhere. The live
+deploy is `https://axon-site.tanmay-harkawat.workers.dev`.
 
 Those are the real values for the **sandbox** Stripe account
 (`acct_1U6hlUB8mNE63ebC`) as of 2026-09-02: product `Pro`
@@ -87,10 +105,6 @@ hunting for the old secret.
 
 A price id belongs to the account its secret key belongs to — test-mode keys
 with live-mode price ids fail at Checkout, and the two accounts share nothing.
-`MASTERY_APP_ORIGIN` is the origin Stripe returns the payer to; it is separate
-from `AXON_SITE_URL` because the pipeline and billing can point at different
-deploys. Note that `wrangler.jsonc` sets `AXON_SITE_URL` to `https://axon.app`,
-which does not resolve — the live deploy is the `workers.dev` origin above.
 
 **Live mode is not ready.** The live account (`acct_1U6hkCPiqaubF9ju`) has no
 products and no prices at all, so live-mode Checkout cannot succeed whatever is

@@ -28,6 +28,24 @@ Deno.serve(async (req) => {
   }
 });
 
+/**
+ * The origin Stripe returns the payer to.
+ *
+ * MASTERY_APP_ORIGIN is the billing-specific override and wins where it is set.
+ * AXON_SITE_URL is the project-wide site origin that DEPLOY.md §1 has always
+ * asked for and that `_shared/openrouter.ts` already reads — billing was the
+ * only thing in the codebase demanding a second, differently-branded name for
+ * the same value, which is exactly how it came to be unset while everything
+ * else worked.
+ *
+ * Trailing slashes are trimmed because every caller appends an absolute path:
+ * an origin stored as "https://site/" would otherwise produce "https://site//".
+ */
+function originForReturn(): string {
+  const raw = Deno.env.get('MASTERY_APP_ORIGIN') ?? Deno.env.get('AXON_SITE_URL') ?? '';
+  return raw.trim().replace(/\/+$/, '');
+}
+
 async function checkout(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
@@ -57,8 +75,11 @@ async function checkout(req: Request): Promise<Response> {
   }
   if (!guardian) return failure('No guardian account for this session.', 404);
 
-  const appOrigin = Deno.env.get('MASTERY_APP_ORIGIN');
-  if (!appOrigin) return failure('Checkout is not configured yet.', 500);
+  const appOrigin = originForReturn();
+  if (!appOrigin) {
+    return failure('Checkout is not configured yet.', 500,
+      'Set AXON_SITE_URL (or MASTERY_APP_ORIGIN, which overrides it) on the project.');
+  }
 
   // Resolved before a Stripe Customer is created, and reported in words rather
   // than by letting priceIdFor throw the name of an environment variable at a
