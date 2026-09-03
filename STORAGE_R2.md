@@ -439,7 +439,7 @@ and will be the development surface.
 
 ```json
 [{
-  "AllowedOrigins": ["https://axon.app", "http://localhost:5173"],
+  "AllowedOrigins": ["https://axonstudy.online", "http://localhost:5173"],
   "AllowedMethods": ["PUT", "GET", "HEAD"],
   "AllowedHeaders": ["content-type", "x-amz-*"],
   "ExposeHeaders": ["ETag"],

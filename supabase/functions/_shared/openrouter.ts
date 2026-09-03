@@ -277,7 +277,7 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
       headers: {
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': Deno.env.get('AXON_SITE_URL') ?? 'https://axon.app',
+        'HTTP-Referer': Deno.env.get('AXON_SITE_URL') ?? 'https://axonstudy.online',
         'X-Title': 'Axon',
       },
       body: JSON.stringify(body),

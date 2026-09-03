@@ -3,7 +3,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-20",
   "vars": {
-    "AXON_SITE_URL": "https://axon.app"
+    "AXON_SITE_URL": "https://axonstudy.online"
   },
   "assets": {
     "directory": "./dist",
