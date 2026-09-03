@@ -119,10 +119,16 @@ async function checkout(req: Request): Promise<Response> {
     metadata: { guardian_id: guardian.id },
     subscription_data: { metadata: { guardian_id: guardian.id } },
     line_items: [{ price: priceId, quantity: 1 }],
-    // Stripe Tax handles GST for India-resident customers and the equivalent
-    // for other jurisdictions -- see the Stripe Dashboard config, not this
-    // code (workstream instructions §2 / §5).
-    automatic_tax: { enabled: true },
+    // No automatic_tax. Both prices carry tax_behavior: inclusive, and the
+    // launch decision is explicit: the price a parent is quoted is the price
+    // they pay, with no separate tax calculation layer built for this launch.
+    //
+    // It is also not optional to leave it off right now. Stripe Tax on this
+    // account is status: pending (no head_office), and Checkout rejects a
+    // session requesting automatic_tax while Tax is inactive -- which is a
+    // 500 at the moment a parent presses Subscribe, not a warning anywhere
+    // earlier. Turning it back on is one line here PLUS activating Tax on the
+    // account; doing the line alone breaks checkout outright.
     success_url: `${appOrigin}${returnTo}${returnTo.includes('?') ? '&' : '?'}billing=success`,
     cancel_url: `${appOrigin}${returnTo}${returnTo.includes('?') ? '&' : '?'}billing=cancelled`,
   });

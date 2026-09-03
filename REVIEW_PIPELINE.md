@@ -578,7 +578,7 @@ export async function callModel(opts: CallOpts) {
     headers: {
       Authorization: `Bearer ${Deno.env.get('OPENROUTER_API_KEY')}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://axon.app',
+      'HTTP-Referer': 'https://axonstudy.online',
       'X-Title': 'Axon'
     },
     body: JSON.stringify(body),

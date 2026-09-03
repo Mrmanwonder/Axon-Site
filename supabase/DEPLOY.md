@@ -80,14 +80,16 @@ it is set, as a billing-only override:
 ```bash
 # Only if billing must return to a different origin than the rest of the app.
 supabase secrets set --project-ref dlgcqieyevoebefhcggi \
-  MASTERY_APP_ORIGIN=https://axon-site.tanmay-harkawat.workers.dev
+  MASTERY_APP_ORIGIN=https://axonstudy.online
 ```
 
-Whichever is used, check the value: `wrangler.jsonc` carries
-`AXON_SITE_URL: https://axon.app`, which does **not** resolve. If the secret
-holds that value, Checkout will complete and then return the payer to a dead
-domain — the subscription is created either way, but they land nowhere. The live
-deploy is `https://axon-site.tanmay-harkawat.workers.dev`.
+**The site is `https://axonstudy.online`.** Check the value actually stored in
+the secret, not just that a secret exists: the repo carried `https://axon.app`
+in `wrangler.jsonc` and in two docs until 2026-09-03, and that domain does not
+resolve. A secret still holding it means Checkout completes and then returns the
+payer to a dead page — the subscription is created either way, but they land
+nowhere. `https://axon-site.tanmay-harkawat.workers.dev` also serves the app and
+works, but the custom domain is the one to use.
 
 Those are the real values for the **sandbox** Stripe account
 (`acct_1U6hlUB8mNE63ebC`) as of 2026-09-02: product `Pro`
