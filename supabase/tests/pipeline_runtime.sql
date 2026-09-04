@@ -90,7 +90,7 @@ end; end $$;
 -- ── transitions ────────────────────────────────────────────────────────────
 
 do $$
-declare v_run uuid; v_paper uuid;
+declare v_run uuid; v_paper uuid; v_advance jsonb;
 begin
   select id, paper_id into v_run, v_paper from public.extraction_run limit 1;
 
@@ -100,31 +100,42 @@ begin
 
   perform public.run_advance(v_run, 'structure');
 
+  -- `advance_after_structure` returns jsonb, not boolean, and it does NOT
+  -- enqueue anything itself. 20260825043237_cloudflare_queue_fanout.sql moved
+  -- the fan-out to the caller: nothing in Postgres can push into a Cloudflare
+  -- Queue, so the function reports WHAT to enqueue and the Worker sends it.
+  -- These assertions were written against the pre-fanout contract and kept
+  -- passing only because that migration had no file in this repository — the
+  -- local schema was five days behind production. Both are the real contract now.
+
   -- Structure is not finished while a page is still being read.
   perform public._t('structure does not advance while a page is pending',
-                    not public.advance_after_structure(v_run));
+                    not (public.advance_after_structure(v_run) ->> 'advanced')::boolean);
 
   update public.paper_page set structure_status = 'done' where paper_id = v_paper and page_number = 1;
   update public.paper_page set structure_status = 'unreadable' where paper_id = v_paper and page_number = 2;
 
   -- A page nobody could read is finished, not pending. It becomes a visible gap
   -- on the review screen rather than a paper that never advances.
+  select public.advance_after_structure(v_run) into v_advance;
   perform public._t('an unreadable page still counts as done',
-                    public.advance_after_structure(v_run));
+                    (v_advance ->> 'advanced')::boolean);
   perform public._t('and the run moved to content',
                     (select status from public.extraction_run where id = v_run) = 'content');
 
-  -- A paper with no questions goes to reconciliation rather than going quiet.
-  perform public._t('a structure pass that found nothing enqueues reconciliation',
-                    exists (select 1 from pgmq.q_axon_reconcile
-                             where message ->> 'run_id' = v_run::text));
+  -- A paper with no questions asks for reconciliation rather than going quiet.
+  -- It reports the intent; the Worker is what actually enqueues.
+  perform public._t('a structure pass that found nothing asks for reconciliation',
+                    (v_advance ->> 'enqueue_reconcile')::boolean);
+  perform public._t('and asks for no content work',
+                    coalesce(jsonb_array_length(v_advance -> 'enqueue_content'), 0) = 0);
 
   -- Called twice, as two workers finishing together would.
+  select public.advance_after_structure(v_run) into v_advance;
   perform public._t('a second call does not advance it again',
-                    not public.advance_after_structure(v_run));
-  perform public._t('and did not enqueue reconciliation twice',
-                    (select count(*) from pgmq.q_axon_reconcile
-                      where message ->> 'run_id' = v_run::text) = 1);
+                    not (v_advance ->> 'advanced')::boolean);
+  perform public._t('and does not ask for reconciliation twice',
+                    v_advance -> 'enqueue_reconcile' is null);
 end $$;
 
 -- ── terminal is terminal ───────────────────────────────────────────────────
@@ -177,7 +188,7 @@ end $$;
 -- ── explanations wait for the student ──────────────────────────────────────
 
 do $$
-declare v_run uuid; v_paper uuid; v_student uuid; v_queued integer;
+declare v_run uuid; v_paper uuid; v_student uuid; v_queued jsonb;
 begin
   select id, paper_id, student_id into v_run, v_paper, v_student
     from public.extraction_run limit 1;
@@ -205,16 +216,22 @@ begin
 
   update public.question_region set student_confirmed_at = now() where run_id = v_run;
 
+  -- Also jsonb since the fan-out migration: {queued, region_ids}, so the
+  -- caller can enqueue the ids it is told about.
   select public.begin_explanations(v_run) into v_queued;
-  perform public._t('only the question that lost marks is queued', v_queued = 1,
-                    format('%s queued', v_queued));
+  perform public._t('only the question that lost marks is queued',
+                    (v_queued ->> 'queued')::int = 1,
+                    format('%s queued', v_queued ->> 'queued'));
+  perform public._t('and it hands back exactly that one region id',
+                    jsonb_array_length(v_queued -> 'region_ids') = 1);
   perform public._t('and the run is explaining',
                     (select status from public.extraction_run where id = v_run) = 'explaining');
 
   -- Called again, as a retried request would.
   select public.begin_explanations(v_run) into v_queued;
-  perform public._t('a second call does not queue the same question twice', v_queued = 0,
-                    format('%s queued', v_queued));
+  perform public._t('a second call does not queue the same question twice',
+                    (v_queued ->> 'queued')::int = 0,
+                    format('%s queued', v_queued ->> 'queued'));
 
   perform public._t('the run is not ready while an explanation is outstanding',
                     not public.advance_after_explain(v_run));

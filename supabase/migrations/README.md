@@ -9,62 +9,60 @@ live project is never touched by anything automatic.
 
 **Applying a merged migration to the live project is a manual step, every
 time.** If nobody does it, the migration silently never takes effect while the
-code that depends on it ships anyway.
+code that depends on it ships anyway. `20260825170000_honest_sweep_failure_messages.sql`
+merged on 2026-08-25 and was never applied — ten days dead in the tree, and by
+then no longer applicable verbatim (see below).
 
-That is not hypothetical. Two instances, both real:
+When code *reads* a column a migration adds, there is no graceful degradation:
+PostgREST rejects a select naming an unknown column, so the request fails
+outright and takes the screen with it. **Apply the migration before merging the
+code, not after.**
 
-- **`20260825170000_honest_sweep_failure_messages.sql`** merged on 2026-08-25
-  and has never been applied. As of 2026-09-04 `private.run_pages_stored` does
-  not exist in the live project and both `private.sweep_dead_letters` and
-  `private.sweep_stuck_runs` still carry the messages that migration was written
-  to replace. It has been dead in the tree for ten days.
-- **The two migrations from #33** shipped alongside code that needed them and
-  stayed unapplied until someone tested the feature and found it inert.
+## The reconciliation (2026-09-04)
 
-The second one is the shape to fear most. When code *reads* a column a migration
-adds, there is no graceful degradation: PostgREST rejects a select naming an
-unknown column, so the request fails outright and takes the screen with it.
-**Apply the migration before merging the code, not after.**
+This directory previously held 26 files against the live project's 43 applied
+migrations. All 19 that had no file here have been reconstructed from
+`supabase_migrations.schema_migrations` and committed. Eighteen are byte-exact
+after normalising comments and whitespace; the exceptions are called out below.
 
-## The repository is not the schema
+The matched pairs were checked too, and the headline is that **none of them
+diverged in schema.** Comparing both sides under identical normalisation
+(strip `--` comments, strip whitespace, lowercase), 20 of 25 hash-match
+exactly. The five that do not — `identity_and_consent`, `academic_model`,
+`rls_and_analytics`, `preferences_and_erasure`, `r2_and_runtime`,
+`pipeline_runtime` — differ only inside `comment on ...` string literals:
+reworded prose, and the `mastery` → `axon` rename that reached the repo but not
+the database. No DDL, no policy, no function body differs.
 
-As of 2026-09-04 the live project has 43 applied migrations and this directory
-has 26. Twenty were applied to production and have no file here at all:
+An earlier note claimed `entitlements_and_billing` had divergent content
+because the file is 18,563 bytes and the stored statement 12,986 characters.
+It does not; that gap is comments and whitespace, and it hash-matches exactly.
 
-```
-apply_region_confidence_rpc                        model_call_error_detail
-cloudflare_queue_fanout                            phase3_2_security_hardening
-crop_functions_revoke_direct_grants                phase3_3_missing_fk_indexes
-crop_stage_enum_and_status                         restrict_apply_region_confidence_to_service_role
-crop_stage_feature_flag                            restrict_apply_region_confidence_to_service_role_v2
-crop_stage_functions                               revoke_subscribers_public_access
-document_service_role_only_tables                  submit_paper_accept_existing_draft
-drop_legacy_planner_schema                         sweep_covers_crop
-enable_rls_with_owner_policies                     sweep_resets_done_pages_too
-harden_helpers_into_private_schema*                sweep_resets_done_pages_too_fix
-```
+Three reconstructed files are deliberately **not** verbatim, each for a reason
+recorded in its own header:
 
-<sub>* this one is only a filename difference — it is `20260810180400_harden_helpers.sql` here.</sub>
+- `20260810130016_enable_rls_with_owner_policies.sql` — a documented no-op. Its
+  real body enables RLS on sixteen tables of an abandoned study-planner schema
+  that no migration here creates and that the next migration drops. Replayed
+  verbatim it is the first statement of `db reset` and it fails.
+- `20260826073407_phase3_2_security_hardening.sql` and
+  `20260901050006_revoke_subscribers_public_access.sql` — the Stripe FDW
+  statements are wrapped in existence guards. `public."Subscribers"` and the
+  `stripe` schema come from a dashboard-configured wrapper that no migration
+  here creates, so unguarded they fail a fresh reset. Where they exist the
+  behaviour is unchanged, and production has already run both.
 
-Two consequences worth being clear-eyed about:
+## What this directory still is not
 
-1. **`supabase db reset --local` does not reproduce production.** The pgTAP
-   suites run against a schema missing the crop stage, several security
-   hardening passes, and the FK indexes. A suite passing in CI is weaker
-   evidence than it looks.
-2. **A rebuild from this directory would not produce the live database.** This
-   directory cannot currently be treated as the source of truth for the schema.
+Reconciled is not the same as authoritative. Two things are still true:
 
-Reconciling that — pulling the applied definitions back into files — is real
-work and has not been done. It is worth doing before wiring up any automated
-deploy, because a parity check added today would fail on all twenty from its
-first run and be switched off within a day.
-
-Versions also drift: migrations applied through the Supabase MCP's
-`apply_migration` are stamped with the time they were *applied*, not the
-filename here, so `supabase migration list` shows different version numbers on
-each side for the same migration. Harmless on its own, and not worth renaming
-files over while the gap above is the real problem.
+1. **The Stripe FDW is not in the migration history.** `public."Subscribers"`
+   and the `stripe` schema exist in production and are created by nothing here.
+2. **Version numbers differ on the two sides.** Migrations applied through the
+   MCP `apply_migration` are stamped with the time they were applied, not the
+   filename, so `supabase migration list` shows different numbers for the same
+   migration. Cosmetic — the content is what was verified above — but it means
+   the two ledgers line up by name, not by version.
 
 ## Applying one
 
@@ -74,5 +72,5 @@ supabase db push --project-ref dlgcqieyevoebefhcggi
 
 Then confirm by querying the live project for the thing the migration was
 supposed to create — a table, a column, a function body. `db push` reporting
-success is not the same as the change being there, and the whole reason this
-file exists is that "assumed applied" has been wrong twice.
+success is not the same as the change being there, and "assumed applied" has
+been wrong more than once.

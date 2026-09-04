@@ -1,0 +1,75 @@
+# Edge Functions — read this before editing anything here
+
+## Most of this directory is not deployed and does not run
+
+Checked against the live project on 2026-09-04. The **only** Edge Functions
+deployed to `dlgcqieyevoebefhcggi` are:
+
+```
+stripe-setup   stripe-webhook   stripe-worker   billing-checkout   billing-portal
+```
+
+That is the complete list. Every extraction-pipeline function in this
+directory — `w-triage`, `w-structure`, `w-content`, `w-reconcile`,
+`w-adjudicate`, `w-explain`, `w-r2-delete`, `queue-tick`, `paper-submit`,
+`upload-intent`, `upload-complete`, `review-complete`, `explain`,
+`extract-structure`, `extract-content`, `extract-finalize`, `eval-run`,
+`patterns` — **is not deployed.** Editing them changes nothing that runs.
+
+## What actually runs the pipeline
+
+Nine Cloudflare Workers, last deployed 2026-09-02:
+
+```
+mastery-api        mastery-triage    mastery-structure   mastery-crop
+mastery-content    mastery-reconcile mastery-adjudicate  mastery-explain
+mastery-sweep
+```
+
+`src/config.js` points the client straight at them
+(`MASTERY_API_URL = https://mastery-api.tanmay-harkawat.workers.dev`). They
+carry their own copy of the shared logic — the deployed bundle shows
+`../../shared/src/confidence.ts` — and they use **Cloudflare Queues**, not
+pgmq.
+
+**That source is not in this repository.** PR #16 would have added the
+`workers/` monorepo and was closed unmerged on 2026-09-03, so the code running
+Axon's entire extraction pipeline exists only as deployed bundles. It can be
+read with `workers_get_worker_code`, but it cannot be reviewed, diffed, tested
+or rebuilt from here.
+
+This is the single largest gap between this repository and the running system,
+and it is worth more than the migration drift that got reconciled alongside it.
+
+## Two concrete ways this has already misled people
+
+**The confidence fix.** `_shared/confidence.ts` and `w-reconcile` were changed
+on 2026-09-04 to make the `arithmetic` and `layerFallback` signals per-region
+instead of paper-wide. The deployed `mastery-reconcile` had already solved
+that on 2026-09-02, and solved it differently: it passes `arithmeticOk: true`
+outright, and rather than vetoing on a fallen-back page it *downgrades
+recognition* for the regions whose `page_spans` touch one. Two committed runs
+on 2026-09-04 (03:30 and 08:16) show 5 `confident` and 2 `unsure` on a paper
+whose totals did **not** reconcile, with the arithmetic signal passing for all
+seven regions — the fix is live and has been for days. The repo-side change is
+consistent with it and harmless, but it is not what produced that result.
+
+**The queue names.** Everything here enqueues to `axon_triage`,
+`axon_structure`, `axon_content`, `axon_adjudicate`, `axon_explain`. The pgmq
+queues that exist are `mastery_*`. The rename reached the repo and never
+reached the database. `eval-run` in particular would create an `eval_run` row,
+mint `extraction_run` rows, reset every page of the paper to
+`structure_status = 'pending'`, and only then fail to enqueue — leaving
+orphaned queued runs for the sweep to fail ten minutes later, having run no
+pipeline at all. It is not a usable acceptance-check path in its current state.
+
+All the pgmq queues are empty, including the archives. pgmq is vestigial here.
+
+## So what should someone do with this directory?
+
+Not delete it blindly — parts of it are the readable reference for logic that
+now lives only in a bundle, and the Stripe functions here **are** live. But
+treat every pipeline function as documentation of a previous implementation
+until the `workers/` source is brought into version control. Until then, a
+change made here reaches production only if someone separately makes the same
+change in the Workers codebase.

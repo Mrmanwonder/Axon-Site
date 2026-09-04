@@ -1,0 +1,35 @@
+-- ============================================================================
+-- Historical placeholder — intentionally does nothing
+-- ============================================================================
+-- This version exists in the live project's migration history and is the
+-- earliest entry in it. Its real body enabled RLS and created owner-scoped
+-- policies on sixteen tables belonging to an ABANDONED study-planner schema:
+-- users, academic_profiles, user_preferences, knowledge_states, missions,
+-- mission_steps, study_plans, study_blocks, focus_sessions, learning_events,
+-- progress_snapshots, notes, notifications, past_papers, topics, subjects.
+--
+-- None of those tables exist any more. The very next migration,
+-- 20260810173605_drop_legacy_planner_schema.sql, dropped all sixteen about
+-- four hours later, after verifying each was empty. Nothing in this product's
+-- schema descends from them.
+--
+-- The body is deliberately NOT reproduced here. Those tables were created
+-- outside the migration history — no migration in this directory has ever
+-- created them — so a faithful copy would be the first statement in a
+-- `supabase db reset` and would fail immediately on `alter table public.users
+-- enable row level security` with "relation does not exist", taking CI's whole
+-- SQL suite with it. A migration that cannot be replayed is not a migration.
+--
+-- The file exists so the repository's history lines up 1:1 with the live
+-- project's by version and name, which is the point of the reconciliation this
+-- belongs to. Deleting it would leave a hole at the very start of the ledger
+-- and reopen the question of whether something was missed.
+--
+-- If the original text is ever wanted for forensics, it is still in the live
+-- project:
+--
+--   select statements[1] from supabase_migrations.schema_migrations
+--    where version = '20260810130016';
+-- ============================================================================
+
+-- Intentionally empty.
