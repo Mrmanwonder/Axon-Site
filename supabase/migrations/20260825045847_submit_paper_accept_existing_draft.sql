@@ -1,3 +1,27 @@
+-- ============================================================================
+-- Reconstructed from the live project's migration history (2026-09-04).
+-- ============================================================================
+-- One deliberate addition: the explicit DROP below.
+--
+-- This migration adds an eleventh parameter (`p_paper_id`) to `submit_paper`.
+-- `create or replace function` cannot change a signature, so it creates a
+-- SECOND function rather than replacing the ten-argument one from
+-- 20260821100200_pipeline_runtime.sql. Every added parameter has a default, so
+-- the two overloads are ambiguous for any call that omits the optional tail —
+-- which is every real caller. `supabase/tests/pipeline_runtime.sql` calls it
+-- with seven arguments and fails with "function public.submit_paper(...) is
+-- not unique".
+--
+-- Production has exactly one `submit_paper`, the eleven-argument one, so the
+-- ten-argument version was disposed of there by some means outside this
+-- history. Dropping it explicitly is what makes a replay of these files
+-- reproduce the schema that actually exists.
+-- ============================================================================
+
+drop function if exists public.submit_paper(
+  uuid, public.paper_type, public.paper_tier, date, text,
+  jsonb, uuid, numeric, numeric, text);
+
 create or replace function public.submit_paper(
   p_student_id      uuid,
   p_type            public.paper_type,

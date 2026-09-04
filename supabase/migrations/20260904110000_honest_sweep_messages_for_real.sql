@@ -55,8 +55,8 @@ comment on function private.run_pages_stored(uuid) is
 revoke all on function private.run_pages_stored(uuid) from public, anon, authenticated;
 
 -- ── dead letters ───────────────────────────────────────────────────────────
--- Live body, with the queue names it really has, and the message made
--- conditional on the fact rather than assumed.
+-- Live body, with the queues discovered rather than named (see below), and the
+-- message made conditional on the checked fact rather than assumed.
 create or replace function private.sweep_dead_letters(p_max_attempts integer default 5)
 returns integer language plpgsql security definer set search_path = 'public', 'pg_temp' as $function$
 declare
@@ -66,10 +66,23 @@ declare
   v_stored boolean;
   v_swept  integer := 0;
 begin
-  foreach v_queue in array array[
-    'mastery_triage', 'mastery_structure', 'mastery_content',
-    'mastery_adjudicate', 'mastery_explain'
-  ] loop
+  -- The queues are DISCOVERED, not named. Production's are `mastery_*`, created
+  -- 2026-08-23 under the project's old name. A fresh database gets `axon_*`,
+  -- because 20260821100100_r2_and_runtime.sql creates them under the new one —
+  -- the rename reached the migration and never reached the live queues. Any
+  -- hardcoded prefix is therefore correct in exactly one of the two
+  -- environments and throws "relation does not exist" in the other, which is
+  -- how the first draft of this migration broke the pgTAP suite. Listing what
+  -- exists is right in both, and stays right the day the queues are renamed.
+  for v_queue in
+    select queue_name from pgmq.list_queues()
+     where queue_name in (
+       'axon_triage', 'axon_structure', 'axon_content',
+       'axon_adjudicate', 'axon_explain',
+       'mastery_triage', 'mastery_structure', 'mastery_content',
+       'mastery_adjudicate', 'mastery_explain')
+     order by queue_name
+  loop
     for v_msg in
       execute format(
         'select msg_id, read_ct, message from pgmq.q_%I where read_ct >= $1', v_queue)
