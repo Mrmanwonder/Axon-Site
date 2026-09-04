@@ -11,7 +11,7 @@
 import { assert, assertEquals } from 'jsr:@std/assert@1';
 import { assignToRegion, classifyMark, groupComments } from './attribution.ts';
 import { reconcile } from './reconcile.ts';
-import { assess, numberingSoundness } from './confidence.ts';
+import { assess, numberingSoundness, tierFrom } from './confidence.ts';
 import { takeBox, tierToConfidence } from './contract.ts';
 import { clearsTheFloor } from './quality_floor.ts';
 
@@ -137,19 +137,53 @@ Deno.test('reconciliation never rewrites a mark to make the sum work', () => {
 // ── the confidence model ───────────────────────────────────────────────────
 
 const signals = (over: Partial<Parameters<typeof assess>[0]> = {}) => assess({
-  recognition: 'high', numberingSound: true, paperReconciled: true,
+  recognition: 'high', numberingSound: true, arithmeticSound: true,
   awarded: 4, available: 5, layerFallback: false, unreadable: false, ...over,
 });
 
 Deno.test('all four signals passing is the only route to confident', () => {
   assertEquals(signals().tier, 'confident');
   assertEquals(signals({ numberingSound: false }).tier, 'unsure');
-  assertEquals(signals({ paperReconciled: false }).tier, 'unsure');
+  assertEquals(signals({ arithmeticSound: false }).tier, 'unsure');
   assertEquals(signals({ recognition: 'low' }).tier, 'unsure');
 });
 
 Deno.test('a page that broke the colour assumption cannot produce a confident field', () => {
   assertEquals(signals({ layerFallback: true }).tier, 'unsure');
+});
+
+// The arithmetic and layer-fallback signals are per REGION, not per paper. Both
+// were once one boolean computed for the whole paper and handed to every region
+// identically, which meant a single total that did not close, or a single page
+// that fell back off colour separation, demoted every question on the paper —
+// 84% of all extracted questions never reached `confident` at all. These two
+// assert the thing that actually changed: two regions on the same paper can
+// now disagree.
+Deno.test('two regions on one paper can reach different tiers', () => {
+  assertEquals(signals({ arithmeticSound: true }).tier, 'confident');
+  assertEquals(signals({ arithmeticSound: false }).tier, 'unsure');
+  assertEquals(signals({ layerFallback: false }).tier, 'confident');
+  assertEquals(signals({ layerFallback: true }).tier, 'unsure');
+});
+
+Deno.test('adjudication clears a region by flipping only the arithmetic signal', () => {
+  // What w-adjudicate does to a region it looked at and did not implicate: the
+  // readings behind the other three signals are not revisited, because it never
+  // looked at those.
+  const held = { recognition: true, structural: true, arithmetic: false, plausibility: true };
+  assertEquals(tierFrom(held, { layerFallback: false }), 'unsure');
+  assertEquals(tierFrom({ ...held, arithmetic: true }, { layerFallback: false }), 'confident');
+
+  // Clearing the arithmetic does not rescue a region that failed something else,
+  // and does not override a page that broke the colour assumption.
+  assertEquals(
+    tierFrom({ ...held, arithmetic: true, structural: false }, { layerFallback: false }),
+    'unsure',
+  );
+  assertEquals(
+    tierFrom({ ...held, arithmetic: true }, { layerFallback: true }),
+    'unsure',
+  );
 });
 
 Deno.test('nothing readable is unreadable, not unsure', () => {

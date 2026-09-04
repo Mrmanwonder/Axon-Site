@@ -170,6 +170,18 @@ export default function QuestionDetail() {
                 <b>Do this next.</b> {loss.do_this_next}
               </div>
             )}
+            {/* What this question was about. Descriptive, not evaluative — a
+                topic is not a verdict, so these are set in one neutral tone
+                rather than in the cause hues. Those seven colours mean a
+                specific thing in this app, and a concept borrowing one would
+                read as a diagnosis the tag is not making. */}
+            {loss.concepts && loss.concepts.length > 0 && (
+              <div className="concepts">
+                {loss.concepts.map((c) => (
+                  <span className="concept" key={c}>{c}</span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

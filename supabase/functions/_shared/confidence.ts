@@ -22,11 +22,32 @@ export interface SignalInput {
   recognition: 'high' | 'medium' | 'low' | null;
   /** This region's number is present and continues the paper's sequence. */
   numberingSound: boolean;
-  /** The paper's arithmetic closed. */
-  paperReconciled: boolean;
+  /**
+   * Nothing about the arithmetic implicates THIS question.
+   *
+   * This used to be `paperReconciled` — one boolean per paper, computed once
+   * and handed to every region identically. One total that did not close took
+   * every question on the paper down with it, however cleanly each one was
+   * read, and since almost no real paper's totals close on the first pass, 84%
+   * of extracted questions never reached `confident` at all. That is not a
+   * strict confidence model; it is a confidence model that has stopped
+   * discriminating, and it made review uniformly tedious — every question
+   * tapped individually, bulk-accept permanently dead.
+   *
+   * A paper that closes still passes this for every region. A paper that does
+   * not goes to adjudication, which is the stage that can say WHICH questions
+   * are implicated; it clears the rest itself. See w-adjudicate.
+   */
+  arithmeticSound: boolean;
   awarded: number | null;
   available: number | null;
-  /** The page broke the colour assumption, so everything on it drops a tier. */
+  /**
+   * THIS region's pages broke the colour assumption.
+   *
+   * Also formerly paper-wide. One page that fell back off colour separation
+   * said nothing about a question three pages later, but demoted it anyway.
+   * Scoped through `question_region.page_spans` now.
+   */
   layerFallback: boolean;
   /** Nothing readable at all, or a value that arrived with no box. */
   unreadable: boolean;
@@ -39,7 +60,7 @@ export function assess(input: SignalInput): { tier: ConfidenceTier; signals: Sig
     // other three signals are what turn that into confidence.
     recognition: input.recognition === 'high' || input.recognition === 'medium',
     structural: input.numberingSound,
-    arithmetic: input.paperReconciled,
+    arithmetic: input.arithmeticSound,
     plausibility: plausible(input.awarded, input.available),
   };
 
@@ -51,9 +72,28 @@ export function assess(input: SignalInput): { tier: ConfidenceTier; signals: Sig
   // analytics entirely until the student resolves it.
   if (input.recognition === 'low') return { tier: 'unsure', signals };
 
+  return { tier: tierFrom(signals, { layerFallback: input.layerFallback }), signals };
+}
+
+/**
+ * The tier a set of already-computed signals produces.
+ *
+ * Split out of `assess` so a later stage can revisit a verdict without
+ * re-deriving the readings behind it. Adjudication is the case that needs it:
+ * it runs after reconciliation, and it is the only stage that can say which
+ * questions a failed total actually implicates. It flips `arithmetic` on the
+ * ones it cleared and asks this function what that now means, rather than
+ * carrying a second copy of the rule.
+ *
+ * `unreadable` is not an argument. A region that could not be read is not
+ * eligible for revision by a stage that never looked at it, so callers skip it.
+ */
+export function tierFrom(
+  signals: Signals,
+  opts: { layerFallback: boolean },
+): ConfidenceTier {
   const allPass = Object.values(signals).every(Boolean);
-  if (allPass && !input.layerFallback) return { tier: 'confident', signals };
-  return { tier: 'unsure', signals };
+  return allPass && !opts.layerFallback ? 'confident' : 'unsure';
 }
 
 /**

@@ -31,7 +31,7 @@ serveWorker(async ({ sb, msg }) => {
 
   const { data: regions } = await sb
     .from('question_region')
-    .select('id, order_index, question_label, marks_awarded, marks_available, confidence_tier, confidence_signals, extract_status')
+    .select('id, order_index, question_label, marks_awarded, marks_available, confidence_tier, confidence_signals, extract_status, page_spans')
     .eq('run_id', runId).order('order_index');
 
   if (!regions?.length) {
@@ -57,26 +57,49 @@ serveWorker(async ({ sb, msg }) => {
 
   const sound = numberingSoundness(marks.map((m) => m.label));
 
-  // Any page that broke the colour assumption drops every question on the paper
-  // a tier: we do not know which marks the mask missed, only that it missed.
-  const { count: fallbackPages } = await sb
-    .from('paper_page').select('id', { count: 'exact', head: true })
+  // Which pages broke the colour assumption — not how many. This used to be a
+  // count, and any non-zero count demoted every question on the paper: one bad
+  // page on page 1 dragged down a cleanly-read question on page 6. What the
+  // fallback actually tells us is that the mask missed marks ON THOSE PAGES, so
+  // it is scoped to the regions that sit on them.
+  const { data: fallbackRows } = await sb
+    .from('paper_page').select('page_number')
     .eq('paper_id', run.paper_id).not('layer_fallback', 'is', null);
+  const fallbackPages = new Set((fallbackRows ?? []).map((p) => p.page_number as number));
+
+  /** Does this region sit on any page that fell back? A question that straddles
+      pages is normal, so any one of its pages is enough. */
+  const touchesFallback = (spans: unknown): boolean => {
+    if (!fallbackPages.size || !Array.isArray(spans)) return false;
+    return spans.some((s) => fallbackPages.has((s as { page?: number })?.page as number));
+  };
 
   for (const [i, region] of regions.entries()) {
+    const layerFallback = touchesFallback(region.page_spans);
     const { tier, signals } = assess({
       recognition: marks[i].recognition,
       numberingSound: sound[i] ?? false,
-      paperReconciled: result.reconciled,
+      // A paper whose total closes clears every question's arithmetic. One that
+      // does not is NOT resolved here: this stage cannot say which questions the
+      // discrepancy implicates, so it says "not yet" for all of them and hands
+      // the paper to adjudication, which can. Adjudication clears the ones it
+      // did not implicate. If it never runs, or runs and finds nothing, they
+      // stay unsure — which is the honest answer when we know the paper is wrong
+      // somewhere and cannot say where.
+      arithmeticSound: result.reconciled,
       awarded: marks[i].awarded,
       available: marks[i].available,
-      layerFallback: (fallbackPages ?? 0) > 0,
+      layerFallback,
       unreadable: region.confidence_tier === 'unreadable' || region.extract_status === 'failed',
     });
 
     await sb.from('question_region').update({
       confidence_tier: tier,
-      confidence_signals: { ...(region.confidence_signals as object ?? {}), ...signals },
+      // `layer_fallback` rides along with the four signals because adjudication
+      // has to reach the same verdict later without re-deriving it from pages.
+      confidence_signals: {
+        ...(region.confidence_signals as object ?? {}), ...signals, layer_fallback: layerFallback,
+      },
       // Everything is reviewed at launch. Skipping review is earned with
       // measured accuracy, not assumed.
       needs_review: true,

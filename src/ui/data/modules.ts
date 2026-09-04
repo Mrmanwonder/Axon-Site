@@ -241,6 +241,10 @@ export type MarkLossEvent = {
   marks_lost: number | null;
   ai_explanation: string | null;
   do_this_next: string | null;
+  /** Topic/skill tags for this lost mark, carried from the explanation at
+      commit. Descriptive only: they say what the question was about, never how
+      well it went, and they carry no ranking. */
+  concepts: string[] | null;
   confidence: "confirmed" | "likely" | "unsure";
   student_confirmed_at: string | null;
   student_rejected_at: string | null;
