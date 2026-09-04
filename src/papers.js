@@ -277,7 +277,15 @@ export async function listPapers(studentId) {
   return readThrough(`papers:${studentId}`, async () => {
     const { data, error } = await sb
     .from('paper')
-    .select('id,type,tier,date_taken,created_at,paper_page(count),student_attempt(count)')
+    // `student_attempt!...` names the foreign key to embed on, and it is not
+    // optional. There are TWO foreign keys from student_attempt to paper —
+    // (paper_id, student_id) for ownership, and (paper_id, paper_tier), the
+    // guard that keeps an attempt's tier equal to its paper's. PostgREST will
+    // not guess between them: an unqualified embed returns 300 PGRST201 and no
+    // rows at all, so this whole read fails and the Library renders "No papers
+    // yet" over a library that is not empty. Ownership is the one we mean.
+    .select('id,type,tier,date_taken,created_at,paper_page(count),' +
+            'student_attempt!student_attempt_paper_id_student_id_fkey(count)')
     .eq('student_id', studentId)
     .order('date_taken', { ascending: false });
     if (error) throw error;
@@ -294,7 +302,7 @@ export async function readPaper(studentId, paperId) {
       `id,type,tier,date_taken,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
-      student_attempt(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
+      student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
       teacher_remark,extraction_confidence,student_confirmed_at,
       mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,concepts,
       confidence,student_confirmed_at,student_rejected_at)),

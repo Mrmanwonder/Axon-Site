@@ -46,7 +46,7 @@ function Thumb() {
 type CountRow = { count: number }[] | undefined;
 
 export default function Library() {
-  const { papers, papersStale, progress } = useApp();
+  const { papers, papersStale, papersError, progress } = useApp();
   const navigate = useNavigate();
 
   return (
@@ -60,7 +60,23 @@ export default function Library() {
       </div>
 
       <div className="list">
-        {!papers.length && (
+        {/* Two different states that used to render identically. A library
+            that is empty and a library we could not read are not the same
+            thing, and telling a student the first when it is the second is
+            the confident lie hard rule 4 exists to prevent. */}
+        {!papers.length && papersError && (
+          <div className="srow noicon">
+            <div className="lbl">
+              We couldn&rsquo;t load your papers
+              <small>
+                Your papers are safe — this is us failing to read them, not them
+                being gone. Try again in a moment.
+              </small>
+            </div>
+          </div>
+        )}
+
+        {!papers.length && !papersError && (
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet
