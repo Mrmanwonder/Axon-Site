@@ -385,3 +385,51 @@ export async function analyticsReadiness(studentId) {
     return data ?? { papers_counted: 0, questions_counted: 0, has_enough_data: false };
   });
 }
+
+/**
+ * Live library.
+ *
+ * `listPapers` and `paperProgress` are point-in-time reads, and the app used to
+ * run them exactly once — on mount, and never again. That is fine for an
+ * archive and wrong for everything else this screen shows. Two consequences,
+ * both of which read as the app being broken rather than as the app being
+ * stale:
+ *
+ * · A paper scanned in this session did not appear in the Library until a full
+ *   reload, because a commit inserts rows the client never asked about again.
+ * · A paper uploaded on the phone never appeared on the laptop at all. There is
+ *   no second backend to sync with — both devices are already reading the same
+ *   Postgres rows through the same account. The laptop simply had no way to
+ *   find out a row had arrived.
+ *
+ * So this subscribes to the four tables the library reads and lets the server
+ * say when. Every subscription is filtered on `student_id` server-side, so a
+ * device is only ever woken by its own student's rows, and RLS still decides
+ * what is actually delivered — the filter narrows, it does not authorise.
+ *
+ * `onChange` is called with no argument and no payload on purpose. The payload
+ * is one changed row; what the caller needs is a re-read, and a caller that
+ * patched its state from the payload would be maintaining a second, subtly
+ * different copy of the query in `listPapers`. Callers should coalesce: a
+ * commit lands a whole paper's attempts at once and would otherwise fan out
+ * into one refetch per question.
+ *
+ * Returns an unsubscribe function. Realtime being unreachable is not fatal and
+ * is not surfaced — the app still works exactly as well as it did before this
+ * existed, which is to say the reads still happen, just not unprompted.
+ */
+export function watchLibrary(studentId, onChange) {
+  if (!studentId) return () => {};
+
+  const channel = sb.channel(`library:${studentId}`);
+  for (const table of ['paper', 'paper_page', 'student_attempt', 'extraction_run']) {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table, filter: `student_id=eq.${studentId}` },
+      () => onChange(),
+    );
+  }
+  channel.subscribe();
+
+  return () => { void sb.removeChannel(channel); };
+}

@@ -130,6 +130,25 @@
   .estate{margin:18px var(--gutter);padding:28px 22px;border-radius:var(--r-card);background:var(--surface);border:.5px solid var(--hairline);text-align:center;}
   .estate .ic{width:52px;height:52px;border-radius:17px;background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
   .estate .ic svg{width:24px;height:24px;fill:none;stroke:var(--label-3);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* Empty-state illustration. Sized to actually anchor the card rather than to
+     label a row — the 52px .ic tile above is the affordance for a list item,
+     and using it as the subject of a whole screen is what made these states
+     read as unfinished instead of as honest. Capped in px as well as in %, so
+     it does not inflate to fill a tablet. */
+  .estate .art{display:block;width:min(100%,192px);height:auto;margin:0 auto 20px;
+    fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  /* Solid: the thing that exists. */
+  .estate .art .sheet{stroke:var(--label-3);stroke-width:1.7;fill:var(--surface);}
+  .estate .art .axis{stroke:var(--label-3);stroke-width:1.7;}
+  .estate .art .rule{stroke:var(--label-3);stroke-width:1.7;opacity:.5;}
+  /* Dashed: the thing that does not yet. The same grammar the confidence
+     badges use — dashed outline is this design language's word for "unsure",
+     and an empty state is that at the scale of a screen. */
+  .estate .art .ghost{stroke:var(--label-3);stroke-width:1.5;opacity:.42;stroke-dasharray:5 5;}
+  /* The one accent, and the only coloured thing in either drawing. Blue,
+     because amber means attention and red means signing out. */
+  .estate .art .pen{stroke:var(--accent);stroke-width:1.9;}
   .estate h4{margin:0 0 7px;font-size:18px;font-weight:700;letter-spacing:-.025em;}
   .estate p{margin:0 0 18px;font-size:14px;line-height:1.5;color:var(--label-2);}
   .estate .prog{display:flex;align-items:center;gap:9px;margin-bottom:18px;}
@@ -412,7 +431,29 @@
   .srow .aux{font-size:15.5px;color:var(--label-3);letter-spacing:-.015em;}
   .locked{font-size:12px;font-weight:600;color:var(--label-3);background:var(--surface-sunk);padding:3px 8px;border-radius:7px;}
   .sprofile{margin:16px var(--gutter) 0;padding:20px;display:flex;align-items:center;gap:15px;border-radius:var(--r-card);}
-  .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
+  /* The gradient here is a FALLBACK, not the avatar. src/avatar.js writes the
+     real background and ink inline, from the student's own seed; this is what
+     shows for the instant before the profile has loaded, and if it is ever what
+     you see for longer than that, the student row did not arrive. */
+  .sprofile .pic{width:58px;height:58px;border-radius:29px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(0,0,0,.12);}
+
+  /* Picture picker. Ten discs, scrolled rather than wrapped: a grid of ten
+     reflows into two ragged rows at 380px, and the row is a list of options,
+     not a layout. Selection is a RING, not a tick and not a colour — the discs
+     are already ten colours, and one more would be competing with them. */
+  .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
+  .lookrow{display:flex;gap:12px;padding:0 16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .lookrow::-webkit-scrollbar{display:none;}
+  .look{flex:0 0 auto;padding:3px;border-radius:26px;cursor:pointer;
+    box-shadow:inset 0 0 0 2px transparent;transition:box-shadow .12s ease;}
+  .look.on{box-shadow:inset 0 0 0 2px var(--accent);}
+  /* The inner hairline is not decoration. Two of the ten presets — Mint and
+     Cotton Candy — are near-white, and without a ring they vanish entirely
+     against a light card: a student in light mode would see eight options and
+     two holes. It is invisible on the saturated eight. */
+  .look .disc{display:flex;width:40px;height:40px;border-radius:20px;align-items:center;justify-content:center;
+    font-size:16px;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(0,0,0,.12);}
+  .look:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
   .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
   .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
   .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
@@ -453,7 +494,17 @@
 
   /* nav — one DOM, two orientations. Geometry comes from JS measurement. */
   .tabdock{position:absolute;left:0;right:0;bottom:0;z-index:35;padding:0 13px var(--dock-pad);}
-  .tabbar{position:relative;padding:5px;border-radius:32px;overflow:hidden;background:var(--nav-bg);
+  /* --nav-pad is the glass margin around the tab strip, and it is a variable
+     rather than a literal because TWO things have to agree with it: .tabbar's
+     own padding, which insets .refractlayer, and .lensglow's origin. The glow
+     is a SIBLING of .refractlayer, so it is positioned against .tabbar's
+     padding box while the pill it is meant to sit on top of is positioned
+     against .refractlayer's content box. Those two boxes differ by exactly this
+     padding, which is why the glass highlight used to sit up and to the left of
+     the pill by 5px on every tab. Measured geometry was never the problem —
+     the pill and the lens map both measure against #refractlayer correctly.
+     Only the glow was reading its origin off a different box. */
+  .tabbar{--nav-pad:5px;position:relative;padding:var(--nav-pad);border-radius:32px;overflow:hidden;background:var(--nav-bg);
     backdrop-filter:blur(30px) saturate(2);-webkit-backdrop-filter:blur(30px) saturate(2);
     box-shadow:var(--nav-shadow);transition:background .4s ease,box-shadow .4s ease;}
   .tabbar .rim{position:absolute;inset:0;border-radius:32px;pointer-events:none;z-index:5;
@@ -469,9 +520,12 @@
   /* Not red: red is reserved for sign out, the one irreversible-feeling action
      in the interface. A notification dot is an accent, not a rebuke. */
   .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--blue);box-shadow:0 0 0 2px var(--nav-bg);}
-  .tab .pfp{width:25px;height:25px;border-radius:13px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#fff;transition:box-shadow .25s ease;}
+  /* Same fallback, same reason as .sprofile .pic — TabNav writes the student's
+     real gradient inline, and both read it from src/avatar.js so they cannot
+     disagree about what this student looks like. */
+  .tab .pfp{width:25px;height:25px;border-radius:13px;background:linear-gradient(155deg,#5AA0FF,#2E74E8);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;color:#fff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);transition:box-shadow .25s ease;}
   .tab.on .pfp{box-shadow:0 0 0 2px var(--nav-icon-on);}
-  .lensglow{position:absolute;top:0;left:0;height:46px;border-radius:26px;pointer-events:none;z-index:3;
+  .lensglow{position:absolute;top:var(--nav-pad);left:var(--nav-pad);height:46px;border-radius:26px;pointer-events:none;z-index:3;
     box-shadow:inset 0 1px 0 var(--nav-pill-rim),inset 0 -1px 0 rgba(255,255,255,.1),
     inset 1px 0 0 rgba(255,255,255,.14),inset -1px 0 0 rgba(255,255,255,.14);
     background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,0) 58%);will-change:transform;}

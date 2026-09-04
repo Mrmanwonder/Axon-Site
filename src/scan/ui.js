@@ -309,6 +309,8 @@ async function paintDrafts() {
 }
 
 async function resumeDraft(id) {
+  // Taken up, so it is no longer an outstanding offer.
+  host.draftToast(null, { onResume: resumeDraft });
   S.draft = await readDraft(id);
   S.thumbs.forEach((url) => URL.revokeObjectURL(url));
   S.thumbs.clear();
@@ -625,6 +627,14 @@ async function save() {
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
     host.closeReview();
+    // The paper is read, reviewed and saved: the progress panel is describing
+    // work that finished. Left standing it kept "Reading this paper" under the
+    // viewfinder for the rest of the session, so the next paper started against
+    // the last one's steps and Scan never returned to its idle state. This is
+    // the terminal path, and clearing it here is what makes the screen idle
+    // again. The refused and failed paths deliberately do NOT clear it — those
+    // panels are the only place the student is told what went wrong.
+    host.renderProgress(null);
     releaseCrops();
     S.runId = null;
     S.regions = null;
@@ -636,6 +646,10 @@ async function save() {
       S.thumbs.clear();
       await paintTray();
       await paintDrafts();
+      // The offer to resume outlived the thing it offered: the draft row is
+      // gone above, but the toast is only ever raised at boot, so it stayed on
+      // the viewfinder pointing at a deleted draft for the rest of the session.
+      host.draftToast(null, { onResume: resumeDraft });
     }
     await host.refreshLibrary();
   } catch (error) {
