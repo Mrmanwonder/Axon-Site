@@ -296,7 +296,7 @@ export async function readPaper(studentId, paperId) {
       page_unreadable(page_number,reason,storage_path),
       student_attempt(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
       teacher_remark,extraction_confidence,student_confirmed_at,
-      mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,
+      mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,concepts,
       confidence,student_confirmed_at,student_rejected_at)),
       question_region(committed_attempt_id,page_spans,crop_key)`,
       )

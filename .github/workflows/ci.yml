@@ -72,3 +72,62 @@ jobs:
             fi
           done
           exit $status
+
+  # Nothing in this repository applies a migration to the live project — see
+  # supabase/migrations/README.md. This job cannot apply one either (it has no
+  # credentials, by design), so it does the next most useful thing: it makes a
+  # PR that adds one impossible to skim past. Two merged migrations have already
+  # gone unapplied for want of exactly this.
+  #
+  # It never fails. A red check here would be a check somebody turns off; this
+  # is a summary a reviewer reads. Real enforcement needs the project's
+  # credentials as repository secrets AND the twenty-migration gap in that README
+  # closed first, or a parity check would be red from its very first run.
+  migration-notice:
+    name: migrations need applying by hand
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Say so, loudly, if this PR adds a migration
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" \
+            -- 'supabase/migrations/*.sql' || true)
+
+          if [ -z "$changed" ]; then
+            echo "No migration files touched." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## This PR changes the database schema"
+            echo
+            echo '```'
+            echo "$changed"
+            echo '```'
+            echo
+            echo "**Merging does not apply these.** Nothing in CI does."
+            echo "\`supabase db reset --local\` above builds a throwaway database for the"
+            echo "pgTAP suites and destroys it; the live project is never touched."
+            echo
+            echo "Apply them by hand and confirm by querying the project, then merge:"
+            echo
+            echo '```sh'
+            echo "supabase db push --project-ref dlgcqieyevoebefhcggi"
+            echo '```'
+            echo
+            echo "If code in this PR **reads** anything these add, apply them **first** —"
+            echo "PostgREST errors on an unknown column, so a select naming one that is not"
+            echo "there yet takes the whole screen down rather than degrading."
+            echo
+            echo "See \`supabase/migrations/README.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::warning title=Migration needs applying by hand::This PR changes supabase/migrations/. Merging will not apply it — see the job summary."

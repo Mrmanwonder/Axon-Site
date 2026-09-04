@@ -12,6 +12,7 @@
 // standing to change a number a teacher wrote, and neither do we.
 
 import { type RouteOverride, serveWorker } from '../_shared/worker.ts';
+import { type Signals, tierFrom } from '../_shared/confidence.ts';
 import { callModel, type ImageRef } from '../_shared/openrouter.ts';
 import { presignGet } from '../_shared/r2.ts';
 import * as adjudicate from '../_shared/prompts/adjudicate.v1.ts';
@@ -103,10 +104,12 @@ serveWorker(async ({ sb, msg, beat }) => {
   // confidence so it surfaces first on the review screen; the student decides
   // what the paper says, and no mark is touched here.
   const byIndex = new Map(regions.map((r) => [r.order_index as number, r]));
+  const flaggedIds = new Set<string>();
   let flagged = 0;
   for (const correction of parsed.corrections) {
     const region = byIndex.get(correction.order_index);
     if (!region) continue;
+    flaggedIds.add(region.id as string);
     await sb.from('question_region').update({
       confidence_tier: 'unsure',
       needs_review: true,
@@ -123,6 +126,48 @@ serveWorker(async ({ sb, msg, beat }) => {
     flagged += 1;
   }
 
+  // ── and the other half: clearing the questions this did NOT implicate ──
+  //
+  // Reconciliation could not say which questions a failed total was about, so
+  // it withheld the arithmetic signal from all of them. This stage is the one
+  // that can say, and having said it, it owes the rest of the paper the verdict
+  // they would have had if the total had closed. Without this the demotion is
+  // permanent for every question on any paper whose sum is off by anything at
+  // all, which was the whole 84%-never-confident problem.
+  //
+  // Only when adjudication actually localised the problem. Corrections found
+  // means the suspicion has a home and the other questions are free of it;
+  // corrections NOT found means we know the paper is wrong somewhere and cannot
+  // say where, and spreading that suspicion across the paper is the honest
+  // reading of it. Promoting everything there would offer bulk-accept on a
+  // paper we have just told the student does not add up.
+  let cleared = 0;
+  if (parsed.corrections.length) {
+    for (const region of regions) {
+      if (flaggedIds.has(region.id as string)) continue;
+      // Adjudication looked at totals, not at legibility. A region nobody could
+      // read is not made readable by this stage declining to blame it.
+      if (region.confidence_tier === 'unreadable') continue;
+
+      const stored = (region.confidence_signals ?? {}) as Record<string, unknown>;
+      const signals: Signals = {
+        recognition: stored.recognition === true,
+        structural: stored.structural === true,
+        arithmetic: true,
+        plausibility: stored.plausibility === true,
+      };
+      const tier = tierFrom(signals, { layerFallback: stored.layer_fallback === true });
+      if (tier === region.confidence_tier) continue;
+
+      await sb.from('question_region').update({
+        confidence_tier: tier,
+        confidence_signals: { ...stored, ...signals },
+        updated_at: new Date().toISOString(),
+      }).eq('id', region.id);
+      cleared += 1;
+    }
+  }
+
   await sb.from('extraction_run').update({
     adjudication: { cause: parsed.cause, checked: parsed.checked, corrections: parsed.corrections },
   }).eq('id', runId);
@@ -134,7 +179,7 @@ serveWorker(async ({ sb, msg, beat }) => {
     : 'The marks on this paper do not add up to the total written on it. We could not see why, so nothing was changed.';
 
   await sb.rpc('run_advance', { p_run_id: runId, p_to: 'needs_review', p_reason: reason });
-  return { detail: { cause: parsed.cause, flagged } };
+  return { detail: { cause: parsed.cause, flagged, cleared } };
 }, async ({ sb, msg }) => {
   // Adjudication is a nicety. Failing it must not fail the paper — the marks are
   // already read, and the student can review them without our second opinion.

@@ -80,7 +80,11 @@ Deno.serve(async (req) => {
     const { tier, signals: assessed } = assess({
       recognition: (signals.recognition ?? null) as 'high' | 'medium' | 'low' | null,
       numberingSound: sound[i],
-      paperReconciled: result.reconciled,
+      // Renamed with the signal, not re-scoped with it. This is the legacy
+      // extract-* path, which has no adjudication stage to say which questions
+      // a failed total implicates — so paper-wide is still the only answer it
+      // can give. The w-* pipeline is where the per-region behaviour lives.
+      arithmeticSound: result.reconciled,
       awarded: r.marks_awarded === null ? null : Number(r.marks_awarded),
       available: r.marks_available === null ? null : Number(r.marks_available),
       layerFallback: anyFallback,

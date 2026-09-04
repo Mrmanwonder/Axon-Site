@@ -441,6 +441,14 @@
      reflows into two ragged rows at 380px, and the row is a list of options,
      not a layout. Selection is a RING, not a tick and not a colour — the discs
      are already ten colours, and one more would be competing with them. */
+  /* Concept tags on a question. Neutral by design: these name the topic a mark
+     was lost on, and the seven cause hues mean a KIND of mistake — a topic
+     wearing one would read as a diagnosis it is not making. */
+  .concepts{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;}
+  .concept{font-size:12px;line-height:1;padding:6px 9px;border-radius:8px;
+    background:var(--surface-sunk);color:var(--label-2);
+    border:.5px solid var(--hairline);white-space:nowrap;}
+
   .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
   .lookrow{display:flex;gap:12px;padding:0 16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   .lookrow::-webkit-scrollbar{display:none;}
