@@ -28,6 +28,7 @@ import * as verificationMod from "../../verification.js";
 import * as entitlementsMod from "../../entitlements.js";
 import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
+import * as avatarMod from "../../avatar.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -45,6 +46,10 @@ export type Student = {
   board: string;
   class_level: number;
   subjects?: string[];
+  /** Either the original random hex seed (nothing chosen — the face is derived
+      from it) or a preset key the student picked. Never an image: there is no
+      avatar bucket and no upload path anywhere in this app. */
+  avatar_seed?: string | null;
 };
 
 export type Paper = {
@@ -221,6 +226,15 @@ export const paperProgress = papersMod.paperProgress as unknown as (
   studentId: string,
 ) => Promise<Map<string, ProgressRow>>;
 
+/** Subscribe to the tables the library reads. Calls back with nothing — the
+    caller re-reads rather than patching state from a payload, and should
+    coalesce, because committing a paper lands every one of its attempts at
+    once. Returns an unsubscribe. */
+export const watchLibrary = papersMod.watchLibrary as unknown as (
+  studentId: string,
+  onChange: () => void,
+) => () => void;
+
 export type MarkLossEvent = {
   id: string;
   cause: string | null;
@@ -375,3 +389,41 @@ export const downloadJson = accountMod.downloadJson as (name: string, data: unkn
 export const deleteAccount = accountMod.deleteAccount as (
   g: Guardian,
 ) => Promise<{ students_erased: number }>;
+
+
+/* ── the avatar ─────────────────────────────────────────────────────────────
+   One module, read by both surfaces that draw a face: the disc at the top of
+   Settings and the swatch in the nav's Settings tab. They are wired to the
+   same source deliberately — the nav one used to be a hardcoded capital "M",
+   which is to say it was not the student's face at all, and two independent
+   definitions are what let that happen. */
+
+export type AvatarPreset = {
+  key: string;
+  title: string;
+  type: "sphere" | "plane" | "waterPlane";
+  /** Absent means the app may hand this preset out unasked. `false` means it
+      may not — Halo and Mandarin are close enough to the reserved sign-out red
+      that deriving one onto someone would spend red on decoration. Both stay
+      pickable. */
+  auto?: boolean;
+  c: [string, string, string];
+};
+
+export const AVATAR_PRESETS = avatarMod.PRESETS as unknown as AvatarPreset[];
+
+/** The `background` and `color` to paint, plus which preset produced them. */
+export const avatarStyleFor = avatarMod.avatarStyleFor as unknown as (
+  student: { id?: string; avatar_seed?: string | null } | null | undefined,
+) => { background: string; color: string; preset: string };
+
+export const backgroundFor = avatarMod.backgroundFor as unknown as (p: AvatarPreset) => string;
+export const inkFor = avatarMod.inkFor as unknown as (p: AvatarPreset) => string;
+
+/** True when the seed is a preset key — i.e. the student chose this face
+    rather than being handed the one derived from their seed. */
+export const isChosenAvatar = avatarMod.isChosen as unknown as (
+  student: { avatar_seed?: string | null } | null | undefined,
+) => boolean;
+
+export const initialFor = avatarMod.initialFor as unknown as (label?: string | null) => string;

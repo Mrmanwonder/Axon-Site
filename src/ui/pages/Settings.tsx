@@ -35,6 +35,7 @@ import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isPasskeySupported, registerPasskey, listPasskeys, renamePasskey, deletePasskey,
   PASSKEY_MESSAGE,
+  AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Switch from "../components/Switch";
@@ -91,7 +92,10 @@ const PLAN_NOTE: Record<string, string> = {
 };
 
 export default function Settings() {
-  const { guardian, student, prefs, setPref, consent, refreshConsent, setConsent, signOutNow } = useApp();
+  const {
+    guardian, student, prefs, setPref, consent, refreshConsent, setConsent,
+    setAvatar, signOutNow,
+  } = useApp();
   const { state: billingRead, entitlements } = useEntitlements();
   const toast = useToast();
   const { openSheet } = useSheetControls();
@@ -108,7 +112,24 @@ export default function Settings() {
   useEffect(loadPasskeys, [guardian, passkeySupported]);
 
   const name = student?.first_name ?? guardian?.name ?? "";
-  const initial = (name || "?")[0]?.toUpperCase() ?? "?";
+  const initial = initialFor(name);
+
+  /* The same call the nav swatch makes, from the same module. Two surfaces draw
+     this student and neither owns the definition. */
+  const avatar = avatarStyleFor(student);
+  const chosen = isChosenAvatar(student);
+
+  const pickAvatar = async (key: string) => {
+    hapticTick();
+    try {
+      await setAvatar(key);
+    } catch {
+      // setAvatar has already put the previous face back. Say so plainly —
+      // silently reverting a tap is the invisible failure hard rule 4 forbids,
+      // small as this one is.
+      toast("That could not be saved. Your picture is unchanged.", "warn");
+    }
+  };
 
   /* "loading", "failed" and a real state are three different things, and the
      row says which. Reading "free" out of a request that never came back is
@@ -150,12 +171,72 @@ export default function Settings() {
       <div className="greet"><h1>Settings</h1></div>
 
       <div className="card sprofile">
-        <div className="pic" aria-hidden="true">{initial}</div>
+        <div
+          className="pic"
+          aria-hidden="true"
+          data-preset={avatar.preset}
+          style={{ background: avatar.background, color: avatar.color }}
+        >
+          {initial}
+        </div>
         <div>
           <div className="n">{name}</div>
           <div className="e">{guardian?.contact}</div>
         </div>
       </div>
+
+      {/* ── The picture ──
+          No photograph, here or anywhere: there is no avatar bucket, no upload
+          path and no column that could hold an image of a child. What a student
+          picks is a gradient, and what is stored is its name.
+
+          Ten presets, all of them offered. Two of them — Halo and Mandarin —
+          are close enough to the reserved sign-out red that the app will never
+          hand one out unasked, but a student choosing red for themselves is not
+          the interface spending it, so both are here to pick.
+
+          A tap is the whole interaction. No confirm step and no save button:
+          this is reversible decoration, and asking someone to ratify their
+          choice of colour is exactly the "prove yourself to the machine" the
+          copy rules rule out. */}
+      {student && (
+        <>
+          <div className="sectitle">Picture</div>
+          <div className="card lookcard">
+            <div className="lookrow" role="radiogroup" aria-label="Your picture">
+              {AVATAR_PRESETS.map((p) => {
+                const on = chosen && student.avatar_seed === p.key;
+                return (
+                  <PressBox
+                    as="button"
+                    type="button"
+                    key={p.key}
+                    className={"look" + (on ? " on" : "")}
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={p.title}
+                    title={p.title}
+                    onClick={() => { void pickAvatar(p.key); }}
+                  >
+                    <span
+                      className="disc"
+                      aria-hidden="true"
+                      style={{ background: backgroundFor(p), color: inkFor(p) }}
+                    >
+                      {initial}
+                    </span>
+                  </PressBox>
+                );
+              })}
+            </div>
+          </div>
+          <div className="note">
+            {chosen
+              ? "Yours on every device you sign in on."
+              : "Picked for you from your profile. Choose another whenever you like."}
+          </div>
+        </>
+      )}
 
       <div className="sectitle">Profile</div>
       <div className="list">

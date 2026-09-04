@@ -31,6 +31,7 @@ import { paperTypeLabel } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { useIngestion } from "../data/useIngestion";
+import { NoPapersArt } from "../components/EmptyArt";
 
 export default function Home() {
   const { student, guardian, papers, papersStale } = useApp();
@@ -51,12 +52,7 @@ export default function Home() {
       <>
         <div className="greet"><h1>{name}</h1></div>
         <div className="estate">
-          <div className="ic">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 4.5h9l4 4V19a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z" />
-              <path d="M14.5 4.5V9H19" />
-            </svg>
-          </div>
+          <NoPapersArt />
           <h4>No papers yet</h4>
           <p>
             Add a marked paper and we&rsquo;ll show you where the marks went. Until

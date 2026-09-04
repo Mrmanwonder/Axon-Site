@@ -20,6 +20,7 @@
 import { useAnalytics } from "../data/useAnalytics";
 import { useIngestion } from "../data/useIngestion";
 import PressBox from "../components/PressBox";
+import { NotEnoughDataArt } from "../components/EmptyArt";
 
 /** The fixed enum, with the hues from CLAUDE.md and the student-facing wording
     from the prototype. Not extensible without a decision — a new cause is an
@@ -67,12 +68,7 @@ export default function Insights() {
       <>
         <div className="greet"><h1>Insights</h1></div>
         <div className="estate">
-          <div className="ic">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 19.5h16" />
-              <path d="M7 16v-3M12 16V8M17 16v-5" />
-            </svg>
-          </div>
+          <NotEnoughDataArt />
           <h4>Not enough papers yet</h4>
           <p>
             Patterns need about four papers before they mean anything. With

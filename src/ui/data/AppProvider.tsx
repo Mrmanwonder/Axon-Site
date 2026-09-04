@@ -30,7 +30,7 @@ import {
   sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
   loadPrefs, savePrefs, readLocal,
   readConsentState, recordConsent, withdrawConsent,
-  listPapers, paperProgress,
+  listPapers, paperProgress, watchLibrary,
 } from "./modules";
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
 
@@ -63,6 +63,12 @@ type AppValue = {
       previous map in place rather than substituting a guess. */
   progress: Map<string, ProgressRow>;
   refreshLibrary: () => Promise<void>;
+
+  /** Persist the student's chosen avatar preset. Optimistic: the disc and the
+      nav swatch repaint on the tap and revert together if the write fails —
+      this is decoration, and a face that lags a tap by a round trip reads as
+      an app that did not hear you. */
+  setAvatar: (presetKey: string) => Promise<void>;
 
   online: boolean;
   finishOnboarding: (r: { guardian?: Guardian; student?: Student; firstPaperType?: string | null }) => Promise<void>;
@@ -179,6 +185,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [student]);
 
+  const setAvatar = useCallback(async (presetKey: string) => {
+    if (!student) return;
+    const previous = student.avatar_seed ?? null;
+    setStudent({ ...student, avatar_seed: presetKey });
+    const { error } = await sb
+      .from("student").update({ avatar_seed: presetKey }).eq("id", student.id);
+    if (error) {
+      setStudent((s) => (s ? { ...s, avatar_seed: previous } : s));
+      throw error;
+    }
+  }, [student]);
+
   const finishOnboarding = useCallback(async (r: {
     guardian?: Guardian; student?: Student; firstPaperType?: string | null;
   }) => {
@@ -244,6 +262,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refreshConsent(); }, [refreshConsent]);
   useEffect(() => { void refreshLibrary(); }, [refreshLibrary]);
 
+  // ── the library, kept live ──────────────────────────────────────────────
+  //
+  // This used to be the read above and nothing else: once, on mount, forever.
+  // Two things fell out of that, and both read as the app being broken rather
+  // than as the app being a moment behind. A paper scanned in this session did
+  // not reach the Library until a reload, and a paper uploaded on the phone
+  // never reached the laptop at all.
+  //
+  // The second one is worth being precise about, because it looks like a
+  // missing feature and is not. There is no sync layer to build: both devices
+  // are signed into the same account and already reading the same Postgres
+  // rows. The laptop just had no way to learn that a row had arrived. Listening
+  // is the whole of it.
+  //
+  // Coalesced, because committing a paper inserts every one of its attempts in
+  // one transaction — unbatched, that is one full library refetch per question,
+  // on a device the 60fps floor is written for.
+  useEffect(() => {
+    if (!student) return;
+
+    let timer: number | undefined;
+    const coalesced = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { void refreshLibrary(); }, 350);
+    };
+
+    const stop = watchLibrary(student.id, coalesced);
+
+    // Realtime is the fast path, not the only one. A socket that dropped while
+    // the phone was in a pocket comes back with no backlog, so returning to the
+    // app and regaining a connection each re-read once — cheap, and the
+    // difference between "a moment behind" and "wrong until you reload".
+    const onWake = () => { if (document.visibilityState === "visible") coalesced(); };
+    document.addEventListener("visibilitychange", onWake);
+    addEventListener("online", coalesced);
+
+    return () => {
+      clearTimeout(timer);
+      stop();
+      document.removeEventListener("visibilitychange", onWake);
+      removeEventListener("online", coalesced);
+    };
+  }, [student, refreshLibrary]);
+
   // A sign-out in another tab must not leave this one showing a signed-in app.
   useEffect(() => {
     let had = false;
@@ -259,12 +321,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gate, providerError, session, guardian, student,
     prefs, setPref,
     consent, refreshConsent, setConsent,
-    papers, papersStale, progress, refreshLibrary,
+    papers, papersStale, progress, refreshLibrary, setAvatar,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, providerError, session, guardian, student, prefs, setPref,
     consent, refreshConsent, setConsent, papers, papersStale, progress, refreshLibrary,
-    online, finishOnboarding, takePendingPaperType, signOutNow,
+    setAvatar, online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

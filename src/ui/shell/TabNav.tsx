@@ -30,6 +30,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useApp } from "../data/AppProvider";
+import { avatarStyleFor, initialFor } from "../data/modules";
 import { destinations, activeIndex } from "../app/nav";
 import { lensMapFor, PILL_R } from "../lib/lens";
 import { spring, seed, releaseSpring, SPRING } from "../lib/spring";
@@ -42,6 +44,16 @@ export default function TabNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current = Math.max(0, activeIndex(pathname));
+
+  /* The Settings tab wears the student's face rather than an icon. It used to
+     wear a hardcoded capital "M" — not the student's initial, not their
+     gradient, just a letter left over from the prototype, which meant every
+     account in the world had the same nav avatar. Both this and the disc at
+     the top of Settings read `avatarStyleFor` now, so there is one definition
+     of what a student looks like and no way for the two to disagree. */
+  const { student, guardian } = useApp();
+  const avatar = avatarStyleFor(student);
+  const initial = initialFor(student?.first_name ?? guardian?.name);
 
   const layerRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -198,8 +210,13 @@ export default function TabNav() {
                   {d.icon}
                 </svg>
               ) : (
-                <div className="pfp" aria-hidden="true">
-                  M
+                <div
+                  className="pfp"
+                  aria-hidden="true"
+                  data-preset={avatar.preset}
+                  style={{ background: avatar.background, color: avatar.color }}
+                >
+                  {initial}
                 </div>
               )}
               <span className="lbl">{d.label}</span>
