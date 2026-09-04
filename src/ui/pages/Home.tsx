@@ -34,7 +34,7 @@ import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
 
 export default function Home() {
-  const { student, guardian, papers, papersStale } = useApp();
+  const { student, guardian, papers, papersStale, papersError } = useApp();
   const { state, needsCheck } = useAnalytics();
   const { addPaper } = useIngestion();
   const navigate = useNavigate();
@@ -46,6 +46,25 @@ export default function Home() {
   // still in flight tells a student they have nothing a moment before their
   // library appears.
   if (state === "loading") return null;
+
+  // A library we could not read is not an empty one. Offering "Add your first
+  // paper" to someone who already has papers, because the read failed, is the
+  // same confident lie as inventing a paper count — it just fails in the other
+  // direction.
+  if (!papers.length && papersError) {
+    return (
+      <>
+        <div className="greet"><h1>{name}</h1></div>
+        <div className="estate">
+          <h4>We couldn&rsquo;t load your papers</h4>
+          <p>
+            Your papers are safe. This is us failing to read them, not them being
+            gone. Try again in a moment.
+          </p>
+        </div>
+      </>
+    );
+  }
 
   if (!papers.length) {
     return (

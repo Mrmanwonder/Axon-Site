@@ -55,6 +55,13 @@ type AppValue = {
 
   papers: Paper[];
   papersStale: boolean;
+  /** Set when the library read itself failed — not when it came back empty.
+      An empty library and an unreadable one look identical on screen unless
+      something carries the difference, and for weeks they were: the read was
+      returning 300 PGRST201 on every call and the interface said "no papers
+      yet" over a library that had papers in it. Hard rule 4 — an admitted gap
+      is recoverable, an invisible one is not. */
+  papersError: string | null;
   /** paper_id -> its current (most recent) run's live status. A paper with
       no entry here has no run in flight — either it has committed attempts
       already, or nothing has ever been submitted for it. Not stale-tolerant
@@ -110,6 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [consent, setConsentState] = useState<ConsentState>({});
   const [papers, setPapers] = useState<Paper[]>([]);
   const [papersStale, setPapersStale] = useState(false);
+  const [papersError, setPapersError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Map<string, ProgressRow>>(new Map());
   const [online, setOnline] = useState(() => navigator.onLine);
 
@@ -174,8 +182,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const { data, stale } = await listPapers(student.id);
       setPapers(data ?? []);
       setPapersStale(!!stale);
-    } catch {
-      /* the cached view stays on screen */
+      setPapersError(null);
+    } catch (e) {
+      // NOT swallowed. This catch used to be empty, with a comment saying the
+      // cached view stays on screen — true when there is a cached view, and a
+      // silent, total blackout when there is not. `readThrough` only reaches
+      // here when the network read failed AND the cache had nothing, so by
+      // definition there is nothing on screen to keep.
+      console.error("library read failed", e);
+      setPapersError((e as Error)?.message || "We could not read your library.");
     }
     try {
       setProgress(await paperProgress(student.id));
@@ -321,11 +336,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gate, providerError, session, guardian, student,
     prefs, setPref,
     consent, refreshConsent, setConsent,
-    papers, papersStale, progress, refreshLibrary, setAvatar,
+    papers, papersStale, papersError, progress, refreshLibrary, setAvatar,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, providerError, session, guardian, student, prefs, setPref,
-    consent, refreshConsent, setConsent, papers, papersStale, progress, refreshLibrary,
+    consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
     setAvatar, online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);
 
