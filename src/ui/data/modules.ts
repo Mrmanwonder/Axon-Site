@@ -235,6 +235,20 @@ export const watchLibrary = papersMod.watchLibrary as unknown as (
   onChange: () => void,
 ) => () => void;
 
+/** One distinct way a mark went.
+
+    `mark_type` is Cambridge mark-scheme notation — M for method, A for
+    accuracy, B for independent, C for communication. It is null on every row
+    today and will stay null until a Tier 2 explanation grounded in a real
+    marking scheme exists: labelling a deduction "M1" without a scheme in the
+    library is reconstructing scheme language, which hard rule 2 forbids. */
+export type LossReason = {
+  mark_type: "M" | "A" | "B" | "C" | null;
+  marks: number;
+  cause: string | null;
+  note: string | null;
+};
+
 export type MarkLossEvent = {
   id: string;
   cause: string | null;
@@ -245,6 +259,19 @@ export type MarkLossEvent = {
       commit. Descriptive only: they say what the question was about, never how
       well it went, and they carry no ranking. */
   concepts: string[] | null;
+  /** The Cambridge command word the question was built around, and one line on
+      what it asks of an answer. Both null unless the stem was readable and the
+      word was one of the closed list — never a guess. */
+  command_word: string | null;
+  command_word_note: string | null;
+  /** The corrected working, in the same steps as the student's own answer.
+      A demonstration of how the question is answered — never a claim about what
+      this attempt was worth, and never compared to the teacher's mark. */
+  model_answer: string | null;
+  /** The deduction broken into its distinct parts. Empty is the normal case:
+      a single-cause question has nothing to decompose and the flat cause above
+      carries it. */
+  loss_reasons: LossReason[] | null;
   confidence: "confirmed" | "likely" | "unsure";
   student_confirmed_at: string | null;
   student_rejected_at: string | null;

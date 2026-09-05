@@ -334,11 +334,31 @@
   .qcrop{margin:0 16px;border-radius:14px;overflow:hidden;background:var(--surface-sunk);
     border:.5px solid var(--hairline);max-height:200px;display:flex;align-items:center;justify-content:center;}
   .qcrop img{width:100%;display:block;object-fit:cover;}
+  /* The crop itself: the page image, blown up and shifted so one region fills
+     the frame. Cut in CSS rather than on a canvas — src/scan/crops.js says why.
+     `overflow:hidden` is the cut; the inline aspect-ratio is the region's own,
+     so the frame is the shape of the thing it shows. */
+  .cropframe{position:relative;overflow:hidden;width:100%;background:var(--surface-sunk);}
+  .cropframe img{position:absolute;top:0;left:0;display:block;max-width:none;width:100%;
+    transform-origin:0 0;opacity:0;}
+  /* Shown only once measured, so a page never flashes at full size inside the
+     frame before it is positioned. Opacity only — the motion rules allow it,
+     and there is no layout in it. */
+  .cropframe img[data-ready]{opacity:1;transition:opacity var(--d-state) var(--spring);}
+  [data-motion="reduce"] .cropframe img[data-ready]{transition:none;}
   .qcrop .missing{padding:26px 16px;font-size:13px;color:var(--label-3);text-align:center;line-height:1.5;}
   .qfield{padding:11px 16px;border-top:.5px solid var(--hairline);margin-top:12px;}
   .qfield .k{font-size:11.5px;color:var(--label-3);font-weight:600;letter-spacing:.01em;text-transform:uppercase;}
   .qfield .v{font-size:14.5px;margin-top:3px;line-height:1.5;color:var(--label);}
   .qfield .v.empty{color:var(--label-3);}
+  /* Multi-step working, kept as steps. The content stage already returns the
+     student's line breaks — a floating-point answer arrives as eight lines —
+     and HTML was collapsing every one of them into a single run-on paragraph,
+     so a student could not read back their own working in the subjects where
+     the working *is* the answer. Nothing upstream needed changing; this is
+     where it was lost. `pre-wrap`, not `pre`: their lines survive, and a line
+     too long for a 380px viewport still wraps instead of scrolling the page. */
+  .qfield .v.steps{white-space:pre-wrap;overflow-wrap:anywhere;}
   .qacts{display:flex;gap:8px;padding:12px 16px 14px;flex-wrap:wrap;}
   .qact{font-size:13px;font-weight:600;padding:8px 13px;border-radius:11px;background:var(--surface-sunk);
     color:var(--label);cursor:pointer;will-change:transform;}
@@ -448,6 +468,46 @@
   .concept{font-size:12px;line-height:1;padding:6px 9px;border-radius:8px;
     background:var(--surface-sunk);color:var(--label-2);
     border:.5px solid var(--hairline);white-space:nowrap;}
+
+  /* ── Cambridge depth on one question ───────────────────────────────────
+     The command word the question was built around, the deduction broken into
+     its parts, and the corrected working. All three render nothing when the
+     model could not produce them honestly, so every rule below has to look
+     right against an empty slot as well as a full one. */
+
+  /* The command word, said once, quietly, above the diagnosis. It is a fact
+     about the question, not about the student, so it carries no hue. */
+  .cmdword{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin-top:3px;}
+  .cmdword .w{font-size:14.5px;font-weight:600;letter-spacing:-.015em;color:var(--label);}
+  .cmdword .n{font-size:13px;color:var(--label-3);line-height:1.45;}
+
+  /* One card per distinct way a mark went. Equal weight, no ordering by
+     severity — two marks lost to a slip is not "worse" than one to a gap, it
+     is a different thing, and the cause hues already say which. */
+  .reasons{display:flex;flex-direction:column;gap:7px;margin-top:10px;}
+  .reason{display:flex;align-items:flex-start;gap:9px;padding:10px 11px;border-radius:11px;
+    background:var(--surface-sunk);border:.5px solid var(--hairline);}
+  /* The cause hue as a rail rather than a fill: it identifies the kind at a
+     glance and survives greyscale, without colouring the words. */
+  .reason .rail{flex:0 0 3px;align-self:stretch;border-radius:2px;background:var(--c);min-height:18px;}
+  .reason .b{flex:1;min-width:0;}
+  .reason .t{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;}
+  .reason .cz{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--label);}
+  .reason .m{font-size:12.5px;color:var(--label-3);font-variant-numeric:tabular-nums;}
+  /* Cambridge mark notation. Absent on every row today and rendered only if a
+     scheme-grounded explanation ever fills it — never invented here. */
+  .reason .mt{font-size:11px;font-weight:700;letter-spacing:.02em;padding:2px 6px;border-radius:6px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);
+    font-variant-numeric:tabular-nums;}
+  .reason .nt{font-size:13px;color:var(--label-2);line-height:1.5;margin-top:4px;white-space:pre-wrap;}
+
+  /* The corrected working, in the student's own step shape. Collapsed at rest:
+     it is one tap away, and it is not the first thing on the screen, so the
+     answer they actually wrote is what they read first. */
+  .worked{font-size:14px;line-height:1.6;color:var(--label);white-space:pre-wrap;overflow-wrap:anywhere;
+    padding:12px 13px;border-radius:11px;background:var(--surface-sunk);
+    border:.5px solid var(--hairline);font-variant-numeric:tabular-nums;}
+  .worked + .wnote{font-size:12.5px;color:var(--label-3);line-height:1.45;margin-top:8px;}
 
   .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
   .lookrow{display:flex;gap:12px;padding:0 16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}

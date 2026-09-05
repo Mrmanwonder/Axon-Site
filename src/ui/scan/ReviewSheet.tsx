@@ -27,14 +27,18 @@ import { useEffect } from "react";
 import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
+import Crop from "../components/Crop";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
 
-function Field({ k, v }: { k: string; v?: string | null }) {
+function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
     <div className="qfield">
       <div className="k">{k}</div>
-      <div className={"v" + (v ? "" : " empty")}>{v || "Not read"}</div>
+      {/* `steps` keeps the line breaks the student actually wrote. Their
+          working is the answer in a notation-dense subject, and reading it
+          back as one paragraph is reading someone else's answer. */}
+      <div className={"v" + (v ? "" : " empty") + (steps && v ? " steps" : "")}>{v || "Not read"}</div>
     </div>
   );
 }
@@ -71,9 +75,12 @@ function Question({
       {/* Hard rule 4: an unreadable crop says so and shows why. It is never
           quietly dropped, and never filled with a plausible guess. */}
       <div className="qcrop">
-        {q.crop
-          ? <img src={q.crop} alt="The part of your paper this came from" />
-          : <div className="missing">{q.unreadableReason || "We could not show this part of the page."}</div>}
+        <Crop
+          paperId={q.crop?.paperId}
+          pageNumber={q.crop?.page}
+          box={q.crop?.box}
+          missing={q.unreadableReason || "We could not show this part of the page."}
+        />
       </div>
 
       {!!q.alternatives?.length && (
@@ -95,8 +102,8 @@ function Question({
         </>
       )}
 
-      <Field k="Your answer" v={q.answer} />
-      {q.remark && <Field k="Your teacher wrote" v={q.remark} />}
+      <Field k="Your answer" v={q.answer} steps />
+      {q.remark && <Field k="Your teacher wrote" v={q.remark} steps />}
 
       {q.explanation?.cause && (
         <div className="qfield">

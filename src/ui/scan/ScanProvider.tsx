@@ -30,6 +30,7 @@ import { useApp } from "../data/AppProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import type { SheetConfig } from "../components/SheetProvider";
+import type { CropBox } from "../components/Crop";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
 export type TrayPage = {
@@ -57,7 +58,8 @@ export type ReviewQuestion = {
   marksAvailable?: number | null;
   answer?: string | null;
   remark?: string | null;
-  crop?: string | null;
+  /* The region's box on its page, not a rendered image — <Crop> cuts it in CSS. */
+  crop?: { paperId: string; page: number; box: CropBox } | null;
   pageNumber?: number;
   unreadableReason?: string | null;
   alternatives?: number[];
