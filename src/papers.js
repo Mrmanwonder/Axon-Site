@@ -305,6 +305,7 @@ export async function readPaper(studentId, paperId) {
       student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
       teacher_remark,extraction_confidence,student_confirmed_at,
       mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,concepts,
+      command_word,command_word_note,model_answer,loss_reasons,
       confidence,student_confirmed_at,student_rejected_at)),
       question_region(committed_attempt_id,page_spans,crop_key)`,
       )

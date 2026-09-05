@@ -469,6 +469,46 @@
     background:var(--surface-sunk);color:var(--label-2);
     border:.5px solid var(--hairline);white-space:nowrap;}
 
+  /* ── Cambridge depth on one question ───────────────────────────────────
+     The command word the question was built around, the deduction broken into
+     its parts, and the corrected working. All three render nothing when the
+     model could not produce them honestly, so every rule below has to look
+     right against an empty slot as well as a full one. */
+
+  /* The command word, said once, quietly, above the diagnosis. It is a fact
+     about the question, not about the student, so it carries no hue. */
+  .cmdword{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;margin-top:3px;}
+  .cmdword .w{font-size:14.5px;font-weight:600;letter-spacing:-.015em;color:var(--label);}
+  .cmdword .n{font-size:13px;color:var(--label-3);line-height:1.45;}
+
+  /* One card per distinct way a mark went. Equal weight, no ordering by
+     severity — two marks lost to a slip is not "worse" than one to a gap, it
+     is a different thing, and the cause hues already say which. */
+  .reasons{display:flex;flex-direction:column;gap:7px;margin-top:10px;}
+  .reason{display:flex;align-items:flex-start;gap:9px;padding:10px 11px;border-radius:11px;
+    background:var(--surface-sunk);border:.5px solid var(--hairline);}
+  /* The cause hue as a rail rather than a fill: it identifies the kind at a
+     glance and survives greyscale, without colouring the words. */
+  .reason .rail{flex:0 0 3px;align-self:stretch;border-radius:2px;background:var(--c);min-height:18px;}
+  .reason .b{flex:1;min-width:0;}
+  .reason .t{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px;}
+  .reason .cz{font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--label);}
+  .reason .m{font-size:12.5px;color:var(--label-3);font-variant-numeric:tabular-nums;}
+  /* Cambridge mark notation. Absent on every row today and rendered only if a
+     scheme-grounded explanation ever fills it — never invented here. */
+  .reason .mt{font-size:11px;font-weight:700;letter-spacing:.02em;padding:2px 6px;border-radius:6px;
+    background:var(--surface);border:.5px solid var(--hairline);color:var(--label-2);
+    font-variant-numeric:tabular-nums;}
+  .reason .nt{font-size:13px;color:var(--label-2);line-height:1.5;margin-top:4px;white-space:pre-wrap;}
+
+  /* The corrected working, in the student's own step shape. Collapsed at rest:
+     it is one tap away, and it is not the first thing on the screen, so the
+     answer they actually wrote is what they read first. */
+  .worked{font-size:14px;line-height:1.6;color:var(--label);white-space:pre-wrap;overflow-wrap:anywhere;
+    padding:12px 13px;border-radius:11px;background:var(--surface-sunk);
+    border:.5px solid var(--hairline);font-variant-numeric:tabular-nums;}
+  .worked + .wnote{font-size:12.5px;color:var(--label-3);line-height:1.45;margin-top:8px;}
+
   .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
   .lookrow{display:flex;gap:12px;padding:0 16px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   .lookrow::-webkit-scrollbar{display:none;}

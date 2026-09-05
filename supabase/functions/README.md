@@ -32,14 +32,21 @@ carry their own copy of the shared logic — the deployed bundle shows
 `../../shared/src/confidence.ts` — and they use **Cloudflare Queues**, not
 pgmq.
 
-**That source is not in this repository.** PR #16 would have added the
-`workers/` monorepo and was closed unmerged on 2026-09-03, so the code running
-Axon's entire extraction pipeline exists only as deployed bundles. It can be
-read with `workers_get_worker_code`, but it cannot be reviewed, diffed, tested
-or rebuilt from here.
+**That source is not in *this* repository — but it is in version control.**
+It lives in `Mrmanwonder/axon-backend` (private), as an npm workspace monorepo:
+`shared/` for the library the workers share, `workers/{api,triage,structure,
+crop,content,reconcile,adjudicate,explain,sweep}/` for the nine. It typechecks
+with `tsc` and dry-runs with `wrangler`, and it has tests.
 
-This is the single largest gap between this repository and the running system,
-and it is worth more than the migration drift that got reconciled alongside it.
+Corrected 2026-09-05. The paragraph that stood here said the code existed only
+as deployed bundles, on the strength of PR #16 having been closed unmerged. That
+was wrong, and it was expensive: a spec written against this file concluded that
+the explain-stage prompt could not be changed from source at all and planned
+around a constraint that did not exist. If you need to change pipeline
+behaviour, change it in `axon-backend` — not here, and not by reading a bundle.
+
+The gap that *is* real is smaller and duller: this directory still contains an
+older copy of that logic, and editing it changes nothing that runs.
 
 ## Two concrete ways this has already misled people
 
@@ -67,9 +74,8 @@ All the pgmq queues are empty, including the archives. pgmq is vestigial here.
 
 ## So what should someone do with this directory?
 
-Not delete it blindly — parts of it are the readable reference for logic that
-now lives only in a bundle, and the Stripe functions here **are** live. But
-treat every pipeline function as documentation of a previous implementation
-until the `workers/` source is brought into version control. Until then, a
-change made here reaches production only if someone separately makes the same
-change in the Workers codebase.
+Not delete it blindly — the Stripe functions here **are** live. But every
+pipeline function in it is now a stale second copy of something that has a real
+home in `axon-backend`, so treat it as documentation of a previous
+implementation and make the change there. A change made here reaches production
+never, not "only if someone also does it upstream".
