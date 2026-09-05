@@ -11,7 +11,6 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { cropUrl } from './crops.js';
 
 /**
  * Everything the review screen needs for one run.
@@ -47,7 +46,9 @@ export async function loadReview(runId) {
   const questions = await Promise.all((regions ?? []).map(async (r) => {
     const span = (r.page_spans ?? [])[0];
     const page = span ? pageByNumber.get(span.page) : null;
-    const crop = page?.r2_key && span ? await cropUrl(run.paper_id, span.page, span.box) : null;
+    // The box, not a rendered image: <Crop> cuts it in CSS from the page the
+    // browser is already showing, so nothing is fetched or decoded here.
+    const crop = page?.r2_key && span ? { paperId: run.paper_id, page: span.page, box: span.box } : null;
     const explanation = byRegion.get(r.id) ?? null;
 
     return {
