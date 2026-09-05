@@ -41,6 +41,17 @@ function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean 
   );
 }
 
+/* Plain words, deliberately. These are Axon's categories, not Cambridge's, and
+   spelling them out is what keeps them from being mistaken for mark-scheme
+   notation. "other" is absent on purpose: it has no honest label, so the chip
+   simply does not render and the cause and note carry the row. */
+const ERROR_TYPE_LABEL: Record<string, string> = {
+  method: "Method",
+  final_answer: "Final answer",
+  omitted_step: "Missing step",
+  presentation: "Presentation",
+};
+
 const CONF_LABEL: Record<string, string> = {
   confirmed: "Confirmed",
   likely: "Likely",
@@ -209,10 +220,21 @@ export default function QuestionDetail() {
                     />
                     <div className="b">
                       <div className="t">
-                        {/* Null on every row today: M/A/B/C is mark-scheme
-                            notation, and a Tier 1 paper has no scheme to read
-                            it from. It renders only if a scheme-grounded
-                            explanation ever fills it. */}
+                        {/* What the mistake looked like, where the cause says
+                            why. Whole words, never a letter: a single-character
+                            badge here would read as mark-scheme notation, which
+                            is exactly what this field exists to avoid being.
+                            "other" carries no label — a chip reading "Other"
+                            says nothing the row does not already say. */}
+                        {r.error_type && ERROR_TYPE_LABEL[r.error_type] && (
+                          <span className="etype">{ERROR_TYPE_LABEL[r.error_type]}</span>
+                        )}
+                        {/* Null on every row today, and a database CHECK keeps
+                            it that way for Tier 1: M/A/B/C is Cambridge's own
+                            notation, a Tier 1 paper has no scheme to read it
+                            from, and it is not ours to reproduce. It renders
+                            only if an explanation grounded in licensed scheme
+                            text ever fills it. */}
                         {r.mark_type && <span className="mt">{r.mark_type}</span>}
                         <span className="cz">{(r.cause && CAUSE_LABEL[r.cause]) || r.cause}</span>
                         <span className="m">{numMark(r.marks)} mark{r.marks === 1 ? "" : "s"}</span>
