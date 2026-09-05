@@ -235,15 +235,25 @@ export const watchLibrary = papersMod.watchLibrary as unknown as (
   onChange: () => void,
 ) => () => void;
 
+/** What a mistake looked like, as distinct from `cause`, which is why it
+    happened. Axon's own category — none of Cambridge's vocabulary, and always
+    rendered as whole words, never abbreviated to a letter. */
+export type ErrorType = "method" | "final_answer" | "omitted_step" | "presentation" | "other";
+
 /** One distinct way a mark went.
 
     `mark_type` is Cambridge mark-scheme notation — M for method, A for
     accuracy, B for independent, C for communication. It is null on every row
-    today and will stay null until a Tier 2 explanation grounded in a real
-    marking scheme exists: labelling a deduction "M1" without a scheme in the
-    library is reconstructing scheme language, which hard rule 2 forbids. */
+    today and stays null until a Tier 2 explanation grounded in licensed scheme
+    text exists, for two reasons: a Tier 1 paper has no scheme in the library,
+    so a code written against one is reconstructed from nothing (hard rule 2),
+    and Cambridge notation is not ours to reproduce — Cambridge and Pearson
+    refused third-party rights, so official scheme content is CBSE-only.
+    A database CHECK on region_explanation enforces this rather than trusting
+    it; `error_type` is what carries the diagnosis instead. */
 export type LossReason = {
   mark_type: "M" | "A" | "B" | "C" | null;
+  error_type: ErrorType | null;
   marks: number;
   cause: string | null;
   note: string | null;
