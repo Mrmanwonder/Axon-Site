@@ -28,6 +28,7 @@ import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
 import Disclose from "../components/Disclose";
 import { paths } from "../app/paths";
+import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -107,6 +108,9 @@ export default function QuestionDetail() {
   const span = region?.page_spans?.[0];
 
   const loss = attempt.mark_loss_event.find((e) => !e.student_rejected_at) ?? null;
+  // The corrected working and the diagnosis come out of one call on one bundle
+  // of evidence, so one field decides what either of them may claim.
+  const withheld = withheldWorking(loss?.grounding_status, loss?.unresolved_parts);
   const marksLost = attempt.max_marks != null && attempt.marks_awarded != null
     ? Number(attempt.max_marks) - Number(attempt.marks_awarded)
     : null;
@@ -180,21 +184,31 @@ export default function QuestionDetail() {
           </div>
         )}
 
-        {/* Where the working is missing, the gap speaks only when the student
-            can do something about it. A missing dependency means the page
-            carrying the earlier part was never scanned, which is a thing they
-            can go and fix. The others leave the slot empty: that is the honest
-            state for "we had nothing worth showing", and narrating our own
-            near-miss would spend their confidence to tell them nothing they can
-            use. */}
-        {!loss?.model_answer && loss?.grounding_status === "missing_dependency" && (
+        {/* Where the working is missing, the gap says so. Every status, not
+            just the actionable one.
+
+            The earlier version spoke only for a missing dependency and left the
+            rest silent, on the reasoning that an empty slot is honest. It is
+            not: the student came to this screen for the explanation, and a
+            block that is simply absent is a content hole they have to
+            interpret, with nothing to distinguish "we had nothing to say" from
+            "this app is broken". Hard rule 4 is about exactly this — an
+            admitted gap is recoverable, an invisible one is not — and it
+            applies to a missing explanation as much as to a missing crop.
+
+            Lower visual weight than a real answer, never alarmist, and never in
+            our own vocabulary: the student is not asked to know what
+            "off topic" meant to a gate they cannot see. */}
+        {!loss?.model_answer && withheld && (
           <div className="qfield">
             <div className="k">How this question is answered</div>
-            <div className="v empty">
-              {loss.unresolved_parts?.length
-                ? `This question builds on part ${loss.unresolved_parts.join(" and ")}, which isn\u2019t in this scan. Add that page and Axon can work it through.`
-                : "This question builds on an earlier part that isn\u2019t in this scan. Add that page and Axon can work it through."}
-            </div>
+            <div className="v empty">{withheld.note}</div>
+            {withheld.actionable && (
+              <Link to={paths.paper(paperId!)} className="btn ghost"
+                    style={{ display: "inline-flex", marginTop: 10 }}>
+                Add the missing page
+              </Link>
+            )}
           </div>
         )}
 
@@ -222,7 +236,7 @@ export default function QuestionDetail() {
                 <div style={{ height: 14 }} />
               </>
             )}
-            <div className="k">Why marks were lost</div>
+            <div className="k">{diagnosisHeading(loss.grounding_status)}</div>
             <div className="v">
               <span className="cause" style={{ "--c": CAUSE_HUE[loss.cause] ?? "var(--cause-timed-out)" } as React.CSSProperties}>
                 <span className="sw" />
@@ -237,6 +251,15 @@ export default function QuestionDetail() {
             {loss.ai_explanation && (
               <div className="v" style={{ marginTop: 7, color: "var(--label-2)" }}>
                 {loss.ai_explanation}
+              </div>
+            )}
+            {/* What an ungrounded diagnosis was actually written from. The
+                working is withheld on this row; presenting the prose beside it
+                in the same type, under the same heading, would assert the
+                grounding the row has just admitted it lacks. */}
+            {diagnosisNote(loss.grounding_status, loss.unresolved_parts) && (
+              <div className="subnote" style={{ marginTop: 7 }}>
+                {diagnosisNote(loss.grounding_status, loss.unresolved_parts)}
               </div>
             )}
             {/* Where the deduction breaks into distinct parts, each is its own
