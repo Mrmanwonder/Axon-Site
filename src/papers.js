@@ -302,13 +302,13 @@ export async function readPaper(studentId, paperId) {
       `id,type,tier,date_taken,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
-      student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,marks_awarded,max_marks,marks_source,
+      student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,answer_block,marks_awarded,max_marks,marks_source,
       teacher_remark,extraction_confidence,student_confirmed_at,
       mark_loss_event(id,cause,marks_lost,ai_explanation,do_this_next,concepts,
       command_word,command_word_note,model_answer,loss_reasons,
       grounding_status,model_answer_source,depends_on_parts,unresolved_parts,
       confidence,student_confirmed_at,student_rejected_at)),
-      question_region(committed_attempt_id,page_spans,crop_key)`,
+      question_region(committed_attempt_id,page_spans,crop_key,confidence_signals)`,
       )
     .eq('student_id', studentId)
     .eq('id', paperId)

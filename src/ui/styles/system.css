@@ -1020,3 +1020,44 @@
   .greet h1,.insight .line,.estate h4,.sheet h4,.proc .hd{text-wrap:balance;}
 
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;}}
+
+  /* ── What Axon read ───────────────────────────────────────────────────────
+     The transcription, with the structure the handwriting actually had. Every
+     rule here exists because the flat-string version destroyed something: a
+     strikethrough that still earns marks under CAIE, a boxed final answer that
+     was the student's own statement of "this is my answer", a fraction that
+     became an addition. */
+  .answerblock{display:flex;flex-direction:column;gap:6px;margin-top:2px;}
+  .aline{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;line-height:1.6;
+    font-size:16px;color:var(--label);letter-spacing:-.005em;}
+  /* The student's own boxed final answer, kept distinguishable from working. */
+  .aline.role-final_answer{font-weight:600;}
+  /* Withdrawn work stays visible: CAIE still marks it when nothing replaces it. */
+  .aline.role-crossed_out{opacity:.55;}
+
+  .seg{background:none;border:none;padding:2px 3px;margin:0;font:inherit;color:inherit;
+    border-radius:6px;cursor:default;}
+  button.seg{cursor:pointer;}
+  button.seg:hover,button.seg:focus-visible{background:var(--fill-2);}
+  button.seg:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  .seg.picked{background:var(--fill-2);box-shadow:inset 0 0 0 1px var(--accent);}
+  /* Uncertainty is shown per segment, so one doubtful numeral does not
+     discredit the whole answer with a single badge at the top. */
+  .seg-unsure{border-bottom:1px dashed var(--label-3);}
+  .seg-raw{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;}
+
+  .an-struck{text-decoration:line-through;text-decoration-thickness:1.5px;}
+  .an-underlined{text-decoration:underline;}
+  .an-boxed{box-shadow:inset 0 0 0 1px var(--label-3);}
+  .an-circled{box-shadow:inset 0 0 0 1px var(--label-3);border-radius:999px;padding-inline:7px;}
+  .an-inserted{font-style:italic;}
+  .an-overwritten{opacity:.7;}
+
+  /* Tap a segment, see it in your own handwriting. This is what turns "the app
+     misread me" from an argument into a two-second check. */
+  .crophl{position:absolute;pointer-events:none;border:2px solid var(--accent);
+    border-radius:4px;background:color-mix(in srgb,var(--accent) 14%,transparent);
+    transition:opacity 120ms ease;}
+
+  /* KaTeX inherits the card's colour rather than shipping its own. */
+  .answerblock .katex{font-size:1.02em;color:inherit;}

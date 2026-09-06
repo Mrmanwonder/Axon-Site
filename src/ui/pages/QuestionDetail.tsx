@@ -26,6 +26,8 @@ import { readPaper, paperTypeLabel } from "../data/modules";
 import type { PaperDetail, StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
+import AnswerBlockView from "../components/AnswerBlock";
+import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
@@ -65,6 +67,8 @@ export default function QuestionDetail() {
 
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Which part of the transcription the student tapped, highlighted in the crop.
+  const [picked, setPicked] = useState<Segment | null>(null);
 
   useEffect(() => {
     if (!student || !paperId) return;
@@ -107,6 +111,14 @@ export default function QuestionDetail() {
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
   const span = region?.page_spans?.[0];
 
+  // Three-valued, and read from the region rather than inferred: "unknown" is a
+  // real state and must not be shown as a clean read.
+  const rawRecognition = (region?.confidence_signals as Record<string, unknown> | undefined)?.recognition;
+  const recognition: boolean | "unknown" | null =
+    rawRecognition === true || rawRecognition === false ? rawRecognition
+    : rawRecognition === undefined || rawRecognition === null ? null
+    : "unknown";
+
   const loss = attempt.mark_loss_event.find((e) => !e.student_rejected_at) ?? null;
   // The corrected working and the diagnosis come out of one call on one bundle
   // of evidence, so one field decides what either of them may claim.
@@ -142,10 +154,19 @@ export default function QuestionDetail() {
 
         {/* Hard rule 4: an unreadable crop says so, never a silent gap. */}
         <div className="qcrop">
-          <Crop paperId={paperId} pageNumber={span?.page} box={span?.box} />
+          <Crop paperId={paperId} pageNumber={span?.page} box={span?.box} highlight={picked?.bbox ?? null} />
         </div>
 
-        <Field k="Your answer" v={attempt.student_answer} steps />
+        {/* Not "Your answer". The crop above is the student's answer; this is
+            what we made of it, and the live data shows what that can cost —
+            handwritten 8/2 stored as 8+1, which turns a correct step into a
+            false one. Naming it honestly makes the crop the authority. */}
+        <AnswerBlockView
+          block={attempt.answer_block}
+          rawText={attempt.student_answer}
+          recognition={recognition}
+          onPick={setPicked}
+        />
 
         {/* How this question is answered, one tap below the student's own, in
             the same step shape so the two can be read against each other.
