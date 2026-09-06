@@ -56,9 +56,10 @@ begin
     --                             be read from this paper, so anything said
     --                             about that part was said blind.
     --   missing_question_text     the stem itself did not transcribe.
-    --   no_verified_answer_source there is no source we may ground an answer in.
-    --                             Reserved for Tier 2, where the scheme is the
-    --                             only authority and we may not reproduce it.
+    --   no_verified_answer_source there is no source we may attest to. Covers
+    --                             Tier 2, where the scheme is the only authority
+    --                             and we may not reproduce it, and the rows
+    --                             written before grounding was recorded at all.
     --   heuristic_off_topic       a coarse net, not a verifier: what came back
     --                             shared no subject vocabulary with the
     --                             question. It catches prose generated without
@@ -87,6 +88,47 @@ begin
     -- question whose setup it could not read.
     execute format(
       'alter table public.%I add column if not exists unresolved_parts text[] not null default ''{}''', t);
+
+  end loop;
+end $$;
+
+-- ============================================================================
+-- The rows that predate grounding
+-- ============================================================================
+-- Three rows in region_explanation and the three mark_loss_event rows they
+-- committed into carry a model_answer written before any of this existed. Their
+-- grounding was not recorded because nothing recorded it, so it cannot now be
+-- attested — and the constraints below would reject them, correctly.
+--
+-- They are withheld rather than backfilled to `complete`. Two of the three are
+-- in fact sound (replaying the shipped logic over them returns complete), but
+-- "we checked afterwards and think it is fine" is precisely the standard this
+-- migration exists to replace. The third is the fabrication in the header, and
+-- it is live on the question detail screen right now: this statement is what
+-- takes it off the screen, immediately and before any deploy.
+--
+-- Nothing is deleted. The prose, the cause, the advice and the concepts stay;
+-- only the corrected working is withheld, and the reason it is withheld is on
+-- the row. Re-running these papers through the fixed pipeline will produce
+-- grounded answers to replace them.
+-- ============================================================================
+update public.region_explanation
+   set model_answer = null,
+       model_answer_source = null,
+       grounding_status = 'no_verified_answer_source'
+ where model_answer is not null;
+
+update public.mark_loss_event
+   set model_answer = null,
+       model_answer_source = null,
+       grounding_status = 'no_verified_answer_source'
+ where model_answer is not null;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['region_explanation', 'mark_loss_event'] loop
 
     execute format(
       'alter table public.%I drop constraint if exists %I', t, t || '_grounding_status_known');

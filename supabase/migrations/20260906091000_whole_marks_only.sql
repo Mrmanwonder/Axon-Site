@@ -15,7 +15,7 @@
 --     mark is admitted is the reconciler reporting that the *extraction* is
 --     wrong. A half-mark option turns that signal into a shrug.
 --
--- The chip row is fixed in src/scan/review.js. This is the other half: a half
+-- The chip row is fixed in src/scan/marks.js. This is the other half: a half
 -- mark should be unrepresentable, not merely un-offered, so that a model
 -- returning 0.5 or a hand-written API call is rejected rather than stored.
 --
