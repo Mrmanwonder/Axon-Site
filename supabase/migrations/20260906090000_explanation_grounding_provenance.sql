@@ -20,11 +20,24 @@
 -- explain worker selected one region by id and never looked left.
 --
 -- The worker now resolves the parts a question refers to and puts them in the
--- prompt. These three columns are the other half: what the explanation was
--- actually grounded in, recorded on the row, so a card can be traced back to its
--- evidence instead of taken on trust — and so a corrected working that could not
--- be grounded is stored as *withheld with a reason* rather than silently absent.
--- Hard rule 4: an admitted gap is recoverable, an invisible one is not.
+-- prompt. These columns are the other half: what the explanation was actually
+-- grounded in, recorded on the row, so a card can be traced back to its evidence
+-- instead of taken on trust.
+--
+-- The load-bearing one is `grounding_status`, and the constraint under it is the
+-- point of this migration. The corrected working is the highest-trust thing the
+-- product renders — the sentence a student copies into their notes — and the
+-- rule is not "we try to check it" but **a corrected working may not exist on a
+-- row whose grounding was not complete**. That is a CHECK rather than a
+-- convention, so no future prompt, worker or backfill can put one there by
+-- accident, and no render path can display one that the database would not have
+-- accepted. Hard rule 4: an admitted gap is recoverable, an invisible one is not.
+--
+-- `grounding_status` is deliberately one closed list rather than a flag plus a
+-- free-text note, because the question it exists to answer is countable: how
+-- often do we withhold, and for which reason. A rising `heuristic_off_topic`
+-- means the model is drifting; a rising `missing_dependency` means the scanner
+-- is losing pages. Free text answers neither.
 -- ============================================================================
 
 do $$
@@ -32,11 +45,38 @@ declare
   t text;
 begin
   foreach t in array array['region_explanation', 'mark_loss_event'] loop
-    -- Why the corrected working is not on this row. Null means nothing was
-    -- withheld — either one was stored, or the model honestly declined to write
-    -- one, which is the outcome the prompt asks for and is not a failure.
+
+    -- Why this row's corrected working may or may not be shown.
+    --
+    --   complete                  every part the question depends on was
+    --                             resolved and put in the prompt, and what came
+    --                             back is about this question. The only value
+    --                             under which a model_answer may exist.
+    --   missing_dependency        the question refers to a part that could not
+    --                             be read from this paper, so anything said
+    --                             about that part was said blind.
+    --   missing_question_text     the stem itself did not transcribe.
+    --   no_verified_answer_source there is no source we may ground an answer in.
+    --                             Reserved for Tier 2, where the scheme is the
+    --                             only authority and we may not reproduce it.
+    --   heuristic_off_topic       a coarse net, not a verifier: what came back
+    --                             shared no subject vocabulary with the
+    --                             question. It catches prose generated without
+    --                             the question and nothing subtler, and is kept
+    --                             distinct from the positive states above so it
+    --                             is never mistaken for a correctness check.
+    --   generation_failed         the model call did not return a usable answer.
     execute format(
-      'alter table public.%I add column if not exists model_answer_withheld_reason text', t);
+      'alter table public.%I add column if not exists grounding_status text not null default ''complete''', t);
+
+    -- Where a shown corrected working came from. `axon_method` is our own
+    -- method, written independently and labelled as ours. `verified_scheme` is
+    -- reserved and currently unreachable: Cambridge and Pearson refused
+    -- third-party reproduction, so official CAIE scheme content is not ours to
+    -- render, and the Tier 1 constraint below makes that structural rather than
+    -- remembered.
+    execute format(
+      'alter table public.%I add column if not exists model_answer_source text', t);
 
     -- The earlier parts that were resolved and put in front of the model.
     execute format(
@@ -48,43 +88,79 @@ begin
     execute format(
       'alter table public.%I add column if not exists unresolved_parts text[] not null default ''{}''', t);
 
-    -- A reason is an account of an absence. Storing one beside a corrected
-    -- working that is present would mean both "here it is" and "here is why it
-    -- isn't", and the card would have to pick one.
     execute format(
-      'alter table public.%I drop constraint if exists %I', t, t || '_withheld_reason_needs_absence');
-    execute format(
-      'alter table public.%I add constraint %I check (model_answer_withheld_reason is null or model_answer is null)',
-      t, t || '_withheld_reason_needs_absence');
-
-    -- A closed list. The point of the column is that the reasons are countable —
-    -- "how often do we withhold, and for which of the two causes" is the metric
-    -- that says whether the gate is set right, and free text cannot answer it.
-    execute format(
-      'alter table public.%I drop constraint if exists %I', t, t || '_withheld_reason_known');
+      'alter table public.%I drop constraint if exists %I', t, t || '_grounding_status_known');
     execute format($f$
       alter table public.%I add constraint %I check (
-        model_answer_withheld_reason is null
-        or model_answer_withheld_reason in ('unresolved_dependency', 'off_topic')
-      )$f$, t, t || '_withheld_reason_known');
+        grounding_status in (
+          'complete', 'missing_dependency', 'missing_question_text',
+          'no_verified_answer_source', 'heuristic_off_topic', 'generation_failed')
+      )$f$, t, t || '_grounding_status_known');
+
+    execute format(
+      'alter table public.%I drop constraint if exists %I', t, t || '_answer_source_known');
+    execute format($f$
+      alter table public.%I add constraint %I check (
+        model_answer_source is null or model_answer_source in ('axon_method', 'verified_scheme')
+      )$f$, t, t || '_answer_source_known');
+
+    -- The rule this migration exists for. A corrected working may only sit on a
+    -- row whose grounding was complete, and it must say where it came from.
+    -- Both directions are checked, so a source cannot be claimed for an answer
+    -- that is not there either.
+    execute format(
+      'alter table public.%I drop constraint if exists %I', t, t || '_answer_needs_grounding');
+    execute format($f$
+      alter table public.%I add constraint %I check (
+        case
+          when model_answer is null then model_answer_source is null
+          else grounding_status = 'complete' and model_answer_source is not null
+        end
+      )$f$, t, t || '_answer_needs_grounding');
+
+    -- An unresolved part and a complete grounding are a contradiction: the
+    -- array is the list of things we could not read.
+    execute format(
+      'alter table public.%I drop constraint if exists %I', t, t || '_unresolved_is_not_complete');
+    execute format($f$
+      alter table public.%I add constraint %I check (
+        cardinality(unresolved_parts) = 0 or grounding_status <> 'complete'
+      )$f$, t, t || '_unresolved_is_not_complete');
   end loop;
 end $$;
 
-comment on column public.region_explanation.model_answer_withheld_reason is
-  'Why no corrected working is stored: unresolved_dependency (the question refers to a part that could not be read) or off_topic (what came back shared no subject vocabulary with the question). Null when nothing was withheld.';
+-- Hard rule 2 at the schema, on the table that has a tier to check it against.
+-- A Tier 1 paper has no scheme in the library by definition, so an answer on one
+-- cannot be scheme-backed; and because rights make `verified_scheme` unreachable
+-- today, this is the constraint that keeps "AXON's own method" from ever being
+-- relabelled as Cambridge's without a migration saying so out loud.
+alter table public.region_explanation
+  drop constraint if exists region_explanation_tier1_answer_is_ours;
+alter table public.region_explanation
+  add constraint region_explanation_tier1_answer_is_ours check (
+    tier <> 'tier_1' or model_answer_source is null or model_answer_source = 'axon_method');
+
+comment on column public.region_explanation.grounding_status is
+  'Whether this row''s corrected working was grounded, and if not, why. Closed list; only `complete` permits a model_answer. `heuristic_off_topic` is a coarse net for prose generated without the question, never a correctness check.';
+comment on column public.region_explanation.model_answer_source is
+  'Where a shown corrected working came from: axon_method (ours, written independently) or verified_scheme (reserved; official CAIE scheme content is not ours to reproduce).';
 comment on column public.region_explanation.depends_on_parts is
   'Labels of the earlier parts resolved and placed in the explanation prompt. Empty for a question that stands alone.';
 comment on column public.region_explanation.unresolved_parts is
   'Parts this question refers to that were not found in the run. Non-empty means the explanation was written without setup the question depends on.';
 
-comment on column public.mark_loss_event.model_answer_withheld_reason is
+comment on column public.mark_loss_event.grounding_status is
   'Carried from region_explanation at commit. See that column.';
-
 -- ============================================================================
--- The bridge insert carries the three across.
+-- The bridge insert carries the grounding across.
 --
--- Everything else in this function is the live body as of 20260905090000 and is
--- unchanged line for line. Only the mark_loss_event column list differs.
+-- Everything else in this function is the live body as of 20260905090000,
+-- verified against pg_get_functiondef() on the production project before
+-- editing and unchanged line for line. Only the mark_loss_event column list
+-- differs — which matters, because the CHECK above now applies to
+-- mark_loss_event too: a commit that dropped the grounding while carrying the
+-- answer would be rejected rather than quietly landing an ungrounded corrected
+-- working on the table QuestionDetail actually reads.
 -- ============================================================================
 create or replace function public.commit_extraction_run(p_run_id uuid)
 returns jsonb
@@ -182,7 +258,7 @@ begin
       attempt_id, student_id, cause, marks_lost, ai_explanation, do_this_next, confidence,
       concepts,
       command_word, command_word_note, model_answer, loss_reasons,
-      model_answer_withheld_reason, depends_on_parts, unresolved_parts
+      grounding_status, model_answer_source, depends_on_parts, unresolved_parts
     )
     select v_attempt, e.student_id, e.cause, e.marks_lost, e.body, e.do_this_next,
            case when v_region.confidence_tier = 'confident' then 'likely'::public.confidence
@@ -190,9 +266,9 @@ begin
            coalesce(e.concepts, '{}'),
            e.command_word, e.command_word_note, e.model_answer,
            coalesce(e.loss_reasons, '[]'::jsonb),
-           -- The three this migration exists for. Everything above is carried
+           -- The four this migration exists for. Everything above is carried
            -- over from the live body unchanged.
-           e.model_answer_withheld_reason,
+           e.grounding_status, e.model_answer_source,
            coalesce(e.depends_on_parts, '{}'),
            coalesce(e.unresolved_parts, '{}')
       from public.region_explanation e

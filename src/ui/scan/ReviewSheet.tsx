@@ -83,6 +83,21 @@ function Question({
         />
       </div>
 
+      {/* Hard rule 4 again, on the mark rather than the crop. A part whose
+          allocation did not read as a whole number gets no grid: rounding it
+          offered a mark above the allocation, which the typed rung then
+          refused. The gap is named rather than left blank, and it points at
+          the rung that still works. */}
+      {q.allocationUnusable && (
+        <div className="qfield">
+          <div className="k">How many marks this question is worth</div>
+          <div className="v empty">
+            We couldn&rsquo;t read this as a whole number of marks, so we&rsquo;re not guessing at the
+            options. Type the mark your teacher wrote, or rescan this page.
+          </div>
+        </div>
+      )}
+
       {!!q.alternatives?.length && (
         <>
           <div className="qfield"><div className="k">Which number did your teacher write?</div></div>

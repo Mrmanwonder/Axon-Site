@@ -143,45 +143,57 @@ export default function QuestionDetail() {
 
         <Field k="Your answer" v={attempt.student_answer} steps />
 
-        {/* The corrected working, one tap below the student's own, in the same
-            step shape so the two can be read against each other. Collapsed at
-            rest rather than gated: nothing here asks them to prove they tried
-            first — the copy rules are explicit that a UI which makes the user
-            earn its content is the wrong shape — but it is also not the first
-            thing on the screen, so what they actually wrote is what they read
-            first. do_this_next names the fix; this is the fix carried through. */}
-        {loss?.model_answer && (
+        {/* How this question is answered, one tap below the student's own, in
+            the same step shape so the two can be read against each other.
+            Collapsed at rest rather than gated: nothing here asks them to prove
+            they tried first — the copy rules are explicit that a UI which makes
+            the user earn its content is the wrong shape — but it is also not the
+            first thing on the screen, so what they actually wrote is what they
+            read first. do_this_next names the fix; this is the fix carried
+            through.
+
+            Two conditions, not one. `grounding_status` must be complete and a
+            source must be named, which is the same invariant the database
+            CHECK enforces — a row cannot hold a working it could not ground.
+            Belt and braces on purpose: this is the highest-trust element on the
+            screen, and a render path that trusted the column being non-null
+            would be one schema change away from showing an ungrounded answer.
+
+            And it is not called "the corrected working" any more. That phrasing
+            borrows the authority of a mark scheme, and we do not have one:
+            Cambridge and Pearson refused third-party reproduction, so official
+            scheme content is not ours to render. What we show is our own method,
+            and it says so. */}
+        {loss?.model_answer
+          && loss.grounding_status === "complete"
+          && loss.model_answer_source && (
           <div className="qfield">
-            <Disclose label="See the corrected working">
+            <Disclose label="See how this question is answered">
               <div className="worked">{loss.model_answer}</div>
               <div className="wnote">
-                How this question is answered &mdash; not a mark. If the mark itself looks wrong,
-                that is a conversation with your teacher.
+                {loss.model_answer_source === "verified_scheme"
+                  ? "From the official marking scheme for this paper."
+                  : "AXON\u2019s own method, not a Cambridge mark scheme \u2014 one way to reach the answer, not a claim about what this attempt was worth."}
+                {" "}If the mark itself looks wrong, that is a conversation with your teacher.
               </div>
             </Disclose>
           </div>
         )}
 
-        {/* A corrected working that could not be tied to this paper is not
-            shown, and where the student can do something about it, the gap says
-            so. This is the highest-trust element on the screen — the sentence
-            that gets copied into revision notes — and it is the one place where
-            a plausible-sounding paragraph is worse than nothing at all: a
-            student cannot catch a confident answer to a question we never read.
-
-            Only `unresolved_dependency` speaks, because only it is actionable:
-            the part this question builds on is missing from the scan, and
-            adding that page is a thing they can go and do. `off_topic` leaves
-            the slot empty instead — the honest state for "we had nothing worth
-            showing", and narrating our own near-miss would spend the student's
-            confidence to tell them nothing they can use. */}
-        {!loss?.model_answer && loss?.model_answer_withheld_reason === "unresolved_dependency" && (
+        {/* Where the working is missing, the gap speaks only when the student
+            can do something about it. A missing dependency means the page
+            carrying the earlier part was never scanned, which is a thing they
+            can go and fix. The others leave the slot empty: that is the honest
+            state for "we had nothing worth showing", and narrating our own
+            near-miss would spend their confidence to tell them nothing they can
+            use. */}
+        {!loss?.model_answer && loss?.grounding_status === "missing_dependency" && (
           <div className="qfield">
-            <div className="k">The corrected working</div>
+            <div className="k">How this question is answered</div>
             <div className="v empty">
               {loss.unresolved_parts?.length
-                ? `This question builds on part ${loss.unresolved_parts.join(" and ")}, which isn't in this scan. Add that page and Axon can work it through.`
-                : "This question builds on an earlier part that isn't in this scan. Add that page and Axon can work it through."}
+                ? `This question builds on part ${loss.unresolved_parts.join(" and ")}, which isn\u2019t in this scan. Add that page and Axon can work it through.`
+                : "This question builds on an earlier part that isn\u2019t in this scan. Add that page and Axon can work it through."}
             </div>
           </div>
         )}

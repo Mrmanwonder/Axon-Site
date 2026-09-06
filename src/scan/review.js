@@ -11,7 +11,7 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { markAlternatives, WHOLE_MARKS_ONLY } from './marks.js';
+import { markAlternatives, allocationIsUsable, WHOLE_MARKS_ONLY } from './marks.js';
 
 /**
  * Everything the review screen needs for one run.
@@ -71,6 +71,10 @@ export async function loadReview(runId) {
         ? (r.confidence_signals?.unreadable_reason ?? 'We could not read this question.')
         : null,
       alternatives: markAlternatives(r),
+      // Hard rule 4. A part whose allocation could not be read as a whole
+      // number gets no correction grid, and the screen says why rather than
+      // rendering an empty space where a row used to be.
+      allocationUnusable: r.marks_available !== null && !allocationIsUsable(r),
       explanation: explanation && explanation.body
         ? {
             cause: explanation.cause,

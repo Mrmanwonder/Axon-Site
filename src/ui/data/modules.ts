@@ -278,14 +278,25 @@ export type MarkLossEvent = {
       A demonstration of how the question is answered — never a claim about what
       this attempt was worth, and never compared to the teacher's mark. */
   model_answer: string | null;
-  /** Why there is no corrected working on this row, when there is none.
-      `unresolved_dependency` — the question refers to another part ("justify
-      your answer to (d)(i)") that could not be read from this paper, so nothing
-      written about it would be grounded. `off_topic` — what came back shared no
-      subject vocabulary with the question, which is what a model produces when
-      the question was not in front of it. Null when nothing was withheld:
-      either working is stored, or the model honestly declined to write one. */
-  model_answer_withheld_reason: "unresolved_dependency" | "off_topic" | null;
+  /** Whether this row's corrected working was grounded, and if not, why.
+      Only `complete` permits a `model_answer` — a database CHECK enforces it,
+      so a card can never render one the pipeline could not tie to the paper.
+      `heuristic_off_topic` is a coarse net for prose generated *without* the
+      question; it is never a correctness check and must not be described as
+      verification anywhere a student or a metric can see it. */
+  grounding_status:
+    | "complete"
+    | "missing_dependency"
+    | "missing_question_text"
+    | "no_verified_answer_source"
+    | "heuristic_off_topic"
+    | "generation_failed";
+  /** Where a shown corrected working came from. `verified_scheme` is reserved
+      and currently unreachable: Cambridge scheme content is not ours to
+      reproduce, so what we render is our own method and is labelled as ours. */
+  model_answer_source: "axon_method" | "verified_scheme" | null;
+  /** The earlier parts resolved into the explanation prompt. */
+  depends_on_parts: string[] | null;
   /** Parts this question refers to that were not found in the paper. */
   unresolved_parts: string[] | null;
   /** The deduction broken into its distinct parts. Empty is the normal case:
