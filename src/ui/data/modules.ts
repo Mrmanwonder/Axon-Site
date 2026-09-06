@@ -278,6 +278,27 @@ export type MarkLossEvent = {
       A demonstration of how the question is answered — never a claim about what
       this attempt was worth, and never compared to the teacher's mark. */
   model_answer: string | null;
+  /** Whether this row's corrected working was grounded, and if not, why.
+      Only `complete` permits a `model_answer` — a database CHECK enforces it,
+      so a card can never render one the pipeline could not tie to the paper.
+      `heuristic_off_topic` is a coarse net for prose generated *without* the
+      question; it is never a correctness check and must not be described as
+      verification anywhere a student or a metric can see it. */
+  grounding_status:
+    | "complete"
+    | "missing_dependency"
+    | "missing_question_text"
+    | "no_verified_answer_source"
+    | "heuristic_off_topic"
+    | "generation_failed";
+  /** Where a shown corrected working came from. `verified_scheme` is reserved
+      and currently unreachable: Cambridge scheme content is not ours to
+      reproduce, so what we render is our own method and is labelled as ours. */
+  model_answer_source: "axon_method" | "verified_scheme" | null;
+  /** The earlier parts resolved into the explanation prompt. */
+  depends_on_parts: string[] | null;
+  /** Parts this question refers to that were not found in the paper. */
+  unresolved_parts: string[] | null;
   /** The deduction broken into its distinct parts. Empty is the normal case:
       a single-cause question has nothing to decompose and the flat cause above
       carries it. */

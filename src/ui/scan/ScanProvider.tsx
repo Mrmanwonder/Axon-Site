@@ -63,6 +63,9 @@ export type ReviewQuestion = {
   pageNumber?: number;
   unreadableReason?: string | null;
   alternatives?: number[];
+  /** The marks-available read off the page is not a whole number, so no
+      correction grid is offered and the sheet explains the gap instead. */
+  allocationUnusable?: boolean;
   explanation?: { cause?: string; body?: string; doThisNext?: string } | null;
 };
 

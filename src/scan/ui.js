@@ -507,6 +507,7 @@ async function refreshReview() {
       crop: q.crop,
       unreadableReason: q.unreadableReason,
       alternatives: q.alternatives,
+      allocationUnusable: q.allocationUnusable,
       explanation: q.explanation,
     })),
   }, {
