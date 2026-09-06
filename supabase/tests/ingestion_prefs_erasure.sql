@@ -47,8 +47,8 @@ insert into public.paper_page (paper_id, student_id, page_number, source_kind, s
 
 insert into public.student_attempt (id, student_id, paper_id, paper_tier, question_label, marks_awarded, max_marks, marks_source, extraction_confidence)
  values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-000000000003','tier_1','Q1',3,5,'teacher_pen','confirmed');
-insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence)
- values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','presentation',2,'likely');
+insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence, grounding_status)
+ values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','presentation',2,'likely','complete');
 
 insert into public.app_preference (guardian_id, theme) values
  ('aaaaaaaa-0000-4000-8000-000000000001','light'),

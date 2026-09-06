@@ -60,9 +60,9 @@ insert into public.student_attempt (id, student_id, paper_id, paper_tier, questi
  ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-000000000003','tier_1','Q1',3,5,'teacher_pen','confirmed'),
  ('bbbbbbbb-0000-4000-8000-000000000004','bbbbbbbb-0000-4000-8000-000000000002','bbbbbbbb-0000-4000-8000-000000000003','tier_1','Q1',4,5,'teacher_pen','confirmed');
 
-insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence, ai_explanation) values
- ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','presentation',2,'likely','Your answer is right. The mark went for units.'),
- ('bbbbbbbb-0000-4000-8000-000000000005','bbbbbbbb-0000-4000-8000-000000000004','bbbbbbbb-0000-4000-8000-000000000002','keyword_miss',1,'likely','x');
+insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence, ai_explanation, grounding_status) values
+ ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','presentation',2,'likely','Your answer is right. The mark went for units.','complete'),
+ ('bbbbbbbb-0000-4000-8000-000000000005','bbbbbbbb-0000-4000-8000-000000000004','bbbbbbbb-0000-4000-8000-000000000002','keyword_miss',1,'likely','x','complete');
 
 -- Objects for both students, written as the privileged role so the isolation
 -- tests below have something real to fail to reach.
@@ -113,8 +113,8 @@ do $$ begin begin
 exception when others then perform public._t('rule1: marks_awarded cannot exceed max_marks', true, sqlstate); end; end $$;
 
 do $$ begin begin
-  insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence)
-  values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','incomplete',3,'likely');
+  insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence, grounding_status)
+  values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','incomplete',3,'likely','complete');
   perform public._t('marks_lost total cannot exceed marks forgone', false, 'insert succeeded');
 exception when others then perform public._t('marks_lost total cannot exceed marks forgone', true, sqlstate); end; end $$;
 
@@ -155,8 +155,8 @@ update public.student_attempt set student_confirmed_at = now() where id='aaaaaaa
 select public._t('rule3: confirming an unsure attempt admits it to analytics',
   (select count(*) = 1 from public.attempt_analytics where id='aaaaaaaa-0000-4000-8000-000000000006'));
 
-insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence)
-values ('aaaaaaaa-0000-4000-8000-000000000007','aaaaaaaa-0000-4000-8000-000000000006','aaaaaaaa-0000-4000-8000-000000000002','timed_out',2,'unsure');
+insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence, grounding_status)
+values ('aaaaaaaa-0000-4000-8000-000000000007','aaaaaaaa-0000-4000-8000-000000000006','aaaaaaaa-0000-4000-8000-000000000002','timed_out',2,'unsure','complete');
 select public._t('rule3: an unsure loss event is excluded from analytics',
   (select count(*) = 0 from public.mark_loss_analytics where id='aaaaaaaa-0000-4000-8000-000000000007'));
 
@@ -170,8 +170,8 @@ select public._t('readiness view reports an honest sample size',
    from public.student_analytics_readiness where student_id='aaaaaaaa-0000-4000-8000-000000000002'));
 
 do $$ begin begin
-  insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence, student_confirmed_at, student_rejected_at)
-  values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','incomplete',0.5,'likely',now(),now());
+  insert into public.mark_loss_event (attempt_id, student_id, cause, marks_lost, confidence, student_confirmed_at, student_rejected_at, grounding_status)
+  values ('aaaaaaaa-0000-4000-8000-000000000004','aaaaaaaa-0000-4000-8000-000000000002','incomplete',1,'likely',now(),now(),'complete');
   perform public._t('a loss event cannot be both confirmed and rejected', false, 'insert succeeded');
 exception when others then perform public._t('a loss event cannot be both confirmed and rejected', true, sqlstate); end; end $$;
 

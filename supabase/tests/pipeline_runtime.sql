@@ -243,9 +243,11 @@ begin
                       where run_id = v_run and order_index = 3) = 'skipped');
 
   insert into public.region_explanation (region_id, run_id, student_id, tier,
-                                         cause, marks_lost, body, model_version, prompt_version)
+                                         cause, marks_lost, body, model_version, prompt_version,
+                                         grounding_status)
   select r.id, v_run, v_student, 'tier_1', 'conceptual_gap', 3,
-         'The formula was right; the substitution was not.', 'test-model', 'explain_tier1.v1'
+         'The formula was right; the substitution was not.', 'test-model', 'explain_tier1.v1',
+         'complete'
     from public.question_region r where r.run_id = v_run and r.order_index = 1;
   update public.question_region set explain_status = 'done'
    where run_id = v_run and order_index = 1;
