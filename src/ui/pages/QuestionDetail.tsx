@@ -162,6 +162,30 @@ export default function QuestionDetail() {
           </div>
         )}
 
+        {/* A corrected working that could not be tied to this paper is not
+            shown, and where the student can do something about it, the gap says
+            so. This is the highest-trust element on the screen — the sentence
+            that gets copied into revision notes — and it is the one place where
+            a plausible-sounding paragraph is worse than nothing at all: a
+            student cannot catch a confident answer to a question we never read.
+
+            Only `unresolved_dependency` speaks, because only it is actionable:
+            the part this question builds on is missing from the scan, and
+            adding that page is a thing they can go and do. `off_topic` leaves
+            the slot empty instead — the honest state for "we had nothing worth
+            showing", and narrating our own near-miss would spend the student's
+            confidence to tell them nothing they can use. */}
+        {!loss?.model_answer && loss?.model_answer_withheld_reason === "unresolved_dependency" && (
+          <div className="qfield">
+            <div className="k">The corrected working</div>
+            <div className="v empty">
+              {loss.unresolved_parts?.length
+                ? `This question builds on part ${loss.unresolved_parts.join(" and ")}, which isn't in this scan. Add that page and Axon can work it through.`
+                : "This question builds on an earlier part that isn't in this scan. Add that page and Axon can work it through."}
+            </div>
+          </div>
+        )}
+
         {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
 
         <div className="qfield">

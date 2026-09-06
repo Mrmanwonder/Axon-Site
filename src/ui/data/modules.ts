@@ -278,6 +278,16 @@ export type MarkLossEvent = {
       A demonstration of how the question is answered — never a claim about what
       this attempt was worth, and never compared to the teacher's mark. */
   model_answer: string | null;
+  /** Why there is no corrected working on this row, when there is none.
+      `unresolved_dependency` — the question refers to another part ("justify
+      your answer to (d)(i)") that could not be read from this paper, so nothing
+      written about it would be grounded. `off_topic` — what came back shared no
+      subject vocabulary with the question, which is what a model produces when
+      the question was not in front of it. Null when nothing was withheld:
+      either working is stored, or the model honestly declined to write one. */
+  model_answer_withheld_reason: "unresolved_dependency" | "off_topic" | null;
+  /** Parts this question refers to that were not found in the paper. */
+  unresolved_parts: string[] | null;
   /** The deduction broken into its distinct parts. Empty is the normal case:
       a single-cause question has nothing to decompose and the flat cause above
       carries it. */

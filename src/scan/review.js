@@ -11,6 +11,7 @@
 // misread it.
 
 import { sb } from '../supabase.js';
+import { markAlternatives, WHOLE_MARKS_ONLY } from './marks.js';
 
 /**
  * Everything the review screen needs for one run.
@@ -111,30 +112,6 @@ export async function loadReview(runId) {
   };
 }
 
-/**
- * The numbers the student is offered when the mark was misread.
- *
- * Neighbours on the half-mark grid, plus the two ends, which between them cover
- * almost every real correction in one tap. The picker is the landing state
- * because typing is slower and rescanning is slower still — the ladder goes
- * pick, then type, then rescan, and most corrections stop at the first rung.
- */
-function markAlternatives(region) {
-  const available = region.marks_available === null ? null : Number(region.marks_available);
-  if (available === null || available <= 0) return [];
-  const awarded = region.marks_awarded === null ? null : Number(region.marks_awarded);
-
-  const candidates = new Set([0, available]);
-  if (awarded !== null) {
-    for (const step of [-1, -0.5, 0, 0.5, 1]) {
-      const value = Math.round((awarded + step) * 2) / 2;
-      if (value >= 0 && value <= available) candidates.add(value);
-    }
-  } else {
-    for (let v = 0; v <= available && candidates.size < 7; v += available > 6 ? 1 : 0.5) candidates.add(v);
-  }
-  return [...candidates].sort((a, b) => a - b).slice(0, 7);
-}
 
 function deltaFor(run, paper) {
   if (run.reconciled !== false) return null;
@@ -192,6 +169,16 @@ export async function correctMark(regionId, value) {
   const available = region.marks_available === null ? null : Number(region.marks_available);
   if (available !== null && value > available) {
     throw new Error(`This question is out of ${available}, so ${value} can't be the mark on it.`);
+  }
+  // The typed rung of the ladder. The chip row cannot offer a half mark any
+  // more, but this path takes whatever was entered, and a CAIE paper has no
+  // half marks on it to record. Caught here so the student reads a sentence
+  // about their paper rather than a constraint violation from Postgres.
+  if (WHOLE_MARKS_ONLY && Number.isFinite(value) && value !== Math.round(value)) {
+    throw new Error(`Cambridge papers are marked in whole marks, so ${value} isn't a mark your teacher could have written.`);
+  }
+  if (value < 0) {
+    throw new Error(`A mark can't be less than zero.`);
   }
 
   // Provenance survives a correction: the box stays the one we read from, or —
