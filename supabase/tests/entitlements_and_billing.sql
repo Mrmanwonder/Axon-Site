@@ -56,11 +56,11 @@ insert into public.student_attempt (id, student_id, paper_id, paper_tier, questi
  ('b0000000-0000-4000-8000-000000000020','b0000000-0000-4000-8000-000000000002','b0000000-0000-4000-8000-000000000010','tier_1','Q1',3,5,'teacher_pen','confirmed'),
  ('b0000000-0000-4000-8000-000000000021','b0000000-0000-4000-8000-000000000002','b0000000-0000-4000-8000-000000000012','tier_1','Q1',3,5,'teacher_pen','confirmed');
 
-insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence, ai_explanation) values
- ('a0000000-0000-4000-8000-000000000030','a0000000-0000-4000-8000-000000000020','a0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x'),
- ('a0000000-0000-4000-8000-000000000031','a0000000-0000-4000-8000-000000000021','a0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x'),
- ('b0000000-0000-4000-8000-000000000030','b0000000-0000-4000-8000-000000000020','b0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x'),
- ('b0000000-0000-4000-8000-000000000031','b0000000-0000-4000-8000-000000000021','b0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x');
+insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, confidence, ai_explanation, grounding_status) values
+ ('a0000000-0000-4000-8000-000000000030','a0000000-0000-4000-8000-000000000020','a0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x','complete'),
+ ('a0000000-0000-4000-8000-000000000031','a0000000-0000-4000-8000-000000000021','a0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x','complete'),
+ ('b0000000-0000-4000-8000-000000000030','b0000000-0000-4000-8000-000000000020','b0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x','complete'),
+ ('b0000000-0000-4000-8000-000000000031','b0000000-0000-4000-8000-000000000021','b0000000-0000-4000-8000-000000000002','procedural_slip',2,'confirmed','x','complete');
 
 -- One single_subject and one cross_subject pattern_insight per student, as if
 -- the patterns function had just run — inserted here as postgres (owner
