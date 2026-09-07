@@ -343,6 +343,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let track = createTrack();
   let trackSize = null;     // { width, height } of the tracking space
   let trackInFlight = false;
+  // The video timestamp the last tracking cycle ran against, so the same
+  // picture is never searched twice. See trackStep().
+  let lastTrackedFrame = -1;
   // The exposure and focus reads, and the pose they were taken at. They come
   // from the global search, so between two of them they describe a moment
   // rather than this frame — see measurementsStale().
@@ -522,6 +525,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     steadySince = heldSince = consecutiveFinds = 0;
     track = createTrack();
     trackSize = measured = measuredQuad = guidance = null;
+    lastTrackedFrame = -1;
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
@@ -608,6 +612,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh || !trackSize) return;
+
+    // Phone cameras deliver thirty frames a second and phone displays refresh
+    // at sixty or a hundred and twenty, so most of the frames this loop is
+    // offered are the same picture again. Searching one twice cannot move the
+    // corners and costs a bitmap grab, a worker round trip and the battery for
+    // both. `currentTime` not having advanced is the cheapest way to know, and
+    // is available everywhere — unlike requestVideoFrameCallback.
+    if (video.currentTime === lastTrackedFrame) return;
+    lastTrackedFrame = video.currentTime;
+
     const { width: tw, height: th } = trackSize;
 
     const windows = searchWindows(track, performance.now(), { width: tw, height: th });
