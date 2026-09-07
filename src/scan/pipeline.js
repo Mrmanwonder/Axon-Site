@@ -55,16 +55,25 @@ if (replacing !== null && !draft.pages.some((p) => p.page_number === replacing))
   throw new Error('That page is not in this booklet any more.');
 }
 
+// AXON_SCAN_LAG_BRIEF.md §0 — the onShot → paintTray gap, split into
+// acceptPage's own steps. Temporary instrumentation, landed rather than
+// dropped: this is what "the picture takes ten more seconds to show up" has
+// to be measured against.
+const tAcceptStart = performance.now();
+
 // The resolution floor, checked before any of the expensive work rather than
 // after it (AXON_FIX_BRIEF.md §7.2). Conditioning caps and never upscales, so a
 // source under the floor cannot produce a page at the floor — running the warp,
 // the layer separation and two encodes first would only spend several seconds
 // arriving at the same answer.
+const tRefusalStart = performance.now();
 const refusal = refusalFor(bitmap.width || bitmap.naturalWidth, bitmap.height || bitmap.naturalHeight, quad);
+const refusalMs = performance.now() - tRefusalStart;
 if (refusal) throw new PageRefused(refusal);
 
 const pageNumber = replacing ?? draft.pages.length + 1;
   let processed;
+  const tProcessStart = performance.now();
   try {
     processed = await processPage(bitmap, { quad, pageNumber, capturePath, liveGate, sourceKind });
   } catch (error) {
@@ -76,7 +85,22 @@ const pageNumber = replacing ?? draft.pages.length + 1;
     if (error?.refused) throw new PageRefused(error.message);
     throw error;
   }
+  const processMs = performance.now() - tProcessStart;
+  const tProxyStart = performance.now();
   const proxy = await makeProxy(processed.blob);
+  const proxyMs = performance.now() - tProxyStart;
+
+  const captureTiming = {
+    refusalMs: +refusalMs.toFixed(1),
+    processMs: +processMs.toFixed(1),
+    // Which path processPage actually took, and its own internal round-trip —
+    // see device.js. Logged again here because acceptPage is the caller that
+    // knows the full onShot → paintTray budget this has to fit inside.
+    workerUsed: processed.workerUsed ?? null,
+    proxyMs: +proxyMs.toFixed(1),
+    totalMs: +(performance.now() - tAcceptStart).toFixed(1),
+  };
+  console.debug('[scan:accept-timing]', captureTiming);
 
 const page = {
   blob: processed.blob,
@@ -98,7 +122,7 @@ const page = {
   width: processed.width,
   height: processed.height,
   quality: processed.quality,
-  meta: { ...processed.meta, coverage: processed.coverage },
+  meta: { ...processed.meta, coverage: processed.coverage, capture_timing: captureTiming },
   teacher_marks: processed.teacher_marks,
   margin_band: processed.margin_band,
   layer_fallback: processed.layer_fallback,

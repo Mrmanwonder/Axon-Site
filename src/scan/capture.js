@@ -188,6 +188,36 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let imageCapture = null;
   let capturePath = 'canvas-grab';
 
+  // ── §0 instrumentation ────────────────────────────────────────────────────
+  // A rolling window rather than a log line per search: the search runs up to
+  // ~12 times a second, and a console line at that rate is not a diagnostic,
+  // it is noise that drowns the one number that matters. Flushed as a single
+  // summary every couple of seconds instead — see recordStepTiming() below —
+  // and the most recent sample also rides along on the state itself
+  // (next.timing), which is what reaches conditioning_meta.live_gate.timing
+  // for the exact frame a shot was taken from.
+  const stepStats = { count: 0, sumMs: 0, maxMs: 0, lastFlush: 0 };
+
+  function recordStepTiming({ detectMs, measureMs, focusMs }) {
+    const total = detectMs + measureMs + focusMs;
+    stepStats.count++;
+    stepStats.sumMs += total;
+    if (total > stepStats.maxMs) stepStats.maxMs = total;
+    const now = performance.now();
+    if (!stepStats.lastFlush) stepStats.lastFlush = now;
+    if (now - stepStats.lastFlush < 2000) return;
+    console.debug('[scan:step-timing]', {
+      n: stepStats.count,
+      meanMs: +(stepStats.sumMs / stepStats.count).toFixed(1),
+      maxMs: +stepStats.maxMs.toFixed(1),
+      lastMs: +total.toFixed(1),
+      lastBreakdown: {
+        detectMs: +detectMs.toFixed(1), measureMs: +measureMs.toFixed(1), focusMs: +focusMs.toFixed(1),
+      },
+    });
+    stepStats.count = 0; stepStats.sumMs = 0; stepStats.maxMs = 0; stepStats.lastFlush = now;
+  }
+
   const proxy = document.createElement('canvas');
   const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
   const focus = document.createElement('canvas');
@@ -231,6 +261,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
       /** What the student is told, right now. One line, actionable. */
       hint: 'Lay the page flat and fit all four corners in the frame',
       blocking: null,
+      // detectMs/measureMs/focusMs for this search, or null before the first
+      // one has run. See recordStepTiming() — AXON_SCAN_LAG_BRIEF.md §0.
+      timing: null,
     };
   }
 
@@ -319,7 +352,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     proxyCtx.drawImage(video, 0, 0, pw, ph);
     const frame = proxyCtx.getImageData(0, 0, pw, ph);
 
+    const tDetectStart = performance.now();
     const found = detectQuad(frame);
+    const detectMs = performance.now() - tDetectStart;
     const next = blankState();
 
     if (!found) {
@@ -332,12 +367,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // next page — which simply loses the quad — left it disarmed for the rest
       // of the session.
       armed = true;
+      next.timing = { detectMs, measureMs: 0, focusMs: 0 };
+      recordStepTiming(next.timing);
       publish(next);
       return;
     }
 
     next.hasPage = true;
     next.fill = quadFill(found, pw, ph);
+    const tMeasureStart = performance.now();
     const exposure = measureQuad(frame, found);
     next.glare = exposure.glare;
     next.clipping = exposure.clipping;
@@ -345,6 +383,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // Angle-only, so scale-invariant — this reads the same on the 240px
     // search proxy as it would on the full frame.
     next.skew = skewDegrees(found);
+    const measureMs = performance.now() - tMeasureStart;
     consecutiveFinds++;
 
     // How big the page will be once it is warped flat, in the camera's own
@@ -359,7 +398,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // Null rather than zero when the window landed on blank paper: "we could
     // not measure this" and "this is out of focus" are different claims and the
     // gate must not act on the first as though it were the second.
+    const tFocusStart = performance.now();
     next.sharpness = focusInPage(found, pw, ph, vw, vh, next.pageLongEdge);
+    const focusMs = performance.now() - tFocusStart;
+
+    // AXON_SCAN_LAG_BRIEF.md §0 — the wall-clock cost of one detection pass,
+    // split by stage. Temporary instrumentation, landed rather than dropped:
+    // this is what a "the border takes forever" report has to be measured
+    // against, not guessed at by reading the search-interval math below.
+    next.timing = { detectMs, measureMs, focusMs };
+    recordStepTiming(next.timing);
 
     const window_ = steadyWindow({
       anchor: steadyAnchor, found, width: pw, height: ph,
@@ -517,7 +565,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   async function shoot(auto = false) {
     if (!running || !video.videoWidth) return null;
+    const tShotStart = performance.now();
     const captured = await grabStill();
+    const grabMs = performance.now() - tShotStart;
     if (!captured) return null;
     const { bitmap, path, original } = captured;
 
@@ -531,9 +581,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
           { width: bitmap.width, height: bitmap.height })
       : null;
 
+    const tVerifyStart = performance.now();
     if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
+    const verifyMs = performance.now() - tVerifyStart;
 
-    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, original, gate: { ...state } };
+    // AXON_SCAN_LAG_BRIEF.md §0 — shoot() → onShot, split by stage. This is
+    // the whole of the "shutter fired, nothing happens for a beat" gap on the
+    // capture side; ui.js/pipeline.js pick up the rest of it (acceptPage,
+    // paintTray) on the other side of onShot.
+    const timing = { grabMs: +grabMs.toFixed(1), verifyMs: +verifyMs.toFixed(1) };
+    console.debug('[scan:shoot-timing]', { auto, capturePath: path, ...timing });
+
+    const shot = { bitmap, quad: shotQuad, auto, capturePath: path, original, gate: { ...state }, timing };
     onShot?.(shot);
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.

@@ -337,6 +337,10 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
         skew: liveGate.skew,
         steady: liveGate.steady,
         blocking: liveGate.blocking,
+        // detectMs/measureMs/focusMs for the search that produced this exact
+        // frame's gate read — AXON_SCAN_LAG_BRIEF.md §0. Null on a page with no
+        // live gate behind it (an upload) or before the first search landed.
+        timing: liveGate.timing ?? null,
       } : null,
     },
     // Handed on rather than re-decoded: stage 2 has already read exactly this,
