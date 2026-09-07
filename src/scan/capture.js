@@ -22,8 +22,12 @@ import { detectQuad, easeQuad, isPageShaped, scaleQuad } from './edges.js';
 import { paperScore } from './quad.js';
 import { focusWindowRect, measureQuad, sharpness, skewDegrees } from './quality.js';
 import { quadDrift, quadFill, quadSize } from './geometry.js';
+import {
+  acquire, createTrack, documentConfidence, geometryValid, isSameDocument,
+  needsGlobal, observe, quadOf, searchWindows,
+} from './track.js';
 
-const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
+const DETECT_INTERVAL_MS = 80;   // the *global* search's floor; tracking runs at frame rate
 const DETECT_MAX_INTERVAL_MS = 320;
 // A worker message that never comes back — a dropped frame, a worker hiccup
 // — must not wedge the search loop. Generous relative to the interval above:
@@ -60,6 +64,21 @@ const PROXY_WIDTH = 240;
 // centred on the page, and small enough that this stays affordable at ~12Hz on
 // a phone: 384x384 is 147k pixels against the proxy search's own 102k.
 const FOCUS_WINDOW = 384;
+// The width the tracker works in, and the width of the frame its per-frame
+// windows are cut from.
+//
+// Twice the global search's, deliberately. A local window is cheap in
+// proportion to its own area rather than the frame's, so tracking can afford
+// resolution the whole-frame search cannot: four 64px windows are sixteen
+// thousand pixels whatever the frame is, against the 240px proxy's hundred
+// thousand. Twice the width is also twice the positional precision, which is
+// what the overlay is drawn from and what the student actually sees.
+const TRACK_WIDTH = 480;
+// How long a tracked pose may go without a fresh measurement before the gate
+// stops speaking for it. The exposure and focus reads come from the global
+// search; between two of them the geometry is live and those are not, and a
+// glare reading from two seconds ago is not evidence about this frame.
+const MEASUREMENT_STALE_MS = 1200;
 
 /**
  * How long the page has been sitting in one place.
@@ -89,11 +108,26 @@ export function steadyWindow({ anchor, found, width, height, since, now }) {
  * worse failure than occasionally taking one the student then deletes — which
  * costs a tap, against a mode that otherwise simply does not work.
  */
-export function shouldAutoCapture({ autoCapture, armed, blocking, steady, heldFor, consecutiveFinds }) {
+export function shouldAutoCapture({
+  autoCapture, armed, blocking, steady, heldFor, consecutiveFinds, trackState = 'tracking',
+}) {
   if (!autoCapture || !armed || blocking) return false;
   // A detector locked onto something large and wrong is extremely stable, so
   // stability alone is not evidence. Several finds running is.
+  //
+  // What "several finds" is worth changed when the tracker arrived, and this
+  // has to change with it. Five *searches* in a row used to mean five
+  // independent whole-frame detections agreeing over most of half a second;
+  // five frames of a track is five extrapolations of one detection, over
+  // eighty milliseconds, and is nothing like the same evidence. So the count
+  // stays as the floor it always was and the tracker's own state carries the
+  // weight the count used to: 'tracking' is reached only once all four corners
+  // have been found independently and agree on a document-shaped quad, which
+  // is the thing the guard was reaching for in the first place. 'locking',
+  // 'reacquiring' and 'recovering' are all the tracker saying it is not sure
+  // yet, and the shutter waits for them the same way it waits for stillness.
   if (consecutiveFinds < CAPTURE.CONSECUTIVE_FINDS) return false;
+  if (trackState !== 'tracking') return false;
   return steady || heldFor >= CAPTURE.PATIENCE_MS;
 }
 
@@ -203,7 +237,7 @@ function ensureDetectWorker() {
     empty — every one of those cases means "nothing to report this cycle",
     which searchOnWorker() already treats the same way a legitimate
     not-found does. */
-function runDetectWorker(kind, bitmap) {
+function runDetectWorker(kind, bitmap, extra = null) {
   const w = ensureDetectWorker();
   if (!w) { bitmap.close?.(); return Promise.resolve(null); }
   const id = nextDetectId++;
@@ -217,7 +251,7 @@ function runDetectWorker(kind, bitmap) {
     };
     detectPending.set(id, finish);
     setTimeout(() => finish(null), DETECT_TIMEOUT_MS);
-    w.postMessage({ id, kind, bitmap }, [bitmap]);
+    w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
   });
 }
 
@@ -233,6 +267,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let running = false;
   let rafHandle = 0;
   let detectHandle = 0;
+
+  // The tracker, and the space it works in. `quad` is what the overlay draws:
+  // the tracked pose in video coordinates, refreshed every frame rather than
+  // every search, which is the point of the whole file.
+  let track = createTrack();
+  let trackSize = null;     // { width, height } of the tracking space
+  let trackInFlight = false;
+  // The exposure and focus reads, and the pose they were taken at. They come
+  // from the global search, so between two of them they describe a moment
+  // rather than this frame — see measurementsStale().
+  let measured = null;
+  let measuredAt = 0;
+  let measuredQuad = null;
 
   let quad = null;          // smoothed, in video coordinates
   let lastDetection = null; // raw, for the shot's own geometry
@@ -338,6 +385,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
       /** What the student is told, right now. One line, actionable. */
       hint: 'Lay the page flat and fit all four corners in the frame',
       blocking: null,
+      // What the tracker makes of the page right now — 'searching', 'locking',
+      // 'tracking', 'reacquiring', 'recovering' — and how strongly. Carried on
+      // the state so the overlay and the harness can both see the difference
+      // between a page held confidently and one being reacquired, which the
+      // old boolean hasPage could not express.
+      trackState: 'searching',
+      trackConfidence: 0,
       // detectMs/measureMs/focusMs for this search, or null before the first
       // one has run. See recordStepTiming() — AXON_SCAN_LAG_BRIEF.md §0.
       timing: null,
@@ -393,6 +447,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     video.srcObject = null;
     quad = lastDetection = steadyAnchor = lastSearchSize = null;
     steadySince = heldSince = consecutiveFinds = 0;
+    track = createTrack();
+    trackSize = measured = measuredQuad = null;
+    measuredAt = 0;
+    trackInFlight = false;
     imageCapture = null;
     capturePath = 'canvas-grab';
     // Clear the shared request too, or the next visit adopts a stream whose
@@ -412,8 +470,17 @@ export function createCapture({ video, overlay, onState, onShot }) {
       detectHandle = setTimeout(detect, DETECT_MAX_INTERVAL_MS);
       return;
     }
+    // The global search is the fallback now, not the loop. `needsGlobal` says
+    // yes while there is nothing to track, yes when the track has come apart,
+    // and otherwise only as a slow re-check that a healthy track has not
+    // quietly slid onto a notebook edge — so a page being tracked well costs
+    // one whole-frame Hough search every few seconds instead of twelve a
+    // second. Everything in between is four small windows: trackStep().
     const started = performance.now();
-    try { await step(); } catch { /* a bad frame is not worth stopping the camera for */ }
+    try {
+      if (needsGlobal(track, started)) await step();
+      else await measureStep(video.videoWidth, video.videoHeight);
+    } catch { /* a bad frame is not worth stopping the camera for */ }
     const cost = performance.now() - started;
     // Back off in proportion to what the last search actually cost, so a slow
     // phone searches less often rather than searching just as often and dropping
@@ -434,14 +501,61 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!vw || !vh) return;
 
     const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
-    lastSearchSize = { width: pw, height: ph };
 
     const workerUsed = !!ensureDetectWorker();
     const result = workerUsed
       ? await searchOnWorker(pw, ph, vw, vh)
       : searchOnMainThread(pw, ph, vw, vh);
 
+    // Recorded whether or not anything was found: this is when the global
+    // detector last *ran*, which is what needsGlobal() paces itself against.
+    // Recording it only on a find would make an empty frame re-search as fast
+    // as the loop can go.
+    track.lastGlobalDetection = performance.now();
+
     finishStep(result, workerUsed, pw, ph, vw, vh);
+  }
+
+  /**
+   * One tracking cycle: four small windows, four corners, no whole-frame
+   * search. This is what runs on the frames between global searches, and on a
+   * page being tracked well it is every frame but one in fifty.
+   *
+   * Driven from the rAF loop and never queued: one cycle is in flight at a
+   * time, so a slow phone tracks at whatever rate it can sustain rather than
+   * building a backlog of stale frames it will render anyway.
+   */
+  async function trackStep() {
+    if (trackInFlight || !running || document.hidden) return;
+    // No worker, no tracking — the main-thread fallback stays exactly the
+    // whole-frame search it always was rather than becoming a second thing to
+    // get right, and `needsGlobal` then finds nothing to track and runs the
+    // global search on its own cadence, which is the pre-tracking behaviour.
+    if (!ensureDetectWorker()) return;
+
+    const vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh || !trackSize) return;
+    const { width: tw, height: th } = trackSize;
+
+    const windows = searchWindows(track, performance.now(), { width: tw, height: th });
+    if (!windows.length) return;
+
+    trackInFlight = true;
+    try {
+      const bitmap = await createImageBitmap(video, { resizeWidth: tw, resizeHeight: th });
+      const reply = await runDetectWorker('track', bitmap, { windows });
+      if (!running) return;
+      // An absent reply — worker gone, message timed out — is folded in as
+      // "looked, found nothing", the same as a frame where the page really had
+      // gone. Confidence falls, and if it keeps falling `needsGlobal` asks for
+      // a whole-frame search, which is the honest way back.
+      track = observe(track, reply?.observations ?? {}, performance.now(), { width: tw, height: th });
+      publishFromTrack(tw, th, vw, vh, reply?.trackMs ?? 0);
+    } catch {
+      /* one bad frame costs one tracking cycle */
+    } finally {
+      trackInFlight = false;
+    }
   }
 
   /**
@@ -466,24 +580,78 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     const size = quadSize(search.found);
     const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
-    const inFrame = search.found.map((p) => ({ x: p.x * (vw / pw), y: p.y * (vh / ph) }));
-    const rect = focusWindowRect(inFrame, vw, vh, pageLongEdge, FOCUS_WINDOW);
-
-    let sharpnessScore = null, focusMs = 0;
-    if (rect) {
-      const focusBitmap = await createImageBitmap(
-        video, rect.sx, rect.sy, rect.size, rect.size,
-        { resizeWidth: rect.target, resizeHeight: rect.target },
-      );
-      const focus = await runDetectWorker('focus', focusBitmap);
-      sharpnessScore = focus?.sharpness ?? null;
-      focusMs = focus?.focusMs ?? 0;
-    }
+    const { sharpness: sharpnessScore, focusMs } =
+      await focusOnWorker(search.found, pw, ph, vw, vh, pageLongEdge);
 
     return {
       found: search.found, exposure: search.exposure, skew: search.skew, pageLongEdge,
       sharpness: sharpnessScore, detectMs: search.detectMs, measureMs: search.measureMs, focusMs,
     };
+  }
+
+  /**
+   * The focus round trip, for whichever pass needs it.
+   *
+   * A native-resolution crop rather than the search proxy: sharpness cannot be
+   * read off a 240px frame at all — the detail is not there — so the window is
+   * cut straight out of the video and drawn at exactly the scale the final
+   * quality gate will measure the submitted page at, which is what makes the
+   * live number and the final number the same number.
+   */
+  async function focusOnWorker(quadInProxy, pw, ph, vw, vh, pageLongEdge) {
+    const inFrame = quadInProxy.map((p) => ({ x: p.x * (vw / pw), y: p.y * (vh / ph) }));
+    const rect = focusWindowRect(inFrame, vw, vh, pageLongEdge, FOCUS_WINDOW);
+    if (!rect) return { sharpness: null, focusMs: 0 };
+    const focusBitmap = await createImageBitmap(
+      video, rect.sx, rect.sy, rect.size, rect.size,
+      { resizeWidth: rect.target, resizeHeight: rect.target },
+    );
+    const focus = await runDetectWorker('focus', focusBitmap);
+    return { sharpness: focus?.sharpness ?? null, focusMs: focus?.focusMs ?? 0 };
+  }
+
+  /**
+   * Exposure and focus for the page the tracker is already holding.
+   *
+   * The reason this exists: once `needsGlobal` made the whole-frame search
+   * rare, the readings that rode along with it became rare too, and a gate
+   * judging glare and focus from four seconds ago is not judging this frame.
+   * So the geometry runs at frame rate on the tracker and the measurements run
+   * here, on the old search loop's cadence — which is the right split, because
+   * where the page is changes every frame and how well-lit it is does not.
+   *
+   * `detectQuad` is not re-run: the corners are known, so only `measureQuad`
+   * and the focus crop are paid for.
+   */
+  async function measureStep(vw, vh) {
+    const tracked = quadOf(track);
+    if (!tracked || !trackSize || !ensureDetectWorker()) return;
+
+    const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    const inProxy = scaleQuad(tracked, trackSize, { width: pw, height: ph });
+    const size = quadSize(inProxy);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+
+    const bitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+    const read = await runDetectWorker('measure', bitmap, { quad: inProxy });
+    if (!running || !read?.exposure) return;
+
+    const { sharpness: sharpnessScore, focusMs } =
+      await focusOnWorker(inProxy, pw, ph, vw, vh, pageLongEdge);
+    if (!running) return;
+
+    measured = {
+      glare: read.exposure.glare,
+      clipping: read.exposure.clipping,
+      headroom: read.exposure.headroom,
+      skew: read.skew,
+      sharpness: sharpnessScore,
+    };
+    measuredAt = performance.now();
+    // The pose these readings belong to, so a later frame can tell whether the
+    // page has moved out from under them.
+    measuredQuad = quadOf(track);
+    recordStepTiming({ detectMs: 0, measureMs: read.measureMs ?? 0, focusMs, workerUsed: true });
   }
 
   /**
@@ -519,11 +687,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   /**
-   * Everything after a search result exists: steadiness bookkeeping, the
-   * live gate, publishing state, and the auto-capture decision. None of
-   * this was ever the expensive part, so none of it moved — same logic,
-   * same order, as before Phase 1, just no longer entangled with finding
-   * the quad in the first place.
+   * What a global search result does: hand the page to the tracker, and put
+   * this moment's exposure and focus reads on the shelf for the frames that
+   * follow.
+   *
+   * It no longer publishes the gate itself. Both this and the per-frame track
+   * go through publishFromTrack, so there is one place the gate is decided and
+   * one pose it is decided about, rather than a whole-frame answer and a
+   * tracked answer that could drift apart.
    */
   function finishStep(result, workerUsed, pw, ph, vw, vh) {
     // step() is async now — a search can still be waiting on the worker
@@ -542,9 +713,17 @@ export function createCapture({ video, overlay, onState, onShot }) {
     };
     recordStepTiming(next.timing);
 
+    trackSize = { width: TRACK_WIDTH, height: Math.round(TRACK_WIDTH * vh / vw) };
+
     if (!result.found) {
+      // Nothing in the whole frame. That is the one answer allowed to end a
+      // track outright: a corner search coming back empty is a corner behind a
+      // thumb, but the global detector finding no page anywhere means there is
+      // no page anywhere.
+      track = createTrack();
       lastDetection = steadyAnchor = null;
       steadySince = heldSince = consecutiveFinds = 0;
+      measured = measuredQuad = null;
       quad = null;
       // Losing the page is what re-arms auto-capture. Without this, the first
       // automatic shot was the only one: `armed` went false on firing and was
@@ -556,40 +735,116 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return;
     }
 
-    const found = result.found;
+    // Into the tracker's space, which is finer than the search proxy's.
+    const found = scaleQuad(result.found, { width: pw, height: ph }, trackSize);
+    const now = performance.now();
+
+    // The same page, or a different one? A re-detection of the page already
+    // being tracked keeps the track — with its velocities, its confidences and
+    // its history — rather than starting over and losing the second of steady
+    // holding that auto-capture is counting (§32).
+    track = isSameDocument(track, found, trackSize.width, trackSize.height)
+      ? observe(track, {
+          topLeft: { ...found[0], confidence: 0.9 },
+          topRight: { ...found[1], confidence: 0.9 },
+          bottomRight: { ...found[2], confidence: 0.9 },
+          bottomLeft: { ...found[3], confidence: 0.9 },
+        }, now, trackSize)
+      : acquire(createTrack(), found, now, trackSize);
+
+    // The exposure and focus reads belong to this moment and this pose. Both
+    // are recorded so a later frame can tell whether they still describe it.
+    measured = {
+      glare: result.exposure.glare,
+      clipping: result.exposure.clipping,
+      headroom: result.exposure.headroom,
+      // Angle-only, so scale-invariant — this reads the same on the 240px
+      // search proxy as it would on the full frame.
+      skew: result.skew,
+      // Focus, measured on real pixels at the scale the final gate will use.
+      // Null rather than zero when the window landed on blank paper: "we could
+      // not measure this" and "this is out of focus" are different claims and
+      // the gate must not act on the first as though it were the second.
+      sharpness: result.sharpness,
+    };
+    measuredAt = now;
+    measuredQuad = found;
+
+    publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
+  }
+
+  /**
+   * Are the last exposure and focus reads still about what is on screen?
+   *
+   * They come from the global search, so on a tracked frame they are as old as
+   * the last one — which is fine while the page has not moved, and is not fine
+   * the moment it has. A sharpness score from when the phone was still, applied
+   * to a frame taken mid-sweep, is exactly how a blurred page gets through an
+   * automatic shutter.
+   */
+  function measurementsStale(current, width, height) {
+    if (!measured || !measuredQuad) return true;
+    if (performance.now() - measuredAt > MEASUREMENT_STALE_MS) return true;
+    return quadDrift(current, measuredQuad, width, height) > CAPTURE.STABILITY_TOLERANCE;
+  }
+
+  /**
+   * Publish the gate's view of the current tracked pose.
+   *
+   * One path for both the global search and the per-frame track, so the gate
+   * cannot come to mean two different things depending on which found the page
+   * — the geometry always comes from the tracker, and the measurements always
+   * come from the last global search, labelled with how old they are.
+   */
+  function publishFromTrack(tw, th, vw, vh, trackMs, timing = null) {
+    if (!running) return;
+    const tracked = quadOf(track);
+    const next = blankState();
+    next.timing = timing ?? { detectMs: 0, measureMs: 0, focusMs: 0, trackMs, workerUsed: true };
+
+    if (!tracked || !geometryValid(track, tw, th) || track.state === 'searching') {
+      lastDetection = steadyAnchor = null;
+      steadySince = heldSince = consecutiveFinds = 0;
+      quad = null;
+      armed = true;
+      publish(next);
+      return;
+    }
+
     next.hasPage = true;
-    next.fill = quadFill(found, pw, ph);
-    next.glare = result.exposure.glare;
-    next.clipping = result.exposure.clipping;
-    next.headroom = result.exposure.headroom;
-    // Angle-only, so scale-invariant — this reads the same on the 240px
-    // search proxy as it would on the full frame.
-    next.skew = result.skew;
+    next.fill = quadFill(tracked, tw, th);
     consecutiveFinds++;
 
+    const stale = measurementsStale(tracked, tw, th);
+    next.glare = stale ? 0 : measured.glare;
+    next.clipping = stale ? 0 : measured.clipping;
+    next.headroom = stale ? 0 : measured.headroom;
+    next.skew = stale ? 0 : measured.skew;
     // How big the page will be once it is warped flat, in the camera's own
     // pixels. This is the number the quality gate will judge the page on, so it
     // is the number the advice should come from — telling someone to move closer
     // because the page covers less than a third of a *frame* is advice about the
     // wrong thing, and it is wrong whenever the frame is mostly desk.
-    next.pageLongEdge = result.pageLongEdge;
-
-    // Focus, measured on real pixels at the scale the final gate will use.
-    // Null rather than zero when the window landed on blank paper: "we could
-    // not measure this" and "this is out of focus" are different claims and the
-    // gate must not act on the first as though it were the second.
-    next.sharpness = result.sharpness;
+    const size = quadSize(tracked);
+    next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / tw));
+    // Null while the reads are stale, not zero, and not the old number. The
+    // gate treats null as "not measured" and refuses to clear on it, which is
+    // the right refusal: the page is moving, so there is nothing to shoot yet.
+    next.sharpness = stale ? null : measured.sharpness;
 
     const window_ = steadyWindow({
-      anchor: steadyAnchor, found, width: pw, height: ph,
+      anchor: steadyAnchor, found: tracked, width: tw, height: th,
       since: steadySince, now: performance.now(),
     });
     steadyAnchor = window_.anchor;
     steadySince = window_.since;
-    lastDetection = found;
+    lastDetection = tracked;
+    lastSearchSize = { width: tw, height: th };
     next.steady = window_.steady;
+    next.trackState = track.state;
+    next.trackConfidence = documentConfidence(track);
 
-    quad = easeQuad(quad, scaleQuad(found, { width: pw, height: ph }, { width: vw, height: vh }));
+    quad = easeQuad(quad, scaleQuad(tracked, { width: tw, height: th }, { width: vw, height: vh }));
 
     // ── the gate ───────────────────────────────────────────────────────────
     // See liveGateVerdict() above for the ordering and the reasoning behind
@@ -613,7 +868,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (shouldAutoCapture({
       autoCapture, armed, blocking: next.blocking,
-      steady: next.steady, heldFor, consecutiveFinds,
+      steady: next.steady, heldFor, consecutiveFinds, trackState: track.state,
     })) {
       armed = false;
       shoot(true);
@@ -634,6 +889,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
   function loop() {
     if (!running) return;
     rafHandle = requestAnimationFrame(loop);
+
+    // The tracking cycle rides the display's clock rather than a timer of its
+    // own. It is deliberately not awaited: this frame draws the pose the last
+    // cycle produced, and the cycle started here lands in time for the next
+    // one. Never more than one in flight, so a phone that cannot keep up
+    // tracks at a lower rate instead of accumulating frames it will throw away.
+    trackStep();
 
     const rect = video.getBoundingClientRect();
     const dpr = Math.min(2, devicePixelRatio || 1);

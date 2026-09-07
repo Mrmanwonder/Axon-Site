@@ -93,6 +93,20 @@ test('one lucky detection is not enough', () => {
   assert.equal(shouldAutoCapture({ ...ready, consecutiveFinds: CAPTURE.CONSECUTIVE_FINDS }), true);
 });
 
+test('a tracker that is not sure yet holds the shutter', () => {
+  // The run-length guard used to carry this alone: five *searches* in a row
+  // meant five independent whole-frame detections agreeing. Once the tracker
+  // took over, five frames became five extrapolations of one detection over
+  // eighty milliseconds, which is not the same evidence at all. 'tracking' is
+  // the state reached only when all four corners have been found separately
+  // and agree on a document-shaped quad, so it is what the guard rests on now.
+  for (const state of ['searching', 'locking', 'reacquiring', 'recovering']) {
+    assert.equal(shouldAutoCapture({ ...ready, trackState: state }), false,
+      `the shutter fired while the tracker was still ${state}`);
+  }
+  assert.equal(shouldAutoCapture({ ...ready, trackState: 'tracking' }), true);
+});
+
 test('a page held long enough fires even if it never reads as steady', () => {
   const restless = { ...ready, steady: false };
   assert.equal(shouldAutoCapture({ ...restless, heldFor: 0 }), false);

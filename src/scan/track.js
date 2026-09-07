@@ -400,6 +400,68 @@ export function quadOf(track) {
   return quad.every(Boolean) ? quad.map((p) => ({ x: p.x, y: p.y })) : null;
 }
 
+// Which two edges meet at each corner. The local search needs both of their
+// directions, because "find these two specific lines" is the whole reason it
+// is cheap — see corner-search.js.
+const CORNER_EDGES = {
+  topLeft: ['top', 'left'],
+  topRight: ['top', 'right'],
+  bottomRight: ['right', 'bottom'],
+  bottomLeft: ['bottom', 'left'],
+};
+
+/**
+ * Where to look for each corner on this frame, and what to look for.
+ *
+ * Everything the per-frame search needs and nothing about how it is run:
+ * a square window in the tracker's own space, clamped to the frame, and the
+ * directions of the two edges that meet inside it. Keeping this here rather
+ * than in capture.js is what lets the window geometry be tested against
+ * synthetic tracks instead of only against a camera.
+ *
+ * `size` is one number for all four windows on purpose. The four are cut as
+ * tiles of a single readback, and a uniform tile is what makes that one
+ * readback rather than four; a corner that wants a bigger window is a corner
+ * in trouble, which is exactly when spending a little more on the other three
+ * is the right trade.
+ */
+export function searchWindows(track, now, { width, height, minSize = 32, maxSize = 128 } = {}) {
+  const predicted = predict(track, now);
+  const edges = edgesFrom(track.corners);
+
+  let radius = 0;
+  for (const id of CORNER_IDS) {
+    const corner = track.corners[id];
+    if (corner) radius = Math.max(radius, searchRadius(corner, now));
+  }
+  if (!radius) return [];
+
+  // A multiple of eight keeps the tiles aligned and the sub-image copies on
+  // whole rows.
+  const size = Math.max(minSize, Math.min(maxSize, Math.ceil(radius * 2 / 8) * 8));
+
+  const windows = [];
+  for (const id of CORNER_IDS) {
+    const corner = track.corners[id];
+    const centre = predicted[id];
+    if (!corner || !centre) continue;
+    const [edgeA, edgeB] = CORNER_EDGES[id];
+    // Fall back to the corner's own remembered directions when an edge is
+    // missing — which happens when the corner at the far end of it is gone.
+    const a = edges[edgeA]?.angle ?? corner.edgeDirectionA;
+    const b = edges[edgeB]?.angle ?? corner.edgeDirectionB;
+    if (a == null || b == null) continue;
+
+    // Clamped, so a corner near the frame edge still gets a full window —
+    // an off-centre corner is what `centrality` is for, and a truncated
+    // window would instead quietly change what the search is measuring.
+    const sx = Math.round(Math.max(0, Math.min((width ?? size) - size, centre.x - size / 2)));
+    const sy = Math.round(Math.max(0, Math.min((height ?? size) - size, centre.y - size / 2)));
+    windows.push({ id, sx, sy, size, edgeA: a, edgeB: b });
+  }
+  return windows;
+}
+
 /** Centroid, area, aspect and rotation — the pose everything else reads (§25). */
 export function poseOf(track) {
   const quad = quadOf(track);
