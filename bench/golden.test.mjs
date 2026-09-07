@@ -266,18 +266,17 @@ test('reconcileWithInk downgrades a glare-only fail when the ink survived, and o
     'a page whose red layer yielded nothing was let through — reconcileWithInk must not pass a page on no evidence');
 });
 
-test('page-clean.jpg (a room with no page in shot) is a known false accept — pinned, not fixed here', async () => {
-  // Quad-detector accuracy is explicitly deferred work (scansystemredesign.md
-  // §4.3, phased last in §6) — it needs production data from the capture fix
-  // landing first, not a threshold guessed against seven fixtures. This test
-  // exists to pin today's behaviour so a *regression* — a new false accept
-  // appearing, or this one getting worse — is caught the same way any other
-  // change is, rather than to claim the gap is closed. If detection ever
-  // legitimately stops finding a page here, tighten this assertion (and
-  // update the comment) rather than leaving it stale.
+// Was a known false accept, pinned rather than fixed: a photo of an empty
+// room (no page anywhere in shot) scored 0.92 on paperScore's `paper` share
+// alone, comfortably over PAPER_MIN, because the floor here is bright and
+// neutral enough to read as paper on colour alone. Closed by the texture gate
+// in detectQuad() — see edges.js — which reads the same fixture's interior
+// variance at ~50 against every real page fixture's under-23, and rejects it.
+// This is now a regression pin the other way: if detection starts finding a
+// page here again, that is the false accept coming back.
+test('page-clean.jpg (a room with no page in shot) is not found as a page', async () => {
   const proxy = await decodeFixture('page-clean.jpg', { resizeWidth: PROXY_W });
   const quad = detectQuad(proxy);
-  assert.ok(quad, 'the baseline this pins found a quad here — if that changed, this comment needs updating too');
-  const { paper } = paperScore(proxy, quad);
-  assert.ok(paper >= PAPER_MIN, `paper score ${paper} — same known false accept as documented above, not a new one`);
+  assert.equal(quad, null,
+    'a room with no page in shot produced a quad — the empty-floor false accept is back');
 });

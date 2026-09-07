@@ -13,7 +13,7 @@
 // things. A white page beside a pale blue folder on a cream floor is one
 // connected bright blob, and its extreme corners are the corners of the folder.
 //
-// Three things separate a page from the rest of a desk, and this uses all of
+// Four things separate a page from the rest of a desk, and this uses all of
 // them, because any one alone is what produced that failure:
 //
 //   1. Paper is bright *and neutral*. The desk is brown, the folder is blue,
@@ -24,6 +24,11 @@
 //   3. A page has edges *inside the frame*. A region touching every border is
 //      not a page we can see the shape of — it is a floor, and the honest answer
 //      is that there is no page here.
+//   4. A page's interior is flat. A cream floor or a wooden desk can be as
+//      bright and as colourless as paper, but not as smooth — grain, veining
+//      and shadow put real variance into a handful of interior samples that a
+//      blank sheet does not. This is what closes the gap #1-#3 left open: see
+//      the texture gate in detectQuad() below.
 //
 // Detection runs on a small proxy of the frame, several times a second rather
 // than every frame. The overlay is drawn every frame from the last known quad,
@@ -41,6 +46,10 @@ const RECTANGULARITY_MIN = 0.78;
 // Above this the "page" is the whole frame, which means its edges are not in
 // shot. Nothing to deskew, and nothing to auto-capture.
 const MAX_FILL = 0.92;
+// Standard deviation of interior brightness a page-shaped quad is allowed
+// before it reads as textured surface rather than blank paper. See the gate
+// in detectQuad() for where this number comes from.
+const TEXTURE_MAX = 32;
 
 /** Otsu's threshold: the split that best separates the histogram into two lumps. */
 export function otsu(gray) {
@@ -120,23 +129,28 @@ export function detectQuad(img, { minFill = 0.16 } = {}) {
           if (!isPageShaped(quad, width, height)) continue;
 
           const paper = paperScore(img, quad);
-          // How much of the inside is actually paper. This is the one signal
-          // that separates a page from most of the rest of a desk: every real
-          // page in bench/golden.test.mjs's fixtures scores 0.96 or better.
+          // How much of the inside is actually paper. This is the strongest
+          // single signal separating a page from most of the rest of a desk:
+          // every real page in bench/golden.test.mjs's fixtures scores 0.96 or
+          // better.
           //
-          // It is not a clean separation, though — bench/golden.test.mjs also
-          // pins a known false accept: a photo of an empty floor (no page in
-          // shot at all) currently scores 0.92, comfortably over this line.
-          // That was measured, not assumed, once golden.test.mjs made it
-          // possible to run this against real fixtures as an actual check
-          // rather than eyeballing bench/detect.html by hand — see that test
-          // file for the up-to-date numbers and why closing this gap is
-          // deferred rather than guessed at with a higher threshold here.
-          //
-          // A tone step across the edge looked like it should work too and does
-          // not — it stays in the ranking score, where being wrong costs
-          // nothing, and out of the gate, where it cost real pages.
+          // It is not a clean separation on its own, though — bench/golden.
+          // test.mjs used to pin a known false accept here: a photo of an empty
+          // floor (no page in shot at all) scores 0.92 on this alone,
+          // comfortably over the line. A tone step across the edge looked like
+          // it should catch that and does not — it stays in the ranking score,
+          // where being wrong costs nothing, and out of the gate, where it cost
+          // real pages.
           if (paper.paper < 0.85) continue;
+          // What actually separates the floor from a page is texture, not
+          // colour or brightness: a floor's grain and veining put real
+          // variance into a 5x5 grid even where it is bright and neutral
+          // enough to pass the check above, and a page's blank interior does
+          // not. Measured on the real fixtures (bench/golden.test.mjs): every
+          // genuine page scores under 23, and the floor fixture that used to
+          // false-accept scores 50 — TEXTURE_MAX sits with margin on both
+          // sides of that gap, not against a single number.
+          if (paper.texture > TEXTURE_MAX) continue;
 
           const votes = vertical[i].votes + vertical[j].votes +
                         horizontal[k].votes + horizontal[l].votes;

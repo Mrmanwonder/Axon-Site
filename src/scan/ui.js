@@ -148,6 +148,11 @@ function stopCamera() {
 async function takePage(shot, replacing = null) {
   if (S.busy) return;
   S.busy = true;
+  // AXON_SCAN_LAG_BRIEF.md §0 — the onShot → paintTray gap, split into
+  // acceptPage() (its own breakdown lands in pipeline.js's console line and
+  // in the saved page's conditioning_meta.capture_timing) and paintTray()
+  // itself. Temporary, landed rather than dropped.
+  const tOnShot = performance.now();
   try {
     if (!S.draft) {
       S.draft = await createDraft({
@@ -170,8 +175,14 @@ async function takePage(shot, replacing = null) {
       sourceKind: shot.sourceKind ?? 'camera',
       original: shot.original ?? null,
     });
+    const tAccepted = performance.now();
 
     await paintTray();
+    console.debug('[scan:tray-timing]', {
+      acceptMs: +(tAccepted - tOnShot).toFixed(1),
+      paintMs: +(performance.now() - tAccepted).toFixed(1),
+      totalMs: +(performance.now() - tOnShot).toFixed(1),
+    });
 
     // The verdict is delivered now, while the paper is still in front of the
     // student. The same words forty seconds later usually mean a lost page.

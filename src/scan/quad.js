@@ -213,7 +213,7 @@ function paperScore(img, quad) {
   };
 
   // Inside, on a small grid in barycentric-ish coordinates over the quad.
-  let paper = 0, samples = 0, insideValue = 0;
+  let paper = 0, samples = 0, insideValue = 0, insideValueSq = 0;
   for (let u = 1; u <= 5; u++) {
     for (let w = 1; w <= 5; w++) {
       const fu = u / 6, fw = w / 6;
@@ -221,6 +221,7 @@ function paperScore(img, quad) {
       const bottom = { x: quad[3].x + (quad[2].x - quad[3].x) * fu, y: quad[3].y + (quad[2].y - quad[3].y) * fu };
       const { v, s } = at(top.x + (bottom.x - top.x) * fw, top.y + (bottom.y - top.y) * fw);
       insideValue += v;
+      insideValueSq += v * v;
       if (v > 120 && s < 0.34) paper++;
       samples++;
     }
@@ -228,6 +229,14 @@ function paperScore(img, quad) {
   if (!samples) return 0;
   const paperShare = paper / samples;
   const meanInside = insideValue / samples;
+  // How much the interior's own brightness varies from sample to sample.
+  // Paper's blank interior is flat by construction — a written line or two
+  // barely moves this across a 5x5 grid. A floor or desk is not: grain,
+  // veining and shadow put real variance into the same handful of samples
+  // even when the surface is bright and colourless enough to pass the checks
+  // above. See the gate in detectQuad() (edges.js) for the threshold and the
+  // measurement behind it.
+  const texture = Math.sqrt(Math.max(0, insideValueSq / samples - meanInside * meanInside));
 
   // Just outside each edge, stepped along its length. A page sits on something,
   // and that something is darker or more colourful than the page.
@@ -249,7 +258,7 @@ function paperScore(img, quad) {
   const meanOutside = outsideSamples ? outside / outsideSamples : meanInside;
   const step = Math.max(0, Math.min(1, (meanInside - meanOutside) / 60));
 
-  return { paper: paperShare, step, score: paperShare * 0.75 + step * 0.25 };
+  return { paper: paperShare, step, texture, score: paperShare * 0.75 + step * 0.25 };
 }
 
 export { findLines, intersect, offAxis, paperScore, MAX_LINES_PER_FAMILY, AXIS_TOLERANCE };

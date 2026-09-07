@@ -23,7 +23,17 @@ function ensureWorker() {
       pending.delete(id);
       resolve(rest);
     };
-    worker.onerror = () => { worker = false; }; // fall back from here on
+    worker.onerror = (event) => {
+      // This failure mode was previously invisible — the fallback worked, so
+      // nothing ever surfaced that it was the fallback. AXON_SCAN_LAG_BRIEF.md
+      // §3: a Worker that fails and silently falls back to the main thread is
+      // one of the two live suspects for "the picture takes ten more seconds
+      // to show up", and it cannot be ruled in or out without this line.
+      console.error('[scan] worker failed, falling back to main-thread conditioning', {
+        message: event?.message, filename: event?.filename, lineno: event?.lineno,
+      });
+      worker = false; // fall back from here on
+    };
   } catch {
     worker = false;
   }
@@ -37,10 +47,13 @@ function ensureWorker() {
  * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object, sourceKind?:string}} options
  */
 export async function processPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
+  const started = performance.now();
   const w = ensureWorker();
+  const workerUsed = !!w;
+  let result;
   if (w) {
     const id = nextId++;
-    const result = await new Promise((resolve) => {
+    result = await new Promise((resolve) => {
       pending.set(id, resolve);
       // The bitmap is transferred rather than copied. A copy of an
       // eight-megapixel frame is tens of megabytes moved for nothing.
@@ -51,9 +64,16 @@ export async function processPage(source, { quad = null, pageNumber = 1, capture
       error.refused = !!result.refused;
       throw error;
     }
-    return result;
+  } else {
+    result = await processOnThisThread(source, { quad, pageNumber, capturePath, liveGate, sourceKind });
   }
-  return processOnThisThread(source, { quad, pageNumber, capturePath, liveGate, sourceKind });
+  // AXON_SCAN_LAG_BRIEF.md §3: whether the Worker path or the main-thread
+  // fallback actually ran, and how long the round trip cost either way — the
+  // two live suspects for "the picture takes ten more seconds to show up"
+  // collapse to this one number and this one flag.
+  const processMs = performance.now() - started;
+  console.debug('[scan:process-timing]', { workerUsed, capturePath, pageNumber, processMs: +processMs.toFixed(1) });
+  return { ...result, workerUsed, timing: { ...(result.timing ?? null), processMs: +processMs.toFixed(1) } };
 }
 
 async function processOnThisThread(source, { quad, pageNumber, capturePath, liveGate, sourceKind }) {
