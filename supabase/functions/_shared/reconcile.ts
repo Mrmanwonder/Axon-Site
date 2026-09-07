@@ -21,15 +21,50 @@ export interface RegionMarks {
   recognition: 'high' | 'medium' | 'low' | null;
 }
 
+/**
+ * Where a paper's arithmetic stands. Five states, not a boolean.
+ *
+ * The boolean is still published — too much reads it — but it is derived from
+ * this rather than being the thing itself, because a boolean cannot tell
+ * "the sums agree" apart from "the sums agree about the half of the paper we
+ * managed to read". Those are different papers and only one of them is
+ * reconciled. See the spec's §48/§49.
+ */
+export type ReconciliationState =
+  /** No reported total and no stated maximum: there was nothing to check against. */
+  | 'NOT_CHECKED'
+  /** Every applicable mark is known and every check passes. */
+  | 'CONSISTENT'
+  /** A check failed. The reading is wrong somewhere, and the delta says roughly where. */
+  | 'INCONSISTENT'
+  /** The checks that could run passed, but some applicable mark is unknown, so
+      the agreement is conditional on values we do not have. */
+  | 'CONDITIONALLY_CONSISTENT';
+
 export interface Reconciliation {
+  /**
+   * True only for CONSISTENT.
+   *
+   * Deliberately strict: this is what the confidence model reads as "nothing
+   * about the arithmetic implicates this question", and an unknown mark
+   * implicates the arithmetic by definition — we cannot know that the sums
+   * close when we do not know one of the addends.
+   */
   reconciled: boolean;
+  state: ReconciliationState;
+  completeness: 'COMPLETE' | 'INCOMPLETE';
+  /** order_index of every region whose awarded mark was never read. */
+  unknown_awarded: number[];
   delta: number | null;
+  /** Known values only. An unknown mark is not a zero — see sumKnown. */
   sum_awarded: number;
   sum_available: number;
   checks: {
     awarded_matches_total: boolean | null;
     available_matches_maximum: boolean | null;
     every_question_within_its_maximum: boolean;
+    /** Every applicable mark was actually read. */
+    all_marks_known: boolean;
   };
   /** Regions to put in front of the student first, worst-suspected first. */
   suspects: number[];
@@ -37,33 +72,67 @@ export interface Reconciliation {
   message: string | null;
 }
 
-const sum = (ns: (number | null)[]) =>
-  ns.reduce<number>((t, n) => t + (typeof n === 'number' ? n : 0), 0);
+/**
+ * Sum of the values that exist, and a count of the ones that do not.
+ *
+ * The version this replaces folded `null` into the total as a zero, which is
+ * the single most consequential line this file has ever had. A paper reading
+ * `2, unknown, 4` against a reported total of 6 summed to exactly 6 and was
+ * declared reconciled — so a question whose mark was never read produced a
+ * *clean* paper, and every other question on it collected the arithmetic
+ * signal that clean paper implied. Missing is not zero: an unread mark is a
+ * question we have nothing to say about, and saying nothing is the whole
+ * point of having the state below.
+ */
+function sumKnown(ns: (number | null)[]): { total: number; unknown: number } {
+  let total = 0, unknown = 0;
+  for (const n of ns) {
+    if (typeof n === 'number') total += n;
+    else unknown++;
+  }
+  return { total, unknown };
+}
 
 export function reconcile(
   regions: RegionMarks[],
   reportedTotal: number | null,
   statedMaximum: number | null,
 ): Reconciliation {
-  const sumAwarded = sum(regions.map((r) => r.awarded));
-  const sumAvailable = sum(regions.map((r) => r.available));
+  const awarded = sumKnown(regions.map((r) => r.awarded));
+  const available = sumKnown(regions.map((r) => r.available));
+  const sumAwarded = awarded.total;
+  const sumAvailable = available.total;
+
+  const unknownAwarded = regions.filter((r) => r.awarded === null).map((r) => r.order_index);
+  const allMarksKnown = unknownAwarded.length === 0;
+  const completeness: 'COMPLETE' | 'INCOMPLETE' = allMarksKnown ? 'COMPLETE' : 'INCOMPLETE';
 
   const awardedMatches = reportedTotal === null ? null : nearly(sumAwarded, reportedTotal);
   const availableMatches = statedMaximum === null ? null : nearly(sumAvailable, statedMaximum);
   const withinMax = regions.every((r) =>
     r.awarded === null || r.available === null || r.awarded <= r.available + 1e-6);
 
+  const checksPass = withinMax && (awardedMatches ?? true) && (availableMatches ?? true);
+  const anythingToCheck = awardedMatches !== null || availableMatches !== null;
+
   // A paper with no total on it skips checks 1 and 2 and keeps check 3. It is
   // not a failure — it is a paper we know less about, and the whole paper drops
   // a confidence tier to say so.
-  const reconciled = withinMax &&
-    (awardedMatches ?? true) && (availableMatches ?? true) &&
-    (awardedMatches !== null || availableMatches !== null);
+  const state: ReconciliationState = !anythingToCheck
+    ? 'NOT_CHECKED'
+    : !checksPass
+      ? 'INCONSISTENT'
+      : allMarksKnown
+        ? 'CONSISTENT'
+        : 'CONDITIONALLY_CONSISTENT';
 
   const delta = reportedTotal === null ? null : round2(sumAwarded - reportedTotal);
 
   return {
-    reconciled,
+    reconciled: state === 'CONSISTENT',
+    state,
+    completeness,
+    unknown_awarded: unknownAwarded,
     delta,
     sum_awarded: round2(sumAwarded),
     sum_available: round2(sumAvailable),
@@ -71,9 +140,10 @@ export function reconcile(
       awarded_matches_total: awardedMatches,
       available_matches_maximum: availableMatches,
       every_question_within_its_maximum: withinMax,
+      all_marks_known: allMarksKnown,
     },
     suspects: rankSuspects(regions, delta),
-    message: messageFor(regions, reportedTotal, sumAwarded, delta, withinMax),
+    message: messageFor(regions, reportedTotal, sumAwarded, delta, withinMax, unknownAwarded.length),
   };
 }
 
@@ -124,6 +194,7 @@ function messageFor(
   sumAwarded: number,
   delta: number | null,
   withinMax: boolean,
+  unknownCount: number,
 ): string | null {
   if (!withinMax) {
     return 'Our reading of this paper gives one question more marks than it was worth — worth checking these.';
@@ -132,6 +203,15 @@ function messageFor(
     return regions.length
       ? 'We could not find this paper’s total, so we could not check our reading against it.'
       : null;
+  }
+  // Said before the delta, because a delta of zero across an incomplete paper
+  // is the case most likely to be misread as "all good" — by a student and by
+  // us. The mark we never read is the thing worth their attention, not the sum
+  // that happened to land on the total without it.
+  if (unknownCount > 0) {
+    return unknownCount === 1
+      ? 'We could not read the mark on one question, so we could not check this paper’s total — worth a look.'
+      : `We could not read the marks on ${unknownCount} questions, so we could not check this paper’s total — worth a look.`;
   }
   if (delta === null || delta === 0) return null;
   return `Our reading of this paper adds up to ${trim(sumAwarded)}, and the total on the paper is ` +
