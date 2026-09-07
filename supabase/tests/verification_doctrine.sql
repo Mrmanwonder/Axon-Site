@@ -46,9 +46,9 @@ insert into public.student (id, guardian_id, first_name, class_level, age_band) 
  ('cccccccc-0000-4000-8000-000000000002','cccccccc-0000-4000-8000-000000000001','Cai',11,'under_18');
 
 insert into public.paper (id, student_id, type, tier, date_taken) values
- ('cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002','school_test','tier_1','2026-09-01'),
- ('cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002','school_test','tier_1','2026-09-01'),
- ('cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002','school_test','tier_1','2026-09-01');
+ ('cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002','unit_test','tier_1','2026-09-01'),
+ ('cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002','unit_test','tier_1','2026-09-01'),
+ ('cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002','unit_test','tier_1','2026-09-01');
 
 -- question_region.run_id carries a composite foreign key to
 -- extraction_run(id, student_id), so every run a region hangs off must exist.
@@ -98,17 +98,17 @@ exception when check_violation then perform public._t('a malformed answer_block 
 -- a raw string comparison sees no clash and Insights counts it twice.
 
 do $$ begin
-  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, created_at)
-  values ('cccccccc-0000-4000-8000-000000000010','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',4,'2a', now());
+  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box, created_at)
+  values ('cccccccc-0000-4000-8000-000000000010','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',4,'2a','{"page":1,"x":40,"y":100,"w":60,"h":40}', now());
   begin
-    insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, created_at)
-    values ('cccccccc-0000-4000-8000-000000000010','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',5,'2. a)', now());
+    insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box, created_at)
+    values ('cccccccc-0000-4000-8000-000000000010','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',5,'2. a)','{"page":1,"x":40,"y":100,"w":60,"h":40}', now());
     perform public._t('2a and 2. a) are the same question', false, 'both inserted');
   exception when unique_violation then perform public._t('2a and 2. a) are the same question', true);
   end;
   -- A re-scan is legitimate and makes its own run, so the same label may repeat.
-  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, created_at)
-  values ('cccccccc-0000-4000-8000-000000000011','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',0,'2a', now());
+  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box, created_at)
+  values ('cccccccc-0000-4000-8000-000000000011','cccccccc-0000-4000-8000-000000000003','cccccccc-0000-4000-8000-000000000002',0,'2a','{"page":1,"x":40,"y":100,"w":60,"h":40}', now());
   perform public._t('a re-scan may repeat a label on its own run', true);
 end $$;
 
@@ -127,9 +127,9 @@ begin
   insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication)
   values (v_run,'cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002','test',
           '{"blocks_commit":true,"blocked_reason":"adjudication reported misidentified question labels"}');
-  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label,
-                                      marks_awarded, marks_available, confidence_tier, needs_review, student_confirmed_at, created_at)
-  values (v_run,'cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002',0,'c',3,3,'confident',false,now(), now());
+  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
+                                      marks_awarded, marks_awarded_box, marks_available, marks_available_box, confidence_tier, needs_review, student_confirmed_at, created_at)
+  values (v_run,'cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002',0,'c','{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}','confident',false,now(), now());
   begin
     perform public.commit_extraction_run(v_run);
     perform public._t('a structural adjudication blocks the commit', false, 'committed anyway');
@@ -146,10 +146,10 @@ begin
   values (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002','test');
   -- created_at before the index cutoff, so this exercises the commit gate
   -- rather than being refused at insert time.
-  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label,
-                                      marks_awarded, marks_available, confidence_tier, needs_review, student_confirmed_at, created_at)
-  values (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002',0,'2a',2,2,'confident',false,now(),'2026-09-01'),
-         (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002',1,'2. a)',2,2,'confident',false,now(),'2026-09-01');
+  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
+                                      marks_awarded, marks_awarded_box, marks_available, marks_available_box, confidence_tier, needs_review, student_confirmed_at, created_at)
+  values (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002',0,'2a','{"page":1,"x":40,"y":100,"w":60,"h":40}',2,'{"page":1,"x":40,"y":100,"w":60,"h":40}',2,'{"page":1,"x":40,"y":100,"w":60,"h":40}','confident',false,now(),'2026-09-01'),
+         (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002',1,'2. a)','{"page":1,"x":40,"y":100,"w":60,"h":40}',2,'{"page":1,"x":40,"y":100,"w":60,"h":40}',2,'{"page":1,"x":40,"y":100,"w":60,"h":40}','confident',false,now(),'2026-09-01');
   begin
     perform public.commit_extraction_run(v_run);
     perform public._t('the same question read twice blocks the commit', false, 'committed anyway');
@@ -164,13 +164,13 @@ do $$
 declare v_run uuid := gen_random_uuid(); v_paper uuid := gen_random_uuid();
 begin
   insert into public.paper (id, student_id, type, tier, date_taken)
-  values (v_paper,'cccccccc-0000-4000-8000-000000000002','school_test','tier_1','2026-09-01');
+  values (v_paper,'cccccccc-0000-4000-8000-000000000002','unit_test','tier_1','2026-09-01');
   insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication)
   values (v_run, v_paper,'cccccccc-0000-4000-8000-000000000002','test','{"cause":"ok"}');
-  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label,
-                                      marks_awarded, marks_available, confidence_tier, needs_review,
+  insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
+                                      marks_awarded, marks_awarded_box, marks_available, marks_available_box, confidence_tier, needs_review,
                                       student_confirmed_at, answer_block, created_at)
-  values (v_run, v_paper,'cccccccc-0000-4000-8000-000000000002',0,'a',3,3,'confident',false,now(),
+  values (v_run, v_paper,'cccccccc-0000-4000-8000-000000000002',0,'a','{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}','confident',false,now(),
           '{"lines":[{"segments":[{"type":"math","latex":"\\tfrac{8}{2}","annotations":[]}],"role":"working"}],"notation_profile":"caie_cs","raw_text":"8/2"}', now());
   perform public.commit_extraction_run(v_run);
   perform public._t('a clean paper still commits',
