@@ -308,11 +308,43 @@ export type MarkLossEvent = {
   student_rejected_at: string | null;
 };
 
+/** A box on the page image, in the pipeline's 0–1000 grid. */
+export type Bbox = { x: number; y: number; w: number; h: number; page_index?: number };
+
+/** One piece of a transcribed line. `latex` is model-generated and untrusted. */
+export type Segment = {
+  type: "math" | "prose" | "numeral" | "binary" | "label";
+  latex?: string | null;
+  text?: string | null;
+  annotations: string[];
+  bbox?: Bbox | null;
+  confidence?: number | null;
+};
+
+/**
+ * The student's answer with its structure intact.
+ *
+ * `student_answer` is `text`, which is why the screen showed what a student
+ * called "numbers, alphabets and signs paired together": structure was
+ * destroyed at write time and no frontend could recover it. Handwritten `8/2`
+ * became `8+1` — a correct step turned into a false one — and a struck-through
+ * `32` vanished entirely, which under CAIE marking is mark-bearing evidence.
+ *
+ * Null on every row written before the extraction stage produced one; the
+ * screen falls back to `student_answer`.
+ */
+export type AnswerBlock = {
+  lines: { segments: Segment[]; role: "working" | "final_answer" | "restatement" | "crossed_out" }[];
+  notation_profile: string;
+  raw_text: string;
+};
+
 export type StudentAttempt = {
   id: string;
   question_label: string | null;
   question_text: string | null;
   student_answer: string | null;
+  answer_block: AnswerBlock | null;
   marks_awarded: number | null;
   max_marks: number | null;
   marks_source: "teacher_pen" | "official_scheme";
@@ -337,6 +369,15 @@ export type QuestionRegionRef = {
   committed_attempt_id: string | null;
   page_spans: { page: number; box: { x: number; y: number; w: number; h: number } }[] | null;
   crop_key: string | null;
+  /**
+   * The four signals, kept apart rather than collapsed into one tier.
+   *
+   * Three-valued: `true`, `false`, or the string `"unknown"`. A boolean forces
+   * a guess where no check applies — live rows carried an `arithmetic` verdict
+   * on the two words "Not Normalized", which contain no arithmetic at all — and
+   * a forced guess is a hallucination with a schema.
+   */
+  confidence_signals: Record<string, unknown> | null;
 };
 
 export type PaperDetail = {

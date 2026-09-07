@@ -26,12 +26,21 @@ export default function Crop({
   box,
   missing = "We could not show this part of the page.",
   alt = "The part of your paper this came from",
+  highlight = null,
 }: {
   paperId: string | null | undefined;
   pageNumber: number | null | undefined;
   box: CropBox | null | undefined;
   missing?: string;
   alt?: string;
+  /**
+   * A box inside `box`, in the same 0–1000 page grid, drawn over the crop.
+   *
+   * This is what turns "the app misread me" from an argument into a two-second
+   * check: tap a segment of the transcription and see the handwriting it was
+   * read from, in the student's own hand.
+   */
+  highlight?: CropBox | null;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [styles, setStyles] = useState<Styles>(null);
@@ -90,6 +99,22 @@ export default function Crop({
           data-ready={styles ? "1" : undefined}
           onLoad={(e) => void measure(e.currentTarget)}
           onError={() => void recover()}
+        />
+      )}
+      {/* The highlight is positioned relative to the crop's own box, so a
+          segment's page-grid coordinates land in the right place inside a frame
+          that is already showing only part of the page. Drawn only once the
+          image has been measured, or it would sit over nothing. */}
+      {styles && highlight && box && (
+        <div
+          className="crophl"
+          aria-hidden="true"
+          style={{
+            left: `${((highlight.x - box.x) / box.w) * 100}%`,
+            top: `${((highlight.y - box.y) / box.h) * 100}%`,
+            width: `${(highlight.w / box.w) * 100}%`,
+            height: `${(highlight.h / box.h) * 100}%`,
+          }}
         />
       )}
     </div>
