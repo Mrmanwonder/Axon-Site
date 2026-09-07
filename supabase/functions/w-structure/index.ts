@@ -154,7 +154,10 @@ serveWorker(async ({ sb, msg, beat }) => {
       box: m.box,
       shape: m.shape,
       mark_class: m.mark_class,
-      metrics: m.metrics,
+      // §41: every mark -> question binding carries how it was arrived at and
+      // how strongly, so an unattributed or ambiguous mark can be told apart
+      // from a confident one at review instead of all three looking alike.
+      metrics: { ...m.metrics, attribution: m.attribution },
       confidence_tier: 'unsure' as const,
     }));
     if (rows.length) await sb.from('teacher_mark').insert(rows);

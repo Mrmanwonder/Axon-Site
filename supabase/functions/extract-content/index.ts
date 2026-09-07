@@ -209,6 +209,14 @@ Deno.serve(async (req) => {
     marks_available: marksCoherent ? availableValue : null,
     marks_available_box: marksCoherent && availableValue !== null ? available.box : null,
     confidence_signals: {
+      // Two keys, deliberately. `recognition` is later overwritten by the
+      // confidence model's own boolean of the same name (assess() -> Signals,
+      // merged into this jsonb by w-reconcile), so the model's actual
+      // 'high' | 'medium' | 'low' cannot survive there. This is the one that
+      // does survive, and it is what w-reconcile reads back. Writing only the
+      // first meant a re-run of reconciliation read a boolean where a grade
+      // was expected and marked every question on the paper unreadable.
+      recognition_confidence: result.recognition_confidence,
       recognition: result.recognition_confidence,
       marks_coherent: marksCoherent,
       cropped_every_page: croppedAll,

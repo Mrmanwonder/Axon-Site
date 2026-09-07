@@ -16,12 +16,39 @@ export interface Signals {
   structural: boolean;
   arithmetic: boolean;
   plausibility: boolean;
+  /**
+   * The two things `structural` is the conjunction of, kept alongside it.
+   *
+   * §6: uncertainty has to stay decomposable. `structural: false` on its own
+   * cannot tell anyone whether the numbering broke or the boundary did, and
+   * those are different bugs with different fixes. Written into
+   * confidence_signals (jsonb) so the distinction survives into the row and
+   * into review, without a schema change.
+   */
+  structure_numbering?: boolean;
+  structure_boundary?: boolean;
 }
 
 export interface SignalInput {
   recognition: 'high' | 'medium' | 'low' | null;
   /** This region's number is present and continues the paper's sequence. */
   numberingSound: boolean;
+  /**
+   * Whether this region's own geometry holds up: it has at least one span,
+   * and every span has a real box.
+   *
+   * Separate from `numberingSound` on purpose. Structure confidence used to
+   * *be* numbering soundness — one boolean standing in for the whole of
+   * "do we know where this question is and what it is called" — which meant a
+   * question with a perfectly sequential label and no usable boundary scored
+   * as structurally sound. They fail for different reasons and are fixed by
+   * different things, so they are recorded separately even though the tier
+   * still needs both (§57).
+   *
+   * Defaults true: a caller that does not know is not making a claim, and
+   * absence of evidence is not evidence of a broken boundary.
+   */
+  boundarySound?: boolean;
   /**
    * Nothing about the arithmetic implicates THIS question.
    *
@@ -53,15 +80,47 @@ export interface SignalInput {
   unreadable: boolean;
 }
 
+/**
+ * The recognition confidence the content pass actually recorded.
+ *
+ * `confidence_signals.recognition` is written by extract-content from the
+ * model's own `recognition_confidence`, so the real 'high' | 'medium' | 'low'
+ * is in the row. Reading it back is the whole of this function; it exists
+ * because the alternative — deriving recognition from `confidence_tier` — is
+ * circular. The tier is computed *from* recognition, so recovering one from
+ * the other can only ever return what was already assumed, and what it
+ * actually returned was a flat 'medium' for every readable question on every
+ * paper.
+ *
+ * Null when nothing was recorded, which `assess` treats as unreadable rather
+ * than as a passing grade. A missing signal is not a good one.
+ */
+export function recognitionOf(
+  signals: unknown,
+  tier: string | null,
+): 'high' | 'medium' | 'low' | null {
+  if (tier === 'unreadable') return 'low';
+  const bag = signals as { recognition_confidence?: unknown; recognition?: unknown } | null;
+  // `recognition_confidence` is the durable key. `recognition` is read only as
+  // a fallback for rows written before it existed, and only when it still
+  // holds a grade — by the time reconciliation has run once it holds a
+  // boolean instead, which is not a grade and must not be read as one.
+  const recorded = bag?.recognition_confidence ?? bag?.recognition;
+  return recorded === 'high' || recorded === 'medium' || recorded === 'low' ? recorded : null;
+}
+
 export function assess(input: SignalInput): { tier: ConfidenceTier; signals: Signals } {
+  const boundarySound = input.boundarySound ?? true;
   const signals: Signals = {
     // 'medium' passes. A pass here is not a claim the reading is right — it is a
     // claim that nothing about the recognition itself was alarming, and the
     // other three signals are what turn that into confidence.
     recognition: input.recognition === 'high' || input.recognition === 'medium',
-    structural: input.numberingSound,
+    structural: input.numberingSound && boundarySound,
     arithmetic: input.arithmeticSound,
     plausibility: plausible(input.awarded, input.available),
+    structure_numbering: input.numberingSound,
+    structure_boundary: boundarySound,
   };
 
   if (input.unreadable || input.recognition === null) {
@@ -92,7 +151,12 @@ export function tierFrom(
   signals: Signals,
   opts: { layerFallback: boolean },
 ): ConfidenceTier {
-  const allPass = Object.values(signals).every(Boolean);
+  // Named explicitly rather than Object.values(...).every(Boolean): the
+  // interface also carries decomposed sub-signals for review, and a
+  // diagnostic field added later must not silently become a gate on whether
+  // a question reaches analytics.
+  const allPass = signals.recognition && signals.structural &&
+    signals.arithmetic && signals.plausibility;
   return allPass && !opts.layerFallback ? 'confident' : 'unsure';
 }
 

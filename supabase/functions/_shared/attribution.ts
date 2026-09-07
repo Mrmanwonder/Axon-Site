@@ -26,6 +26,13 @@ export interface AttributedMark {
   mark_class: MarkClass;
   value: number | null;
   region_index: number | null;
+  /**
+   * How the binding above was arrived at, kept beside it rather than folded
+   * into it. A mark bound at 0.41 because it was the nearest thing on the page
+   * and one bound at 0.95 because it sits inside the question are both
+   * `region_index: 4`, and review needs to be able to tell them apart.
+   */
+  attribution: Attribution;
   metrics: Record<string, unknown>;
 }
 
@@ -109,47 +116,151 @@ export function groupComments(marks: TeacherMarkInput[], pageWidth: number): Tea
   return groups;
 }
 
+/** What binding a mark to a question is actually claiming, and how strongly. */
+export interface Attribution {
+  /** null means unattributed, which is a result and not a failure. */
+  region_index: number | null;
+  confidence: number;
+  /** Which relations produced this, for the review screen and for debugging. */
+  method: string[];
+  /** Runners-up worth keeping, best first. Populated when the choice was close. */
+  alternatives: { region_index: number; confidence: number }[];
+  /** Two or more candidates were too close to separate; nothing was bound. */
+  ambiguous: boolean;
+}
+
+// Below this, a mark is not near enough to any question to say it belongs to
+// one. Expressed in multiples of the median region height on the page rather
+// than in pixels, so it scales with the document instead of assuming a
+// resolution: a mark a whole question-height clear of every question is a mark
+// about nothing we can name.
+const MAX_GAP_IN_REGION_HEIGHTS = 1.0;
+// Two candidates closer together than this are a coin toss, and a coin toss
+// that lands on the wrong question is the most expensive error this system
+// makes (§134). Neither wins.
+const AMBIGUITY_MARGIN = 0.12;
+// A candidate has to be at least this convincing to be bound at all.
+const MIN_CONFIDENCE = 0.35;
+
+const UNATTRIBUTED: Attribution = {
+  region_index: null, confidence: 0, method: [], alternatives: [], ambiguous: false,
+};
+
 /**
- * Which region does this mark belong to?
+ * Which region does this mark belong to — or none of them?
  *
- * A mark inside a region's box belongs to it, plainly. A mark in the margin band
- * belongs to whichever region it sits alongside — which is why finding the band
- * is worth a pass of its own: it turns a two-dimensional search across the page
- * into a one-dimensional one down it. Ties go to reading order.
+ * Two rules changed here, and both were cases of the code being more certain
+ * than the page warranted.
+ *
+ * **It considered one span per region.** `spans.find(s => s.page === page)`
+ * takes the first span on the page and ignores the rest, so a question split
+ * around a diagram, or with two answer boxes, was matched on its first piece
+ * only — a mark sitting squarely inside the second piece scored as "outside
+ * every box" and fell through to the distance rule below. Every span on the
+ * page is a candidate now.
+ *
+ * **It always returned something.** The distance rule had no ceiling, so the
+ * nearest question won however far away it was: a mark at the foot of the page
+ * bound to the last question on it, always, with no way for the result to say
+ * that nothing on this page plausibly owns this mark. That is the failure the
+ * spec calls catastrophic, because the OCR is right and the paper is still
+ * wrong, and it is silent — a mark bound to the wrong question looks exactly
+ * like a mark bound to the right one. Unattributed is now a real outcome, and
+ * so is ambiguous.
  */
 export function assignToRegion(
   mark: { page: number; box: { x: number; y: number; w: number; h: number } },
   regions: Region[],
-): number | null {
+): Attribution {
   const c = centre(mark.box);
-  const onPage = regions
-    .map((r, i) => ({ index: i, span: r.spans.find((s) => s.page === mark.page) }))
-    .filter((r): r is { index: number; span: RegionSpan } => !!r.span);
-  if (!onPage.length) return null;
+  // Every span on this page, not the first one per region.
+  const onPage: { index: number; span: RegionSpan }[] = [];
+  regions.forEach((r, index) => {
+    for (const span of r.spans) if (span.page === mark.page) onPage.push({ index, span });
+  });
+  if (!onPage.length) return UNATTRIBUTED;
 
   const inside = onPage.filter(({ span }) =>
     c.x >= span.box.x && c.x <= span.box.x + span.box.w &&
     c.y >= span.box.y && c.y <= span.box.y + span.box.h);
-  if (inside.length === 1) return inside[0].index;
-  if (inside.length > 1) {
+
+  if (inside.length) {
     // Nested or overlapping regions: the tightest one wins, because a region
     // that contains another is the outer question and the mark is on the part.
-    inside.sort((a, b) => (a.span.box.w * a.span.box.h) - (b.span.box.w * b.span.box.h));
-    return inside[0].index;
+    // Containment is strong evidence, so this does not go to the ambiguity
+    // test — but the others are still reported as alternatives.
+    const ranked = [...inside]
+      .sort((a, b) => (a.span.box.w * a.span.box.h) - (b.span.box.w * b.span.box.h));
+    const chosen = ranked[0].index;
+    return {
+      region_index: chosen,
+      confidence: ranked.length === 1 ? 0.95 : 0.8,
+      method: ranked.length === 1 ? ['inside_span'] : ['inside_span', 'tightest_of_nested'],
+      alternatives: dedupe(ranked.slice(1).map((r) => ({ region_index: r.index, confidence: 0.5 })), chosen),
+      ambiguous: false,
+    };
   }
 
-  // Outside every box — the usual case for a margin mark. Nearest vertical span,
-  // measured to the band the region actually occupies rather than to its centre,
-  // so a long region is not penalised for being long.
-  let best: number | null = null;
-  let bestDistance = Infinity;
-  for (const { index, span } of onPage) {
+  // Outside every box — the usual case for a margin mark. Distance is measured
+  // to the band the region actually occupies rather than to its centre, so a
+  // long region is not penalised for being long.
+  const heights = onPage.map(({ span }) => span.box.h).filter((h) => h > 0).sort((a, b) => a - b);
+  const medianHeight = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+  // With no usable height there is no scale to judge "near" against, and
+  // guessing one would be the old behaviour wearing a threshold.
+  if (!medianHeight) return UNATTRIBUTED;
+  const reach = medianHeight * MAX_GAP_IN_REGION_HEIGHTS;
+
+  const scored = onPage.map(({ index, span }) => {
     const top = span.box.y, bottom = span.box.y + span.box.h;
-    const distance = c.y < top ? top - c.y : c.y > bottom ? c.y - bottom : 0;
-    if (distance < bestDistance) { bestDistance = distance; best = index; }
+    const gap = c.y < top ? top - c.y : c.y > bottom ? c.y - bottom : 0;
+    return { index, confidence: gap >= reach ? 0 : 1 - (gap / reach), overlaps: gap === 0 };
+  }).sort((a, b) => b.confidence - a.confidence || a.index - b.index);
+
+  // Several spans of the SAME region are not competing candidates — the best
+  // of them is that region's score.
+  const byRegion = new Map<number, { index: number; confidence: number; overlaps: boolean }>();
+  for (const s of scored) if (!byRegion.has(s.index)) byRegion.set(s.index, s);
+  const candidates = [...byRegion.values()].sort((a, b) => b.confidence - a.confidence || a.index - b.index);
+
+  const best = candidates[0];
+  if (!best || best.confidence < MIN_CONFIDENCE) return UNATTRIBUTED;
+
+  const runnerUp = candidates[1];
+  const alternatives = candidates.slice(1)
+    .filter((c2) => c2.confidence > 0)
+    .map((c2) => ({ region_index: c2.index, confidence: round2(c2.confidence) }));
+
+  if (runnerUp && best.confidence - runnerUp.confidence < AMBIGUITY_MARGIN) {
+    // Two questions equally close. The old code took the lower index; the
+    // honest answer is that the page does not say, and review can.
+    return {
+      region_index: null,
+      confidence: round2(best.confidence),
+      method: ['ambiguous_vertical_gap'],
+      alternatives: [{ region_index: best.index, confidence: round2(best.confidence) }, ...alternatives],
+      ambiguous: true,
+    };
   }
-  return best;
+
+  return {
+    region_index: best.index,
+    confidence: round2(best.confidence),
+    method: best.overlaps ? ['vertical_overlap'] : ['nearest_vertical_gap'],
+    alternatives,
+    ambiguous: false,
+  };
 }
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+const dedupe = (
+  list: { region_index: number; confidence: number }[],
+  exclude: number,
+) => {
+  const seen = new Set<number>([exclude]);
+  return list.filter((a) => !seen.has(a.region_index) && seen.add(a.region_index));
+};
 
 /**
  * Stage 5 in one call: classify every mark, bind it to a region, and read the
@@ -181,14 +292,21 @@ export function attribute(opts: {
         w: Math.max(...group.map((m) => m.box.x + m.box.w)) - x,
         h: Math.max(...group.map((m) => m.box.y + m.box.h)) - y,
       };
+      const attribution = assignToRegion({ page, box }, regions);
       out.push({
         page_number: page,
         box,
         shape: 'unknown',
         mark_class: 'comment',
         value: null,
-        region_index: assignToRegion({ page, box }, regions),
-        metrics: { grouped_from: group.length },
+        region_index: attribution.region_index,
+        attribution,
+        metrics: {
+          grouped_from: group.length,
+          // §37: aggregation may not destroy the evidence it aggregated. The
+          // pieces are what a reviewer needs to see when the grouping is wrong.
+          component_boxes: group.map((m) => m.box),
+        },
       });
     }
   }
@@ -198,13 +316,15 @@ export function attribute(opts: {
     const band = marginBands.get(mark.page) ?? null;
     const c = centre(mark.box);
     const inBand = !!band && c.x >= band.x0 && c.x <= band.x1;
+    const attribution = assignToRegion(mark, regions);
     out.push({
       page_number: mark.page,
       box: mark.box,
       shape: mark.shape,
       mark_class: classifyMark(mark, inBand),
       value: null,
-      region_index: assignToRegion(mark, regions),
+      region_index: attribution.region_index,
+      attribution,
       metrics: { ...mark.metrics, in_margin_band: inBand },
     });
   }

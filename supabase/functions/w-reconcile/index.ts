@@ -12,7 +12,7 @@
 
 import { failRun, failRunHonestly, serveWorker } from '../_shared/worker.ts';
 import { reconcile, type RegionMarks } from '../_shared/reconcile.ts';
-import { assess, numberingSoundness } from '../_shared/confidence.ts';
+import { assess, numberingSoundness, recognitionOf } from '../_shared/confidence.ts';
 
 serveWorker(async ({ sb, msg }) => {
   const runId = msg.run_id as string;
@@ -46,7 +46,13 @@ serveWorker(async ({ sb, msg }) => {
     label: r.question_label as string | null,
     awarded: r.marks_awarded === null ? null : Number(r.marks_awarded),
     available: r.marks_available === null ? null : Number(r.marks_available),
-    recognition: r.confidence_tier === 'unreadable' ? 'low' : 'medium',
+    // The content pass records what it actually thought of its own reading —
+    // 'high', 'medium' or 'low' — in confidence_signals.recognition. This used
+    // to throw that away and substitute a flat 'medium' for every region that
+    // was not already unreadable, which meant a question the model said it read
+    // poorly and one it said it read cleanly arrived here indistinguishable.
+    // The signal was being selected in the query above and then ignored.
+    recognition: recognitionOf(r.confidence_signals, r.confidence_tier as string | null),
   }));
 
   const result = reconcile(
@@ -66,6 +72,13 @@ serveWorker(async ({ sb, msg }) => {
     .from('paper_page').select('page_number')
     .eq('paper_id', run.paper_id).not('layer_fallback', 'is', null);
   const fallbackPages = new Set((fallbackRows ?? []).map((p) => p.page_number as number));
+
+  /** Does this region have at least one span with a real box to point at? */
+  const hasUsableSpan = (spans: unknown): boolean =>
+    Array.isArray(spans) && spans.some((s) => {
+      const box = (s as { box?: { w?: number; h?: number } })?.box;
+      return !!box && Number(box.w) > 0 && Number(box.h) > 0;
+    });
 
   /** Does this region sit on any page that fell back? A question that straddles
       pages is normal, so any one of its pages is enough. */
@@ -87,6 +100,9 @@ serveWorker(async ({ sb, msg }) => {
       // stay unsure — which is the honest answer when we know the paper is wrong
       // somewhere and cannot say where.
       arithmeticSound: result.reconciled,
+      // §57: structure is more than the numbering. A region with no usable
+      // span is one we cannot point at, however well-numbered it is.
+      boundarySound: hasUsableSpan(region.page_spans),
       awarded: marks[i].awarded,
       available: marks[i].available,
       layerFallback,

@@ -42,29 +42,35 @@ Deno.test('a crossing that is neither shape is unknown rather than guessed', () 
   assertEquals(classifyMark(ambiguous, false), 'unknown');
 });
 
+// NOTE: nothing runs this file automatically. CI runs `npm test` (Node) and
+// the pgTAP suites; there is no Deno job and no Deno toolchain on either.
+// The P0 regressions this module's own logic carried are pinned in
+// bench/pipeline-p0.test.mjs instead, which does run. Keep both honest until
+// a Deno job exists.
+
 // ── stage 5 · where a mark belongs ─────────────────────────────────────────
 
 Deno.test('a mark inside a region belongs to it', () => {
   const regions = [region(1, 0, 0, 800, 200), region(1, 0, 200, 800, 200)];
   regions[1].order_index = 1;
-  assertEquals(assignToRegion({ page: 1, box: box(100, 250, 20, 20) }, regions), 1);
+  assertEquals(assignToRegion({ page: 1, box: box(100, 250, 20, 20) }, regions).region_index, 1);
 });
 
 Deno.test('a margin mark binds to the region it sits alongside, not the first one', () => {
   const regions = [region(1, 0, 0, 800, 200), region(1, 0, 200, 800, 200)];
   regions[1].order_index = 1;
   // Well outside every region box horizontally — the usual case for a margin.
-  assertEquals(assignToRegion({ page: 1, box: box(950, 300, 30, 30) }, regions), 1);
+  assertEquals(assignToRegion({ page: 1, box: box(950, 300, 30, 30) }, regions).region_index, 1);
 });
 
 Deno.test('overlapping regions give the mark to the tighter one', () => {
   const outer = region(1, 0, 0, 800, 400);
   const inner = { ...region(1, 0, 180, 800, 60), order_index: 1 };
-  assertEquals(assignToRegion({ page: 1, box: box(100, 200, 10, 10) }, [outer, inner]), 1);
+  assertEquals(assignToRegion({ page: 1, box: box(100, 200, 10, 10) }, [outer, inner]).region_index, 1);
 });
 
 Deno.test('a mark on a page with no regions binds to nothing rather than to anything', () => {
-  assertEquals(assignToRegion({ page: 3, box: box(10, 10, 10, 10) }, [region(1, 0, 0, 10, 10)]), null);
+  assertEquals(assignToRegion({ page: 3, box: box(10, 10, 10, 10) }, [region(1, 0, 0, 10, 10)]).region_index, null);
 });
 
 // ── stage 5 · the teacher's own words ──────────────────────────────────────

@@ -249,8 +249,16 @@ Deno.serve(async (req) => {
       box: { page: m.page_number, ...m.box },
       shape: m.shape,
       mark_class: m.mark_class,
-      metrics: m.metrics,
-      confidence_tier: m.mark_class === 'unknown' ? 'unsure' : 'confident',
+      // §41: every mark -> question binding carries how it was arrived at and
+      // how strongly, so an unattributed or ambiguous mark can be told apart
+      // from a confident one at review instead of all three looking alike.
+      metrics: { ...m.metrics, attribution: m.attribution },
+      // Knowing *what* a mark is says nothing about *whose* it is, and this
+      // used to claim confidence on the strength of the first alone — a tick
+      // read perfectly and bound to the wrong question was stored as
+      // 'confident'. Both have to hold now.
+      confidence_tier: m.mark_class === 'unknown' || m.region_index === null ||
+        m.attribution.confidence < 0.8 ? 'unsure' : 'confident',
     })));
   }
 
