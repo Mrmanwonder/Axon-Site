@@ -9,7 +9,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveGateVerdict, shouldAutoCapture, steadyWindow } from '../src/scan/capture.js';
+import {
+  GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS,
+  liveGateVerdict, settledGuidance, shouldAutoCapture, steadyWindow,
+} from '../src/scan/capture.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
@@ -199,4 +202,58 @@ test('skew past the warn line is advisory, never blocking', () => {
 test('a page just over the floor is not blocked on resolution', () => {
   const v = liveGateVerdict({ ...clean, pageLongEdge: CONDITIONING.MIN_LONG_EDGE });
   assert.equal(v.blocking, null);
+});
+
+// ── guidance that does not nag ──────────────────────────────────────────────
+//
+// The gate is consulted every frame now rather than a dozen times a second,
+// which made two latent problems into visible ones. A measurement sitting on
+// a threshold does not produce one answer, it produces both, alternating; and
+// a line of advice that changes several times a second is not advice.
+
+test('a measurement sitting on the line does not answer twice', () => {
+  // Right on the distance threshold, where a hand-held phone crosses back and
+  // forth on ordinary jitter.
+  const onTheLine = { ...clean, fill: CAPTURE.MIN_FILL };
+  // Nothing showing: the plain reading, which is that this is fine.
+  assert.equal(liveGateVerdict(onTheLine).blocking, null);
+  // Already warning about distance: it stays, because coming back to exactly
+  // the line is not evidence that anything changed.
+  assert.equal(liveGateVerdict(onTheLine, 'distance').blocking, 'distance');
+  // And it goes as soon as the page is genuinely clear of the line.
+  const clear = { ...clean, fill: CAPTURE.MIN_FILL * (1 + GUIDANCE_HYSTERESIS) + 0.001 };
+  assert.equal(liveGateVerdict(clear, 'distance').blocking, null);
+});
+
+test('the margin only ever delays leaving a warning, never entering one', () => {
+  // Holding a different reason must not soften this one.
+  const soft = { ...clean, sharpness: QUALITY.BLUR_WARN - 0.001 };
+  assert.equal(liveGateVerdict(soft, 'distance').blocking, 'focus');
+  assert.equal(liveGateVerdict(soft, null).blocking, 'focus');
+});
+
+test('one warning replacing another waits long enough to be read', () => {
+  const showing = { hint: 'Move closer so the page fills more of the frame', blocking: 'distance', since: 1000 };
+  const glare = { hint: 'Light is bouncing off the page — tilt it slightly away from the light', blocking: 'glare' };
+  assert.equal(settledGuidance(showing, glare, 1000 + GUIDANCE_DWELL_MS - 1).hint, showing.hint);
+  assert.equal(settledGuidance(showing, glare, 1000 + GUIDANCE_DWELL_MS).hint, glare.hint);
+});
+
+test('starting to block, and stopping, are both immediate', () => {
+  // Into a blocked state: `blocking` is what holds the automatic shutter, so a
+  // page that has just gone soft has to stop it on that frame.
+  const fine = { hint: 'Ready', blocking: null, since: 1000 };
+  const soft = { hint: 'Hold still — the page is not sharp yet', blocking: 'focus' };
+  assert.equal(settledGuidance(fine, soft, 1001).blocking, 'focus');
+
+  // Out of one: the student has just fixed it and should be told at once.
+  const showing = { hint: 'Move closer so the page fills more of the frame', blocking: 'distance', since: 1000 };
+  assert.equal(settledGuidance(showing, { hint: 'Ready', blocking: null }, 1001).hint, 'Ready');
+});
+
+test('an unchanged hint does not restart its own clock', () => {
+  // Otherwise a hint that is genuinely steady would never age past the dwell,
+  // and the next one that needed to replace it never could.
+  const showing = { hint: 'Hold still', blocking: null, since: 1000 };
+  assert.equal(settledGuidance(showing, { hint: 'Hold still', blocking: null }, 5000).since, 1000);
 });

@@ -165,24 +165,43 @@ export function shouldAutoCapture({
  *   tilt, and the warning is for the case where it will have to stretch one end
  *   badly.
  */
-export function liveGateVerdict({ glare, clipping, fill, sharpness, skew, pageLongEdge, steady }) {
-  if (pageLongEdge < CONDITIONING.MIN_LONG_EDGE) {
+export function liveGateVerdict(
+  { glare, clipping, fill, sharpness, skew, pageLongEdge, steady },
+  holding = null,
+) {
+  // A condition that is already blocking has to clear its threshold by a
+  // margin before it stops, rather than the instant it crosses back.
+  //
+  // Without this, a page sitting at exactly the distance line does not get one
+  // answer, it gets both, alternating — and at frame rate that is a hint
+  // strobing between "move closer" and "ready" several times a second while
+  // the student holds perfectly still and watches the app argue with itself.
+  // The threshold was never a real boundary in the paper; it is a line drawn
+  // through a continuum, and the honest reading of a measurement sitting on it
+  // is "no change", not a new verdict every frame.
+  //
+  // Only ever applied to the condition that is currently showing, so the
+  // margin cannot make the gate more permissive than it is: it delays
+  // *leaving* a warning, never entering one.
+  const easing = (reason) => (holding === reason ? 1 + GUIDANCE_HYSTERESIS : 1);
+
+  if (pageLongEdge < CONDITIONING.MIN_LONG_EDGE * easing('resolution')) {
     return { blocking: 'resolution', hint: 'Closer — the page needs to fill more of the frame for us to read the marking' };
   }
-  if (fill < CAPTURE.MIN_FILL) {
+  if (fill < CAPTURE.MIN_FILL * easing('distance')) {
     return { blocking: 'distance', hint: 'Move closer so the page fills more of the frame' };
   }
-  if (glare > QUALITY.GLARE_WARN) {
+  if (glare > QUALITY.GLARE_WARN / easing('glare')) {
     return { blocking: 'glare', hint: 'Light is bouncing off the page — tilt it slightly away from the light' };
   }
-  if (clipping > QUALITY.CLIP_WARN) {
+  if (clipping > QUALITY.CLIP_WARN / easing('exposure')) {
     return { blocking: 'exposure', hint: 'Too bright — move into shade, or turn a lamp away from the page' };
   }
   // Null means the focus window landed on blank paper and there was nothing to
   // measure. Not the same as "soft", and not a reason to refuse: a page with
   // little written on it is a page, and blocking here would refuse it for being
   // lightly used.
-  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN) {
+  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN * easing('focus')) {
     return { blocking: 'focus', hint: 'Hold still — the page is not sharp yet' };
   }
   if (skew > QUALITY.SKEW_WARN_DEG) {
@@ -190,6 +209,56 @@ export function liveGateVerdict({ glare, clipping, fill, sharpness, skew, pageLo
   }
   if (!steady) return { blocking: null, hint: 'Hold still' };
   return { blocking: null, hint: 'Ready' };
+}
+
+/**
+ * How long a hint has to hold before it is allowed to replace the one on
+ * screen.
+ *
+ * The gate is now consulted every frame rather than a dozen times a second,
+ * and a line of advice that changes faster than it can be read is not advice.
+ * Anything that is genuinely wrong stays wrong for longer than this, so the
+ * only thing the delay costs is the flicker.
+ *
+ * Deliberately asymmetric — see `settledGuidance`. Clearing to "ready" is not
+ * held back, because that is the student having fixed the problem and there is
+ * no reason to make them wait to be told so.
+ */
+export const GUIDANCE_DWELL_MS = 700;
+// How far past its threshold a measurement has to come back before the warning
+// it triggered goes away. Five per cent: wide enough to swallow the jitter of
+// a hand-held phone at the boundary, narrow enough that it is never the
+// difference between a usable page and an unusable one.
+export const GUIDANCE_HYSTERESIS = 0.05;
+
+/**
+ * Which hint to actually show, given the one already showing.
+ *
+ * Pure and exported, like the rest of the gate, because "what does the student
+ * see" is the part of this file that is worth being able to test without a
+ * camera.
+ *
+ * @param {{hint: string, blocking: string|null, since: number}|null} showing
+ * @param {{hint: string, blocking: string|null}} verdict
+ */
+export function settledGuidance(showing, verdict, now) {
+  const settled = { hint: verdict.hint, blocking: verdict.blocking, since: now };
+  if (!showing || showing.hint === verdict.hint) {
+    return { ...settled, since: showing?.since ?? now };
+  }
+  // Crossing into or out of a blocked state is never delayed, in either
+  // direction and for different reasons. Into: `blocking` is what holds the
+  // automatic shutter, and a page that has just gone soft must stop the
+  // shutter on the frame it went soft, not most of a second later. Out of: the
+  // student has just fixed the problem, and making them wait to be told so is
+  // the app being slow at the one moment it was asked to be quick.
+  //
+  // What is left to dwell on is one warning replacing another, and one piece
+  // of ordinary advice replacing another — which is exactly where the
+  // flickering was, and where nothing is at stake in holding it.
+  if (!showing.blocking !== !verdict.blocking) return settled;
+  if (now - showing.since < GUIDANCE_DWELL_MS) return showing;
+  return settled;
 }
 
 // ── the live-detection worker ────────────────────────────────────────────
@@ -280,6 +349,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let measured = null;
   let measuredAt = 0;
   let measuredQuad = null;
+  // The line of advice currently on screen, and when it went up. See
+  // settledGuidance — the gate is consulted every frame now, and a hint that
+  // changes faster than it can be read is not a hint.
+  let guidance = null;
 
   let quad = null;          // smoothed, in video coordinates
   let lastDetection = null; // raw, for the shot's own geometry
@@ -448,7 +521,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     quad = lastDetection = steadyAnchor = lastSearchSize = null;
     steadySince = heldSince = consecutiveFinds = 0;
     track = createTrack();
-    trackSize = measured = measuredQuad = null;
+    trackSize = measured = measuredQuad = guidance = null;
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
@@ -723,7 +796,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       track = createTrack();
       lastDetection = steadyAnchor = null;
       steadySince = heldSince = consecutiveFinds = 0;
-      measured = measuredQuad = null;
+      measured = measuredQuad = guidance = null;
       quad = null;
       // Losing the page is what re-arms auto-capture. Without this, the first
       // automatic shot was the only one: `armed` went false on firing and was
@@ -803,7 +876,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.timing = timing ?? { detectMs: 0, measureMs: 0, focusMs: 0, trackMs, workerUsed: true };
 
     if (!tracked || !geometryValid(track, tw, th) || track.state === 'searching') {
-      lastDetection = steadyAnchor = null;
+      lastDetection = steadyAnchor = guidance = null;
       steadySince = heldSince = consecutiveFinds = 0;
       quad = null;
       armed = true;
@@ -849,9 +922,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // ── the gate ───────────────────────────────────────────────────────────
     // See liveGateVerdict() above for the ordering and the reasoning behind
     // it — kept as one implementation rather than repeated here.
-    const verdict = liveGateVerdict(next);
-    next.blocking = verdict.blocking;
-    next.hint = verdict.hint;
+    const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
+    guidance = settledGuidance(guidance, verdict, performance.now());
+    next.blocking = guidance.blocking;
+    next.hint = guidance.hint;
 
     // How long the page has been continuously found with nothing blocking. The
     // clock runs on the gate, not on stillness, so it survives the jitter that
