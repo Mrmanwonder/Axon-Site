@@ -35,7 +35,7 @@
 // so the brackets stay smooth on a mid-tier phone while the search costs little.
 
 import { orderQuad, quadFill } from './geometry.js';
-import { AXIS_TOLERANCE, MAX_LINES_PER_FAMILY, findLines, gradients, intersect, offAxis, paperScore } from './quad.js';
+import { AXIS_TOLERANCE, MAX_LINES_PER_FAMILY, findLines, frameLines, gradients, intersect, offAxis, paperScore } from './quad.js';
 import { perimeterSupport, quadsFromEdges } from './contour.js';
 
 // Paper is the least colourful thing on a desk. Saturation above this is
@@ -137,7 +137,7 @@ function quadsFromLines(img, grad, width, height) {
   const out = [];
   const minSeparation = Math.min(width, height) * 0.3;
 
-  for (const [first, second] of orientationFamilies(lines)) {
+  for (const [first, second] of orientationFamilies(lines, width, height)) {
     for (let i = 0; i < first.length - 1; i++) {
       for (let j = i + 1; j < first.length; j++) {
         if (Math.abs(first[i].rho - first[j].rho) < minSeparation) continue;
@@ -191,7 +191,7 @@ function quadsFromLines(img, grad, width, height) {
  * page. Every candidate still goes through the same gate afterwards, so a
  * wrong anchor produces a quad that is refused, not a quad that is trusted.
  */
-function orientationFamilies(lines) {
+function orientationFamilies(lines, width, height) {
   const anchors = [];
   for (const line of lines) {
     if (anchors.length >= MAX_ANCHORS) break;
@@ -200,6 +200,8 @@ function orientationFamilies(lines) {
     if (anchors.some((a) => offAxis(line.theta, a) < ANCHOR_SPREAD)) continue;
     anchors.push(line.theta);
   }
+
+  const borders = frameLines(width, height);
 
   const families = [];
   for (const anchor of anchors) {
@@ -213,6 +215,19 @@ function orientationFamilies(lines) {
       } else if (second.length < MAX_LINES_PER_FAMILY) {
         second.push(line);
       }
+    }
+    // The frame's own edges go in last and over the cap: a page that runs off
+    // the bottom of the picture has no bottom edge to find, and the only line
+    // that closes its quad is the one the photograph ends at. Last, because a
+    // real edge should always be preferred; over the cap, because otherwise
+    // the one case that needs them is the busy frame that has no room left.
+    for (const border of borders) {
+      const toAnchor = offAxis(border.theta, anchor);
+      const toAcross = offAxis(border.theta, across);
+      // Only where it lines up with the family it is joining. A border at
+      // forty-five degrees to both is not this page's missing edge.
+      if (Math.min(toAnchor, toAcross) > AXIS_TOLERANCE) continue;
+      (toAnchor <= toAcross ? first : second).push(border);
     }
     if (first.length >= 2 && second.length >= 2) families.push([first, second]);
   }

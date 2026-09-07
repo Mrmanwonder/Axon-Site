@@ -45,7 +45,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detectQuad } from '../src/scan/edges.js';
-import { paperScore } from '../src/scan/quad.js';
+import { findLines, paperScore } from '../src/scan/quad.js';
 import { clipping, glareScore, reconcileWithInk, scorePage, sharpness } from '../src/scan/quality.js';
 import { CONDITIONING, QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
@@ -280,12 +280,17 @@ test('reconcileWithInk downgrades a glare-only fail when the ink survived, and o
 // fix was for. bench/rotation-report.mjs sweeps the whole range; this is the
 // part that has to keep working.
 //
-// 90° is deliberately not asserted: a portrait fixture rotated a quarter turn
-// becomes a landscape frame the page fills almost entirely, and isPageShaped
-// refuses that on MAX_FILL by design — a page with no visible edges has
-// nothing to deskew. That is the rule working, and pinning it here would pin
-// the wrong thing.
-for (const angle of [30, 45, 60]) {
+// 90° is asserted now, and the reason it was not is worth keeping. A quarter
+// turn used to come back with nothing, and that was read as the rule working:
+// a portrait fixture becomes a landscape frame the page nearly fills, so
+// isPageShaped refusing it on MAX_FILL looked like the right refusal for the
+// right reason. It was not. The quad being refused was not the page — it was
+// a rectangle drawn from the four phantom lines the Sobel pass produced at the
+// edge of its own buffer, which at a quarter turn happened to beat the real
+// page edges. With those excluded and the frame's edges supplied deliberately
+// instead (frameLines in quad.js), a rotated page is found at the same fill as
+// an upright one, which is what rotating a picture ought to do to a detector.
+for (const angle of [30, 45, 60, 90]) {
   for (const name of ['page-tilted.jpg', 'page-angled.jpg']) {
     test(`detectQuad still finds ${name} rotated ${angle}°`, async () => {
       const proxy = await decodeFixture(name, { rotate: angle, resizeWidth: PROXY_W });
@@ -297,6 +302,30 @@ for (const angle of [30, 45, 60]) {
     });
   }
 }
+
+// The gradient pass writes nothing usable to the outermost two rows and
+// columns — the Sobel window runs off the buffer there, and the buffer is
+// reused between frames without clearing — so those four lines are either a
+// step against zero or a step against the previous frame. Straight, full
+// length, parallel to the page edges, and on the fixture corpus the four
+// *strongest* lines in eight frames out of ten, at up to 354 votes against
+// real page edges scoring 155. Detection survived only because they usually
+// approximated the frame edge a clipped page really does end at. They are
+// excluded now and the frame's own edges are supplied deliberately instead,
+// which is the same behaviour without the accident. This pins the exclusion:
+// blank paper, filling the window, must not produce lines.
+test('the edge of the buffer is not read as an edge in the picture', async () => {
+  const width = 96, height = 128, n = width * height;
+  const blank = { data: new Uint8ClampedArray(n * 4), width, height };
+  for (let i = 0; i < n; i++) {
+    blank.data[i * 4] = blank.data[i * 4 + 1] = blank.data[i * 4 + 2] = 228;
+    blank.data[i * 4 + 3] = 255;
+  }
+  const found = findLines(blank);
+  assert.deepEqual(found, [],
+    `an image with nothing in it produced ${found.length} lines: ${
+      found.slice(0, 4).map((l) => `θ${l.theta} ρ${l.rho} v${l.votes}`).join(', ')}`);
+});
 
 // Was a known false accept, pinned rather than fixed: a photo of an empty
 // room (no page anywhere in shot) scored 0.92 on paperScore's `paper` share
