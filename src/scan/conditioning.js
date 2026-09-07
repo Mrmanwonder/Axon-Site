@@ -18,6 +18,7 @@
 
 import { CONDITIONING, ENHANCE } from './contract.js';
 import { warpPerspective, quadSize } from './geometry.js';
+import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
 import { assessRescue, enhancePage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
@@ -185,6 +186,10 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
 
   let img;
   let warped = false;
+  // 'gpu', 'cpu', or 'cpu-fallback' when the GPU was available and declined
+  // this particular page. Recorded rather than assumed — see meta below.
+  let warpPath = null;
+  let warpMs = null;
 
   // What this page will be before any cap or rescue is applied — the warped
   // page's own size, which for a quad is not the frame's size.
@@ -204,10 +209,19 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
   // is already known would be tens of megabytes spent on nothing — on the one
   // path (upload, no quad) that had until now never needed the source at full
   // size at all.
-  let sourcePixels = quad ? imageDataFrom(source, sw, sh) : null;
+  //
+  // The GPU warp extends that to the quad path too, which is the common one:
+  // it uploads `source` to a texture directly, so the eight-megapixel decode
+  // and the thirty-megabyte ImageData behind it are never needed at all. On a
+  // phone that is not only time, it is the largest single allocation the scan
+  // makes. `pixels()` is what everything below calls when it turns out to
+  // need them anyway — a rescue assessment, or a warp that fell back.
+  const useGPU = !!quad && gpuWarpAvailable();
+  let sourcePixels = (quad && !useGPU) ? imageDataFrom(source, sw, sh) : null;
+  const pixels = () => (sourcePixels ??= imageDataFrom(source, sw, sh));
   const rescue = naturalLong >= CONDITIONING.MIN_LONG_EDGE
     ? { needed: false, possible: false, longEdge: naturalLong, scale: 1 }
-    : assessRescue(sourcePixels ?? (sourcePixels = imageDataFrom(source, sw, sh)), naturalLong);
+    : assessRescue(pixels(), naturalLong);
   if (rescue.needed && !rescue.possible) {
     // Not an error in the ordinary sense: the page cannot be used and the
     // message already says what to do instead. Flagged so the worker boundary
@@ -225,15 +239,23 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
 
   if (quad) {
     const target = targetSize(natural.width, natural.height, targetLongEdge, rescue.possible);
-    const out = warpPerspective(sourcePixels, quad, target.width, target.height);
-    if (out) { img = out; warped = true; } else { img = sourcePixels; }
+    // The GPU first, the CPU whenever it says no — and it says no for every
+    // reason at once: no WebGL2, a texture larger than the device allows, a
+    // degenerate quad, or a self-test it did not pass. There is one right
+    // answer to all of those and it is the warp that was already here.
+    const startedWarp = Date.now();
+    let out = useGPU ? warpOnGPU(source, quad, target.width, target.height) : null;
+    warpPath = out ? 'gpu' : (useGPU ? 'cpu-fallback' : 'cpu');
+    if (!out) out = warpPerspective(pixels(), quad, target.width, target.height);
+    warpMs = Date.now() - startedWarp;
+    if (out) { img = out; warped = true; } else { img = pixels(); }
   } else {
     // No quad — an upload, or a native document scanner that already returned a
     // corrected page. §5.1 is explicit that a corrected page must not be
     // corrected again: it has had one good resample and a second is pure loss.
     const target = targetSize(sw, sh, targetLongEdge, rescue.possible);
     img = (target.width === sw && target.height === sh)
-      ? (sourcePixels ?? imageDataFrom(source, sw, sh))
+      ? pixels()
       : imageDataFrom(await resample(source, target), target.width, target.height);
   }
 
@@ -309,6 +331,15 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       // done and what it achieved recorded, so "we enhanced it" is a claim
       // production data can check rather than one anyone has to take on trust.
       enhance: enhancement,
+      // Which warp actually ran. The GPU path is guarded by a per-session
+      // self-test against the CPU (gpu.js), so production data showing
+      // 'cpu-fallback' in the field is the signal that some real device
+      // disagreed — which is a thing worth knowing rather than guessing at.
+      warp_path: warpPath,
+      // What the warp actually cost on this device. The whole argument for
+      // moving it to the GPU is a number measured on a real phone, and this
+      // is where that number comes from rather than from a bench machine.
+      warp_ms: warpMs,
       encoded_type: type,
       encode_quality: CONDITIONING.ENCODE_QUALITY,
       bytes: blob?.size ?? 0,

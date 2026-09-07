@@ -105,10 +105,17 @@ function gradients(img) {
   return { mag, dir, threshold: Math.max(18, mean + 1.4 * sd) };
 }
 
-/** Vote for lines, then pull the peaks back out. */
-function findLines(img) {
+/**
+ * Vote for lines, then pull the peaks back out.
+ *
+ * `grad` is accepted rather than always computed because the contour detector
+ * (contour.js) needs the same Sobel pass over the same frame, and running it
+ * twice per search — twelve times a second, on a phone — would be the whole
+ * cost of the second detector for none of its benefit.
+ */
+function findLines(img, grad = null) {
   const { width, height } = img;
-  const { mag, dir, threshold } = gradients(img);
+  const { mag, dir, threshold } = grad ?? gradients(img);
 
   const diag = Math.ceil(Math.hypot(width, height));
   const rhoBins = Math.ceil((2 * diag) / RHO_STEP) + 1;
@@ -261,4 +268,4 @@ function paperScore(img, quad) {
   return { paper: paperShare, step, texture, score: paperShare * 0.75 + step * 0.25 };
 }
 
-export { findLines, intersect, offAxis, paperScore, MAX_LINES_PER_FAMILY, AXIS_TOLERANCE };
+export { findLines, gradients, intersect, offAxis, paperScore, MAX_LINES_PER_FAMILY, AXIS_TOLERANCE };
