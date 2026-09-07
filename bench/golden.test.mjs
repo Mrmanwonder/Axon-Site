@@ -266,6 +266,38 @@ test('reconcileWithInk downgrades a glare-only fail when the ink survived, and o
     'a page whose red layer yielded nothing was let through — reconcileWithInk must not pass a page on no evidence');
 });
 
+// ── the phone is not always held square ────────────────────────────────────
+//
+// Every fixture in this corpus was photographed roughly square-on, and that
+// is exactly why the detector could carry a hole at 45° through two rounds of
+// work without any test noticing: the line search sorted candidate lines into
+// families defined as "near vertical" and "near horizontal", so a page whose
+// edges sit 45° from both was thrown out of both. It found the lines and had
+// nowhere to put them.
+//
+// The families are relative to the strongest line now rather than to the
+// frame's axes (see orientationFamilies in edges.js). These pin the band the
+// fix was for. bench/rotation-report.mjs sweeps the whole range; this is the
+// part that has to keep working.
+//
+// 90° is deliberately not asserted: a portrait fixture rotated a quarter turn
+// becomes a landscape frame the page fills almost entirely, and isPageShaped
+// refuses that on MAX_FILL by design — a page with no visible edges has
+// nothing to deskew. That is the rule working, and pinning it here would pin
+// the wrong thing.
+for (const angle of [30, 45, 60]) {
+  for (const name of ['page-tilted.jpg', 'page-angled.jpg']) {
+    test(`detectQuad still finds ${name} rotated ${angle}°`, async () => {
+      const proxy = await decodeFixture(name, { rotate: angle, resizeWidth: PROXY_W });
+      const quad = detectQuad(proxy);
+      assert.ok(quad, `no quad on a real page held at ${angle}° — the axis-relative family split has regressed`);
+      const { paper } = paperScore(proxy, quad);
+      assert.ok(paper >= PAPER_MIN,
+        `paper score ${paper} at ${angle}° on ${name} — found something, but not the page`);
+    });
+  }
+}
+
 // Was a known false accept, pinned rather than fixed: a photo of an empty
 // room (no page anywhere in shot) scored 0.92 on paperScore's `paper` share
 // alone, comfortably over PAPER_MIN, because the floor here is bright and

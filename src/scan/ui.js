@@ -28,6 +28,7 @@ const S = {
   capture: null,
   draft: null,
   thumbs: new Map(),   // page number → object URL
+  placeholders: new Map(), // page number → data URL, cleared once the real thumb lands
   run: null,
   regions: null,        // this run's question_region rows, for watchExplanations
   review: null,
@@ -168,6 +169,17 @@ async function takePage(shot, replacing = null) {
       S.thumbs.delete(replacing);
     }
 
+    // scan-ground-up-revamp-2026-09-07.md Phase 4: the tray slot appears the
+    // instant the shutter fires, not several hundred milliseconds later when
+    // conditioning finishes — the counter increments and a picture shows up
+    // in the same beat as the haptic (Scan.tsx's hapticTick, unmoved — this
+    // is a UI-feedback fix, not a reason to touch where the haptic sits).
+    // The raw, unwarped capture scaled down, per the brief's own "cheaper"
+    // option: no new pixels are produced, just a small draw of what was
+    // already captured. Swapped for the real conditioned thumbnail the
+    // moment paintTray() below actually runs.
+    paintPlaceholder(shot.bitmap, replacing ?? S.draft.pages.length + 1);
+
     const { page } = await acceptPage({
       draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
       capturePath: shot.capturePath ?? null, liveGate: shot.gate ?? null,
@@ -219,11 +231,48 @@ async function paintTray() {
   for (const page of pages) {
     if (S.thumbs.has(page.page_number)) continue;
     S.thumbs.set(page.page_number, URL.createObjectURL(page.proxy ?? page.blob));
+    // The real thumbnail has landed for this page number — whatever
+    // placeholder was standing in for it is done its job.
+    S.placeholders.delete(page.page_number);
   }
   host.renderTray(
     pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) })),
     { onPage: openPageActions, onDone: sendPaper },
   );
+}
+
+/**
+ * Paint one tray slot immediately, synchronously, from the frame the shutter
+ * just captured — before acceptPage/processPage have even started, let alone
+ * resolved. `canvas.toDataURL` rather than `toBlob` deliberately: this has to
+ * be there in the same frame as the count updates, not a callback tick later.
+ *
+ * Draws straight from `bitmap`, which is why this has to run before
+ * `takePage`'s `finally` closes it — a placeholder that raced the bitmap's
+ * own cleanup would be a worse bug than not having one.
+ */
+function paintPlaceholder(bitmap, pageNumber) {
+  if (!bitmap || !bitmap.width || !bitmap.height) return;
+  // Best-effort and never load-bearing: a placeholder is purely cosmetic,
+  // and a browser quirk in one small canvas draw must not be the reason a
+  // real, already-captured page fails to accept — that would be this fix
+  // costing more than the lag it was meant to hide.
+  try {
+    const w = 160, h = Math.round(160 * bitmap.height / bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    S.placeholders.set(pageNumber, canvas.toDataURL('image/jpeg', 0.6));
+
+    const pages = S.draft?.pages ?? [];
+    const rows = pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) }));
+    const idx = rows.findIndex((r) => r.page_number === pageNumber);
+    const placeholderRow = { page_number: pageNumber, thumb: S.placeholders.get(pageNumber), pending: true };
+    if (idx >= 0) rows[idx] = { ...rows[idx], ...placeholderRow };
+    else rows.push(placeholderRow);
+
+    host.renderTray(rows, { onPage: openPageActions, onDone: sendPaper });
+  } catch { /* the real thumbnail is still coming from paintTray() below */ }
 }
 
 /**

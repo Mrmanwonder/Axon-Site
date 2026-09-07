@@ -37,6 +37,10 @@ export type TrayPage = {
   page_number: number;
   thumb?: string;
   quality?: { verdict: "ok" | "warn" | "fail"; reasons: string[] };
+  /** True for the beat between the shutter firing and conditioning actually
+      finishing — `thumb` is the raw, unwarped capture scaled down, not yet
+      the real conditioned page. scan-ground-up-revamp-2026-09-07.md Phase 4. */
+  pending?: boolean;
 };
 
 export type ProgressModel = {

@@ -35,7 +35,8 @@
 // so the brackets stay smooth on a mid-tier phone while the search costs little.
 
 import { orderQuad, quadFill } from './geometry.js';
-import { AXIS_TOLERANCE, MAX_LINES_PER_FAMILY, findLines, intersect, offAxis, paperScore } from './quad.js';
+import { AXIS_TOLERANCE, MAX_LINES_PER_FAMILY, findLines, gradients, intersect, offAxis, paperScore } from './quad.js';
+import { perimeterSupport, quadsFromEdges } from './contour.js';
 
 // Paper is the least colourful thing on a desk. Saturation above this is
 // something else — a folder, a desk, a hand.
@@ -86,88 +87,186 @@ export function otsu(gray) {
  */
 export function detectQuad(img, { minFill = 0.16 } = {}) {
   const { width, height } = img;
-  const lines = findLines(img);
-  if (lines.length < 4) return null;
 
-  // Split the candidates by which axis they run along. A page gives two lines
-  // near each axis; a desk edge and a folder give more, which is why the pairing
-  // below is a search rather than a pick.
-  const vertical = [], horizontal = [];
-  for (const line of lines) {
-    if (offAxis(line.theta, 0) <= AXIS_TOLERANCE) {
-      if (vertical.length < MAX_LINES_PER_FAMILY) vertical.push(line);
-    } else if (offAxis(line.theta, THETA_QUARTER) <= AXIS_TOLERANCE) {
-      if (horizontal.length < MAX_LINES_PER_FAMILY) horizontal.push(line);
-    }
-    if (vertical.length >= MAX_LINES_PER_FAMILY && horizontal.length >= MAX_LINES_PER_FAMILY) break;
-  }
-  if (vertical.length < 2 || horizontal.length < 2) return null;
+  // One Sobel pass, two detectors. The gradient is the expensive part of both
+  // searches and it is the same gradient, so it is computed here and handed
+  // down rather than taken twice.
+  const grad = gradients(img);
 
   let best = null;
-  const minSeparation = Math.min(width, height) * 0.3;
+  const consider = (quad, support) => {
+    const verdict = gateQuad(img, quad, width, height, minFill);
+    if (!verdict) return;
+    // Edge strength decides between quads that all look like paper, and the
+    // larger of two plausible pages wins ties — a page's own ruled lines can
+    // otherwise carve a strong-edged box out of its middle.
+    const score = verdict.paper.score * 2 + Math.min(1, support) + verdict.fill;
+    if (!best || score > best.score) best = { quad, score };
+  };
 
-  for (let i = 0; i < vertical.length - 1; i++) {
-    for (let j = i + 1; j < vertical.length; j++) {
-      if (Math.abs(vertical[i].rho - vertical[j].rho) < minSeparation) continue;
-      for (let k = 0; k < horizontal.length - 1; k++) {
-        for (let l = k + 1; l < horizontal.length; l++) {
-          if (Math.abs(horizontal[k].rho - horizontal[l].rho) < minSeparation) continue;
+  // ── the line search ──────────────────────────────────────────────────────
+  for (const found of quadsFromLines(img, grad, width, height)) {
+    consider(found.quad, found.votes / (Math.min(width, height) * 6));
+  }
 
-          const corners = [
-            intersect(vertical[i], horizontal[k]), intersect(vertical[j], horizontal[k]),
-            intersect(vertical[j], horizontal[l]), intersect(vertical[i], horizontal[l]),
-          ];
-          if (corners.some((c) => !c)) continue;
-          // A corner far outside the frame means the page is not really in shot,
-          // and the quad drawn from it would be a guess about what is off-screen.
-          if (corners.some((c) => c.x < -width * 0.15 || c.x > width * 1.15 ||
-                                  c.y < -height * 0.15 || c.y > height * 1.15)) continue;
-
-          const quad = orderQuad(corners);
-          const fill = quadFill(quad, width, height);
-          if (fill < minFill) continue;
-          if (!isPageShaped(quad, width, height)) continue;
-
-          const paper = paperScore(img, quad);
-          // How much of the inside is actually paper. This is the strongest
-          // single signal separating a page from most of the rest of a desk:
-          // every real page in bench/golden.test.mjs's fixtures scores 0.96 or
-          // better.
-          //
-          // It is not a clean separation on its own, though — bench/golden.
-          // test.mjs used to pin a known false accept here: a photo of an empty
-          // floor (no page in shot at all) scores 0.92 on this alone,
-          // comfortably over the line. A tone step across the edge looked like
-          // it should catch that and does not — it stays in the ranking score,
-          // where being wrong costs nothing, and out of the gate, where it cost
-          // real pages.
-          if (paper.paper < 0.85) continue;
-          // What actually separates the floor from a page is texture, not
-          // colour or brightness: a floor's grain and veining put real
-          // variance into a 5x5 grid even where it is bright and neutral
-          // enough to pass the check above, and a page's blank interior does
-          // not. Measured on the real fixtures (bench/golden.test.mjs): every
-          // genuine page scores under 23, and the floor fixture that used to
-          // false-accept scores 50 — TEXTURE_MAX sits with margin on both
-          // sides of that gap, not against a single number.
-          if (paper.texture > TEXTURE_MAX) continue;
-
-          const votes = vertical[i].votes + vertical[j].votes +
-                        horizontal[k].votes + horizontal[l].votes;
-          // Edge strength decides between quads that all look like paper, and
-          // the larger of two plausible pages wins ties — a page's own ruled
-          // lines can otherwise carve a strong-edged box out of its middle.
-          const score = paper.score * 2 + Math.min(1, votes / (Math.min(width, height) * 6)) + fill;
-          if (!best || score > best.score) best = { quad, score };
-        }
-      }
-    }
+  // ── the contour search ───────────────────────────────────────────────────
+  // scan-ground-up-revamp Phase 2. Added alongside rather than in place of the
+  // line search: it finds pages the line pairing structurally cannot (a page
+  // at ~45°, where the ±40° axis split has nothing to pair; a page whose edge
+  // fades through shadow, where a single global threshold drops it), and it
+  // costs one extra pass over an already-computed gradient. Both feed the same
+  // gate below, so a candidate that is not page-shaped, not paper, or textured
+  // like a floor is refused on exactly the terms it always was.
+  const { quads, edges } = quadsFromEdges(grad, width, height);
+  for (const quad of quads) {
+    consider(quad, perimeterSupport(edges, width, height, quad));
   }
 
   return best ? best.quad : null;
 }
 
+/**
+ * Quad candidates from four fitted lines — the original search, unchanged in
+ * substance and lifted out so the contour candidates can be scored beside it
+ * rather than inside it.
+ */
+function quadsFromLines(img, grad, width, height) {
+  const lines = findLines(img, grad);
+  if (lines.length < 4) return [];
+
+  const out = [];
+  const minSeparation = Math.min(width, height) * 0.3;
+
+  for (const [first, second] of orientationFamilies(lines)) {
+    for (let i = 0; i < first.length - 1; i++) {
+      for (let j = i + 1; j < first.length; j++) {
+        if (Math.abs(first[i].rho - first[j].rho) < minSeparation) continue;
+        for (let k = 0; k < second.length - 1; k++) {
+          for (let l = k + 1; l < second.length; l++) {
+            if (Math.abs(second[k].rho - second[l].rho) < minSeparation) continue;
+
+            const corners = [
+              intersect(first[i], second[k]), intersect(first[j], second[k]),
+              intersect(first[j], second[l]), intersect(first[i], second[l]),
+            ];
+            if (corners.some((c) => !c)) continue;
+            // A corner far outside the frame means the page is not really in shot,
+            // and the quad drawn from it would be a guess about what is off-screen.
+            if (corners.some((c) => c.x < -width * 0.15 || c.x > width * 1.15 ||
+                                    c.y < -height * 0.15 || c.y > height * 1.15)) continue;
+
+            out.push({
+              quad: orderQuad(corners),
+              votes: first[i].votes + first[j].votes + second[k].votes + second[l].votes,
+            });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Split the candidate lines into two roughly perpendicular families — the
+ * pairing needs two of each, and a page supplies exactly that.
+ *
+ * The families used to be defined absolutely: "within ±40° of vertical" and
+ * "within ±40° of horizontal". That silently made an assumption nobody had
+ * written down — that the phone is held square to the page — and it fails
+ * hardest exactly halfway between, at 45°, where a page's four edges land
+ * 45° from *both* axes and are thrown out of both families. The lines are
+ * found perfectly well; there is simply nothing left to pair them with.
+ * bench/rotation-report.mjs is what made this visible: every fixture in the
+ * corpus was photographed square-on, so no test could see it.
+ *
+ * So the split is relative now. The strongest few lines each take a turn as
+ * the anchor, one family runs with the anchor and the other across it, and
+ * the tolerance is 45° so that every angle lands in exactly one of the two —
+ * no angle can fall between the families the way 45° used to.
+ *
+ * Trying several anchors rather than just the strongest line costs a handful
+ * of extra pairings over at most seven lines a side, and buys the case where
+ * the strongest line in the frame belongs to a desk edge rather than to the
+ * page. Every candidate still goes through the same gate afterwards, so a
+ * wrong anchor produces a quad that is refused, not a quad that is trusted.
+ */
+function orientationFamilies(lines) {
+  const anchors = [];
+  for (const line of lines) {
+    if (anchors.length >= MAX_ANCHORS) break;
+    // Two anchors 10° apart would produce near-identical families and the same
+    // candidates twice over.
+    if (anchors.some((a) => offAxis(line.theta, a) < ANCHOR_SPREAD)) continue;
+    anchors.push(line.theta);
+  }
+
+  const families = [];
+  for (const anchor of anchors) {
+    const across = (anchor + THETA_QUARTER) % THETA_HALF_TURN;
+    const first = [], second = [];
+    for (const line of lines) {
+      const toAnchor = offAxis(line.theta, anchor);
+      const toAcross = offAxis(line.theta, across);
+      if (toAnchor <= toAcross) {
+        if (first.length < MAX_LINES_PER_FAMILY) first.push(line);
+      } else if (second.length < MAX_LINES_PER_FAMILY) {
+        second.push(line);
+      }
+    }
+    if (first.length >= 2 && second.length >= 2) families.push([first, second]);
+  }
+  return families;
+}
+
+// How many of the strongest lines take a turn as the family anchor, and how
+// far apart two anchors have to be to be worth trying separately.
+const MAX_ANCHORS = 3;
+const ANCHOR_SPREAD = 12;
+
+/**
+ * The gate every candidate passes through, whichever detector proposed it.
+ *
+ * One implementation on purpose: two detectors feeding two copies of these
+ * thresholds is how the calibration in bench/golden.test.mjs would silently
+ * come to mean two different things.
+ *
+ * Returns the measurements when the quad survives, null when it does not.
+ */
+function gateQuad(img, quad, width, height, minFill) {
+  const fill = quadFill(quad, width, height);
+  if (fill < minFill) return null;
+  if (!isPageShaped(quad, width, height)) return null;
+
+  const paper = paperScore(img, quad);
+  // How much of the inside is actually paper. This is the strongest single
+  // signal separating a page from most of the rest of a desk: every real page
+  // in bench/golden.test.mjs's fixtures scores 0.96 or better.
+  //
+  // It is not a clean separation on its own, though — bench/golden.test.mjs
+  // used to pin a known false accept here: a photo of an empty floor (no page
+  // in shot at all) scores 0.92 on this alone, comfortably over the line. A
+  // tone step across the edge looked like it should catch that and does not —
+  // it stays in the ranking score, where being wrong costs nothing, and out of
+  // the gate, where it cost real pages.
+  if (paper.paper < 0.85) return null;
+  // What actually separates the floor from a page is texture, not colour or
+  // brightness: a floor's grain and veining put real variance into a 5x5 grid
+  // even where it is bright and neutral enough to pass the check above, and a
+  // page's blank interior does not. Measured on the real fixtures
+  // (bench/golden.test.mjs): every genuine page scores under 23, and the floor
+  // fixture that used to false-accept scores 50 — TEXTURE_MAX sits with margin
+  // on both sides of that gap, not against a single number.
+  if (paper.texture > TEXTURE_MAX) return null;
+
+  return { fill, paper };
+}
+
 const THETA_QUARTER = 90;
+// A line's angle wraps at 180°, not 360° — a line at 179° and one at 1° run
+// almost together. Mirrors THETA_BINS in quad.js, which is where the angle
+// bins are actually made.
+const THETA_HALF_TURN = 180;
 
 /**
  * Is this quad plausibly a sheet of paper?

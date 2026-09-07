@@ -29,15 +29,32 @@ const here = new URL('./fixtures/', import.meta.url);
  *   a calibrated threshold. Applied last, after any resize, so the degradation
  *   is at the resolution the gate will actually judge — blurring at native and
  *   then downscaling would partly undo it.
+ *
+ *   `rotate` (degrees) is the same idea for geometry rather than quality, and
+ *   it exists for the same reason: every page in the corpus was photographed
+ *   roughly square-on, so a detector blind spot at an angle could not show up
+ *   here. It rotates before any resize, expanding onto a desk-toned
+ *   background rather than white — a white margin would read as more paper
+ *   and quietly make the test easier than the situation it stands for.
  */
-export async function decodeFixture(name, { crop = null, resizeWidth = null, blur = null, exposure = null } = {}) {
+export async function decodeFixture(name, { crop = null, resizeWidth = null, blur = null, exposure = null, rotate = null } = {}) {
   const path = fileURLToPath(new URL(name, here));
   let pipeline = sharp(path).rotate(); // apply EXIF orientation — a raw buffer carries none of its own
   const meta = await pipeline.metadata();
-  const sourceWidth = crop ? crop.width : (meta.width ?? 0);
-  const sourceHeight = crop ? crop.height : (meta.height ?? 0);
+  let sourceWidth = crop ? crop.width : (meta.width ?? 0);
+  let sourceHeight = crop ? crop.height : (meta.height ?? 0);
 
   if (crop) pipeline = pipeline.extract(crop);
+  if (rotate) {
+    // A desk tone, not white. See the note on `rotate` above.
+    pipeline = pipeline.rotate(rotate, { background: { r: 96, g: 88, b: 78 } });
+    // The rotation expands the canvas, so anything downstream that scales by
+    // the original aspect ratio would squash it. Re-read the real size.
+    const rotated = await pipeline.toBuffer({ resolveWithObject: true });
+    pipeline = sharp(rotated.data);
+    sourceWidth = rotated.info.width;
+    sourceHeight = rotated.info.height;
+  }
   if (resizeWidth) {
     const height = Math.max(1, Math.round(resizeWidth * sourceHeight / sourceWidth));
     pipeline = pipeline.resize(resizeWidth, height, { fit: 'fill' });
