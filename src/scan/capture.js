@@ -25,6 +25,11 @@ import { quadDrift, quadFill, quadSize } from './geometry.js';
 
 const DETECT_INTERVAL_MS = 80;   // ~12 searches a second; the overlay still runs at frame rate
 const DETECT_MAX_INTERVAL_MS = 320;
+// A worker message that never comes back — a dropped frame, a worker hiccup
+// — must not wedge the search loop. Generous relative to the interval above:
+// this is a safety net for the rare stuck message, not a budget anything
+// should normally spend.
+const DETECT_TIMEOUT_MS = DETECT_MAX_INTERVAL_MS * 3;
 // The quad the live gate found ran on a 240px proxy of a video frame; the
 // still that actually gets warped can be many times that resolution, taken
 // through a different path entirely on the ImageCapture route. Re-verifying
@@ -153,6 +158,69 @@ export function liveGateVerdict({ glare, clipping, fill, sharpness, skew, pageLo
   return { blocking: null, hint: 'Ready' };
 }
 
+// ── the live-detection worker ────────────────────────────────────────────
+//
+// scan-ground-up-revamp-2026-09-07.md Phase 1. Module-level and lazy, same
+// shape as device.js's conditioning worker: constructed once, on first use,
+// and reused for the tab's lifetime — a Worker is expensive enough to build
+// that paying for it once per Scan visit (not once per search, of which
+// there are ~12 a second) is the whole point. Falls back to running the
+// search synchronously on the main thread — searchOnMainThread(), below —
+// on any browser that cannot construct a module Worker, or if this one ever
+// errors; either way the fallback is real code that ran before this Worker
+// existed, not a stub, and `onerror` logs so a fallback in the field is
+// visible in telemetry instead of invisible (this exact failure mode was
+// silent in device.js's conditioning worker until scan-live-lag-fix's §3.2).
+let detectWorker = null;
+let nextDetectId = 1;
+const detectPending = new Map();
+
+function ensureDetectWorker() {
+  if (detectWorker !== null) return detectWorker;
+  try {
+    detectWorker = new Worker(new URL('./detect-worker.js', import.meta.url), { type: 'module' });
+    detectWorker.onmessage = (event) => {
+      const { id, ...rest } = event.data;
+      const resolve = detectPending.get(id);
+      if (!resolve) return;
+      detectPending.delete(id);
+      resolve(rest);
+    };
+    detectWorker.onerror = (event) => {
+      console.error('[scan] detect worker failed, falling back to main-thread search', {
+        message: event?.message, filename: event?.filename, lineno: event?.lineno,
+      });
+      detectWorker = false; // fall back from here on
+    };
+  } catch {
+    detectWorker = false;
+  }
+  return detectWorker;
+}
+
+/** Run one 'search' or 'focus' message on the detect worker, resolving to
+    null if the worker is unavailable, times out, or the message comes back
+    empty — every one of those cases means "nothing to report this cycle",
+    which searchOnWorker() already treats the same way a legitimate
+    not-found does. */
+function runDetectWorker(kind, bitmap) {
+  const w = ensureDetectWorker();
+  if (!w) { bitmap.close?.(); return Promise.resolve(null); }
+  const id = nextDetectId++;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      detectPending.delete(id);
+      resolve(value);
+    };
+    detectPending.set(id, finish);
+    setTimeout(() => finish(null), DETECT_TIMEOUT_MS);
+    w.postMessage({ id, kind, bitmap }, [bitmap]);
+  });
+}
+
 /**
  * @param {Object} options
  * @param {HTMLVideoElement} options.video
@@ -168,6 +236,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   let quad = null;          // smoothed, in video coordinates
   let lastDetection = null; // raw, for the shot's own geometry
+  // The proxy size the last search actually ran at, for the same reason —
+  // shoot() needs to know what space lastDetection's coordinates are in, and
+  // the worker path never touches the `proxy` canvas element, so that
+  // canvas's own width/height can no longer be trusted to say so.
+  let lastSearchSize = null;
   // The pose the current steady window began at. Steadiness is measured against
   // this rather than against the previous frame — see step().
   let steadyAnchor = null;
@@ -198,7 +271,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // for the exact frame a shot was taken from.
   const stepStats = { count: 0, sumMs: 0, maxMs: 0, lastFlush: 0 };
 
-  function recordStepTiming({ detectMs, measureMs, focusMs }) {
+  function recordStepTiming({ detectMs, measureMs, focusMs, workerUsed }) {
     const total = detectMs + measureMs + focusMs;
     stepStats.count++;
     stepStats.sumMs += total;
@@ -208,6 +281,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (now - stepStats.lastFlush < 2000) return;
     console.debug('[scan:step-timing]', {
       n: stepStats.count,
+      workerUsed,
       meanMs: +(stepStats.sumMs / stepStats.count).toFixed(1),
       maxMs: +stepStats.maxMs.toFixed(1),
       lastMs: +total.toFixed(1),
@@ -225,7 +299,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
   const focusCtx = focus.getContext('2d', { willReadFrequently: true });
 
   /**
-   * Sharpness of the page interior, at the canonical page scale.
+   * Sharpness of the page interior, at the canonical page scale — the
+   * main-thread fallback, used only when the detect worker is unavailable.
+   * See searchOnWorker() below for the primary path, which sends the same
+   * crop to the worker instead of reading it here.
    *
    * The rectangle comes from `focusWindowRect`, shared with bench/ so the
    * agreement report measures the same pixels the phone does. Centred on the
@@ -236,7 +313,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
    * of anything, and blocking the shutter on it would refuse a lightly-written
    * page for being lightly written.
    */
-  function focusInPage(quadInProxy, pw, ph, vw, vh, pageLongEdge) {
+  function focusInPageOnMainThread(quadInProxy, pw, ph, vw, vh, pageLongEdge) {
     const inFrame = quadInProxy.map((p) => ({ x: p.x * (vw / pw), y: p.y * (vh / ph) }));
     const rect = focusWindowRect(inFrame, vw, vh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return null;
@@ -314,18 +391,20 @@ export function createCapture({ video, overlay, onState, onShot }) {
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
-    quad = lastDetection = steadyAnchor = null;
+    quad = lastDetection = steadyAnchor = lastSearchSize = null;
     steadySince = heldSince = consecutiveFinds = 0;
     imageCapture = null;
     capturePath = 'canvas-grab';
     // Clear the shared request too, or the next visit adopts a stream whose
     // tracks have already been stopped and shows a black viewfinder.
     releaseCamera();
+    // Deliberately not tearing down detectWorker here — see its own comment.
+    // It is module-level and outlives one Scan visit on purpose.
   }
 
   // ── the search ───────────────────────────────────────────────────────────
 
-  function detect() {
+  async function detect() {
     if (!running) return;
     // Nothing to look at while the tab is in the background, and a camera search
     // running behind another app is battery spent on nobody.
@@ -334,7 +413,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return;
     }
     const started = performance.now();
-    try { step(); } catch { /* a bad frame is not worth stopping the camera for */ }
+    try { await step(); } catch { /* a bad frame is not worth stopping the camera for */ }
     const cost = performance.now() - started;
     // Back off in proportion to what the last search actually cost, so a slow
     // phone searches less often rather than searching just as often and dropping
@@ -343,11 +422,78 @@ export function createCapture({ video, overlay, onState, onShot }) {
     detectHandle = setTimeout(detect, wait);
   }
 
-  function step() {
+  /**
+   * One search cycle: find the page in the current video frame, on the
+   * detect worker when one is available and on this thread when it is not.
+   * `finishStep` does the rest — the parts that were never the expensive
+   * part (steadiness bookkeeping, the gate, auto-capture) and have no
+   * reason to move off this thread.
+   */
+  async function step() {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
 
     const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    lastSearchSize = { width: pw, height: ph };
+
+    const workerUsed = !!ensureDetectWorker();
+    const result = workerUsed
+      ? await searchOnWorker(pw, ph, vw, vh)
+      : searchOnMainThread(pw, ph, vw, vh);
+
+    finishStep(result, workerUsed, pw, ph, vw, vh);
+  }
+
+  /**
+   * scan-ground-up-revamp-2026-09-07.md Phase 1: the primary path. Two
+   * round trips, because they need different data — the small proxy frame
+   * for `detectQuad`/`measureQuad`, and (only once a quad exists to focus
+   * on) a native-resolution crop for `sharpness`. Both are `createImageBitmap`
+   * grabs off the live `<video>` rather than a `drawImage` + `getImageData`
+   * pixel readback on this thread — the readback is exactly the part that
+   * used to compete with rendering for this thread's time, and it now
+   * happens in the worker instead, against a transferred bitmap.
+   *
+   * A search or focus round trip that comes back null (worker unavailable,
+   * timed out, or the message itself failed) is treated the same as a
+   * legitimate not-found — it costs one cycle, and the next one tries again,
+   * matching the fallback's own per-call try/catch.
+   */
+  async function searchOnWorker(pw, ph, vw, vh) {
+    const proxyBitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+    const search = await runDetectWorker('search', proxyBitmap);
+    if (!search?.found) return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
+
+    const size = quadSize(search.found);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const inFrame = search.found.map((p) => ({ x: p.x * (vw / pw), y: p.y * (vh / ph) }));
+    const rect = focusWindowRect(inFrame, vw, vh, pageLongEdge, FOCUS_WINDOW);
+
+    let sharpnessScore = null, focusMs = 0;
+    if (rect) {
+      const focusBitmap = await createImageBitmap(
+        video, rect.sx, rect.sy, rect.size, rect.size,
+        { resizeWidth: rect.target, resizeHeight: rect.target },
+      );
+      const focus = await runDetectWorker('focus', focusBitmap);
+      sharpnessScore = focus?.sharpness ?? null;
+      focusMs = focus?.focusMs ?? 0;
+    }
+
+    return {
+      found: search.found, exposure: search.exposure, skew: search.skew, pageLongEdge,
+      sharpness: sharpnessScore, detectMs: search.detectMs, measureMs: search.measureMs, focusMs,
+    };
+  }
+
+  /**
+   * The pre-Phase-1 search, kept as the degrade path for a browser that
+   * cannot construct a module Worker, or once one has errored. Identical to
+   * what this function did before the worker existed — same canvases, same
+   * calls, same order — because a fallback that behaves differently from
+   * what it replaces is a second thing to get right, not one.
+   */
+  function searchOnMainThread(pw, ph, vw, vh) {
     if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
     proxyCtx.drawImage(video, 0, 0, pw, ph);
     const frame = proxyCtx.getImageData(0, 0, pw, ph);
@@ -355,9 +501,48 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const tDetectStart = performance.now();
     const found = detectQuad(frame);
     const detectMs = performance.now() - tDetectStart;
-    const next = blankState();
+    if (!found) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
 
-    if (!found) {
+    const tMeasureStart = performance.now();
+    const exposure = measureQuad(frame, found);
+    const skew = skewDegrees(found);
+    const measureMs = performance.now() - tMeasureStart;
+
+    const size = quadSize(found);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+
+    const tFocusStart = performance.now();
+    const sharpnessScore = focusInPageOnMainThread(found, pw, ph, vw, vh, pageLongEdge);
+    const focusMs = performance.now() - tFocusStart;
+
+    return { found, exposure, skew, pageLongEdge, sharpness: sharpnessScore, detectMs, measureMs, focusMs };
+  }
+
+  /**
+   * Everything after a search result exists: steadiness bookkeeping, the
+   * live gate, publishing state, and the auto-capture decision. None of
+   * this was ever the expensive part, so none of it moved — same logic,
+   * same order, as before Phase 1, just no longer entangled with finding
+   * the quad in the first place.
+   */
+  function finishStep(result, workerUsed, pw, ph, vw, vh) {
+    // step() is async now — a search can still be waiting on the worker
+    // when stop() runs (tab navigated away mid-search) and land after it.
+    // The old synchronous step() could never straddle a stop() this way;
+    // this guard keeps that same guarantee rather than publishing state for
+    // a camera that has already been torn down.
+    if (!running) return;
+    const next = blankState();
+    // AXON_SCAN_LAG_BRIEF.md §0 / scan-ground-up-revamp Phase 5 — the wall-clock
+    // cost of one detection pass, split by stage, plus which thread it ran
+    // on. Temporary instrumentation, landed rather than dropped: this is
+    // what a "the border takes forever" report has to be measured against.
+    next.timing = {
+      detectMs: result.detectMs, measureMs: result.measureMs, focusMs: result.focusMs, workerUsed,
+    };
+    recordStepTiming(next.timing);
+
+    if (!result.found) {
       lastDetection = steadyAnchor = null;
       steadySince = heldSince = consecutiveFinds = 0;
       quad = null;
@@ -367,23 +552,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // next page — which simply loses the quad — left it disarmed for the rest
       // of the session.
       armed = true;
-      next.timing = { detectMs, measureMs: 0, focusMs: 0 };
-      recordStepTiming(next.timing);
       publish(next);
       return;
     }
 
+    const found = result.found;
     next.hasPage = true;
     next.fill = quadFill(found, pw, ph);
-    const tMeasureStart = performance.now();
-    const exposure = measureQuad(frame, found);
-    next.glare = exposure.glare;
-    next.clipping = exposure.clipping;
-    next.headroom = exposure.headroom;
+    next.glare = result.exposure.glare;
+    next.clipping = result.exposure.clipping;
+    next.headroom = result.exposure.headroom;
     // Angle-only, so scale-invariant — this reads the same on the 240px
     // search proxy as it would on the full frame.
-    next.skew = skewDegrees(found);
-    const measureMs = performance.now() - tMeasureStart;
+    next.skew = result.skew;
     consecutiveFinds++;
 
     // How big the page will be once it is warped flat, in the camera's own
@@ -391,23 +572,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // is the number the advice should come from — telling someone to move closer
     // because the page covers less than a third of a *frame* is advice about the
     // wrong thing, and it is wrong whenever the frame is mostly desk.
-    const size = quadSize(found);
-    next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    next.pageLongEdge = result.pageLongEdge;
 
     // Focus, measured on real pixels at the scale the final gate will use.
     // Null rather than zero when the window landed on blank paper: "we could
     // not measure this" and "this is out of focus" are different claims and the
     // gate must not act on the first as though it were the second.
-    const tFocusStart = performance.now();
-    next.sharpness = focusInPage(found, pw, ph, vw, vh, next.pageLongEdge);
-    const focusMs = performance.now() - tFocusStart;
-
-    // AXON_SCAN_LAG_BRIEF.md §0 — the wall-clock cost of one detection pass,
-    // split by stage. Temporary instrumentation, landed rather than dropped:
-    // this is what a "the border takes forever" report has to be measured
-    // against, not guessed at by reading the search-interval math below.
-    next.timing = { detectMs, measureMs, focusMs };
-    recordStepTiming(next.timing);
+    next.sharpness = result.sharpness;
 
     const window_ = steadyWindow({
       anchor: steadyAnchor, found, width: pw, height: ph,
@@ -577,7 +748,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // two are not always the same size.
     let shotQuad = lastDetection
       ? scaleQuad(lastDetection,
-          { width: proxy.width, height: proxy.height },
+          lastSearchSize ?? { width: proxy.width, height: proxy.height },
           { width: bitmap.width, height: bitmap.height })
       : null;
 
