@@ -251,6 +251,31 @@ export const ENHANCE = {
   // red mask has to tell ink apart from.
   GAIN_MIN: 0.85,
   GAIN_MAX: 1.6,
+  // How much unevenness a page has to have before flattening is worth applying
+  // — the ratio between the gain the brightest region needs and the gain the
+  // darkest one does. Below it the lighting is already flat and the correction
+  // is a no-op that still costs a full-resolution pass over the page.
+  //
+  // It is not only a saving. Flattening changes the red share of the ink, and
+  // `LAYER_FALLBACK.RED_INK_SHARE_MAX` decides on that number whether a page is
+  // marking or is the student's own writing in red. On the corpus's real
+  // production scans — evenly lit sheets that need no correction at all —
+  // flattening moved the red share from 0.126 to 0.233 and took a page with 141
+  // genuine teacher marks on it to zero. Not correcting a page that has nothing
+  // wrong with it avoids that entirely.
+  //
+  // 1.35 from the corpus, and the margin either side is the point. Real pages as
+  // shot measure 1.11 to 1.22; the same pages with a hand's shadow laid across
+  // them measure 1.90 to 2.24. A line at 1.35 leaves every evenly lit page
+  // untouched with room to spare and catches every shadowed one, and nothing in
+  // the corpus sits anywhere near it. An earlier 1.12 cleared the most
+  // important fixture in the set by 0.01, which is not a threshold, it is a
+  // coincidence waiting to stop happening.
+  FIELD_FLAT_ENOUGH: 1.35,
+  // The low percentile of the illumination field that unevenness is measured
+  // against. The darkest tenth, not the darkest cell — the field's extremes are
+  // the desk beyond the page edge and the odd specular highlight.
+  FIELD_FLOOR: 0.1,
 
   // ── detail restoration ───────────────────────────────────────────────────
   // Unsharp mask, clamped to the local neighbourhood's own range so it cannot

@@ -18,6 +18,7 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
 | `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
 | `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
+| `flatten-report.mjs` | What illumination flattening does to a page's lighting, and what it costs the teacher's red ink — see below |
 | `golden-report.mjs` | The same fixtures again, as a false-accept/false-reject rate report instead of pass/fail — `node bench/golden-report.mjs` |
 | `verdict-agreement.mjs` + `.test.mjs` | Whether the live capture gate ever waves through a shot the final `scorePage()` then fails — see below |
 
@@ -63,6 +64,54 @@ a device. The scene is also an easy one (a bright page on a dark desk, moving
 smoothly), which is why continuity is 100% in both columns: this measures the
 refresh rate honestly and does not yet measure recovery from a genuinely hard
 frame. A fixture that goes briefly out of focus or under a hand is what would.
+
+## flatten-report.mjs
+
+Illumination flattening used to run only on the rescue path, so a page large
+enough not to need rescuing got no lighting correction at all — which is exactly
+where a hand or a desk-lamp shadow shows up. It is considered for every page
+now, and this is what says whether that was safe.
+
+```bash
+node bench/flatten-report.mjs
+```
+
+The thing it measures is not "did the shadow go" — that part was never in
+doubt. It is what flattening costs the teacher's red pen, because any stage that
+touches pixels before `separateLayers` sees them has to be shown not to cost it
+anything.
+
+It found something. Flattening raises the **red share of a page's ink**, and
+`LAYER_FALLBACK.RED_INK_SHARE_MAX` decides on exactly that number whether a page
+is a teacher's marking or a student who wrote in red. On the corpus's real
+production scan — an evenly lit sheet with nothing to correct — flattening moved
+the share from 0.126 to 0.233, past the 0.15 line, and took a page carrying 141
+genuine teacher marks to **zero**.
+
+That is why flattening is gated on `ENHANCE.FIELD_FLAT_ENOUGH`: a page whose
+lighting is already even is left byte-for-byte alone. Measured across the
+corpus, with a synthetic hand's shadow as the second row of each pair:
+
+| | illumination spread | what happens |
+| --- | --- | --- |
+| real pages, as shot | 1.11 – 1.22 | left alone |
+| the same pages, shadowed | 1.90 – 2.24 | flattened |
+
+Nothing sits near the 1.35 line. Every real page as shot keeps exactly the marks
+it had; every shadowed page has its shadow removed (mean evenness 0.383 → 0.273,
+and 0.224 → 0.097 on the worst one). Mean cost is 94ms a page on a bench
+machine, most of which is the pages that skip the full-resolution pass —
+`conditioning_meta.flatten_ms` is the number from a real device.
+
+**One thing this surfaced that is not fixed here.** On a genuinely *shadowed*
+page carrying real marks, removing the shadow still pushes the red share past
+0.15 and the page is written off as `student_wrote_red`, losing every mark
+(291 → 0 and 126 → 0 on the two synthetic-shadow rows). Under a shadow the red
+share reads artificially *low*, so the current threshold is partly being
+protected by the defect this change removes. `RED_INK_SHARE_MAX` comes from
+IMAGE_PIPELINE.md §6.3 and governs whether stage 5 is handed the student's own
+writing and told it is the marking — that is a product decision, not a constant
+to quietly retune, so it is raised rather than changed.
 
 ## golden.test.mjs
 

@@ -242,7 +242,17 @@ export function illuminationGain(img) {
   // stray bright cell would otherwise set the target for the whole page and
   // every gain would be pinned against the no-clip clamp.
   const sorted = Array.from(field).sort((a, b) => a - b);
-  const reference = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * ENHANCE.FIELD_REFERENCE))];
+  const at = (share) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))];
+  const reference = at(ENHANCE.FIELD_REFERENCE);
+
+  // How uneven the lighting actually is: what the darkest tenth of the page
+  // would have to be multiplied by to reach the reference. Percentiles for the
+  // same reason the reference is one — the extremes of this field are the desk
+  // beyond the page edge and the odd specular cell, and taken raw they report
+  // the ratio of the two gain clamps on every photograph ever shot, which is a
+  // statement about the clamps rather than about the page.
+  const floorLevel = at(ENHANCE.FIELD_FLOOR);
+  const spread = floorLevel > 1 ? reference / floorLevel : 1;
 
   const gain = new Float64Array(width * height);
   for (let y = 0; y < height; y++) {
@@ -257,7 +267,7 @@ export function illuminationGain(img) {
       gain[y * width + x] = Math.min(ENHANCE.GAIN_MAX, Math.max(ENHANCE.GAIN_MIN, k));
     }
   }
-  return gain;
+  return { gain, spread };
 }
 
 // ── detail restoration ─────────────────────────────────────────────────────
@@ -343,11 +353,50 @@ function combine(a, b) {
  * @param {{data:Uint8ClampedArray,width:number,height:number}} img the upscaled page
  * @param {{scale:number, longEdge:number, sharpness?:number}} rescue from `assessRescue`
  */
+/**
+ * Even out the lighting across a page. Every page, not only a rescued one.
+ *
+ * This is the honest answer to "remove the phone shadow", and it is not the one
+ * that gets asked for. What gets asked for is adaptive thresholding — grey and
+ * shadowed to white, text to black, the CamScanner look — and this codebase has
+ * already ruled that out twice, for reasons specific to this product rather
+ * than as a matter of taste. Binarisation decides per pixel whether something
+ * is ink; having decided, a faint half-tick and a firm tick are the same black,
+ * a light pencil correction is gone, and layers.js has nothing left to tell a
+ * half-tick from a cross with. It is also achromatic, and separating the
+ * teacher's red pen from the student's own writing by colour is the whole
+ * product.
+ *
+ * Flattening decides nothing. It estimates the lighting gradient — which has no
+ * high frequencies, by definition, so it is measured at a decimated scale — and
+ * divides it out, leaving every local relationship exactly as it was. A hand or
+ * a phone shadow goes; a half-tick is still a half-tick, still red, still soft.
+ */
+export function flattenPage(img) {
+  const { gain, spread } = illuminationGain(img);
+
+  // A page whose lighting is already even gets left alone, and the field that
+  // was just estimated says so for free.
+  //
+  // Skipping is not only a saved pass over every pixel. Flattening moves the
+  // red share of a page's ink, and layers.js decides on that number whether it
+  // is looking at a teacher's marking or at a student who wrote in red. On the
+  // corpus's real production scans — flat-lit sheets with nothing to correct —
+  // flattening pushed that share from 0.126 to 0.233 and took a page carrying
+  // 141 genuine teacher marks to zero. Correcting nothing on a page that has
+  // nothing wrong with it is both cheaper and safer.
+  if (spread < ENHANCE.FIELD_FLAT_ENOUGH) return { image: img, spread, applied: false };
+
+  return { image: applyGain(img, gain), spread, applied: true };
+}
+
 export function enhancePage(img, rescue) {
   const before = sharpness(img);
 
-  const light = illuminationGain(img);
-  const flattened = applyGain(img, light);
+  // Already flattened by conditionPage, which considers it for every page.
+  // Sharpen is what is still rescue-only: it puts back acutance an upscale cost, and a
+  // page that was not upscaled has no acutance owed to it.
+  const flattened = img;
 
   const detail = detailGain(flattened);
   const out = applyGain(flattened, detail);
@@ -365,6 +414,9 @@ export function enhancePage(img, rescue) {
       // lying to its own telemetry.
       native_long_edge: rescue.longEdge,
       scale: Math.round(rescue.scale * 1000) / 1000,
+      // Recorded on the rescue meta for continuity, but it is conditionPage
+      // that does it now and it does it for every page — see `flattened_ms` in
+      // conditioning_meta for the one that is actually about this page.
       flattened: true,
       sharpen_amount: ENHANCE.SHARPEN_AMOUNT,
       sharpen_radius: ENHANCE.SHARPEN_RADIUS,

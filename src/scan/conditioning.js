@@ -20,7 +20,7 @@ import { CONDITIONING, ENHANCE } from './contract.js';
 import { warpPerspective, quadSize } from './geometry.js';
 import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
-import { assessRescue, enhancePage } from './enhance.js';
+import { assessRescue, enhancePage, flattenPage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
 
 /**
@@ -259,15 +259,34 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       : imageDataFrom(await resample(source, target), target.width, target.height);
   }
 
-  // ── tone is touched here, and only here, and only for a rescued page ─────
+  // ── the lighting, on every page ──────────────────────────────────────────
   //
-  // Conditioning's standing rule is "correct the camera, not the page", and it
-  // still holds for every page that clears the floor: those are not touched at
-  // all. A rescued page is the exception the rule always implied — it has been
-  // enlarged, which costs acutance, and putting that acutance back is
-  // correcting for an operation this pipeline performed. Everything enhance.js
-  // does is a per-pixel scalar gain, which is what keeps the red separation
-  // seeing exactly what it would have seen.
+  // Conditioning's standing rule is "correct the camera, not the page", and a
+  // hand or a phone casting a shadow across the paper is the camera's doing,
+  // not the page's — the sheet is evenly white, the photograph is not. So
+  // flattening belongs here, on the ordinary path, and it used to run only on
+  // the rescue path: a page large enough to need no rescue got no lighting
+  // correction at all, which is exactly the common case where a desk-lamp
+  // shadow shows up.
+  //
+  // It should help the red separation rather than cost it. colour.js measures
+  // redness relative to the page's own paper and estimates that baseline once
+  // for the whole sheet; on a page with a gradient there is no single paper
+  // level, so one end is compared against the other end's paper. Flattening
+  // gives the baseline something true to be. Measured on the corpus rather than
+  // argued — see bench/flatten-report.mjs.
+  const startedFlatten = Date.now();
+  const flattening = flattenPage(img);
+  img = flattening.image;
+  const flattenMs = Date.now() - startedFlatten;
+
+  // ── and the acutance, only on a rescued page ─────────────────────────────
+  //
+  // Still the exception the rule always implied: a rescued page has been
+  // enlarged, which costs acutance, and putting that back is correcting for an
+  // operation this pipeline performed. Everything enhance.js does is a
+  // per-pixel scalar gain, which is what keeps the red separation seeing
+  // exactly what it would have seen.
   let enhancement = null;
   if (rescue.possible) {
     const enhanced = enhancePage(img, rescue);
@@ -340,6 +359,15 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       // moving it to the GPU is a number measured on a real phone, and this
       // is where that number comes from rather than from a bench machine.
       warp_ms: warpMs,
+      // Illumination flattening runs on every page now rather than only on a
+      // rescued one, so what it costs on a real phone is a number worth having
+      // — it is the one stage that went from occasional to always.
+      flatten_ms: flattenMs,
+      // Whether the lighting actually needed correcting, and how uneven it was.
+      // A page left alone is the common case and it is worth being able to see
+      // that in production data rather than assuming it.
+      flattened: flattening.applied,
+      illumination_spread: Math.round(flattening.spread * 1000) / 1000,
       encoded_type: type,
       encode_quality: CONDITIONING.ENCODE_QUALITY,
       bytes: blob?.size ?? 0,
