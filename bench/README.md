@@ -12,7 +12,9 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `anisotropy.html` | Whether a motion-blur measure can tell a shaken page from a ruled one |
 | `conditioning.html` | One page through stage 1 and 2, timed under CPU throttling |
 | `viewfinder.html` + `viewfinder.mjs` | The real capture controller against a page-on-a-desk scene streamed from a canvas |
+| `tracking-continuity.mjs` | The same scene with the page *moving*: does the overlay stay on it, and how often does the pose refresh — see below |
 | `capture.test.mjs` | The steadiness window and the shutter decision, as pure functions |
+| `tracking.test.mjs` | The corner tracker and the local corner search, against synthetic corners with known answers |
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
 | `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
 | `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
@@ -29,6 +31,38 @@ node --test bench/capture.test.mjs
 
 Playwright is not vendored — there is no `package.json` and `AGENTS.md` keeps it
 that way. Point `PLAYWRIGHT_HOME` at an install you already have.
+
+## tracking-continuity.mjs
+
+`viewfinder.mjs` asks whether a page held still gets photographed — the failure
+that happened in the field. This asks the other question: while the page is
+being *moved*, does the overlay stay on it?
+
+That is not visible in a still scene, and it is the whole claim of the corner
+tracker. A detector that re-searches the whole frame a dozen times a second
+looks perfect standing still and has nothing at all to say between two
+searches, which is when a moving page is somewhere new.
+
+```bash
+PLAYWRIGHT_HOME=/path/with/node_modules node bench/tracking-continuity.mjs
+```
+
+Measured across the change that added the tracker, same scene, same 12s window:
+
+| | global search only | four tracked corners |
+| --- | --- | --- |
+| pose refresh | 1.6 Hz | **6.6 Hz** |
+| frames with a page | 100% | 100% |
+| longest blink | 0 frames | 0 frames |
+
+Read the ratio, not the absolute numbers. Headless Chromium rendering and
+capturing a 3024x4032 canvas stream is the bottleneck in both columns — a real
+phone is not doing that — so what the run establishes is that the pose refreshes
+about four times as often for the same scene, not what either rate would be on
+a device. The scene is also an easy one (a bright page on a dark desk, moving
+smoothly), which is why continuity is 100% in both columns: this measures the
+refresh rate honestly and does not yet measure recovery from a genuinely hard
+frame. A fixture that goes briefly out of focus or under a hand is what would.
 
 ## golden.test.mjs
 

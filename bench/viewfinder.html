@@ -24,23 +24,47 @@
 // are all exercised on the thing they are actually for.
 import { createCapture } from '../src/scan/capture.js';
 
+// The scene is drawn in a 960x1280 coordinate system and rendered at 3.15x
+// that, because the camera this stands in for is not a small one: camera.js
+// asks for 4032x3024, and the live gate refuses any page whose long edge comes
+// out under CONDITIONING.MIN_LONG_EDGE (2400) in the camera's own pixels. At
+// 960x1280 the page here measured 900px, so this harness spent however long
+// asserting that a shot it had made unreachable never happened. A test that
+// cannot pass is worse than no test: it reports the same failure whether the
+// capture loop works or not.
+const SCALE = 3.15;
 const W = 960, H = 1280;
 const scene = document.createElement('canvas');
-scene.width = W; scene.height = H;
+scene.width = Math.round(W * SCALE); scene.height = Math.round(H * SCALE);
 const g = scene.getContext('2d');
 
 const params = new URLSearchParams(location.search);
 const shake = Number(params.get('shake') ?? 2);   // pixels of hand wobble
+// Real movement, on top of the wobble: the page swings across the frame and
+// back, the way it does while someone is framing a shot. Two pixels of shake
+// exercises steadiness; nothing in this harness exercised *tracking* until
+// there was something to track, and a detector that re-searches the whole
+// frame twelve times a second looks fine standing still and loses the page
+// exactly here. `?sweep=N` is the amplitude in scene pixels.
+const sweep = Number(params.get('sweep') ?? 0);
 let t = 0;
 
 function draw() {
   t++;
-  const jx = Math.sin(t / 7) * shake, jy = Math.cos(t / 5) * shake;
+  const jx = Math.sin(t / 7) * shake + Math.sin(t / 40) * sweep;
+  const jy = Math.cos(t / 5) * shake + Math.cos(t / 55) * sweep * 0.5;
 
+  g.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   g.fillStyle = '#2b2f36'; g.fillRect(0, 0, W, H);          // desk
   g.save();
   g.translate(W / 2 + jx, H / 2 + jy);
   g.rotate(0.03);
+  // The page covered 48% of the frame, and CAPTURE.MIN_FILL is 0.6 — so the
+  // gate was right to say "move closer" and this harness was holding the page
+  // too far away to ever be photographed. 1.22 puts it at ~71%, held the way
+  // someone photographing a page actually holds one, with all four edges still
+  // clear of the frame.
+  g.scale(1.22, 1.22);
   g.fillStyle = '#efeee9';                                   // the page
   g.fillRect(-330, -450, 660, 900);
   g.strokeStyle = '#c9c7c0'; g.lineWidth = 2;
@@ -75,7 +99,9 @@ const capture = createCapture({
       `steady=${s.steady ? 'yes' : 'no '}  edge=${s.pageLongEdge}  block=${s.blocking ?? '-'}  ${s.hint}`;
     events.push(line);
     result.states.push({ hasPage: s.hasPage, steady: s.steady, blocking: s.blocking,
-                         pageLongEdge: s.pageLongEdge, hint: s.hint });
+                         pageLongEdge: s.pageLongEdge, hint: s.hint,
+                         at: Math.round(performance.now() - started),
+                         trackState: s.trackState, trackConfidence: s.trackConfidence });
     log.textContent = events.slice(-14).join('\n');
   },
   onShot: (shot) => {
@@ -86,6 +112,11 @@ const capture = createCapture({
     shot.bitmap.close?.();
   },
 });
+
+// `?auto=0` for runs about the frames rather than the shutter — a shot
+// mid-run disarms the gate and changes what is being measured. See
+// bench/tracking-continuity.mjs.
+if (params.get('auto') === '0') capture.setAutoCapture(false);
 
 try {
   await capture.start(stream);

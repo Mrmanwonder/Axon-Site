@@ -77,9 +77,34 @@ function gradients(img) {
     }
   }
 
+  // The two outermost rows and columns are not data. `blur` was only filled
+  // for [1, n-2], so a Sobel taken at 1 or n-2 reads a blur value that was
+  // never written — for a reused buffer, one left over from a different frame,
+  // and otherwise a zero, which is a step from white paper to black and the
+  // largest gradient anywhere in the image. Four of them, one per side,
+  // perfectly straight and perfectly parallel to the page edges we are looking
+  // for. Measured on the fixture corpus before this was excluded: those four
+  // phantom lines were the four *strongest* lines found in eight of ten
+  // frames, outvoting every real edge and taking most of the line budget with
+  // them. Zeroing the ring here rather than at each caller keeps the contour
+  // detector, the line detector and the corner search all honest at once, and
+  // stops one frame's edges leaking into the next through the shared buffer.
+  for (let y = 0; y < height; y++) {
+    const row = y * width;
+    if (y < 2 || y >= height - 2) {
+      mag.fill(0, row, row + width);
+      dir.fill(0, row, row + width);
+      continue;
+    }
+    for (let x = 0; x < 2; x++) {
+      mag[row + x] = 0; dir[row + x] = 0;
+      mag[row + width - 1 - x] = 0; dir[row + width - 1 - x] = 0;
+    }
+  }
+
   let sum = 0, sumSq = 0, count = 0;
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
+  for (let y = 2; y < height - 2; y++) {
+    for (let x = 2; x < width - 2; x++) {
       const p = y * width + x;
       const gx =
         -blur[p - width - 1] + blur[p - width + 1] +
@@ -268,4 +293,33 @@ function paperScore(img, quad) {
   return { paper: paperShare, step, texture, score: paperShare * 0.75 + step * 0.25 };
 }
 
-export { findLines, gradients, intersect, offAxis, paperScore, MAX_LINES_PER_FAMILY, AXIS_TOLERANCE };
+/**
+ * The four edges of the frame itself, as lines the detector may use.
+ *
+ * A page photographed close up usually runs off at least one side, and where
+ * it does, the visible page really does end at the frame. Until the Sobel ring
+ * above was excluded, those four lines arrived anyway — as artefacts, with a
+ * strength that depended on how bright the desk happened to be at the edge of
+ * the picture, outvoting every real page edge in the frame. Handing them over
+ * deliberately keeps the behaviour and drops the accident: they are always
+ * available, and they never crowd out a real edge because they carry no votes.
+ *
+ * Each carries which side it is, which is not read yet. A page closed by a
+ * frame line is a page the warp will hand back clipped, and hard rule 4 says
+ * the student should be told rather than handed a silently cropped answer —
+ * but saying so is a change to the capture UI, not to the detector, so the
+ * label is here for that and nothing consumes it today.
+ */
+function frameLines(width, height) {
+  return [
+    { theta: 0, rho: 0, votes: 0, frame: 'left' },
+    { theta: 0, rho: width - 1, votes: 0, frame: 'right' },
+    { theta: THETA_BINS / 2, rho: 0, votes: 0, frame: 'top' },
+    { theta: THETA_BINS / 2, rho: height - 1, votes: 0, frame: 'bottom' },
+  ];
+}
+
+export {
+  findLines, frameLines, gradients, intersect, offAxis, paperScore,
+  MAX_LINES_PER_FAMILY, AXIS_TOLERANCE,
+};
