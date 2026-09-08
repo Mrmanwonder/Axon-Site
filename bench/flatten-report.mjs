@@ -31,6 +31,7 @@ import { readdir } from 'node:fs/promises';
 import { decodeFixture } from './decode.mjs';
 import { flattenPage } from '../src/scan/enhance.js';
 import { separateLayers } from '../src/scan/layers.js';
+import { targetSize } from '../src/scan/conditioning.js';
 
 // The size production actually conditions a page at — CONDITIONING.PAGE_LONG_EDGE
 // on the LONG edge, which for a portrait page is nothing like 2400 wide.
@@ -107,9 +108,18 @@ const files = (await readdir(dir)).filter((f) => /\.(jpe?g|png)$/i.test(f)).sort
 
 const rows = [];
 for (const file of files) {
-  const probe = await decodeFixture(file, { resizeWidth: 64 });
-  const width = Math.round(LONG_EDGE * Math.min(1, probe.width / probe.height));
-  const native = await decodeFixture(file, { resizeWidth: width });
+  // Conditioning caps and never upscales, so neither does this. Enlarging the
+  // corpus's 1000px derivatives to 2400 would invent pixels and then report
+  // colour measurements taken on them — which is the mistake this whole family
+  // of reports now prints its dimensions to avoid. Their marks columns are
+  // still weak evidence at their own size; see marks-report.mjs for why that
+  // scale inflates the red share, and treat the shadowed/as-shot *difference*
+  // rather than the absolute numbers as what these rows say.
+  const full = await decodeFixture(file);
+  const target = targetSize(full.width, full.height, LONG_EDGE);
+  const native = target.width === full.width
+    ? full
+    : await decodeFixture(file, { resizeWidth: target.width });
   for (const [label, img] of [['as shot', native], ['+ shadow', shadowed(native)]]) {
     const started = performance.now();
     const flattening = flattenPage(img);
@@ -127,14 +137,16 @@ for (const file of files) {
       redAfter: after.coverage.red_share_of_ink,
       fallbackBefore: before.fallback, fallbackAfter: after.fallback,
       applied: flattening.applied, spread: flattening.spread,
+      dims: `${img.width}x${img.height}`,
     });
   }
 }
 
 const pct = (a, b) => (a === 0 ? (b === 0 ? '  0%' : '  +∞') : `${(((b - a) / a) * 100 >= 0 ? '+' : '')}${(((b - a) / a) * 100).toFixed(0)}%`);
 
-console.log(`\nIllumination flattening · pages at ${LONG_EDGE}px on the long edge\n`);
-console.log('  fixture                     lighting     evenness        red share      marks    spread');
+console.log(`\nIllumination flattening · pages capped at ${LONG_EDGE}px on the long edge,\n` +
+  `never upscaled — each row prints the size it was measured at\n`);
+console.log('  fixture                     lighting     evenness        red share      marks    spread                  dims');
 console.log('                                          before  after   before  after   before after');
 for (const r of rows) {
   console.log(
@@ -142,7 +154,8 @@ for (const r of rows) {
     `${r.evenBefore.toFixed(3).padStart(6)} ${r.evenAfter.toFixed(3).padStart(6)}  ` +
     `${r.redBefore.toFixed(3).padStart(6)} ${r.redAfter.toFixed(3).padStart(6)}  ` +
     `${String(r.marksBefore).padStart(6)} ${String(r.marksAfter).padStart(5)}  ` +
-    `${r.spread.toFixed(2).padStart(5)} ${r.applied ? 'flattened' : 'left alone'}`,
+    `${r.spread.toFixed(2).padStart(5)} ${(r.applied ? 'flattened' : 'left alone').padEnd(11)} ` +
+    `${r.dims}`,
   );
 }
 

@@ -110,8 +110,16 @@ every mark on them (291 → 0, 126 → 0), which read as a threshold that needed
 raising. The threshold was wrong, but the reason those pages moved so far was a
 bug in `modeOf` — see `marks-report.mjs` below. With that fixed and the
 threshold re-derived, flattening changes **no** page's colour verdict and costs
-four marks across the whole corpus (951 → 947), while still removing the shadow
+four marks across the whole corpus (936 → 934), while still removing the shadow
 it exists for.
+
+This report no longer upscales either: it caps at the long edge with the same
+`targetSize` production uses, so the corpus's 1000px derivatives are measured at
+1000px rather than enlarged to 2400 and then colour-measured on invented pixels.
+Their marks columns are still weak at that size — see `marks-report.mjs` for why
+that scale inflates the red share — so read the shadowed-versus-as-shot
+*difference* on those rows, not the absolute numbers. Every row prints the
+dimensions it was measured at.
 
 ## marks-report.mjs
 
