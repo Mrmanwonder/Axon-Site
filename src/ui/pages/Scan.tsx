@@ -39,6 +39,28 @@ export default function Scan() {
     return () => onScreenVisible(false);
   }, [onScreenVisible]);
 
+  // `touch-action: none` on .scanhero stops the browser treating a drag over
+  // the viewfinder as a scroll or a pan, but it does not stop iOS Safari's
+  // pinch-to-zoom — Safari zooms the page from its own `gesture*` events, which
+  // fire ahead of any touch-action decision. Refusing those closes the gap.
+  //
+  // Bound while this screen is mounted and removed with it, so pinch-zoom keeps
+  // working everywhere else in the app. That is the whole reason this is here
+  // rather than `user-scalable=no` in the viewport meta: taking zoom away from
+  // the entire app to fix one screen is an accessibility regression, not a fix.
+  useEffect(() => {
+    const stop = (e: Event) => e.preventDefault();
+    // Not in the DOM lib — `gesture*` is Safari's own, and this is the browser
+    // it exists for. Passive listeners cannot preventDefault, so say so.
+    const listen = document.addEventListener.bind(document) as
+      (t: string, l: EventListener, o?: AddEventListenerOptions) => void;
+    const unlisten = document.removeEventListener.bind(document) as
+      (t: string, l: EventListener) => void;
+    const kinds = ["gesturestart", "gesturechange", "gestureend"];
+    for (const kind of kinds) listen(kind, stop, { passive: false });
+    return () => { for (const kind of kinds) unlisten(kind, stop); };
+  }, []);
+
   const badPages = tray.filter((p) => p.quality && p.quality.verdict !== "ok").length;
 
   return (

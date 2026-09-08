@@ -71,7 +71,21 @@ console.log(`ever steady        ${r.states.some((s) => s.steady)}`);
 console.log(`auto-captured      ${r.shots > 0 ? `yes, at ${r.firstShotMs}ms` : 'NO'}`);
 if (r.lastShot) console.log(`shot               ${r.lastShot.size}, quad ${r.lastShot.hasQuad ? 'kept' : 'MISSING'}`);
 
+// The preview stabiliser must actually be driving the video element, and it
+// must be driving it with a real transform rather than an identity one. A
+// stabiliser that silently does nothing looks exactly like a steady hand.
+const transforms = r.states.map((s) => s.videoTransform).filter(Boolean);
+const panned = transforms.filter((t) => !/translate\(0(?:\.00)?px, ?0(?:\.00)?px\)/.test(t));
+console.log(`stabiliser        ${transforms.length ? transforms[transforms.length - 1] : 'NOT APPLIED'}`);
+console.log(`  panning         ${panned.length} of ${transforms.length} frames`);
+
 if (!r.live) failures.push('the camera never went live');
+if (r.states.length && !transforms.length) {
+  failures.push('the stabiliser never applied a transform to the video');
+}
+if (transforms.length && !transforms.some((t) => /scale\(1\.0[1-9]/.test(t))) {
+  failures.push('the stabiliser applied no overscan, so there is no margin to pan into');
+}
 if (!found) failures.push('the detector never found the page');
 if (!r.states.some((s) => s.steady)) failures.push('the page was never called steady');
 if (!r.shots) failures.push(`nothing was captured within ${budgetMs}ms of a held page`);

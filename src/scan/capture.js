@@ -79,6 +79,177 @@ const TRACK_WIDTH = 480;
 // search; between two of them the geometry is live and those are not, and a
 // glare reading from two seconds ago is not evidence about this frame.
 const MEASUREMENT_STALE_MS = 1200;
+// How far the visual viewport may sit from 1:1 before this screen's coordinate
+// mapping stops being trustworthy. Anything over about a percent is a real
+// pinch rather than a rounding artefact of a fractional device pixel ratio.
+const VIEWPORT_SCALE_TOLERANCE = 0.01;
+
+/**
+ * Is the page pinch-zoomed right now?
+ *
+ * The overlay maps the tracked quad onto screen pixels through the video's
+ * layout rect, and the gate reads fill and page size off the same mapping. A
+ * native pinch changes the *visual* viewport — its scale and its offset —
+ * without moving that layout rect, so both come apart at once: the brackets
+ * stop landing on the page, and the gate can read a distorted frame as large
+ * and steady enough to photograph.
+ *
+ * The gesture is blocked at source on the scan screen (touch-action on
+ * .scanhero, plus refusing Safari's gesture events while it is mounted). This
+ * is the belt to that pair of braces: if a browser quirk or a future
+ * regression lets one through, the failure is a frame with no brackets, never
+ * a shutter firing on a frame nobody could see straight.
+ */
+function viewportScale() {
+  return globalThis.visualViewport?.scale ?? 1;
+}
+
+function viewportScaled() {
+  return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+}
+
+// ── preview stabilisation ─────────────────────────────────────────────────
+//
+// scan-digital-stabilization-2026-09-08. The web platform exposes no camera
+// stabilisation control — there is no MediaTrackConstraint for optical or
+// electronic IS on any browser, it is entirely the OS camera pipeline's
+// business — so the only way to steady what the student sees is to steady it
+// ourselves. The expensive way is real digital EIS: redraw every video frame
+// through a motion-compensated warp onto a canvas, which competes for exactly
+// the main-thread budget the tracker was built to free. This is the cheap way,
+// and it is most of the benefit: render the video slightly larger than its
+// viewport and pan it against the shake, so tremor moves the cropped-off
+// margin rather than the page. One CSS transform, composited for free.
+//
+// Translate-only on purpose. Tremor at arm's length is overwhelmingly a small
+// in-plane shift, not a perspective change, so a 2D pan buys nearly all of what
+// a full homography would at a tiny fraction of its cost.
+
+// How much larger than its viewport the video is drawn. Every percent here is a
+// percent of the preview's own resolution spent on margin, so this wants to be
+// the smallest number that covers real tremor — see the pan amplitude logged by
+// recordStabTiming() for what real is, and tune from that rather than from
+// this comment.
+const STAB_ZOOM = 1.08;
+// The time constant of the slow filter, in milliseconds. Motion slower than
+// this is a deliberate reframe and is left alone; what is left over after
+// subtracting it is the shake. Long enough that a steady sweep across a page
+// is not fought, short enough that the pan does not keep leaning on a reframe
+// after it has finished.
+const STAB_SLOW_MS = 600;
+// The time constant of the velocity estimate. Shorter than the position one,
+// because this is what decides how long a deliberate sweep is fought before the
+// filter accepts it as deliberate, and a second of the pan pinned at the margin
+// is a second with no headroom left for the tremor riding on top of the sweep.
+// Tremor cannot pull it: alternating motion averages to no velocity at all,
+// which is exactly what distinguishes a shake from a move.
+const STAB_VELOCITY_MS = 350;
+// How quickly the pan itself follows its target. Its own constant, deliberately
+// not shared with easeQuad's: that one smooths where the brackets are drawn —
+// what the app says it sees — and this one smooths the image itself. Sharing a
+// number between them would mean tuning one by breaking the other.
+const STAB_FOLLOW = 0.35;
+
+/**
+ * A point on screen, through the same transform the video element carries.
+ *
+ * This is the half of the stabiliser that is easiest to get wrong and worst to
+ * get wrong: brackets that were correct before stabilisation and drift off the
+ * page after it are a worse regression than the tremor the pan exists to
+ * absorb. So it mirrors the CSS exactly — `translate(pan) scale(zoom)` about
+ * the element's centre, which composes as "scale about the centre, then shift"
+ * — rather than approximating it, and it is pure so a test can hold the two
+ * together.
+ *
+ * `pan` is in the same units as the point (device pixels for the overlay
+ * canvas), which is not the unit the CSS custom property is written in; the
+ * caller converts.
+ */
+export function stabApply(point, { width, height, zoom, pan }) {
+  const cx = width / 2, cy = height / 2;
+  return {
+    x: cx + (point.x - cx) * zoom + pan.x,
+    y: cy + (point.y - cy) * zoom + pan.y,
+  };
+}
+
+/**
+ * One step of the stabiliser.
+ *
+ * `slow` is the low-passed position — the deliberate part of the motion — and
+ * what is left after subtracting it from `position` is the shake. The pan is
+ * the negative of that shake, clamped so the overscan margin never runs out and
+ * exposes the edge of the frame.
+ *
+ * Pure and exported for the same reason the rest of the gate is: this decides
+ * what the student's camera looks like, and a camera is a bad place to find out
+ * it was wrong.
+ *
+ * @param {{slow: {x,y}|null, velocity: {x,y}, previous: {x,y}|null, pan: {x,y}}} state
+ * @param {{x: number, y: number}|null} position  page centroid, in screen pixels
+ * @param {number} elapsed  milliseconds since the last step
+ * @param {{x: number, y: number}} margin  the overscan available, in screen pixels
+ */
+export function stabiliseStep(state, position, elapsed, margin) {
+  // Nothing to follow: relax the pan back to centre rather than holding the
+  // last correction over a frame that has no page in it.
+  if (!position) {
+    return {
+      slow: null, velocity: { x: 0, y: 0 }, previous: null,
+      pan: { x: state.pan.x * (1 - STAB_FOLLOW), y: state.pan.y * (1 - STAB_FOLLOW) },
+      shake: { x: 0, y: 0 },
+    };
+  }
+  if (!state.slow) {
+    return {
+      slow: { ...position }, velocity: { x: 0, y: 0 }, previous: { ...position },
+      pan: { x: 0, y: 0 }, shake: { x: 0, y: 0 },
+    };
+  }
+
+  const dt = Math.max(1, elapsed);
+  // Coefficients derived from the real frame interval rather than assumed —
+  // camera frames do not arrive on a schedule, and a fixed coefficient makes
+  // the filter's actual time constant whatever the frame rate happened to be.
+  const alpha = 1 - Math.exp(-dt / STAB_SLOW_MS);
+  const velAlpha = 1 - Math.exp(-dt / STAB_VELOCITY_MS);
+
+  // The slow filter tracks velocity as well as position, and that is not a
+  // refinement — a position-only low pass lags a constant-velocity sweep by
+  // velocity times its own time constant, permanently. At a hand's pace across
+  // a page that is dozens of pixels of standing "shake" that is not shake at
+  // all, so the pan pins itself at the margin for the whole sweep and has
+  // nothing left to absorb the tremor riding on top of it, which is the one
+  // thing it exists for. Predicting forward at the estimated velocity leaves a
+  // steady sweep with no residual at all.
+  const previous = state.previous ?? position;
+  const velocity = {
+    x: state.velocity.x + ((position.x - previous.x) / dt - state.velocity.x) * velAlpha,
+    y: state.velocity.y + ((position.y - previous.y) / dt - state.velocity.y) * velAlpha,
+  };
+  const predicted = {
+    x: state.slow.x + velocity.x * dt,
+    y: state.slow.y + velocity.y * dt,
+  };
+  const slow = {
+    x: predicted.x + (position.x - predicted.x) * alpha,
+    y: predicted.y + (position.y - predicted.y) * alpha,
+  };
+  const shake = { x: position.x - slow.x, y: position.y - slow.y };
+  const clamp = (v, limit) => (v > limit ? limit : v < -limit ? -limit : v);
+  const target = { x: clamp(-shake.x, margin.x), y: clamp(-shake.y, margin.y) };
+
+  return {
+    slow,
+    velocity,
+    previous: { ...position },
+    pan: {
+      x: state.pan.x + (target.x - state.pan.x) * STAB_FOLLOW,
+      y: state.pan.y + (target.y - state.pan.y) * STAB_FOLLOW,
+    },
+    shake,
+  };
+}
 
 /**
  * How long the page has been sitting in one place.
@@ -110,8 +281,15 @@ export function steadyWindow({ anchor, found, width, height, since, now }) {
  */
 export function shouldAutoCapture({
   autoCapture, armed, blocking, steady, heldFor, consecutiveFinds, trackState = 'tracking',
+  viewportScaled = false,
 }) {
   if (!autoCapture || !armed || blocking) return false;
+  // A pinched viewport means every screen-space number this decision rests on
+  // was measured through a mapping that no longer holds — see viewportScale()
+  // below. The gesture is blocked on the scan screen, so this should never
+  // fire; it is here because the cost of being wrong is a photograph nobody
+  // asked for, taken of a frame nobody could see straight.
+  if (viewportScaled) return false;
   // A detector locked onto something large and wrong is extremely stable, so
   // stability alone is not evidence. Several finds running is.
   //
@@ -346,6 +524,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // The video timestamp the last tracking cycle ran against, so the same
   // picture is never searched twice. See trackStep().
   let lastTrackedFrame = -1;
+  // The preview stabiliser's state, and the last frame it stepped on. `pan` is
+  // in CSS pixels and is what reaches --stab-x/--stab-y.
+  let stab = { slow: null, velocity: { x: 0, y: 0 }, previous: null, pan: { x: 0, y: 0 } };
+  let stabLast = 0;
   // The exposure and focus reads, and the pose they were taken at. They come
   // from the global search, so between two of them they describe a moment
   // rather than this frame — see measurementsStale().
@@ -526,6 +708,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     track = createTrack();
     trackSize = measured = measuredQuad = guidance = null;
     lastTrackedFrame = -1;
+    stab = { slow: null, velocity: { x: 0, y: 0 }, previous: null, pan: { x: 0, y: 0 } };
+    stabLast = 0;
+    video.style.removeProperty('transform');
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
@@ -931,7 +1116,23 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.trackState = track.state;
     next.trackConfidence = documentConfidence(track);
 
-    quad = easeQuad(quad, scaleQuad(tracked, { width: tw, height: th }, { width: vw, height: vh }));
+    // What the brackets are drawn toward. While the page is holding still, that
+    // is the steady window's own anchor rather than this frame's estimate —
+    // which is what stops the brackets trembling in sync with the student's
+    // hand. The anchor only moves when the pose leaves STABILITY_TOLERANCE,
+    // which is the same judgement, on the same motion, that the steadiness
+    // clock is already making; a bracket that answered motion the clock calls
+    // still would be contradicting the app's own definition of still.
+    //
+    // Not while the page is moving, though: mid-reframe the anchor is a pose
+    // the page has already left, and drawing it would put the brackets
+    // deliberately behind. Live estimate then, eased fast.
+    const drawTarget = next.steady ? window_.anchor : tracked;
+    quad = easeQuad(
+      quad,
+      scaleQuad(drawTarget, { width: tw, height: th }, { width: vw, height: vh }),
+      { width: vw, height: vh },
+    );
 
     // ── the gate ───────────────────────────────────────────────────────────
     // See liveGateVerdict() above for the ordering and the reasoning behind
@@ -957,6 +1158,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (shouldAutoCapture({
       autoCapture, armed, blocking: next.blocking,
       steady: next.steady, heldFor, consecutiveFinds, trackState: track.state,
+      viewportScaled: viewportScaled(),
     })) {
       armed = false;
       shoot(true);
@@ -992,14 +1194,29 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0, 0, w, h);
-    if (!quad || !video.videoWidth) return;
+    if (!video.videoWidth) return;
 
     // The video is object-fit: cover, so the drawn frame is cropped, not
     // letterboxed. Mapping has to match or the brackets sit off the page.
     const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
     const offsetX = (w - video.videoWidth * scale) / 2;
     const offsetY = (h - video.videoHeight * scale) / 2;
-    const points = quad.map((p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY }));
+    const toOverlay = (p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
+
+    stabilise(quad, toOverlay, rect, w, h);
+
+    if (!quad) return;
+    // Cleared and left empty rather than drawn from a mapping the pinch broke.
+    if (viewportScaled()) return;
+
+    // The video now carries a transform of its own, so the brackets have to
+    // carry the same one or they will drift off the page by exactly the amount
+    // being panned to hold it still — which would be a worse regression than
+    // the tremor the pan exists to absorb.
+    const points = quad.map((p) => stabApply(toOverlay(p), {
+      width: w, height: h, zoom: STAB_ZOOM,
+      pan: { x: stab.pan.x * dpr, y: stab.pan.y * dpr },
+    }));
 
     ctx.strokeStyle = state.blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
     ctx.lineWidth = 3 * dpr;
@@ -1020,6 +1237,82 @@ export function createCapture({ video, overlay, onState, onShot }) {
         ctx.stroke();
       }
     }
+  }
+
+  /**
+   * Drive the video's stabilisation transform from this frame's page position.
+   *
+   * The motion signal is the tracked page's own centroid, which is exactly what
+   * the earlier version of this idea could not have used: detection then ran
+   * every 80-320ms, so a pan driven from it would have stepped a few times a
+   * second, and the brief that asked for this suggested reaching for
+   * DeviceMotion as a faster proxy. The tracker made that unnecessary — the
+   * centroid is a per-frame signal now, and it is the accurate one, so there is
+   * no reason to add a second sensor, an iOS permission prompt and the job of
+   * reconciling the two.
+   */
+  function stabilise(current, toOverlay, rect, w, h) {
+    const now = performance.now();
+    const elapsed = stabLast ? now - stabLast : 0;
+    stabLast = now;
+
+    // The overscan available on each side, in CSS pixels.
+    const margin = {
+      x: rect.width * (STAB_ZOOM - 1) / 2,
+      y: rect.height * (STAB_ZOOM - 1) / 2,
+    };
+
+    let centre = null;
+    if (current && !viewportScaled()) {
+      // In overlay pixels, then to CSS pixels, which is the space the transform
+      // is written in.
+      const points = current.map(toOverlay);
+      const dpr = w / Math.max(1, rect.width);
+      centre = {
+        x: (points[0].x + points[1].x + points[2].x + points[3].x) / 4 / dpr,
+        y: (points[0].y + points[1].y + points[2].y + points[3].y) / 4 / dpr,
+      };
+    }
+
+    const stepped = stabiliseStep(stab, centre, elapsed, margin);
+    stab = { slow: stepped.slow, velocity: stepped.velocity, previous: stepped.previous, pan: stepped.pan };
+    recordStabTiming(stepped.shake, margin);
+
+    // translate before scale, so the offsets are literal screen pixels and
+    // stabApply can mirror the composition without guessing at the order.
+    video.style.transform =
+      `translate(${stab.pan.x.toFixed(2)}px, ${stab.pan.y.toFixed(2)}px) scale(${STAB_ZOOM})`;
+  }
+
+
+  // How much shake the stabiliser is actually being asked to absorb, and how
+  // much of the margin that used. STAB_ZOOM should be the smallest number that
+  // covers real tremor with headroom, and this is what says what real is — the
+  // margin is preview resolution spent, so guessing high is not free.
+  const stabStats = { n: 0, peak: 0, sum: 0, clamped: 0, lastFlush: 0 };
+
+  function recordStabTiming(shake, margin) {
+    const limit = Math.min(margin.x, margin.y) || 1;
+    const amplitude = Math.hypot(shake.x, shake.y);
+    stabStats.n++;
+    stabStats.sum += amplitude;
+    if (amplitude > stabStats.peak) stabStats.peak = amplitude;
+    if (Math.abs(shake.x) > margin.x || Math.abs(shake.y) > margin.y) stabStats.clamped++;
+    const now = performance.now();
+    if (!stabStats.lastFlush) stabStats.lastFlush = now;
+    if (now - stabStats.lastFlush < 4000) return;
+    console.debug('[scan:stabiliser]', {
+      n: stabStats.n,
+      zoom: STAB_ZOOM,
+      marginPx: +limit.toFixed(1),
+      meanShakePx: +(stabStats.sum / stabStats.n).toFixed(2),
+      peakShakePx: +stabStats.peak.toFixed(2),
+      // Frames where the shake was bigger than the margin could absorb. More
+      // than a trickle of these means STAB_ZOOM is too small for real hands.
+      clampedShare: +(stabStats.clamped / stabStats.n).toFixed(3),
+    });
+    stabStats.n = 0; stabStats.sum = 0; stabStats.peak = 0; stabStats.clamped = 0;
+    stabStats.lastFlush = now;
   }
 
   // ── the shutter ──────────────────────────────────────────────────────────

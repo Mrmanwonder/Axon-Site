@@ -27,7 +27,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyGain, assessRescue, detailGain, enhancePage, illuminationGain,
+  applyGain, assessRescue, detailGain, enhancePage, flattenPage, illuminationGain,
 } from '../src/scan/enhance.js';
 import { redRatio } from '../src/scan/colour.js';
 import { toGray, sharpness } from '../src/scan/quality.js';
@@ -228,7 +228,7 @@ test('flattening evens out a lighting gradient without touching local contrast',
   };
 
   const before = spread(lit);
-  const after = spread(applyGain(lit, illuminationGain(lit)));
+  const after = spread(applyGain(lit, illuminationGain(lit).gain));
   assert.ok(after < before * 0.6,
     `top-to-bottom brightness difference went ${before.toFixed(1)} -> ${after.toFixed(1)}; flattening is not removing the gradient`);
 
@@ -236,9 +236,77 @@ test('flattening evens out a lighting gradient without touching local contrast',
   // a measure of local contrast, so if flattening had eaten the writing this
   // would collapse.
   const focusBefore = sharpness(lit).score;
-  const focusAfter = sharpness(applyGain(lit, illuminationGain(lit))).score;
+  const focusAfter = sharpness(applyGain(lit, illuminationGain(lit).gain)).score;
   assert.ok(focusAfter >= focusBefore * 0.9,
     `sharpness fell ${focusBefore.toFixed(3)} -> ${focusAfter.toFixed(3)} across flattening — it is removing detail, not lighting`);
+});
+
+// ── flattening runs on every page now, so it has to earn every page ────────
+//
+// scan-shadow-removal-2026-09-08. It used to run only on the rescue path, so a
+// page large enough not to need rescuing got no lighting correction at all —
+// which is exactly where a hand or a desk-lamp shadow shows up. Moving it onto
+// the ordinary path means it now touches pages that were previously untouched,
+// and that is the risk these pin.
+
+test('an evenly lit page is left byte-for-byte alone', async () => {
+  // The whole reason for the gate. Flattening moves the red share of a page's
+  // ink, and layers.js decides on that number whether it is looking at a
+  // teacher's marking or at a student who wrote in red — so on the corpus's
+  // real production scan, flattening a sheet that had nothing wrong with its
+  // lighting pushed that share from 0.126 to 0.233 and took 141 genuine teacher
+  // marks to zero. A page with an even field must come back untouched, not
+  // nearly untouched.
+  const page = await decodeFixture(PRODUCTION_PAGE, { resizeWidth: 1100 });
+  const flat = flattenPage(page);
+  assert.equal(flat.applied, false,
+    `an evenly lit scan was flattened anyway (spread ${flat.spread.toFixed(3)})`);
+  assert.equal(flat.image, page, 'the page came back as a copy rather than untouched');
+});
+
+test('a shadowed page is flattened, and materially', async () => {
+  const page = await decodeFixture(PRODUCTION_PAGE, { resizeWidth: 1100 });
+  const shaded = { data: new Uint8ClampedArray(page.data), width: page.width, height: page.height };
+  const soft = Math.max(page.width, page.height) * 0.28;
+  for (let y = 0; y < page.height; y++) {
+    for (let x = 0; x < page.width; x++) {
+      const along = (x * 0.7 + y * 0.7) - page.width * 0.55;
+      const k = 1 - 0.55 * Math.max(0, Math.min(1, 0.5 - along / soft));
+      const i = (y * page.width + x) * 4;
+      shaded.data[i] *= k; shaded.data[i + 1] *= k; shaded.data[i + 2] *= k;
+    }
+  }
+  const flat = flattenPage(shaded);
+  assert.equal(flat.applied, true,
+    `a page with a hand's shadow across it was left alone (spread ${flat.spread.toFixed(3)})`);
+
+  // The shadow is measurably gone: the darkened corner and the lit one are
+  // much closer together than they were.
+  const corner = (img, fx, fy) => {
+    let sum = 0, n = 0;
+    for (let y = Math.round(img.height * fy); y < Math.round(img.height * (fy + 0.15)); y += 3) {
+      for (let x = Math.round(img.width * fx); x < Math.round(img.width * (fx + 0.15)); x += 3) {
+        const i = (y * img.width + x) * 4;
+        sum += (img.data[i] * 299 + img.data[i + 1] * 587 + img.data[i + 2] * 114) / 1000;
+        n++;
+      }
+    }
+    return sum / n;
+  };
+  const before = Math.abs(corner(shaded, 0.02, 0.02) - corner(shaded, 0.8, 0.8));
+  const after = Math.abs(corner(flat.image, 0.02, 0.02) - corner(flat.image, 0.8, 0.8));
+  assert.ok(after < before * 0.6,
+    `shadowed corner to lit corner went ${before.toFixed(1)} -> ${after.toFixed(1)}`);
+});
+
+test('the gate separates the two cases with room to spare', async () => {
+  // A threshold that clears its most important fixture by a hundredth is not a
+  // threshold, it is a coincidence waiting to stop happening. An earlier
+  // version of this gate sat at 1.12 against a page measuring 1.11.
+  const page = await decodeFixture(PRODUCTION_PAGE, { resizeWidth: 1100 });
+  const even = flattenPage(page).spread;
+  assert.ok(even < ENHANCE.FIELD_FLAT_ENOUGH * 0.9,
+    `an evenly lit page measures ${even.toFixed(3)} against a gate of ${ENHANCE.FIELD_FLAT_ENOUGH} — too close`);
 });
 
 // ── the decision to rescue is made on evidence ─────────────────────────────
