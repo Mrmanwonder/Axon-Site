@@ -321,8 +321,38 @@ export const LAYER_FALLBACK = {
   // The student wrote in red, which breaks the layer assumption completely.
   STUDENT_WROTE_RED: 'student_wrote_red',
   RED_INK_SHARE_MIN: 0.002,
-  // IMAGE_PIPELINE.md §6.3 puts this at about 15% of written area.
-  RED_INK_SHARE_MAX: 0.15,
+  // Above this share of the ink, red is not marginalia — the student wrote in
+  // it, and the mask is a map of their answer rather than of the marking.
+  //
+  // IMAGE_PIPELINE.md §6.3 put this at about 15% of written area and it was
+  // wrong, not by a little: on the corpus's real submitted pages a teacher who
+  // marks heavily produces 0.183, so a genuinely marked page was classified as
+  // written-in-red and every mark on it discarded. That number could not be
+  // re-derived until `modeOf` was fixed in colour.js, because until then the
+  // same page measured 0.126 or 0.257 depending on a one-pixel resize — there
+  // was no stable quantity to calibrate against.
+  //
+  // Re-derived at the size conditioning actually produces (2400px long edge,
+  // and nowhere else — the same measurement on the corpus's 1000px derivatives
+  // reads 0.56 on a marked page, which is chroma bleeding across strokes and is
+  // the reason the pipeline has a resolution floor at all). See
+  // bench/marks-report.mjs:
+  //
+  //   teacher marked, real          0.117 - 0.183
+  //   student wrote red, synthetic  0.292 - 0.361
+  //
+  // 0.22 sits in that gap, and deliberately on its lower half. The two errors
+  // are not equally bad. Too low discards every mark on a marked page, which is
+  // the failure happening today and is at least *visible* — the page yields
+  // nothing and the pipeline says so. Too high hands stage 5 a map of the
+  // student's own answer and calls it the teacher's marking, which is a
+  // confident wrong answer about what a teacher wrote, and hard rule 1 exists
+  // because that is the one thing this product must never do.
+  //
+  // Four samples from two photographs is thin, and the two synthetics are not
+  // independent of the two reals. A genuinely red-penned student answer and a
+  // page from a heavier-marking teacher would settle it properly.
+  RED_INK_SHARE_MAX: 0.22,
 };
 
 // Structural shape of a teacher mark, as the device can tell it from geometry

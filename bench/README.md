@@ -18,6 +18,7 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
 | `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
 | `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
+| `marks-report.mjs` | Whether the teacher's ink survives stage 2 on real submitted pages, and where the marked / wrote-in-red populations separate — see below |
 | `flatten-report.mjs` | What illumination flattening does to a page's lighting, and what it costs the teacher's red ink — see below |
 | `golden-report.mjs` | The same fixtures again, as a false-accept/false-reject rate report instead of pass/fail — `node bench/golden-report.mjs` |
 | `verdict-agreement.mjs` + `.test.mjs` | Whether the live capture gate ever waves through a shot the final `scorePage()` then fails — see below |
@@ -103,15 +104,85 @@ and 0.224 → 0.097 on the worst one). Mean cost is 94ms a page on a bench
 machine, most of which is the pages that skip the full-resolution pass —
 `conditioning_meta.flatten_ms` is the number from a real device.
 
-**One thing this surfaced that is not fixed here.** On a genuinely *shadowed*
-page carrying real marks, removing the shadow still pushes the red share past
-0.15 and the page is written off as `student_wrote_red`, losing every mark
-(291 → 0 and 126 → 0 on the two synthetic-shadow rows). Under a shadow the red
-share reads artificially *low*, so the current threshold is partly being
-protected by the defect this change removes. `RED_INK_SHARE_MAX` comes from
-IMAGE_PIPELINE.md §6.3 and governs whether stage 5 is handed the student's own
-writing and told it is the marking — that is a product decision, not a constant
-to quietly retune, so it is raised rather than changed.
+**Resolved, and it was not what it looked like.** This report first showed
+flattening pushing shadowed marked pages past `RED_INK_SHARE_MAX` and losing
+every mark on them (291 → 0, 126 → 0), which read as a threshold that needed
+raising. The threshold was wrong, but the reason those pages moved so far was a
+bug in `modeOf` — see `marks-report.mjs` below. With that fixed and the
+threshold re-derived, flattening changes **no** page's colour verdict and costs
+four marks across the whole corpus (936 → 934), while still removing the shadow
+it exists for.
+
+This report no longer upscales either: it caps at the long edge with the same
+`targetSize` production uses, so the corpus's 1000px derivatives are measured at
+1000px rather than enlarged to 2400 and then colour-measured on invented pixels.
+Their marks columns are still weak at that size — see `marks-report.mjs` for why
+that scale inflates the red share — so read the shadowed-versus-as-shot
+*difference* on those rows, not the absolute numbers. Every row prints the
+dimensions it was measured at.
+
+## marks-report.mjs
+
+Does the teacher's ink survive stage 2, on the pages a real student actually
+submitted? For a long time the answer was no, and nothing said so.
+
+```bash
+node bench/marks-report.mjs
+```
+
+`modeOf` in `colour.js` built one histogram from the redness plane's raw minimum
+to its raw maximum. `redRatio` is `(r+1)/(g+b+2)`, so a single pixel with almost
+no green or blue in it reads 85 or more, while the paper the function exists to
+find sits near 0.5. All 512 bins went on outliers, leaving the paper's mode
+resolved to two bins — and which one it landed in was decided by whichever pixel
+happened to be reddest:
+
+| page width | red share | verdict | marks |
+| --- | --- | --- | --- |
+| 1600 | 0.117 | marked | 151 |
+| 1634 | 0.126 | marked | 141 |
+| **1636** | **0.257** | **student_wrote_red** | **0** |
+| 1640 | 0.118 | marked | 138 |
+
+1636×2400 is exactly what conditioning produces for that fixture. An unstable
+measurement has two answers and production was always going to get one of them.
+
+Fixed by measuring the mode over a trimmed range instead. On the real submitted
+page that recovers **144 teacher marks where there were none** — the same count
+`extraction_run fc030c2a` got from those exact pixels, which `golden.test.mjs`
+has cited all along while the live pipeline returned nothing. This is very
+likely most of `scanner-and-post-scan-plan-2026-08-31`'s finding that 48/48
+question regions came back unsure or unreadable: stage 2 was handing every stage
+after it an empty map.
+
+### Re-deriving RED_INK_SHARE_MAX
+
+Only possible once the number it judges was stable. At the size conditioning
+produces:
+
+| | red share |
+| --- | --- |
+| teacher marked, real | 0.117 – 0.183 |
+| student wrote red, synthetic | 0.292 – 0.361 |
+
+The old 0.15 sat *inside* the marked population, so a heavily-marking teacher's
+page was classified as written-in-red. It is 0.22 now — in the gap and
+deliberately on its lower half, because the two errors are not equally bad. Too
+low discards every mark on a marked page, which is at least visible. Too high
+hands stage 5 a map of the student's own answer and calls it the teacher's
+marking, which is a confident wrong answer about what a teacher wrote.
+
+Four samples from two photographs is thin, and the two synthetics are derived
+from the two reals rather than independent of them. What would settle it is a
+genuinely red-penned student answer and a page from a heavier-marking teacher.
+
+**Scale is load-bearing here and the report prints it on every line.** The same
+measurement on the corpus's 1000px derivatives reads 0.56 on a marked page —
+chroma bleeding across strokes, and the reason the pipeline has a resolution
+floor. Three separate wrong conclusions in this codebase have come from a
+number taken at a scale the pipeline never uses: the sharpness bug in
+AXON_FIX_BRIEF.md §B7, `flatten-report.mjs`'s first pass, and the report that
+first claimed these pages already yielded nothing.
 
 ## golden.test.mjs
 
