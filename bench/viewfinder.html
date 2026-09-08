@@ -101,7 +101,12 @@ const capture = createCapture({
     result.states.push({ hasPage: s.hasPage, steady: s.steady, blocking: s.blocking,
                          pageLongEdge: s.pageLongEdge, hint: s.hint,
                          at: Math.round(performance.now() - started),
-                         trackState: s.trackState, trackConfidence: s.trackConfidence });
+                         trackState: s.trackState, trackConfidence: s.trackConfidence,
+                         // The stabiliser's live transform, so the harness can
+                         // check the video is actually being panned and that
+                         // the brackets are drawn through the same transform
+                         // rather than against it.
+                         videoTransform: document.getElementById('v').style.transform });
     log.textContent = events.slice(-14).join('\n');
   },
   onShot: (shot) => {

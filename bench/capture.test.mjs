@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS,
-  liveGateVerdict, settledGuidance, shouldAutoCapture, steadyWindow,
+  liveGateVerdict, settledGuidance, shouldAutoCapture, stabApply, stabiliseStep, steadyWindow,
 } from '../src/scan/capture.js';
 import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -340,4 +340,98 @@ test('a pinched viewport holds the shutter', () => {
   // straight. The gesture is blocked at source; this is the backstop.
   assert.equal(shouldAutoCapture({ ...ready, viewportScaled: true }), false);
   assert.equal(shouldAutoCapture({ ...ready, viewportScaled: false }), true);
+});
+
+// ── preview stabilisation ──────────────────────────────────────────────────
+//
+// scan-digital-stabilization-2026-09-08. Render the video a little larger than
+// its viewport and pan it against the shake, so tremor moves the cropped-off
+// margin instead of the page.
+
+const MARGIN = { x: 16, y: 16 };
+const start = { slow: null, velocity: { x: 0, y: 0 }, previous: null, pan: { x: 0, y: 0 } };
+
+test('the first frame sets the baseline and pans nothing', () => {
+  const s = stabiliseStep(start, { x: 100, y: 200 }, 16, MARGIN);
+  assert.deepEqual(s.slow, { x: 100, y: 200 });
+  assert.deepEqual(s.pan, { x: 0, y: 0 });
+});
+
+// Physiological hand tremor is a few hertz — 4 to 12 — not a flip every frame,
+// and modelling it as the latter tests a signal no hand produces and no
+// follower should chase.
+const tremorAt = (frame, { hz = 8, amplitude = 6, fps = 60 } = {}) =>
+  Math.sin((2 * Math.PI * hz * frame) / fps) * amplitude;
+
+test('tremor is cancelled, and against the page rather than with it', () => {
+  let s = stabiliseStep(start, { x: 100, y: 100 }, 16, MARGIN);
+  let worstResidual = 0;
+  for (let i = 0; i < 120; i++) {
+    const shake = tremorAt(i);
+    s = stabiliseStep(s, { x: 100 + shake, y: 100 }, 16, MARGIN);
+    // What the student is left looking at: the page's own displacement plus the
+    // pan applied to cancel it. Only measured once the filter has settled.
+    if (i > 40) worstResidual = Math.max(worstResidual, Math.abs(shake + s.pan.x));
+  }
+  assert.ok(worstResidual < 6 * 0.7,
+    `6px of tremor still reads as ${worstResidual.toFixed(2)}px on screen`);
+});
+
+test('a deliberate sweep is not fought for long', () => {
+  // A page carried steadily across the frame: a position-only filter lags a
+  // ramp by velocity times its time constant *permanently*, which pinned the
+  // pan at the margin for the whole sweep and left nothing to absorb the
+  // tremor riding on top of it. Tracking velocity is what fixes that.
+  let r = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
+  for (let i = 1; i <= 120; i++) r = stabiliseStep(r, { x: i * 2, y: 0 }, 16, MARGIN);
+  assert.ok(Math.abs(r.pan.x) < MARGIN.x * 0.4,
+    `two seconds into a steady sweep the pan is still leaning ${Math.abs(r.pan.x).toFixed(1)}px`);
+});
+
+test('the pan never exceeds the overscan margin', () => {
+  // A shake bigger than the margin still shows — that is the honest limit of
+  // something this cheap — but it must never pan past the margin and expose
+  // the edge of the frame.
+  let s = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
+  for (let i = 0; i < 60; i++) s = stabiliseStep(s, { x: i % 2 ? 400 : -400, y: 0 }, 16, MARGIN);
+  assert.ok(Math.abs(s.pan.x) <= MARGIN.x + 1e-9,
+    `panned ${s.pan.x.toFixed(1)}px past a ${MARGIN.x}px margin`);
+});
+
+test('losing the page relaxes the pan rather than freezing it', () => {
+  let s = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
+  for (let i = 0; i < 20; i++) s = stabiliseStep(s, { x: i % 2 ? 40 : -40, y: 0 }, 16, MARGIN);
+  const held = Math.abs(s.pan.x);
+  for (let i = 0; i < 20; i++) s = stabiliseStep(s, null, 16, MARGIN);
+  assert.ok(Math.abs(s.pan.x) < held * 0.05,
+    'the pan stayed leaning after the page went away');
+});
+
+test('the filter reads the same at any frame rate', () => {
+  // The coefficient comes from the real interval, because camera frames do not
+  // arrive on a schedule and a fixed one would make the time constant whatever
+  // the frame rate happened to be.
+  let fast = stabiliseStep(start, { x: 0, y: 0 }, 8, MARGIN);
+  for (let i = 0; i < 60; i++) fast = stabiliseStep(fast, { x: 100, y: 0 }, 8, MARGIN);
+  let slow = stabiliseStep(start, { x: 0, y: 0 }, 32, MARGIN);
+  for (let i = 0; i < 15; i++) slow = stabiliseStep(slow, { x: 100, y: 0 }, 32, MARGIN);
+  assert.ok(Math.abs(fast.slow.x - slow.slow.x) < 2,
+    `the same half-second of motion filtered to ${fast.slow.x.toFixed(1)} at 125fps and ${slow.slow.x.toFixed(1)} at 31fps`);
+});
+
+test('the brackets carry exactly the transform the video carries', () => {
+  // The regression this test exists for: a bracket that was correct before
+  // stabilisation and drifts off the page after it is worse than the tremor.
+  // `translate(pan) scale(zoom)` about the element centre composes as "scale
+  // about the centre, then shift", and the overlay must do the same.
+  const box = { width: 400, height: 800, zoom: 1.08, pan: { x: 12, y: -7 } };
+  // The centre only moves by the pan.
+  assert.deepEqual(stabApply({ x: 200, y: 400 }, box), { x: 212, y: 393 });
+  // A corner scales about that centre, then shifts.
+  assert.deepEqual(stabApply({ x: 0, y: 0 }, box), { x: 200 - 200 * 1.08 + 12, y: 400 - 400 * 1.08 - 7 });
+  // With no zoom and no pan it is the identity, so an un-stabilised build maps
+  // exactly as it always did.
+  assert.deepEqual(
+    stabApply({ x: 37, y: 91 }, { ...box, zoom: 1, pan: { x: 0, y: 0 } }),
+    { x: 37, y: 91 });
 });

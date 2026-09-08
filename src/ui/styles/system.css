@@ -251,7 +251,13 @@
      detected quad. Both are object-fit: cover, and the overlay maps through the
      same cover transform — a letterbox mapping would put the brackets a few
      pixels off the page, which reads as the detector being wrong when it isn't. */
-  #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050506;}
+  /* The stabiliser's transform is written by capture.js onto the element's own
+     style, not declared here against this id — the module is handed a video
+     element and should not depend on which one, and bench/viewfinder.html hands
+     it a different one. will-change is the part that belongs in the stylesheet:
+     it is a promise about the element, not a value. */
+  #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050506;
+    will-change:transform;}
   #scanOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
   .scanhero[data-camera="off"] #scanVideo,.scanhero[data-camera="off"] #scanOverlay{display:none;}
   /* The real overlay draws the brackets on the detected page, so the static
