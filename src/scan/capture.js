@@ -79,6 +79,34 @@ const TRACK_WIDTH = 480;
 // search; between two of them the geometry is live and those are not, and a
 // glare reading from two seconds ago is not evidence about this frame.
 const MEASUREMENT_STALE_MS = 1200;
+// How far the visual viewport may sit from 1:1 before this screen's coordinate
+// mapping stops being trustworthy. Anything over about a percent is a real
+// pinch rather than a rounding artefact of a fractional device pixel ratio.
+const VIEWPORT_SCALE_TOLERANCE = 0.01;
+
+/**
+ * Is the page pinch-zoomed right now?
+ *
+ * The overlay maps the tracked quad onto screen pixels through the video's
+ * layout rect, and the gate reads fill and page size off the same mapping. A
+ * native pinch changes the *visual* viewport — its scale and its offset —
+ * without moving that layout rect, so both come apart at once: the brackets
+ * stop landing on the page, and the gate can read a distorted frame as large
+ * and steady enough to photograph.
+ *
+ * The gesture is blocked at source on the scan screen (touch-action on
+ * .scanhero, plus refusing Safari's gesture events while it is mounted). This
+ * is the belt to that pair of braces: if a browser quirk or a future
+ * regression lets one through, the failure is a frame with no brackets, never
+ * a shutter firing on a frame nobody could see straight.
+ */
+function viewportScale() {
+  return globalThis.visualViewport?.scale ?? 1;
+}
+
+function viewportScaled() {
+  return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+}
 
 /**
  * How long the page has been sitting in one place.
@@ -110,8 +138,15 @@ export function steadyWindow({ anchor, found, width, height, since, now }) {
  */
 export function shouldAutoCapture({
   autoCapture, armed, blocking, steady, heldFor, consecutiveFinds, trackState = 'tracking',
+  viewportScaled = false,
 }) {
   if (!autoCapture || !armed || blocking) return false;
+  // A pinched viewport means every screen-space number this decision rests on
+  // was measured through a mapping that no longer holds — see viewportScale()
+  // below. The gesture is blocked on the scan screen, so this should never
+  // fire; it is here because the cost of being wrong is a photograph nobody
+  // asked for, taken of a frame nobody could see straight.
+  if (viewportScaled) return false;
   // A detector locked onto something large and wrong is extremely stable, so
   // stability alone is not evidence. Several finds running is.
   //
@@ -931,7 +966,23 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.trackState = track.state;
     next.trackConfidence = documentConfidence(track);
 
-    quad = easeQuad(quad, scaleQuad(tracked, { width: tw, height: th }, { width: vw, height: vh }));
+    // What the brackets are drawn toward. While the page is holding still, that
+    // is the steady window's own anchor rather than this frame's estimate —
+    // which is what stops the brackets trembling in sync with the student's
+    // hand. The anchor only moves when the pose leaves STABILITY_TOLERANCE,
+    // which is the same judgement, on the same motion, that the steadiness
+    // clock is already making; a bracket that answered motion the clock calls
+    // still would be contradicting the app's own definition of still.
+    //
+    // Not while the page is moving, though: mid-reframe the anchor is a pose
+    // the page has already left, and drawing it would put the brackets
+    // deliberately behind. Live estimate then, eased fast.
+    const drawTarget = next.steady ? window_.anchor : tracked;
+    quad = easeQuad(
+      quad,
+      scaleQuad(drawTarget, { width: tw, height: th }, { width: vw, height: vh }),
+      { width: vw, height: vh },
+    );
 
     // ── the gate ───────────────────────────────────────────────────────────
     // See liveGateVerdict() above for the ordering and the reasoning behind
@@ -957,6 +1008,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (shouldAutoCapture({
       autoCapture, armed, blocking: next.blocking,
       steady: next.steady, heldFor, consecutiveFinds, trackState: track.state,
+      viewportScaled: viewportScaled(),
     })) {
       armed = false;
       shoot(true);
@@ -993,6 +1045,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const ctx = overlay.getContext('2d');
     ctx.clearRect(0, 0, w, h);
     if (!quad || !video.videoWidth) return;
+    // Cleared and left empty rather than drawn from a mapping the pinch broke.
+    if (viewportScaled()) return;
 
     // The video is object-fit: cover, so the drawn frame is cropped, not
     // letterboxed. Mapping has to match or the brackets sit off the page.

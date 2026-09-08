@@ -13,6 +13,7 @@ import {
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS,
   liveGateVerdict, settledGuidance, shouldAutoCapture, steadyWindow,
 } from '../src/scan/capture.js';
+import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
@@ -256,4 +257,87 @@ test('an unchanged hint does not restart its own clock', () => {
   // and the next one that needed to replace it never could.
   const showing = { hint: 'Hold still', blocking: null, since: 1000 };
   assert.equal(settledGuidance(showing, { hint: 'Hold still', blocking: null }, 5000).since, 1000);
+});
+
+// ── the brackets: deadzone and adaptive damping ────────────────────────────
+//
+// scan-tracking-zoom-stability-2026-09-08 §2/§3. A fixed-factor lerp did both
+// of these jobs badly at once, and the two complaints it produced were
+// "the bracket trembles when my hand does" and "it moves a certain distance
+// and then seems to stall".
+
+const FRAME = { width: 480, height: 640 };
+
+test('a deliberate reframe is answered on the first frame, not the ninth', () => {
+  // The whole page moves a fifth of the frame — the student turned to the next
+  // one. The fixed 0.35 lerp this replaced gave that the same gentle catch-up
+  // it gave a millimetre of wobble, which is what "it moves a certain distance
+  // and then stalls" was describing. The first frame is the one that matters:
+  // it is where the difference between sluggish and responsive is felt.
+  const from = page();
+  const to = from.map((p) => ({ x: p.x + 96, y: p.y }));
+  const closed = (easeQuad(from, to, FRAME)[0].x - from[0].x) / 96;
+  assert.ok(closed > 0.8,
+    `closed only ${(closed * 100).toFixed(0)}% of a full reframe on the first frame`);
+  // ...and it is still all the way there shortly after, rather than approaching
+  // forever.
+  let at = from;
+  for (let i = 0; i < 8; i++) at = easeQuad(at, to, FRAME);
+  assert.ok(Math.abs(to[0].x - at[0].x) < 96 * 0.03,
+    'eight frames on and the reframe has still not landed');
+});
+
+test('a small correction stays damped', () => {
+  // Nothing like a reframe: this must still be eased rather than snapped, or
+  // every detection wobble would land on screen at full amplitude.
+  const from = page();
+  const to = from.map((p) => ({ x: p.x + 12, y: p.y }));
+  const moved = easeQuad(from, to, FRAME)[0].x - from[0].x;
+  assert.ok(moved > 0 && moved < 12 * 0.35,
+    `moved ${moved.toFixed(1)}px of 12 in one frame — that is a snap, not damping`);
+});
+
+test('easing always converges, never parks short of the page', () => {
+  // The first attempt at tremor rejection put a deadzone here, comparing the
+  // target against where the brackets already were — which froze them wherever
+  // the gap happened to fall under it, a permanent visible offset rather than a
+  // still bracket. Rejecting tremor is capture.js's job, using the steady
+  // window's anchor; this function's job is to arrive.
+  const from = page();
+  const to = from.map((p) => ({ x: p.x + 96, y: p.y }));
+  let at = from;
+  for (let i = 0; i < 40; i++) at = easeQuad(at, to, FRAME);
+  assert.ok(Math.abs(to[0].x - at[0].x) < 0.01,
+    `parked ${Math.abs(to[0].x - at[0].x).toFixed(2)}px short of the page`);
+});
+
+test('a target that does not move lets the brackets come to rest', () => {
+  // What capture.js hands this while the page is held still: the steady
+  // window's anchor, unchanged frame after frame. The brackets must settle on
+  // it and stop, which is the whole of "the bracket does not tremble".
+  const held = page();
+  let at = page(6);
+  for (let i = 0; i < 40; i++) at = easeQuad(at, held, FRAME);
+  assert.ok(Math.hypot(at[0].x - held[0].x, at[0].y - held[0].y) < 0.01,
+    'the brackets never came to rest on a page that never moved');
+});
+
+test('without a frame size the old fixed factor still applies', () => {
+  // Callers with no frame to measure a share of keep exactly the behaviour they
+  // had, rather than silently getting a different curve in a unit nobody told
+  // this function about.
+  const from = page();
+  const to = from.map((p) => ({ x: p.x + 100, y: p.y }));
+  assert.equal(easeQuad(from, to)[0].x, from[0].x + 35);
+});
+
+// ── the pinch-zoom guard ───────────────────────────────────────────────────
+
+test('a pinched viewport holds the shutter', () => {
+  // scan-tracking-zoom-stability-2026-09-08 §1. Every screen-space number the
+  // decision rests on was measured through a mapping the pinch broke, so the
+  // one thing that must not happen is a photograph of a frame nobody could see
+  // straight. The gesture is blocked at source; this is the backstop.
+  assert.equal(shouldAutoCapture({ ...ready, viewportScaled: true }), false);
+  assert.equal(shouldAutoCapture({ ...ready, viewportScaled: false }), true);
 });

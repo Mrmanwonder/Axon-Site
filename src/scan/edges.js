@@ -34,7 +34,7 @@
 // than every frame. The overlay is drawn every frame from the last known quad,
 // so the brackets stay smooth on a mid-tier phone while the search costs little.
 
-import { orderQuad, quadFill } from './geometry.js';
+import { orderQuad, quadDrift, quadFill } from './geometry.js';
 import { AXIS_TOLERANCE, MAX_LINES_PER_FAMILY, findLines, frameLines, gradients, intersect, offAxis, paperScore } from './quad.js';
 import { perimeterSupport, quadsFromEdges } from './contour.js';
 
@@ -337,6 +337,18 @@ export function scaleQuad(quad, from, to) {
   return quad.map((p) => ({ x: p.x * sx, y: p.y * sy }));
 }
 
+// The gentlest and the most eager the ease is allowed to be. The floor is for
+// the small corrections that make up most frames, where damping is the whole
+// point; the ceiling is for a page that has genuinely gone somewhere else. The
+// floor can sit this high because holding a still page still is no longer this
+// function's job — see the note below about the anchor — so all it has to damp
+// now is detection noise during real movement.
+const EASE_MIN = 0.25;
+const EASE_MAX = 0.9;
+// The drift at which the ease reaches EASE_MAX — about a fifth of the frame,
+// which is a reframe rather than a wobble.
+const EASE_FULL_DRIFT = 0.2;
+
 /**
  * Smooth the quad between detections.
  *
@@ -344,12 +356,48 @@ export function scaleQuad(quad, from, to) {
  * and brackets that twitch read as the app being unsure. Easing toward each new
  * detection costs nothing and makes the overlay feel like it is tracking the
  * page rather than guessing at it.
+ *
+ * The single fixed factor this used to apply did two jobs with one number and
+ * did both badly. A constant lerp closes the same *share* of the remaining gap
+ * every step, so it is quick at first and then visibly crawls — which is what
+ * "it moves a certain distance and then seems to stall" describes. And it
+ * applied the same gentle catch-up whether the page had wobbled a millimetre or
+ * the student had turned to the next one, so a deliberate reframe inherited
+ * smoothing that was only ever meant for tremor.
+ *
+ * The factor scales with how far the page actually moved: small corrections
+ * stay damped, and a real reframe converges in a couple of frames instead of
+ * asymptotically approaching a page it is already looking at.
+ *
+ * Rejecting tremor is deliberately *not* done here. The obvious way — refuse to
+ * move at all while the target is within a tolerance of where the brackets
+ * already are — freezes them wherever they happen to be when the gap falls
+ * under it, which is a permanent visible offset rather than a still bracket.
+ * "Has the page moved?" is a question about successive detections, not about
+ * the gap between the drawing and the truth, so capture.js answers it with the
+ * anchor it already keeps for the steadiness clock and hands this function a
+ * target that simply does not move while the page is still.
+ *
+ * `width`/`height` are the space the quad is in, needed because drift is a
+ * share of the frame rather than a pixel count. Without them the old fixed
+ * factor is used, so existing callers keep their behaviour exactly.
  */
-export function easeQuad(current, target, factor = 0.35) {
+export function easeQuad(current, target, { width, height, factor = null } = {}) {
   if (!current) return target;
   if (!target) return current;
+
+  let ease = factor;
+  if (ease == null) {
+    if (!width || !height) {
+      ease = 0.35;
+    } else {
+      const drift = quadDrift(current, target, width, height);
+      ease = EASE_MIN + Math.min(1, drift / EASE_FULL_DRIFT) * (EASE_MAX - EASE_MIN);
+    }
+  }
+
   return current.map((p, i) => ({
-    x: p.x + (target[i].x - p.x) * factor,
-    y: p.y + (target[i].y - p.y) * factor,
+    x: p.x + (target[i].x - p.x) * ease,
+    y: p.y + (target[i].y - p.y) * ease,
   }));
 }
