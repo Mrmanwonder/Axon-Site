@@ -47,6 +47,8 @@ import assert from 'node:assert/strict';
 import { detectQuad } from '../src/scan/edges.js';
 import { findLines, paperScore } from '../src/scan/quad.js';
 import { clipping, glareScore, reconcileWithInk, scorePage, sharpness } from '../src/scan/quality.js';
+import { separateLayers } from '../src/scan/layers.js';
+import { targetSize } from '../src/scan/conditioning.js';
 import { CONDITIONING, QUALITY } from '../src/scan/contract.js';
 import { decodeFixture } from './decode.mjs';
 
@@ -104,6 +106,66 @@ for (const name of PRODUCTION_PAGES) {
       `clipping ${q.signals.clipping} on a white scan — the metric is counting paper again, which is the defect it was rewritten to remove`);
   });
 }
+
+// ── the teacher's ink actually survives stage 2 ────────────────────────────
+//
+// The pin this file most needed and did not have. `separateLayers` is what
+// turns a photograph into a map of the teacher's marking, and everything
+// downstream — attribution, the explanation, the whole product — has whatever
+// it produces or has nothing. Nothing was what it produced.
+//
+// The bug was in `modeOf`: a single histogram from the plane's raw minimum to
+// its raw maximum, where `redRatio` sends one saturated pixel to 85 and the
+// paper being looked for sits near 0.5. All 512 bins spent on outliers left the
+// paper's mode resolved to two bins, and which one it landed in was decided by
+// whichever pixel happened to be reddest. Resizing a page by ONE pixel moved
+// the mask threshold from 0.61 to 0.46 and the red share of the ink from 0.126
+// to 0.257 — across RED_INK_SHARE_MAX, so the page was written off as "the
+// student wrote in red" and every mark on it discarded.
+//
+// It landed on the wrong side at exactly 1636x2400, which is precisely what
+// conditioning produces for this fixture. That is not luck, it is what an
+// unstable measurement does: one of its two answers was always going to be the
+// one production got.
+//
+// Measured at the size conditioning actually produces, and nowhere else. Three
+// times now this codebase has drawn a wrong conclusion from a measurement taken
+// at a scale the pipeline never uses (AXON_FIX_BRIEF.md §B7, flatten-report's
+// first pass, and the report that first claimed these pages yielded nothing) —
+// so the size is computed with production's own `targetSize`, not assumed.
+test('the teacher\'s marks survive stage 2 on a real submitted page', async () => {
+  const native = await decodeFixture('glare-blown-background-2.png');
+  const target = targetSize(native.width, native.height, CONDITIONING.PAGE_LONG_EDGE);
+  const page = await decodeFixture('glare-blown-background-2.png', { resizeWidth: target.width });
+  assert.equal(Math.max(page.width, page.height), CONDITIONING.PAGE_LONG_EDGE,
+    'this test is not measuring the size the pipeline produces');
+
+  const layers = separateLayers(page);
+  assert.equal(layers.fallback, null,
+    `a page the teacher marked in red, on a student who wrote in blue, came back as "${layers.fallback}" ` +
+    `(red share ${layers.coverage.red_share_of_ink.toFixed(3)}) — every mark on it is discarded`);
+  // extraction_run fc030c2a recovered 144 marks from these exact pixels. Held
+  // to most of that rather than to the number itself: the point is that the
+  // marking is found, not that a component count is frozen forever.
+  assert.ok(layers.teacher.components.length > 100,
+    `only ${layers.teacher.components.length} teacher marks found on a page with well over a hundred`);
+});
+
+// The instability itself, pinned separately from its consequence. A colour
+// judgement whose answer depends on a one-pixel resize is broken whatever the
+// thresholds around it happen to be, and the next person to touch `modeOf`
+// should find that out here rather than in production.
+test('the red baseline does not move when the page is resized by a pixel', async () => {
+  const shares = [];
+  for (const width of [1600, 1634, 1636, 1640, 1700]) {
+    const page = await decodeFixture('glare-blown-background-2.png', { resizeWidth: width });
+    shares.push(separateLayers(page).coverage.red_share_of_ink);
+  }
+  const lo = Math.min(...shares), hi = Math.max(...shares);
+  assert.ok(hi - lo < 0.03,
+    `red share ranged ${lo.toFixed(3)}-${hi.toFixed(3)} across five nearby page sizes: ` +
+    `${shares.map((v) => v.toFixed(3)).join(', ')}. The baseline is outlier-driven again.`);
+});
 
 // ── sharpness is a property of the paper, not of the pixel count ───────────
 //

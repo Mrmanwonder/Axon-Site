@@ -78,29 +78,94 @@ export function rednessPlane(img, channel = 'lab') {
   return { plane, width, height, baseline: modeOf(plane), channel };
 }
 
+// The share of the plane trimmed from each end before the mode is measured.
+// Small, because this is not robustness against a noisy population — it is
+// protection against the handful of pixels that set the raw maximum.
+const MODE_TRIM = 0.005;
+
 /**
  * The most common value in the plane, to a useful precision.
  *
  * A histogram rather than a mean: a page with a lot of red on it would drag a
  * mean upward and quietly raise the bar for detecting the red, which is the
  * opposite of what is wanted. The mode is the paper however much ink is on it.
+ *
+ * Two passes, and the second one is not an optimisation — it is the whole
+ * correctness of this function.
+ *
+ * A single histogram spanning the plane's raw minimum to its raw maximum spends
+ * all of its resolution on outliers. `redRatio` is (r+1)/(g+b+2), so one pixel
+ * with almost no green or blue in it — a saturated red, a black speck, a JPEG
+ * artefact on an edge — reads 85 or more, while the paper this function is
+ * looking for sits near 0.5 and every value that matters lives under 1. Across
+ * 512 bins that put the paper's mode in bin two or bin three and nowhere else:
+ * a resolution of 0.16 on a quantity the entire red separation is measured
+ * against.
+ *
+ * It was not merely imprecise, it was unstable. Which of those two bins the
+ * mode fell in was decided by whichever single pixel happened to be the
+ * reddest, so resizing a page by ONE pixel moved the baseline from 0.49 to
+ * 0.34, the mask threshold from 0.61 to 0.46, and the red share of the page's
+ * ink from 0.126 to 0.257 — across `LAYER_FALLBACK.RED_INK_SHARE_MAX`, which
+ * decides whether a page is a teacher's marking or a student writing in red.
+ * On the corpus's real submitted pages, at exactly the size conditioning
+ * produces, that verdict came out "the student wrote in red" and 141 genuine
+ * teacher marks became zero. See bench/marks-report.mjs.
+ *
+ * So: one pass to find where the mass actually is, discarding half a percent
+ * from each end, and a second over that range where all 512 bins buy real
+ * precision. Two passes over the plane, once per page.
  */
 export function modeOf(plane, bins = 512) {
+  const range = trimmedRange(plane, bins);
+  if (!range) return plane.length ? plane[0] : 0;
+  const { lo, hi } = range;
+
+  const hist = new Uint32Array(bins);
+  const scale = (bins - 1) / (hi - lo);
+  for (let i = 0; i < plane.length; i++) {
+    const bin = (plane[i] - lo) * scale;
+    // Everything outside the trimmed range folds into the nearest end bin. It
+    // cannot become the mode — that is the point — but discarding it outright
+    // would be a third pass for no gain.
+    hist[bin < 0 ? 0 : bin > bins - 1 ? bins - 1 : bin | 0]++;
+  }
+
+  let best = 0, bestCount = 0;
+  for (let i = 0; i < bins; i++) if (hist[i] > bestCount) { bestCount = hist[i]; best = i; }
+  return lo + best / scale;
+}
+
+/**
+ * Where the plane's values actually are, with the extremes trimmed off.
+ *
+ * A coarse histogram over the raw range, read back as a cumulative count. The
+ * raw range is outlier-driven and that is fine here: the outliers are few by
+ * definition, so the position of the half-percent mark barely moves even when
+ * the maximum does. Null when the plane is empty or flat.
+ */
+function trimmedRange(plane, bins) {
+  if (!plane.length) return null;
   let lo = Infinity, hi = -Infinity;
   for (let i = 0; i < plane.length; i++) {
     const v = plane[i];
     if (v < lo) lo = v;
     if (v > hi) hi = v;
   }
-  if (!(hi > lo)) return lo;
+  if (!(hi > lo)) return null;
 
-  const hist = new Uint32Array(bins);
+  const coarse = new Uint32Array(bins);
   const scale = (bins - 1) / (hi - lo);
-  for (let i = 0; i < plane.length; i++) hist[((plane[i] - lo) * scale) | 0]++;
+  for (let i = 0; i < plane.length; i++) coarse[((plane[i] - lo) * scale) | 0]++;
 
-  let best = 0, bestCount = 0;
-  for (let i = 0; i < bins; i++) if (hist[i] > bestCount) { bestCount = hist[i]; best = i; }
-  return lo + best / scale;
+  const cut = plane.length * MODE_TRIM;
+  let seen = 0, low = 0, high = bins - 1;
+  for (let i = 0; i < bins; i++) { seen += coarse[i]; if (seen >= cut) { low = i; break; } }
+  seen = 0;
+  for (let i = bins - 1; i >= 0; i--) { seen += coarse[i]; if (seen >= cut) { high = i; break; } }
+  if (high <= low) return null;
+
+  return { lo: lo + low / scale, hi: lo + high / scale };
 }
 
 /** Hermite smoothstep. Soft edges are the point — see maskFrom. */
