@@ -76,11 +76,16 @@ export async function parentModeState(): Promise<ParentModeState> {
 export function isParentModeRequired(error: unknown): boolean {
   const e = error as { code?: string; hint?: string; message?: string } | null;
   if (!e) return false;
+  // delete_my_account() raises with this hint, which is the only unambiguous
+  // signal available — everything below is inference.
   if (e.hint === 'parent_mode_required') return true;
-  if (e.code === '42501') return true;
-  // An RLS policy that refuses an INSERT surfaces as a check violation rather
-  // than a privilege error, and PostgREST reports it with its own code.
-  return e.code === '42501' || e.code === 'PGRST301' || /row-level security/i.test(e.message ?? '');
+  // Postgres uses 42501 for both an RLS policy refusing a row ('new row
+  // violates row-level security policy') and a privilege error, so the code
+  // alone cannot separate 'not yours' from 'not now'. Treating it as 'not now'
+  // is right here because the caller knows which action it attempted, and the
+  // UI only offers these on rows the session owns — an ownership failure is
+  // not a state a correct client can reach.
+  return e.code === '42501' || /row-level security/i.test(e.message ?? '');
 }
 
 export type UnlockOutcome =
