@@ -77,3 +77,34 @@ export async function readThrough(key, fetcher) {
     throw err;
   }
 }
+
+/**
+ * Remove every local store that can hold a student's schoolwork.
+ *
+ * This is a shared-family-device product: a parent signs out, a sibling signs
+ * in, and both use the same browser profile. The read cache holds papers and
+ * their analysis; the scan draft database holds conditioned page images, masks
+ * and thumbnails, and before upload the original frames. None of that should
+ * outlive the session that created it just because nothing has overwritten it.
+ *
+ * Best-effort by design. Sign-out must complete even if a store refuses to
+ * open — being unable to clear the cache is not a reason to keep someone
+ * signed in — so failures are swallowed here and only here.
+ */
+export async function clearLocalData() {
+  try { await clearCache(); } catch { /* best effort */ }
+
+  // The scan drafts live in their own database (src/scan), so deleting it
+  // wholesale is both simpler and more thorough than walking its stores.
+  try {
+    await new Promise((resolve) => {
+      if (!('indexedDB' in window)) return resolve(null);
+      const req = indexedDB.deleteDatabase('axon-scan');
+      req.onsuccess = () => resolve(null);
+      req.onerror = () => resolve(null);
+      // A delete blocked by another open tab must not hang sign-out.
+      req.onblocked = () => resolve(null);
+      setTimeout(() => resolve(null), 1500);
+    });
+  } catch { /* best effort */ }
+}

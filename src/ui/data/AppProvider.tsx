@@ -35,11 +35,25 @@ import {
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
 
 
-/** What the boot sequence concluded about who this is. */
-export type Gate = "loading" | "onboarding" | "ready";
+/** What the boot sequence concluded about who this is.
+
+    `boot_error` exists because the catch below used to say `onboarding`. A
+    returning guardian whose account read failed — an outage, a schema drift, a
+    dropped connection — was shown the new-account flow, which reads as "your
+    data is gone" and invites them to set up an account they already have.
+
+    That is hard rule 4 at the level of the whole app: an infrastructure failure
+    became a different fact rather than an admitted gap. A failed read is never
+    an answer about who someone is. */
+export type Gate = "loading" | "onboarding" | "ready" | "boot_error";
 
 type AppValue = {
   gate: Gate;
+  /** What went wrong at boot, for the recovery screen to show. Null unless
+      `gate` is "boot_error". */
+  bootError: string | null;
+  /** Re-runs the boot sequence. The recovery screen's only action. */
+  retryBoot: () => void;
   providerError: ProviderError | null;
   session: unknown;
   guardian: Guardian | null;
@@ -109,6 +123,13 @@ function applyPrefs(prefs: Prefs) {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [gate, setGate] = useState<Gate>("loading");
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [bootAttempt, setBootAttempt] = useState(0);
+  const retryBoot = useCallback(() => {
+    setBootError(null);
+    setGate("loading");
+    setBootAttempt((n) => n + 1);
+  }, []);
   const [providerError, setProviderError] = useState<ProviderError | null>(null);
   const [session, setSession] = useState<unknown>(null);
   const [guardian, setGuardian] = useState<Guardian | null>(null);
@@ -247,26 +268,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGuardian(g);
       if (!g) return setGate("onboarding");
 
-      const { data: students } = await sb.from("student").select("*").limit(1);
+      // ORDER BY, not `.limit(1)` alone. SQL makes no promise about which row
+      // an unordered limit returns, so "the student" was an implementation
+      // accident encoded as identity — and on a two-child account it could
+      // change between loads. Oldest-first is at least stable and meaningful
+      // until an explicit active-profile choice exists.
+      const { data: students, error: studentError } = await sb
+        .from("student").select("*").order("created_at", { ascending: true }).limit(1);
       if (cancelled) return;
+      // A failed read is not "no students". This is the exact substitution the
+      // boot_error state exists to prevent.
+      if (studentError) throw studentError;
       const st = students?.[0] ?? null;
       if (!st) return setGate("onboarding");
 
-      const { data: subjectRows } = await sb
+      const { data: subjectRows, error: subjectError } = await sb
         .from("student_subject").select("subject").eq("student_id", st.id);
       if (cancelled) return;
+      if (subjectError) throw subjectError;
       st.subjects = (subjectRows ?? []).map((r: { subject: string }) => r.subject);
 
       setStudent(st);
       setGate("ready");
-    })().catch(() => {
-      // Boot failing is not a reason to show a half-app. Onboarding is the
-      // honest destination: it can re-establish who this is.
-      if (!cancelled) setGate("onboarding");
+    })().catch((e) => {
+      // NOT onboarding. Boot failing says nothing about whether this person has
+      // an account; it says we could not find out. Showing the new-account flow
+      // asserts the opposite of what we know, and to a returning guardian it
+      // reads as their data having been lost.
+      if (cancelled) return;
+      console.error("boot failed", e);
+      setBootError((e as Error)?.message || "We could not reach your account.");
+      setGate("boot_error");
     });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [bootAttempt]);
 
   // Server-side prefs and consent land once we know who this is.
   useEffect(() => {
@@ -333,13 +369,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AppValue>(() => ({
-    gate, providerError, session, guardian, student,
+    gate, bootError, retryBoot, providerError, session, guardian, student,
     prefs, setPref,
     consent, refreshConsent, setConsent,
     papers, papersStale, papersError, progress, refreshLibrary, setAvatar,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
-    gate, providerError, session, guardian, student, prefs, setPref,
+    gate, bootError, retryBoot, providerError, session, guardian, student, prefs, setPref,
     consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
     setAvatar, online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);

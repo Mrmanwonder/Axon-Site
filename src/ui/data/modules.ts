@@ -133,12 +133,10 @@ export const verificationUnavailable = verificationMod.verificationUnavailable a
   detail: string;
 } | null;
 
-/** Records a completed verification. Deliberately an RPC and not an UPDATE:
-    the guardian's own grant on those three columns is revoked, so the browser
-    can no longer declare itself verified. */
-export const recordVerification = verificationMod.recordVerification as (
-  r: { method: string; reference: string },
-) => Promise<Guardian>;
+/** Consumes a provider assertion the service role wrote. The browser supplies
+    no method and no reference — it cannot attest its own verification, only
+    redeem one that already happened. */
+export const claimVerification = verificationMod.claimVerification as () => Promise<Guardian>;
 
 // ── parent mode ────────────────────────────────────────────────────────────
 /* P0-002. The boundary itself is in the database; these are the parts a person

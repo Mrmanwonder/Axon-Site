@@ -5,6 +5,7 @@
 // code, and does not belong in this function.
 
 import { CORS, clientFor, failure, json, readJson } from '../_shared/http.ts';
+import { requireParentMode } from '../_shared/parent_mode.ts';
 import { stripeClient } from '../_shared/stripe.ts';
 
 interface Body { return_to?: string }
@@ -24,6 +25,14 @@ async function portal(req: Request): Promise<Response> {
 
   const sb = clientFor(req);
   if (!sb) return failure('Sign in first.', 401);
+
+  // Before anything else. The portal can change the card, switch the plan and
+  // cancel the subscription, and the bearer token proves only that this is the
+  // guardian's session — not that the guardian is the one holding the phone.
+  // Settings calls guard() first, but a direct fetch does not, which is the
+  // whole point of checking again here.
+  const refusal = await requireParentMode(sb);
+  if (refusal) return refusal;
 
   const body = await readJson<Body>(req);
   const returnTo = typeof body?.return_to === 'string' && body.return_to.startsWith('/') && !body.return_to.includes('://')

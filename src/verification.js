@@ -174,27 +174,25 @@ if (IS_BUILD && adapters[VERIFICATION_ADAPTER]?.devOnly) {
 }
 
 /**
- * Record a completed verification against the signed-in guardian.
+ * Turn a completed provider assertion into a verified guardian.
  *
- * This used to be `sb.from('guardian').update({ verified_at, ... })` from the
- * browser, which is the whole of what "the browser must not be able to mint
- * its own verified result" forbids: anyone with the page open could set those
- * three columns to whatever they liked, and nothing downstream could tell the
- * difference between that and a real check.
+ * This used to be `recordVerification({ method, reference })`, and that was a
+ * forge: the RPC behind it was granted to `authenticated` and validated the
+ * method as "not the stub", so a signed-in browser could call it with
+ * ('digilocker', 'anything') and be verified. Moving the write behind a
+ * SECURITY DEFINER function relocated the hole rather than closing it —
+ * server-authored is not server-validated when the fact being attested still
+ * arrives from the client.
  *
- * The columns are now revoked from `authenticated` and this RPC is the only
- * way in. It is not yet a *server-validated* verification — no adapter exists
- * to validate — but it is the single seam where that validation will land,
- * and in the meantime the database refuses the methods that prove nothing.
+ * Now the browser supplies nothing. The RPC consumes a single-use assertion
+ * that only a service-role provider callback can have written, so with no
+ * provider integration this call can only fail — which is the honest state,
+ * and cheaper to reason about than a parameter nobody is checking.
  *
- * @param {{ method: string, reference: string }} result
  * @returns {Promise<any>} the updated guardian row
  */
-export async function recordVerification({ method, reference }) {
-  const { data, error } = await sb.rpc('record_guardian_verification', {
-    p_method: method,
-    p_reference: reference,
-  });
+export async function claimVerification() {
+  const { data, error } = await sb.rpc('claim_guardian_verification');
   if (error) throw error;
   return data;
 }
