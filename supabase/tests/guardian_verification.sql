@@ -110,7 +110,16 @@ exception when others then
   perform public._t('an ordinary profile edit still works', false, sqlerrm);
 end $$;
 
--- ── the RPC, which is the only way in ─────────────────────────────────────
+-- ── the RPC, now service-role only ────────────────────────────────────────
+--
+-- Re-audit P0-A revoked this from `authenticated`, because a caller-supplied
+-- method and reference are not proof of anything (see
+-- supabase/tests/verification_cannot_be_forged.sql, which asserts the refusal).
+-- Its input validation still matters for the server-side provider callback that
+-- will call it, so those assertions continue here with the role reset. The JWT
+-- claim stays set, because the function still resolves the guardian by auth.uid().
+
+reset role;
 
 do $$ begin
   perform public.record_guardian_verification('stub', 'stub:whatever');
@@ -153,6 +162,8 @@ exception when others then
   perform public._t('the RPC records a real method', false, sqlerrm);
 end $$;
 
+set local role authenticated;
+
 -- Clearing one is a write too, and it has to be tested against a guardian who
 -- is actually verified — null-to-null is not a change and would pass whatever
 -- the trigger did. A guardian who could null these could shed a verification
@@ -184,7 +195,8 @@ update private.app_config set value = 'true'::jsonb
 select public._t('the opt-in flips',
   private.config_flag('allow_unverified_verification_methods') = true);
 
-set local role authenticated;
+-- Role reset, claim kept: as above, the writer is service-role only now, and
+-- the function still resolves its guardian through auth.uid().
 set local "request.jwt.claims" = '{"sub":"d4444444-4444-4444-8444-444444444444","role":"authenticated"}';
 
 do $$ begin

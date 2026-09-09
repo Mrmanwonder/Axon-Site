@@ -6,6 +6,26 @@ import { consentHistory } from './consent.js';
 import { clearCache } from './cache.js';
 
 /**
+ * Read one table for the export, or fail the whole export.
+ *
+ * The old shape was `.then(r => r.data ?? [])`, which mapped a successful empty
+ * result and a failed query to the same `[]`. A database problem therefore
+ * produced a perfectly valid-looking JSON download with tables silently
+ * missing — under a button that says "Everything we hold".
+ *
+ * A partial export is worse than a failed one, because the person who
+ * downloads it has no way to tell. So a failure throws and the download does
+ * not happen.
+ */
+async function section(name, query) {
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Your ${name} could not be read, so the export was stopped rather than sent to you incomplete.`);
+  }
+  return data ?? [];
+}
+
+/**
  * Everything we hold, as one JSON file.
  *
  * Built from the client's own RLS-scoped reads, so by construction it can only
@@ -13,21 +33,34 @@ import { clearCache } from './cache.js';
  */
 export async function exportMyData(guardian) {
   const [students, papers, pages, attempts, losses, unreadable, prefs, consents] = await Promise.all([
-    sb.from('student').select('*').then(r => r.data ?? []),
-    sb.from('paper').select('*').then(r => r.data ?? []),
-    sb.from('paper_page').select('*').then(r => r.data ?? []),
-    sb.from('student_attempt').select('*').then(r => r.data ?? []),
-    sb.from('mark_loss_event').select('*').then(r => r.data ?? []),
-    sb.from('page_unreadable').select('*').then(r => r.data ?? []),
-    sb.from('app_preference').select('*').then(r => r.data ?? []),
+    section('profiles', sb.from('student').select('*')),
+    section('papers', sb.from('paper').select('*')),
+    section('pages', sb.from('paper_page').select('*')),
+    section('attempts', sb.from('student_attempt').select('*')),
+    section('marks lost', sb.from('mark_loss_event').select('*')),
+    section('unreadable pages', sb.from('page_unreadable').select('*')),
+    section('preferences', sb.from('app_preference').select('*')),
     consentHistory(guardian.id),
   ]);
 
   return {
+    export_schema_version: '1.0.0',
     exported_at: new Date().toISOString(),
     note:
       'Your papers themselves are files, not rows. They are not included here — ' +
       'download them from Library, or ask us and we will send them.',
+    // Named rather than silently absent. The extraction pipeline's own records
+    // — runs, question regions and their provenance, teacher marks and the
+    // explanations built from them — are not in this file yet. Saying so is
+    // the difference between an admitted gap and a download that quietly means
+    // less than its button promises. Tracked as the server-side export (the
+    // re-audit's §19), which is where completeness can actually be enforced.
+    not_included_yet: [
+      'extraction_run',
+      'question_region and its provenance boxes',
+      'teacher_mark',
+      'region_explanation',
+    ],
     guardian: {
       name: guardian.name,
       contact: guardian.contact,
@@ -76,13 +109,33 @@ export async function deleteAccount(guardian) {
     throw new Error('Deleting your account needs a connection, so we can remove your papers too.');
   }
 
-  const { data: students } = await sb.from('student').select('id');
+  // Every one of these reads is checked, and the reason is specific and nasty.
+  //
+  // A failed `list()` used to be indistinguishable from an empty folder: `data`
+  // came back null, `?? []` turned it into "nothing here", the loop did
+  // nothing, and deletion continued to the RPC — which releases the auth row.
+  // Once that happens the session can no longer authorise Storage deletes at
+  // all, so a minor's exam pages stayed in a private bucket that no longer had
+  // an owner, with the account reported as fully erased.
+  //
+  // There is no recovery path from that point, so the only safe behaviour is to
+  // stop before the irreversible step and say why.
+  const { data: students, error: studentsError } = await sb.from('student').select('id');
+  if (studentsError) {
+    throw new Error('We could not list the profiles to delete, so nothing was deleted. Try again in a moment.');
+  }
 
   for (const s of students ?? []) {
     // list() is not recursive, so walk paper folders under the student prefix.
-    const { data: paperFolders } = await sb.storage.from(PAPERS_BUCKET).list(s.id);
+    const { data: paperFolders, error: foldersError } = await sb.storage.from(PAPERS_BUCKET).list(s.id);
+    if (foldersError) {
+      throw new Error('We could not reach your stored pages, so nothing was deleted. Deleting now would leave them behind with no way to remove them later.');
+    }
     for (const folder of paperFolders ?? []) {
-      const { data: files } = await sb.storage.from(PAPERS_BUCKET).list(`${s.id}/${folder.name}`);
+      const { data: files, error: filesError } = await sb.storage.from(PAPERS_BUCKET).list(`${s.id}/${folder.name}`);
+      if (filesError) {
+        throw new Error('We could not reach your stored pages, so nothing was deleted. Deleting now would leave them behind with no way to remove them later.');
+      }
       const paths = (files ?? []).map((f) => `${s.id}/${folder.name}/${f.name}`);
       if (paths.length) {
         const { error } = await sb.storage.from(PAPERS_BUCKET).remove(paths);

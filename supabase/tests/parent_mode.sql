@@ -181,26 +181,22 @@ when others then
   perform public._t('student mode cannot re-grant consent either', false, sqlerrm);
 end $$;
 
--- The first decision for a purpose is onboarding, not a change, and is
--- deliberately reachable — a parent who paused halfway through signing up must
--- be able to finish the sentence they started.
+-- A FIRST decision is gated too, and this assertion was inverted by re-audit
+-- P0-C. The original policy exempted a purpose with no prior row, reasoning
+-- that a first decision must be onboarding. It need not be: a purpose
+-- introduced next year, a second child, or an account migrated without a row
+-- each manufacture a new "first" decision that a student holding the guardian
+-- session could make alone. `weekly_parent_digest` has no prior row here, which
+-- is exactly the case that used to slip through.
 do $$ begin
   insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
   values ('eeeeeeee-0000-4000-8000-000000000001', null, 'weekly_parent_digest', true, 'v1.0', 'in_app_itemised');
-  perform public._t('a first consent decision is not gated', true);
-exception when others then
-  perform public._t('a first consent decision is not gated', false, sqlerrm);
-end $$;
-
--- ...but it is a first decision exactly once.
-do $$ begin
-  insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
-  values ('eeeeeeee-0000-4000-8000-000000000001', null, 'weekly_parent_digest', false, 'v1.0', 'in_app_itemised');
-  perform public._t('changing it afterwards is gated', false, 'the insert succeeded');
+  perform public._t('a first decision on a new purpose is gated too', false,
+    'the insert succeeded — the first-consent exemption is back');
 exception when insufficient_privilege then
-  perform public._t('changing it afterwards is gated', true);
+  perform public._t('a first decision on a new purpose is gated too', true);
 when others then
-  perform public._t('changing it afterwards is gated', false, sqlerrm);
+  perform public._t('a first decision on a new purpose is gated too', false, sqlerrm);
 end $$;
 
 do $$ begin

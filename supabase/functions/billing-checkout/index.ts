@@ -2,15 +2,17 @@
 //
 // UX_AND_MONETIZATION_THESIS.md is explicit about where this may be called
 // from: the parent's own account/dashboard surface, never mid-session inside
-// the student's capture -> understand -> act loop. That boundary is a UI
-// concern (this function has no way to know which screen called it), so it is
-// enforced in index.html/src -- see UX_MONETIZATION_AUDIT.md. What this
-// function itself guarantees is narrower and structural: it only ever acts on
-// the caller's own guardian row (RLS-scoped client, exactly like every other
-// function in this codebase -- see AGENTS.md), and it never takes a price id
-// from the client, only a plan name it resolves server-side.
+// the student's capture -> understand -> act loop. WHERE it is called from is
+// still a UI concern, since this function cannot know which screen called it.
+// WHO called it is not, and no longer relies on the UI: requireParentMode()
+// below refuses unless the caller re-authenticated recently, so a student
+// holding the guardian's session cannot start a subscription by calling this
+// endpoint directly. It also only ever acts on the caller's own guardian row
+// (RLS-scoped client, as every function here does -- see AGENTS.md), and never
+// takes a price id from the client, only a plan name it resolves server-side.
 
 import { CORS, clientFor, failure, json, readJson } from '../_shared/http.ts';
+import { requireParentMode } from '../_shared/parent_mode.ts';
 import { priceIdFor, stripeClient } from '../_shared/stripe.ts';
 
 interface Body { plan: 'monthly' | 'annual'; return_to?: string }
@@ -51,6 +53,13 @@ async function checkout(req: Request): Promise<Response> {
 
   const sb = clientFor(req);
   if (!sb) return failure('Sign in first.', 401);
+
+  // Starting a subscription is the parent's, and this is now structural rather
+  // than the UI concern the note above describes. That note was right that this
+  // function cannot know which screen called it — but it does not need to. It
+  // needs to know a parent re-authenticated recently, and the signed token says.
+  const refusal = await requireParentMode(sb);
+  if (refusal) return refusal;
 
   const body = await readJson<Body>(req);
   if (body?.plan !== 'monthly' && body?.plan !== 'annual') {
@@ -102,10 +111,17 @@ async function checkout(req: Request): Promise<Response> {
 
   let customerId = guardian.stripe_customer_id as string | null;
   if (!customerId) {
+    // Idempotency-keyed on the guardian, because two checkout requests racing
+    // here both read a null customer id and both created a Stripe customer.
+    // One update won, the other customer was orphaned — a real customer record
+    // with no row pointing at it, which later shows up as a parent whose
+    // portal and whose subscription disagree. The key is stable per guardian
+    // (not per request) precisely so the second call returns the first result
+    // instead of making a second customer.
     const customer = await stripe.customers.create({
       name: guardian.name,
       metadata: { guardian_id: guardian.id },
-    });
+    }, { idempotencyKey: `guardian-customer:${guardian.id}` });
     customerId = customer.id;
     // Own row, own RLS policy (guardian_update_own) -- no elevated access needed.
     const { error } = await sb.from('guardian').update({ stripe_customer_id: customerId }).eq('id', guardian.id);

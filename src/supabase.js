@@ -10,6 +10,7 @@
 // Google or Apple can assert on a parent's behalf.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
+import { clearLocalData } from './cache.js';
 
 // Imported rather than read off `window` from a vendored UMD script. The intent
 // is unchanged — the client is bundled into our own output, so there is still no
@@ -234,6 +235,11 @@ export async function currentSession() {
 }
 
 export async function signOut() {
+  // Local schoolwork first, session second. A sibling signing in next on the
+  // same browser profile must not inherit the previous student's cached papers
+  // or scan drafts, and clearing after the session is gone is a race: the app
+  // reloads on sign-out, and a reload can beat an unawaited cleanup.
+  await clearLocalData();
   await sb.auth.signOut();
 }
 

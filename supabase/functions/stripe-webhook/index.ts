@@ -36,6 +36,21 @@
 // `const { data } = await ...` turns a database outage into "no such guardian"
 // and then into a silently skipped update, which is the same class of bug one
 // layer down.
+//
+// ── Ordering, which idempotency does not solve ────────────────────────────
+//
+// "Have I applied this event id before?" is a different question from "is this
+// event newer than what I already applied?", and Stripe does not promise
+// delivery order. A payment_failed emitted at T1 can arrive after the
+// subscription recovered at T2, and applying the payload as written would set
+// past_due over a subscription that is currently paid — telling a parent their
+// payment failed about a subscription that did not.
+//
+// So an event is treated as a NOTIFICATION, not as data. Where it names a
+// subscription, the current object is re-fetched from Stripe and that is what
+// gets written. Stripe is the source of truth for its own state; the event is
+// only how we learn to go and look. Out-of-order delivery then converges,
+// because every delivery asks the same question and gets the same answer.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@18';
@@ -138,9 +153,14 @@ async function handle(sb: ServiceClient, stripe: Stripe, event: Stripe.Event): P
       return;
     }
     case 'customer.subscription.updated': {
-      const subscription = event.data.object as Stripe.Subscription;
-      const guardianId = await guardianIdFor(sb, subscription);
-      if (guardianId) await applySubscriptionState(sb, guardianId, subscription);
+      const stale = event.data.object as Stripe.Subscription;
+      const guardianId = await guardianIdFor(sb, stale);
+      if (!guardianId) return;
+      // Re-fetched, not applied from the payload. See the ordering note above:
+      // the object in the event is a snapshot of a past moment, and webhook
+      // delivery order is not guaranteed.
+      const subscription = await stripe.subscriptions.retrieve(stale.id);
+      await applySubscriptionState(sb, guardianId, subscription);
       return;
     }
     case 'customer.subscription.deleted': {
@@ -161,6 +181,37 @@ async function handle(sb: ServiceClient, stripe: Stripe, event: Stripe.Event): P
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
       if (!customerId) return;
+
+      // A failed-payment event that arrives AFTER the retry already succeeded
+      // would otherwise push a recovered subscription back to past_due — the
+      // parent is told their payment failed about a subscription that is
+      // currently paid. So the subscription, where there is one, decides:
+      // fetch its current state and apply that instead of the old fact.
+      //
+      // Read from both shapes on purpose. Basil moved the subscription off
+      // Invoice and onto `invoice.parent.subscription_details`, and reading
+      // only the legacy field would leave this branch silently dead — the old
+      // status-guarded path would still run and the ordering bug would look
+      // fixed while behaving exactly as before. A quietly inert fix is worse
+      // than none, because it stops anyone looking.
+      const invoiceAny = invoice as unknown as {
+        subscription?: string | { id?: string } | null;
+        parent?: { subscription_details?: { subscription?: string | { id?: string } | null } | null } | null;
+      };
+      const rawSubscription = invoiceAny.subscription
+        ?? invoiceAny.parent?.subscription_details?.subscription
+        ?? null;
+      const subscriptionId = typeof rawSubscription === 'string'
+        ? rawSubscription
+        : rawSubscription?.id;
+      if (subscriptionId) {
+        const current = await stripe.subscriptions.retrieve(subscriptionId);
+        const guardianId = await guardianIdFor(sb, current);
+        if (guardianId) await applySubscriptionState(sb, guardianId, current);
+        return;
+      }
+      // No subscription on the invoice (a one-off charge). Fall through to the
+      // status-guarded write below, which is the best available answer.
       // maybeSingle, not single: no guardian for this customer is a real and
       // legitimate state (an invoice for an account since deleted), whereas
       // single() reports it as an error indistinguishable from a failed read.
