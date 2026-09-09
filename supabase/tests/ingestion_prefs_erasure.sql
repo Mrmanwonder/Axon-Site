@@ -130,8 +130,17 @@ select public._t('anon reads no app_preference', (select count(*) = 0 from publi
 reset role;
 
 -- ── erasure ────────────────────────────────────────────────────────────────
+-- The claim carries `amr`, and it has to: since P0-002 deleting an account
+-- needs a guardian who re-authenticated recently, so a session without one is
+-- refused. That refusal has its own coverage in supabase/tests/parent_mode.sql;
+-- what this suite is about is what erasure DOES once it is allowed to run.
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+select set_config('request.jwt.claims', jsonb_build_object(
+  'sub', '11111111-1111-4111-8111-111111111111',
+  'role', 'authenticated',
+  'amr', jsonb_build_array(jsonb_build_object(
+    'method', 'otp', 'timestamp', floor(extract(epoch from now()))::bigint))
+)::text, true);
 
 select public._t('erasure succeeds with a student-scoped consent row present',
   (select (public.delete_my_account() ->> 'students_erased')::int = 1));

@@ -140,6 +140,15 @@ export const recordVerification = verificationMod.recordVerification as (
   r: { method: string; reference: string },
 ) => Promise<Guardian>;
 
+// ── parent mode ────────────────────────────────────────────────────────────
+/* P0-002. The boundary itself is in the database; these are the parts a person
+   touches. See src/lib/auth/parentMode.ts. */
+export {
+  parentModeState, unlockWithPasskey, sendParentCode, unlockWithCode,
+  isParentModeRequired,
+} from "../../lib/auth/parentMode";
+export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
+
 // ── curriculum ─────────────────────────────────────────────────────────────
 /* AGENTS.md: this is the single source for the board, the stages, the
    class-level mapping and the syllabus codes. Nothing else may hardcode

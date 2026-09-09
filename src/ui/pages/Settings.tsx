@@ -17,6 +17,32 @@
      Deleting an account is more destructive and still is not red, because red
      here means "this ends the session", not "this is dangerous".
 
+   ── Parent Mode ──────────────────────────────────────────────────────────
+
+   This is the student's phone. The same session that scans a physics paper
+   opens this screen, so consent, billing, passkeys, export and both deletions
+   go through `guard` — the parent confirms with a passkey or a code, and the
+   window closes on its own a quarter of an hour later.
+
+   The prompt is not a confirmation and does not break the rule above. It is not
+   asking anyone to ratify a decision; it is asking whether the account holder
+   is the person holding the phone. The consequence sheet still does the
+   explaining, and it does it after.
+
+   Where the real refusal lives varies, and the difference matters:
+
+   · consent, delete papers, delete account — refused by the database. A
+     request typed into the console fails exactly as the button does.
+   · passkeys — Supabase Auth owns these, and no policy of ours can reach them.
+     `guard` here is the whole gate, so a determined student with the console
+     open can still call GoTrue directly. Closing that needs an auth hook and is
+     tracked separately; the note under the list no longer promises otherwise.
+   · export — built from ordinary RLS-scoped reads that the app needs anyway, so
+     `guard` gates the button rather than the data. Server-side gating means
+     routing it through one export RPC, which is P1-FE-004.
+   · billing portal — gates reaching Stripe. Once it opens, Stripe's own
+     session governs what happens inside it.
+
    Billing lives here because this screen is the guardian's own account surface
    — their contact, their consent ledger, their data export, their account.
    There is deliberately no pricing card, no plan comparison and no "Upgrade"
@@ -31,10 +57,11 @@ import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
+import { useParentMode } from "../data/useParentMode";
 import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isPasskeySupported, registerPasskey, listPasskeys, renamePasskey, deletePasskey,
-  PASSKEY_MESSAGE,
+  PASSKEY_MESSAGE, isParentModeRequired,
   AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
@@ -99,6 +126,12 @@ export default function Settings() {
   const { state: billingRead, entitlements } = useEntitlements();
   const toast = useToast();
   const { openSheet } = useSheetControls();
+  /* P0-002. Everything below that changes consent, moves money or removes data
+     goes through `guard`. It is not the boundary — the database refuses these
+     for a session that has not re-authenticated, which is what holds against a
+     request typed into the console — it is how a parent is asked, so the
+     refusal is a prompt rather than an error. */
+  const { guard } = useParentMode();
   const [busy, setBusy] = useState<string | null>(null);
   const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -138,19 +171,23 @@ export default function Settings() {
     ? entitlements.billingState
     : billingRead === "failed" ? "failed" : "unknown";
 
-  const toPortal = async () => {
+  /* Guarded: the portal can change the card, the plan, and cancel the
+     subscription. Note the honest limit — Stripe's portal authorises on its own
+     session once opened, so what this gates is reaching it, not what happens
+     inside. */
+  const toPortal = () => guard(async () => {
     hapticTick();
     try {
       // Navigates away on success, so there is nothing to report back.
       await openBillingPortal("/settings");
     } catch (e) { toast((e as Error).message || "Billing could not be opened.", "warn"); }
-  };
+  });
 
   const pref = (key: keyof Prefs) => (next: boolean) => { void setPref({ [key]: next } as Partial<Prefs>); };
 
   /** A consent switch. Optimism is deliberately absent: the thumb moves only
       after the ledger has confirmed, and reverts on failure. */
-  const consentSwitch = (purpose: string) => async (next: boolean) => {
+  const consentSwitch = (purpose: string) => (next: boolean) => guard(async () => {
     setBusy(purpose);
     hapticFirm();
     try {
@@ -160,11 +197,16 @@ export default function Settings() {
         : "Consent withdrawn. Processing for this stops now.");
     } catch (e) {
       await refreshConsent().catch(() => { /* leave what we had */ });
-      toast((e as Error).message || "That could not be recorded.", "warn");
+      // The guard opened the window before this ran, so a refusal here means it
+      // closed in between — a slow sheet, a phone that slept. Say which, rather
+      // than reporting a permissions error to a parent who just confirmed.
+      toast(isParentModeRequired(e)
+        ? "That took long enough for the confirmation to expire. Try once more."
+        : (e as Error).message || "That could not be recorded.", "warn");
     } finally {
       setBusy(null);
     }
-  };
+  });
 
   return (
     <>
@@ -267,7 +309,7 @@ export default function Settings() {
       {billingRead === "ready" && entitlements?.billingState === "past_due" && (
         <PressBox
           as="button" type="button" className="card attention" data-interactive=""
-          onClick={() => void toPortal()}
+          onClick={() => toPortal()}
         >
           <div className="ic">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -300,7 +342,7 @@ export default function Settings() {
         {billingRead === "ready" && entitlements && entitlements.billingState !== "free" && (
           <PressBox
             as="button" type="button" className="srow noicon" data-interactive=""
-            onClick={() => void toPortal()}
+            onClick={() => toPortal()}
           >
             <div className="lbl">
               {entitlements.billingState === "past_due" ? "Update payment method" : "Manage billing"}
@@ -328,11 +370,11 @@ export default function Settings() {
                 key={pk.id}
                 as="button" type="button" className="srow noicon" data-interactive=""
                 disabled={passkeyBusy}
-                onClick={() => {
+                onClick={() => guard(() => {
                   hapticTick();
                   openSheet({
                     title: pk.friendly_name || "Passkey",
-                    body: `Added ${new Date(pk.created_at).toLocaleDateString()}. Renaming or removing takes effect immediately — no extra sign-in needed.`,
+                    body: `Added ${new Date(pk.created_at).toLocaleDateString()}. Renaming or removing takes effect immediately.`,
                     choices: [
                       { label: "Rename", value: "rename" },
                       { label: "Remove this passkey", value: "remove" },
@@ -368,7 +410,7 @@ export default function Settings() {
                       }
                     },
                   });
-                }}
+                })}
               >
                 <div className="lbl">
                   {pk.friendly_name || "Passkey"}
@@ -380,7 +422,7 @@ export default function Settings() {
             <PressBox
               as="button" type="button" className="srow noicon" data-interactive=""
               disabled={!guardian || passkeyBusy}
-              onClick={async () => {
+              onClick={() => guard(async () => {
                 hapticFirm();
                 setPasskeyBusy(true);
                 try {
@@ -393,14 +435,15 @@ export default function Settings() {
                   }
                 } catch (e) { toast((e as Error).message || "That didn't work.", "warn"); }
                 finally { setPasskeyBusy(false); }
-              }}
+              })}
             >
               <div className="lbl">Add a passkey<small>Face ID, Touch ID, or your device's screen lock</small></div>
               <Chevron />
             </PressBox>
           </div>
           <div className="note">
-            Renaming or removing a passkey takes effect immediately — no extra sign-in needed.
+            Adding or removing a passkey is the account holder&rsquo;s, so we check
+            it&rsquo;s you first. After that it takes effect immediately.
           </div>
         </>
       )}
@@ -499,7 +542,7 @@ export default function Settings() {
         <PressBox
           as="button" type="button" className="srow noicon" data-interactive=""
           disabled={!guardian}
-          onClick={async () => {
+          onClick={() => guard(async () => {
             if (!guardian) return;
             hapticTick();
             try {
@@ -510,7 +553,7 @@ export default function Settings() {
               );
               toast("Downloaded.");
             } catch (e) { toast((e as Error).message || "Export failed.", "warn"); }
-          }}
+          })}
         >
           <div className="lbl">Download your data<small>Everything we hold, as one file</small></div>
           <Chevron />
@@ -518,7 +561,7 @@ export default function Settings() {
 
         <PressBox
           as="button" type="button" className="srow noicon" data-interactive=""
-          onClick={() => {
+          onClick={() => guard(() => {
             hapticTick();
             openSheet({
               title: "Delete the student's data?",
@@ -534,10 +577,14 @@ export default function Settings() {
                   const { error } = await sb.from("paper").delete().eq("student_id", student.id);
                   if (error) throw error;
                   toast("Papers and analysis deleted.");
-                } catch (e) { toast((e as Error).message || "Deletion failed.", "warn"); }
+                } catch (e) {
+                  toast(isParentModeRequired(e)
+                    ? "That took long enough for the confirmation to expire. Try once more."
+                    : (e as Error).message || "Deletion failed.", "warn");
+                }
               },
             });
-          }}
+          })}
         >
           <div className="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div>
           <Chevron />
@@ -546,7 +593,7 @@ export default function Settings() {
         <PressBox
           as="button" type="button" className="srow noicon" data-interactive=""
           disabled={!guardian}
-          onClick={() => {
+          onClick={() => guard(() => {
             hapticFirm();
             openSheet({
               title: "Delete this account?",
@@ -564,10 +611,14 @@ export default function Settings() {
                   const result = await deleteAccount(guardian);
                   toast(`Deleted ${result.students_erased} profile(s). Signing out.`);
                   setTimeout(() => location.reload(), 1200);
-                } catch (e) { toast((e as Error).message || "Deletion failed.", "warn"); }
+                } catch (e) {
+                  toast(isParentModeRequired(e)
+                    ? "That took long enough for the confirmation to expire. Try once more."
+                    : (e as Error).message || "Deletion failed.", "warn");
+                }
               },
             });
-          }}
+          })}
         >
           <div className="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div>
           <Chevron />
