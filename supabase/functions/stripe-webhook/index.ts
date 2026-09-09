@@ -36,6 +36,21 @@
 // `const { data } = await ...` turns a database outage into "no such guardian"
 // and then into a silently skipped update, which is the same class of bug one
 // layer down.
+//
+// ── Ordering, which idempotency does not solve ────────────────────────────
+//
+// "Have I applied this event id before?" is a different question from "is this
+// event newer than what I already applied?", and Stripe does not promise
+// delivery order. A payment_failed emitted at T1 can arrive after the
+// subscription recovered at T2, and applying the payload as written would set
+// past_due over a subscription that is currently paid — telling a parent their
+// payment failed about a subscription that did not.
+//
+// So an event is treated as a NOTIFICATION, not as data. Where it names a
+// subscription, the current object is re-fetched from Stripe and that is what
+// gets written. Stripe is the source of truth for its own state; the event is
+// only how we learn to go and look. Out-of-order delivery then converges,
+// because every delivery asks the same question and gets the same answer.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@18';
