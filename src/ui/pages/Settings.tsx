@@ -20,9 +20,9 @@
    ── Parent Mode ──────────────────────────────────────────────────────────
 
    This is the student's phone. The same session that scans a physics paper
-   opens this screen, so consent, billing, passkeys, export and both deletions
-   go through `guard` — the parent confirms with a passkey or a code, and the
-   window closes on its own a quarter of an hour later.
+   opens this screen, so consent, billing, export and both deletions go through
+   `guard` — the parent confirms with a code sent to the contact on the account,
+   and the window closes on its own a quarter of an hour later.
 
    The prompt is not a confirmation and does not break the rule above. It is not
    asking anyone to ratify a decision; it is asking whether the account holder
@@ -33,10 +33,6 @@
 
    · consent, delete papers, delete account — refused by the database. A
      request typed into the console fails exactly as the button does.
-   · passkeys — Supabase Auth owns these, and no policy of ours can reach them.
-     `guard` here is the whole gate, so a determined student with the console
-     open can still call GoTrue directly. Closing that needs an auth hook and is
-     tracked separately; the note under the list no longer promises otherwise.
    · export — built from ordinary RLS-scoped reads that the app needs anyway, so
      `guard` gates the button rather than the data. Server-side gating means
      routing it through one export RPC, which is P1-FE-004.
@@ -52,7 +48,7 @@
    most of all the one state that would otherwise be silent, a failed payment.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
 import { useToast } from "../components/ToastProvider";
@@ -60,15 +56,14 @@ import { useSheetControls } from "../components/SheetProvider";
 import { useParentMode } from "../data/useParentMode";
 import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
-  isPasskeySupported, registerPasskey, listPasskeys, renamePasskey, deletePasskey,
-  PASSKEY_MESSAGE, isParentModeRequired,
+  isParentModeRequired,
   AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
-import type { Prefs, Passkey } from "../data/modules";
+import type { Prefs } from "../data/modules";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -133,17 +128,6 @@ export default function Settings() {
      refusal is a prompt rather than an error. */
   const { guard } = useParentMode();
   const [busy, setBusy] = useState<string | null>(null);
-  const [passkeys, setPasskeys] = useState<Passkey[] | null>(null);
-  const [passkeyBusy, setPasskeyBusy] = useState(false);
-  const passkeySupported = isPasskeySupported();
-
-  const loadPasskeys = () => {
-    if (!guardian || !passkeySupported) return;
-    listPasskeys().then(setPasskeys).catch(() => { /* the list panel just stays empty */ });
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(loadPasskeys, [guardian, passkeySupported]);
-
   const name = student?.first_name ?? guardian?.name ?? "";
   const initial = initialFor(name);
 
@@ -360,93 +344,6 @@ export default function Settings() {
             : "Scanning and each paper's own analysis are free, always. Pro adds the wider lens across papers and subjects."}
       </div>
 
-
-      {passkeySupported && (
-        <>
-          <div className="sectitle">Security</div>
-          <div className="list">
-            {(passkeys ?? []).map((pk) => (
-              <PressBox
-                key={pk.id}
-                as="button" type="button" className="srow noicon" data-interactive=""
-                disabled={passkeyBusy}
-                onClick={() => guard(() => {
-                  hapticTick();
-                  openSheet({
-                    title: pk.friendly_name || "Passkey",
-                    body: `Added ${new Date(pk.created_at).toLocaleDateString()}. Renaming or removing takes effect immediately.`,
-                    choices: [
-                      { label: "Rename", value: "rename" },
-                      { label: "Remove this passkey", value: "remove" },
-                    ],
-                    onChoice: async (choice) => {
-                      if (choice === "rename") {
-                        openSheet({
-                          title: "Rename this passkey",
-                          input: { id: `pk-${pk.id}`, placeholder: pk.friendly_name ?? "Passkey" },
-                          primary: "Save name",
-                          onConfirm: async (value) => {
-                            const name = value.trim();
-                            if (!name) return;
-                            setPasskeyBusy(true);
-                            try {
-                              await renamePasskey(pk.id, name);
-                              loadPasskeys();
-                              toast("Renamed.");
-                            } catch (e) { toast((e as Error).message || "That could not be renamed.", "warn"); }
-                            finally { setPasskeyBusy(false); }
-                          },
-                        });
-                        return;
-                      }
-                      if (choice === "remove") {
-                        setPasskeyBusy(true);
-                        try {
-                          await deletePasskey(pk.id);
-                          loadPasskeys();
-                          toast("Passkey removed.");
-                        } catch (e) { toast((e as Error).message || "That could not be removed.", "warn"); }
-                        finally { setPasskeyBusy(false); }
-                      }
-                    },
-                  });
-                })}
-              >
-                <div className="lbl">
-                  {pk.friendly_name || "Passkey"}
-                  <small>Added {new Date(pk.created_at).toLocaleDateString()}</small>
-                </div>
-                <Chevron />
-              </PressBox>
-            ))}
-            <PressBox
-              as="button" type="button" className="srow noicon" data-interactive=""
-              disabled={!guardian || passkeyBusy}
-              onClick={() => guard(async () => {
-                hapticFirm();
-                setPasskeyBusy(true);
-                try {
-                  const result = await registerPasskey();
-                  if (result.outcome === "ok") {
-                    loadPasskeys();
-                    toast("Passkey added.");
-                  } else if (result.outcome !== "cancelled") {
-                    toast(PASSKEY_MESSAGE[result.outcome] ?? "That didn't work.", "warn");
-                  }
-                } catch (e) { toast((e as Error).message || "That didn't work.", "warn"); }
-                finally { setPasskeyBusy(false); }
-              })}
-            >
-              <div className="lbl">Add a passkey<small>Face ID, Touch ID, or your device's screen lock</small></div>
-              <Chevron />
-            </PressBox>
-          </div>
-          <div className="note">
-            Adding or removing a passkey is the account holder&rsquo;s, so we check
-            it&rsquo;s you first. After that it takes effect immediately.
-          </div>
-        </>
-      )}
 
       <div className="sectitle">Notifications</div>
       <div className="list">

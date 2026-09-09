@@ -23,10 +23,7 @@ import { useCallback } from "react";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useApp } from "./AppProvider";
-import {
-  parentModeState, unlockWithPasskey, sendParentCode, unlockWithCode,
-  isPasskeySupported,
-} from "./modules";
+import { parentModeState, sendParentCode, unlockWithCode } from "./modules";
 import { hapticFirm } from "../lib/haptics";
 
 export function useParentMode() {
@@ -59,31 +56,21 @@ export function useParentMode() {
     };
 
     const offerUnlock = () => {
-      // Passkey first where there is one: on a shared family phone the parent's
-      // face is the one thing the student standing beside them cannot supply,
-      // and it does not route through an inbox the student may also have open.
-      const choices = isPasskeySupported()
-        ? [
-            { label: "Confirm with this device", value: "passkey" },
-            { label: `Send a code to ${contact}`, value: "code" },
-          ]
-        : [{ label: `Send a code to ${contact}`, value: "code" }];
-
+      /* One route, because passkeys were removed from the product: a code to
+         the contact on the account. Deliberately not a contact typed in here —
+         a parent proving they are present does not get to nominate where the
+         proof goes, or the check is one text field away from proving nothing. */
       openSheet({
         title: "This one's for a parent",
         body:
           "Scanning, reviewing and insights are the student's. Consent, billing " +
           "and anything that removes data are the account holder's, so we check " +
           "you're the one here.",
-        choices,
+        choices: [{ label: `Send a code to ${contact}`, value: "code" }],
         onChoice: async (choice) => {
-          if (choice === "code") return askForCode();
+          if (choice !== "code") return;
           hapticFirm();
-          const r = await unlockWithPasskey();
-          if (r.outcome === "unlocked") return run();
-          if (r.outcome === "cancelled") return;
-          if (r.outcome === "needs_code") return askForCode();
-          toast(r.message, "warn");
+          askForCode();
         },
       });
     };

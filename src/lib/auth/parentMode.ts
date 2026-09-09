@@ -26,15 +26,19 @@
 
    ── The proof ────────────────────────────────────────────────────────────
 
-   Re-authenticating — a passkey, or a code to the parent's own email or phone —
-   updates the session's `amr` claim, and the database reads the timestamp out
-   of that. Nothing is minted, stored or expired on our side: the window closes
-   on its own because the claim ages. A page reload cannot reopen it, because
-   the reload carries the same token.
+   Re-authenticating — a code to the parent's own email or phone — updates the
+   session's `amr` claim, and the database reads the timestamp out of that.
+   Nothing is minted, stored or expired on our side: the window closes on its
+   own because the claim ages. A page reload cannot reopen it, because the
+   reload carries the same token.
+
+   A passkey used to be the preferred route here, and would be again: on a
+   shared family phone the parent's face is the one factor the student beside
+   them cannot supply. Passkeys were removed from the product before they were
+   ever enabled in the Supabase project, so the only route today is a code.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { sb } from '../../supabase.js';
-import { signInWithPasskey, isPasskeySupported } from './passkeys';
 
 /** What the server says about the current session's freshness. Advisory: every
     guarded action re-checks server-side, so a client that lies about this
@@ -91,33 +95,7 @@ export function isParentModeRequired(error: unknown): boolean {
 export type UnlockOutcome =
   | { outcome: 'unlocked' }
   | { outcome: 'cancelled' }
-  /** No passkey here, or none registered. The caller falls back to a code. */
-  | { outcome: 'needs_code' }
   | { outcome: 'failed'; message: string };
-
-/**
- * Unlock with a passkey — Face ID, Touch ID, or the device's screen lock.
- *
- * The right default on a shared family phone: the parent's face or fingerprint
- * is something the student standing next to them cannot supply, and it takes a
- * second rather than a round trip through an inbox.
- */
-export async function unlockWithPasskey(): Promise<UnlockOutcome> {
-  if (!isPasskeySupported()) return { outcome: 'needs_code' };
-  try {
-    const result = await signInWithPasskey();
-    if (result.outcome === 'ok') return { outcome: 'unlocked' };
-    if (result.outcome === 'cancelled') return { outcome: 'cancelled' };
-    // 'no_credential' and 'unsupported' are both "not on this device", which is
-    // a reason to offer the other route rather than to report a failure.
-    if (result.outcome === 'no_credential' || result.outcome === 'unsupported') {
-      return { outcome: 'needs_code' };
-    }
-    return { outcome: 'failed', message: "That didn't work." };
-  } catch {
-    return { outcome: 'needs_code' };
-  }
-}
 
 /**
  * Send a code to the guardian's own contact.

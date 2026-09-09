@@ -144,8 +144,7 @@ export const recordVerification = verificationMod.recordVerification as (
 /* P0-002. The boundary itself is in the database; these are the parts a person
    touches. See src/lib/auth/parentMode.ts. */
 export {
-  parentModeState, unlockWithPasskey, sendParentCode, unlockWithCode,
-  isParentModeRequired,
+  parentModeState, sendParentCode, unlockWithCode, isParentModeRequired,
 } from "../../lib/auth/parentMode";
 export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
 
@@ -466,15 +465,6 @@ export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (
 export const listSubjects = papersMod.listSubjects as unknown as (
   studentId: string,
 ) => Promise<Cached<{ subject: string; syllabus_code: string }[]>>;
-
-// ── passkeys ───────────────────────────────────────────────────────────────
-// Already TypeScript, so re-exported directly rather than cast — the untyped
-// boundary above is only for the plain ES modules.
-export {
-  isPasskeySupported, registerPasskey, signInWithPasskey,
-  listPasskeys, renamePasskey, deletePasskey, PASSKEY_MESSAGE,
-} from "../../lib/auth/passkeys";
-export type { Passkey, PasskeyOutcome } from "../../lib/auth/passkeys";
 
 // ── entitlements and billing ───────────────────────────────────────────────
 // The guardian's own account surface only. `src/billing.js` says it plainly:

@@ -20,6 +20,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const problems = [];
+let distNote = '';
 
 // ── which adapter does the build select? ───────────────────────────────────
 
@@ -60,28 +61,45 @@ if (configured && devOnly.has(configured)) {
   );
 }
 
-// ── did the runtime guard survive the build? ───────────────────────────────
+// ── can a development adapter reach the shipped bundle? ───────────────────
 //
-// A guard that a minifier drops is not a guard. This looks for the assertion's
-// own message in the emitted chunks; if the check ever legitimately needs a
-// different string, change both together.
+// The invariant is not "the guard is present" but the thing the guard exists
+// to secure: a development adapter must never be reachable from a shipped
+// bundle. There are two ways to satisfy that, and both are fine:
+//
+//   · the stub is not in the bundle at all — nothing can call it;
+//   · the stub is in the bundle, and so is the boot assertion that refuses it.
+//
+// Asserting only the second was wrong, and it failed the moment the verify
+// screen was removed: with nothing importing src/verification.js, Rollup drops
+// the module, the guard goes with it, and the check reported a regression when
+// the app had in fact become strictly safer. What must never pass is the third
+// case — the stub shipped without the guard.
 
 if (process.argv.includes('--dist')) {
   const assetsDir = join('dist', 'assets');
   if (!existsSync(assetsDir)) {
     problems.push('dist/assets does not exist — run the build before --dist.');
   } else {
-    const chunks = readdirSync(assetsDir).filter((f) => f.endsWith('.js'));
-    const needle = 'guardian verification adapter';
-    const guarded = chunks.some((f) =>
-      readFileSync(join(assetsDir, f), 'utf8').includes(needle));
-    if (!guarded) {
+    const chunks = readdirSync(assetsDir)
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => readFileSync(join(assetsDir, f), 'utf8'));
+
+    // A string literal from the stub adapter itself, so it survives
+    // minification and identifies the adapter rather than the module.
+    const stubShipped = chunks.some((c) => c.includes('Stands in for DigiLocker'));
+    const guardShipped = chunks.some((c) => c.includes('guardian verification adapter'));
+
+    if (stubShipped && !guardShipped) {
       problems.push(
-        `No chunk in dist/assets contains the verification build guard ` +
-        `("...${needle}"). It was tree-shaken or renamed, so the shipped ` +
-        'bundle no longer refuses a development adapter at boot.',
+        'The development verification adapter is in dist/ but the boot ' +
+        'assertion that refuses it is not. The shipped bundle can run a ' +
+        'verification that checks nobody.',
       );
     }
+    distNote = stubShipped
+      ? ', stub present in dist/ and guarded'
+      : ', no verification adapter reaches dist/';
   }
 }
 
@@ -93,7 +111,4 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(
-  `Production configuration OK — verification adapter '${configured}'` +
-  `${process.argv.includes('--dist') ? ', build guard present in dist/' : ''}.`,
-);
+console.log(`Production configuration OK — verification adapter '${configured}'${distNote}.`);

@@ -12,9 +12,9 @@ import type { ReactNode } from "react";
 import PressBox from "../components/PressBox";
 import { hapticTick } from "../lib/haptics";
 
-/* Five phases rather than eight steps: the flow branches, so a step count would
+/* Four phases rather than a step count: the flow branches, so a step count would
    either be wrong on one path or have to lie about the total. */
-export const PHASES = ["Account", "Verify", "Consent", "Plan", "Student"];
+export const PHASES = ["Account", "Consent", "Plan", "Student"];
 
 export const ICONS = {
   back: <path d="M14.5 5.5 8 12l6.5 6.5" />,

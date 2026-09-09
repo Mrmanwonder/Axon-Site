@@ -3,7 +3,7 @@
 
    The order is legally load-bearing, not a UX preference:
 
-     landing → parent account → verify → consent → payment → student profile →
+     landing → parent account → consent → payment → student profile →
      student first run → first upload
 
    Two constraints it exists to satisfy, both from India's DPDP Act:
@@ -13,6 +13,32 @@
      rather than the only guard.
    · Payment comes after consent, never before, so paying cannot become
      pressure on a consent decision.
+
+   ── The verification step is gone, and that is a known gap ──
+
+   There used to be a "Verify it's you" step between account and consent. What
+   it ran was the development stub: an adapter that waits 600ms and returns
+   success without checking a person. It was reaching real parents on
+   axonstudy.online, under a "Required by law" chip, writing `verified_at` from
+   the browser.
+
+   Showing a legal check that checks nothing is worse than not showing one — it
+   tells a parent an assurance was given when none was — so the step is removed
+   rather than left running a stub or left as a dead end nobody can pass. Rule
+   10 of the DPDP Rules 2025 still requires verifying a guardian's identity,
+   adulthood and relationship to the student, and this flow does not do that
+   today. Nothing here should be read as claiming otherwise.
+
+   The seam it will come back through is already built and enforced:
+   `public.record_guardian_verification()` is the only path that can write those
+   columns (migration 20260909120000), and the database refuses any method that
+   proves nothing about a real person. When a real adapter exists, a step goes
+   back here and calls it.
+
+   The age gate went with it. It asked "under 18 / 18 or older" and the second
+   branch led to a screen saying that path was not built — one working answer is
+   not a question, and `age_band` is written as `under_18`, which is what the
+   account model means.
 
    ── One behaviour change from the module this replaces ──
 
@@ -30,18 +56,16 @@
    have meant knowingly porting a bug.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
-  getVerificationAdapter, verificationUnavailable, recordVerification,
   listPurposes, recordConsent,
   BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
   PAPER_TYPES,
-  isPasskeySupported, signInWithPasskey, registerPasskey, PASSKEY_MESSAGE,
   startCheckout,
 } from "../data/modules";
 import type { Guardian, Student } from "../data/modules";
@@ -51,19 +75,8 @@ import Switch from "../components/Switch";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
-  | "passkeyOffer"
-  | "age" | "adult" | "verify" | "consent" | "plan" | "student"
+  | "consent" | "plan" | "student"
   | "firstRun" | "firstUpload";
-
-/* Offered once per device, ever — never re-prompted on a later sign-in. If
-   dismissed, the only way back to it is Settings → Security → Passkeys. */
-const PASSKEY_OFFER_KEY = "axon.passkeyOfferSeen";
-const passkeyOfferSeen = () => {
-  try { return localStorage.getItem(PASSKEY_OFFER_KEY) === "1"; } catch { return true; }
-};
-const markPasskeyOfferSeen = () => {
-  try { localStorage.setItem(PASSKEY_OFFER_KEY, "1"); } catch { /* private mode */ }
-};
 
 /* Back is offered only where returning cannot strand the flow or undo something
    already written. Nothing past consent has a way back: consent is recorded,
@@ -72,17 +85,13 @@ const BACK_TO: Partial<Record<Step, Step>> = {
   studentDead: "landing",
   account: "landing",
   otp: "account",
-  age: "account",
-  adult: "age",
-  verify: "age",
 };
 
 const STEP_PHASE: Partial<Record<Step, number>> = {
   account: 0, otp: 0, nameOnly: 0,
-  age: 1, verify: 1,
-  consent: 2,
-  plan: 3,
-  student: 4,
+  consent: 1,
+  plan: 2,
+  student: 3,
 };
 
 /* The seven causes, as a named palette on the landing screen. Categorical and
@@ -133,7 +142,6 @@ export default function Onboarding() {
     s ? "nameOnly" : providerError ? "account" : "landing",
   );
   const [error, setError] = useState<string | null>(providerError?.message ?? null);
-  const [busy, setBusy] = useState(false);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
   const [parentName, setParentName] = useState(
@@ -143,7 +151,6 @@ export default function Onboarding() {
   const [code, setCode] = useState("");
   const provider = s?.user?.app_metadata?.provider ?? null;
 
-  const [studentAge, setStudentAge] = useState<string | null>(null);
   const [guardian, setGuardian] = useState<Guardian | null>(null);
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
@@ -153,11 +160,6 @@ export default function Onboarding() {
   const [billingReturn, setBillingReturn] = useState<"success" | "cancelled" | null>(null);
   const [busyCheckout, setBusyCheckout] = useState(false);
 
-  const [busyPasskey, setBusyPasskey] = useState(false);
-  const [passkeyNote, setPasskeyNote] = useState<string | null>(null);
-  /* What to do once the passkey-offer interstitial is dismissed or accepted —
-     set by whichever call site interposed it, per the module note above. */
-  const afterPasskeyOffer = useRef<(() => void) | null>(null);
 
   // ── OTP autofill and resend cooldown ──
   const OTP_RESEND_COOLDOWN_S = 30;
@@ -189,21 +191,6 @@ export default function Onboarding() {
      merely redundant: nothing stops a second `student` insert, so it silently
      creates a duplicate profile every time they sign back in, while the flow
      looks like a login that never finishes. That was the "can't log in" bug. */
-  /* Interposes the passkey offer ahead of whatever step or completion would
-     otherwise happen next, but only the first time this device sees it — see
-     `passkeyOfferSeen`. Every call site below that used to `go(...)` or
-     `finishOnboarding(...)` directly now routes through this instead, so the
-     offer shows up after every confirmed sign-in path: fresh OTP, the
-     link/nameOnly path, and a returning guardian's passkey sign-in alike. */
-  const proceedOrOfferPasskey = useCallback((next: () => void) => {
-    if (isPasskeySupported() && !passkeyOfferSeen()) {
-      afterPasskeyOffer.current = next;
-      go("passkeyOffer");
-    } else {
-      next();
-    }
-  }, [go]);
-
   const continueAsGuardian = useCallback(async (g: Guardian) => {
     const { data: existing, error: e1 } = await sb
       .from("student").select("*")
@@ -220,12 +207,11 @@ export default function Onboarding() {
         guardian: g,
         student: { ...st, subjects: (subjectRows ?? []).map((r: { subject: string }) => r.subject) },
       });
-      proceedOrOfferPasskey(finish);
+      finish();
       return;
     }
-    const hasVerified = !!(g as Guardian & { verified_at?: string }).verified_at;
-    proceedOrOfferPasskey(() => go(hasVerified ? "consent" : "age"));
-  }, [finishOnboarding, go, proceedOrOfferPasskey]);
+    go("consent");
+  }, [finishOnboarding, go]);
 
   /* ── back from Stripe ──
      Checkout is a full-page round trip to another origin: this component is
@@ -417,50 +403,9 @@ export default function Onboarding() {
       catch (e) { fail(e, "That code could not be sent."); }
     };
 
-    /* Discoverable-credential sign-in: no email typed, the authenticator
-       resolves the account. This only ever succeeds for someone who has
-       already registered a passkey on this device, which means they already
-       have a guardian row — so on success this goes straight through the
-       same routing a returning OTP sign-in uses. A cancelled OS prompt and
-       "no passkey here" both fall straight back to the fields already on
-       this screen, per the plain-language outcomes in passkeys.ts. */
-    const usePasskey = async () => {
-      if (busyPasskey) return;
-      hapticFirm();
-      setBusyPasskey(true);
-      setPasskeyNote(null);
-      try {
-        const result = await signInWithPasskey();
-        if (result.outcome === "ok") {
-          const g = await currentGuardian();
-          if (!g) {
-            setPasskeyNote("Signed in, but we couldn't find your account — use your email or phone below.");
-            return;
-          }
-          setGuardian(g);
-          await continueAsGuardian(g);
-          return;
-        }
-        if (result.outcome === "cancelled") return;
-        setPasskeyNote(PASSKEY_MESSAGE[result.outcome] ?? "Passkey sign-in didn't work.");
-      } catch (e) { fail(e, "Passkey sign-in didn't work."); }
-      finally { setBusyPasskey(false); }
-    };
-
     return (
       <Shell {...shellProps} title="Create your account">
         <Err message={error} />
-        {isPasskeySupported() && (
-          <>
-            <div className="obalt">
-              <PressBox as="button" type="button" className="btn primary" onClick={() => void usePasskey()}>
-                {busyPasskey ? "Checking…" : "Sign in with a passkey"}
-              </PressBox>
-            </div>
-            {passkeyNote && <div className="subnote">{passkeyNote}</div>}
-            <div className="obor">or</div>
-          </>
-        )}
         {/* "Continue with" rather than "Sign in with": a parent arriving here
             does not have an account yet, and Apple's guidelines allow it. */}
         <div className="obalt">
@@ -583,170 +528,6 @@ export default function Onboarding() {
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" onClick={() => void save()}>
             Continue
-          </PressBox>
-        </div>
-      </Shell>
-    );
-  }
-
-  /* Calm, dismissible, once. Reached only through `proceedOrOfferPasskey`
-     immediately after a confirmed sign-in — never as the first thing a new
-     parent sees, per the ordering constraint in passkeys.ts: registering a
-     passkey requires an existing, confirmed, non-anonymous user. No rail: it
-     is not a numbered step in the flow, it is an interstitial on top of one. */
-  if (step === "passkeyOffer") {
-    const resume = () => {
-      markPasskeyOfferSeen();
-      const next = afterPasskeyOffer.current;
-      afterPasskeyOffer.current = null;
-      setError(null);
-      next?.();
-    };
-    const setUp = async () => {
-      hapticFirm();
-      setBusyPasskey(true);
-      try {
-        const result = await registerPasskey();
-        if (result.outcome === "ok") { resume(); return; }
-        if (result.outcome === "cancelled") return; // both options stay visible
-        setError(PASSKEY_MESSAGE[result.outcome] ?? "That didn't work.");
-      } catch (e) { fail(e, "That didn't work."); }
-      finally { setBusyPasskey(false); }
-    };
-    return (
-      <Shell {...shellProps} title="Skip typing a code next time">
-        <Err message={error} />
-        <div className="obpanel tint">
-          <div className="body" style={{ marginTop: 0 }}>
-            Set up a passkey using Face ID, Touch ID, or your device&rsquo;s
-            screen lock. Next time you sign in on this device, that&rsquo;s all it takes.
-          </div>
-        </div>
-        <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" disabled={busyPasskey}
-                    onClick={() => void setUp()}>
-            {busyPasskey ? "Setting up…" : "Set up a passkey"}
-          </PressBox>
-          <PressBox as="button" type="button" className="btn plain" onClick={() => { hapticTick(); resume(); }}>
-            Not now
-          </PressBox>
-        </div>
-      </Shell>
-    );
-  }
-
-  // ── age gate and verification ────────────────────────────────────────────
-  if (step === "age") {
-    const pick = (age: string) => {
-      hapticTick();
-      setStudentAge(age);
-      go(age === "18_plus" ? "adult" : "verify");
-    };
-    return (
-      <Shell {...shellProps} title="How old is the student?">
-        <div className="list">
-          <Method icon={ICONS.cap} t1="Under 18"
-                  t2="You'll verify and consent on their behalf"
-                  onClick={() => pick("under_18")} />
-          <Method icon={ICONS.person} t1="18 or older"
-                  t2="They can hold their own account"
-                  onClick={() => pick("18_plus")} />
-        </div>
-        <div className="subnote">
-          This decides which consent path applies. We don&rsquo;t ask for a date of birth.
-        </div>
-      </Shell>
-    );
-  }
-
-  if (step === "adult") {
-    return (
-      <Shell {...shellProps} title="Good news">
-        <div className="estate">
-          <div className="ic"><Icon d={ICONS.tick} /></div>
-          <h4>They can sign up themselves</h4>
-          <p>
-            Over 18, no parental consent is needed, so the student holds their own
-            account. That path isn&rsquo;t built yet — it&rsquo;s the next thing we&rsquo;re adding.
-          </p>
-        </div>
-      </Shell>
-    );
-  }
-
-  if (step === "verify") {
-    /* Ask what is wrong before asking for the adapter. `getVerificationAdapter`
-       throws when the configured one is development-only in a build or is not
-       implemented yet, and a throw during render is an error boundary — which
-       tells a guardian nothing and tells us nothing either. This renders the
-       state instead. */
-    const blocked = verificationUnavailable();
-    if (blocked) {
-      return (
-        <Shell {...shellProps} title="Verify it's you">
-          <div className="estate">
-            <div className="ic"><Icon d={ICONS.shield} /></div>
-            <h4>We can&rsquo;t verify you here yet</h4>
-            <p>
-              Verifying a parent is required by law before a student under 18 can
-              use Axon, and the check we&rsquo;re required to run isn&rsquo;t connected yet.
-              Rather than wave it through, we&rsquo;ve stopped here. Nothing you&rsquo;ve
-              entered is lost.
-            </p>
-          </div>
-          <div className="subnote">
-            {/* The detail is for us, in the console, not on the screen: a
-                guardian meeting this needs the sentence above, not an adapter
-                id. It is logged rather than dropped so a support call has
-                something to go on. */}
-            We&rsquo;ll email you the moment it is.
-          </div>
-        </Shell>
-      );
-    }
-
-    const adapter = getVerificationAdapter();
-    const run = async () => {
-      hapticFirm();
-      setBusy(true);
-      try {
-        const result = await adapter.verify();
-        // Not an UPDATE. The guardian's own session can no longer write these
-        // columns — see 20260909120000_guardian_verification_is_server_authored
-        // — so this goes through the RPC that is the seam for a real
-        // server-validated check, and `verified_at` is the server's clock.
-        const data = await recordVerification({
-          method: result.method,
-          reference: result.reference,
-        });
-        setGuardian(data);
-        setBusy(false);
-        go("consent");
-      } catch (e) { setBusy(false); fail(e, "Verification did not complete."); }
-    };
-
-    return (
-      <Shell {...shellProps} title="Verify it's you">
-        <Err message={error} />
-        <div className="obpanel tint">
-          <div className="chips"><span className="chip n">Required by law</span></div>
-          <div className="line">{adapter.label}</div>
-          <div className="body">{adapter.description}</div>
-        </div>
-        <div className="sectitle">What we keep</div>
-        <div className="list">
-          <SRow tone="ic-g" icon={ICONS.shield} label="A confirmation reference"
-                small="Proof the check happened" trailing={<span className="tier t2">Kept</span>} />
-          <SRow tone="ic-g" icon={ICONS.clock} label="When it happened"
-                small="Timestamp and method" trailing={<span className="tier t2">Kept</span>} />
-          <SRow tone="ic-n" icon={ICONS.never} label="Your documents"
-                small="Aadhaar, licence, anything scanned"
-                trailing={<span className="tier t1">Never stored</span>} />
-        </div>
-        <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" disabled={busy}
-                    onClick={() => void run()}>
-            {busy ? "Verifying…" : adapter.label}
           </PressBox>
         </div>
       </Shell>
@@ -897,7 +678,11 @@ export default function Onboarding() {
           first_name: studentFirst.trim(),
           board: BOARD,
           class_level: studentClass,
-          age_band: studentAge ?? "under_18",
+          /* Every account here is a guardian holding a profile for a student
+             under 18 — that IS the account model. The gate that used to ask
+             offered an "18 or older" branch whose own screen said the path was
+             not built, so it was a question with one working answer. */
+          age_band: "under_18",
         }).select().single();
         if (e) throw e;
         /* Each subject carries its Cambridge syllabus code. "Physics" is 0625 at

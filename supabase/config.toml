@@ -1,31 +1,27 @@
-# Local/CI parity for project settings that otherwise live only in the
-# Supabase Dashboard. Currently just the passkey feature flag — nothing else
-# in this project is configured through the CLI, so there is no [api], [db]
-# etc. here on purpose; adding those sections would imply this file drives
-# local development, which it does not yet.
+# Local/CI parity for project settings that otherwise live only in the Supabase
+# Dashboard.
 #
-# `rp_id` is the Relying Party ID: it is cryptographically bound into every
-# passkey a parent registers. Changing it later invalidates every passkey
-# already set up, with no migration path — so it must be the real production
-# bare domain (no scheme, no port, no path) before `enabled` goes to `true`
-# in the Dashboard for the production project. Confirm the Netlify domain is
-# final before doing that; see supabase/DEPLOY.md.
+# This file is currently empty of settings, and that is the accurate state
+# rather than an oversight. It used to carry [auth.passkey] and [auth.webauthn],
+# which were the only things in it; passkeys have been removed from the product,
+# so those sections went with them.
 #
-# `enabled = false` here is deliberate until that domain is confirmed. This
-# file only affects local `supabase start` / CI — the production project's
-# Passkey toggle is set separately in Authentication → Passkeys in the
-# Dashboard, and must stay off there too until rp_id is final.
-[auth.passkey]
-enabled = false
-
-[auth.webauthn]
-# User-facing name shown inside the OS passkey prompt — parent-facing UI we
-# don't control the styling of, so this must read as the product name.
-rp_display_name = "Axon"
-# TODO before enabling in production: replace with the real bare domain,
-# e.g. "axon.app" — not "https://axon.app", not "www.axon.app"
-# unless that is genuinely the domain parents land on.
-rp_id = "localhost"
-rp_origins = ["http://localhost:5173"]
-# If a native Android app is ever built, its origin is added here separately,
-# in the android:apk-key-hash:<...> form — it cannot share the web origin.
+# The file is kept rather than deleted because it is where a Dashboard-only
+# setting belongs the moment one is needed again, and because deleting it would
+# invite the next such setting to be made in the Dashboard alone — which is how
+# a project setting ends up existing nowhere in version control.
+#
+# Nothing else here on purpose: no [api], [db] or [auth] sections, since adding
+# them would imply this file drives local development, which it does not.
+#
+# ── On passkeys ───────────────────────────────────────────────────────────
+#
+# They were never enabled. `enabled` was false here, the Dashboard toggle was
+# never turned on for dlgcqieyevoebefhcggi, and `rp_id` was still "localhost" —
+# so no parent ever registered one (auth.mfa_factors was empty when this was
+# checked). Removing the feature stranded nobody.
+#
+# If they come back: rp_id is cryptographically bound into every passkey
+# registered under it, and changing it later invalidates all of them with no
+# migration path. It must be the real production bare domain — no scheme, no
+# port, no path — before the Dashboard toggle goes on.
