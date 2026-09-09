@@ -25,6 +25,12 @@ jobs:
       - run: npm test
       - run: npm run typecheck
 
+      # INV-01: a production build must not be able to select a development
+      # adapter. `npm run build` runs this too, but Netlify is the only thing
+      # that builds, so without this the check would not run on a pull request
+      # — which is the one place it can still stop the change.
+      - run: npm run check:config
+
   sql-tests:
     name: supabase/tests/*.sql
     runs-on: ubuntu-latest

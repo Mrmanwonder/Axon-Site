@@ -10,8 +10,37 @@
 // underlying documents. There is deliberately no field in the schema that could
 // hold an identity document, so an adapter cannot leak one into the database
 // even by mistake.
+//
+// ── Why this file refuses things ──────────────────────────────────────────
+//
+// The stub asserts nothing about a real person. For as long as it was merely
+// commented as development-only, a production build could still select it and
+// the screen would say "Verify it's you", spin, and write `verified_at` — a
+// claim the code does not implement. That is the one failure mode this file
+// now makes structurally impossible rather than documented:
+//
+//   · a dev-only adapter cannot be handed out of a production build at all;
+//   · the caller gets a describable "unavailable" state rather than an
+//     adapter that lies, so the screen can say so;
+//   · the database refuses a stub verification independently (see migration
+//     20260909_guardian_verification_is_server_authored), so a tampered
+//     bundle pointed at production still cannot record one.
+//
+// Three layers, because the build guard alone protects only the build we ship.
 
-import { VERIFICATION_ADAPTER } from './config.js';
+import { DEV_VERIFICATION_ADAPTER, VERIFICATION_ADAPTER } from './config.js';
+import { sb } from './supabase.js';
+
+/** True for anything `vite build` produced. Deliberately not "is the hostname
+    axonstudy.online": a preview deploy and a local `npm run build` are both
+    bundles that can escape, and neither has any business carrying the stub. */
+export const IS_BUILD = Boolean(
+  typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD,
+);
+
+/** The adapter this environment actually uses. A build gets the production one
+    and has no way to reach the development one; `vite dev` gets the stub. */
+export const ACTIVE_ADAPTER = IS_BUILD ? VERIFICATION_ADAPTER : DEV_VERIFICATION_ADAPTER;
 
 /**
  * @typedef {Object} VerificationResult
@@ -26,6 +55,8 @@ import { VERIFICATION_ADAPTER } from './config.js';
  * @property {string} id
  * @property {string} label                      shown to the guardian
  * @property {string} description
+ * @property {boolean} devOnly                   never selectable from a build
+ * @property {boolean} implemented
  * @property {() => Promise<VerificationResult>} verify
  */
 
@@ -35,7 +66,15 @@ const stubAdapter = {
   label: 'Development verification',
   description:
     'Stands in for DigiLocker during development. It proves nothing about a real person and must never be enabled in production.',
+  devOnly: true,
+  implemented: true,
   async verify() {
+    // Belt to the build guard's braces. If some future caller reaches past
+    // `getVerificationAdapter` and holds this object directly, it still
+    // refuses rather than minting a verification inside a shipped bundle.
+    if (IS_BUILD) {
+      throw new Error('The development verification adapter cannot run in a build.');
+    }
     // Shaped like a real handoff so swapping adapters does not change callers.
     await new Promise((r) => setTimeout(r, 600));
     const reference = `stub:${crypto.randomUUID()}`;
@@ -60,6 +99,8 @@ const digilockerAdapter = {
   label: 'Verify with DigiLocker',
   description:
     'Confirms your identity, that you are an adult, and your relationship to the student. We receive a confirmation reference only — never a copy of any document.',
+  devOnly: false,
+  implemented: false,
   async verify() {
     throw new Error(
       'DigiLocker adapter is not implemented. It needs a registered requester and a ' +
@@ -70,12 +111,90 @@ const digilockerAdapter = {
 
 const adapters = { stub: stubAdapter, digilocker: digilockerAdapter };
 
-export function getVerificationAdapter(id = VERIFICATION_ADAPTER) {
+/**
+ * Why the configured adapter cannot be used, or null if it can.
+ *
+ * `unknown` and `dev_only_in_build` are configuration bugs and say so; the
+ * screen shows the first sentence to nobody but us. `not_implemented` is the
+ * honest present state of production and is the one a guardian may actually
+ * meet, so it reads as a product state rather than a stack trace.
+ *
+ * @param {string} [id]
+ * @returns {{ reason: 'unknown'|'dev_only_in_build'|'not_implemented', detail: string } | null}
+ */
+export function verificationUnavailable(id = ACTIVE_ADAPTER) {
   const adapter = adapters[id];
-  if (!adapter) throw new Error(`Unknown verification adapter: ${id}`);
-  return adapter;
+  if (!adapter) {
+    return { reason: 'unknown', detail: `Unknown verification adapter: ${id}` };
+  }
+  if (adapter.devOnly && IS_BUILD) {
+    return {
+      reason: 'dev_only_in_build',
+      detail:
+        `VERIFICATION_ADAPTER is '${id}', which is development-only, in a production build. ` +
+        'Set it to a real adapter in src/config.js before building.',
+    };
+  }
+  if (!adapter.implemented) {
+    return {
+      reason: 'not_implemented',
+      detail: `The '${id}' verification adapter is not implemented yet.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * The configured adapter, or a throw naming exactly what is wrong.
+ *
+ * Callers that render a screen should ask `verificationUnavailable()` first
+ * and show that state, rather than catching this: a guardian meeting an
+ * unbuilt integration deserves a sentence, not an error boundary.
+ */
+export function getVerificationAdapter(id = ACTIVE_ADAPTER) {
+  const blocked = verificationUnavailable(id);
+  if (blocked) throw new Error(blocked.detail);
+  return adapters[id];
 }
 
 export function listVerificationAdapters() {
-  return Object.values(adapters).map(({ id, label, description }) => ({ id, label, description }));
+  return Object.values(adapters).map(({ id, label, description, devOnly, implemented }) => (
+    { id, label, description, devOnly, implemented }
+  ));
+}
+
+// The assertion the spec asks for, run at module load so it cannot be skipped
+// by a code path that happens not to call the accessor. A build that selects a
+// development adapter fails loudly at boot rather than shipping a screen that
+// claims to verify and does not.
+if (IS_BUILD && adapters[VERIFICATION_ADAPTER]?.devOnly) {
+  throw new Error(
+    `Production build cannot use the '${VERIFICATION_ADAPTER}' guardian verification adapter.`,
+  );
+}
+
+/**
+ * Record a completed verification against the signed-in guardian.
+ *
+ * This used to be `sb.from('guardian').update({ verified_at, ... })` from the
+ * browser, which is the whole of what "the browser must not be able to mint
+ * its own verified result" forbids: anyone with the page open could set those
+ * three columns to whatever they liked, and nothing downstream could tell the
+ * difference between that and a real check.
+ *
+ * The columns are now revoked from `authenticated` and this RPC is the only
+ * way in. It is not yet a *server-validated* verification — no adapter exists
+ * to validate — but it is the single seam where that validation will land,
+ * and in the meantime the database refuses the methods that prove nothing.
+ *
+ * @param {{ method: string, reference: string }} result
+ * @returns {Promise<any>} the updated guardian row
+ */
+export async function recordVerification({ method, reference }) {
+  const { data, error } = await sb.rpc('record_guardian_verification', {
+    p_method: method,
+    p_reference: reference,
+  });
+  if (error) throw error;
+  return data;
 }

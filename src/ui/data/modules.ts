@@ -125,6 +125,21 @@ export const getVerificationAdapter = verificationMod.getVerificationAdapter as 
   verify: () => Promise<{ verifiedAt: string; method: string; reference: string }>;
 };
 
+/** Why the configured adapter cannot run, or null if it can. Ask this before
+    `getVerificationAdapter`: a build that has no usable adapter must render
+    that state, not an error boundary and not a button that fakes a pass. */
+export const verificationUnavailable = verificationMod.verificationUnavailable as () => {
+  reason: "unknown" | "dev_only_in_build" | "not_implemented";
+  detail: string;
+} | null;
+
+/** Records a completed verification. Deliberately an RPC and not an UPDATE:
+    the guardian's own grant on those three columns is revoked, so the browser
+    can no longer declare itself verified. */
+export const recordVerification = verificationMod.recordVerification as (
+  r: { method: string; reference: string },
+) => Promise<Guardian>;
+
 // ── curriculum ─────────────────────────────────────────────────────────────
 /* AGENTS.md: this is the single source for the board, the stages, the
    class-level mapping and the syllabus codes. Nothing else may hardcode

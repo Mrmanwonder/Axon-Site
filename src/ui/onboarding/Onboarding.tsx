@@ -37,7 +37,8 @@ import { hapticTick, hapticFirm } from "../lib/haptics";
 import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
-  getVerificationAdapter, listPurposes, recordConsent,
+  getVerificationAdapter, verificationUnavailable, recordVerification,
+  listPurposes, recordConsent,
   BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
   PAPER_TYPES,
   isPasskeySupported, signInWithPasskey, registerPasskey, PASSKEY_MESSAGE,
@@ -674,19 +675,50 @@ export default function Onboarding() {
   }
 
   if (step === "verify") {
+    /* Ask what is wrong before asking for the adapter. `getVerificationAdapter`
+       throws when the configured one is development-only in a build or is not
+       implemented yet, and a throw during render is an error boundary — which
+       tells a guardian nothing and tells us nothing either. This renders the
+       state instead. */
+    const blocked = verificationUnavailable();
+    if (blocked) {
+      return (
+        <Shell {...shellProps} title="Verify it's you">
+          <div className="estate">
+            <div className="ic"><Icon d={ICONS.shield} /></div>
+            <h4>We can&rsquo;t verify you here yet</h4>
+            <p>
+              Verifying a parent is required by law before a student under 18 can
+              use Axon, and the check we&rsquo;re required to run isn&rsquo;t connected yet.
+              Rather than wave it through, we&rsquo;ve stopped here. Nothing you&rsquo;ve
+              entered is lost.
+            </p>
+          </div>
+          <div className="subnote">
+            {/* The detail is for us, in the console, not on the screen: a
+                guardian meeting this needs the sentence above, not an adapter
+                id. It is logged rather than dropped so a support call has
+                something to go on. */}
+            We&rsquo;ll email you the moment it is.
+          </div>
+        </Shell>
+      );
+    }
+
     const adapter = getVerificationAdapter();
     const run = async () => {
       hapticFirm();
       setBusy(true);
       try {
         const result = await adapter.verify();
-        const { data, error: e } = await sb.from("guardian").update({
-          verified_at: result.verifiedAt,
-          verification_method: result.method,
-          verification_ref: result.reference,
-          updated_at: new Date().toISOString(),
-        }).eq("id", guardian!.id).select().single();
-        if (e) throw e;
+        // Not an UPDATE. The guardian's own session can no longer write these
+        // columns — see 20260909120000_guardian_verification_is_server_authored
+        // — so this goes through the RPC that is the seam for a real
+        // server-validated check, and `verified_at` is the server's clock.
+        const data = await recordVerification({
+          method: result.method,
+          reference: result.reference,
+        });
         setGuardian(data);
         setBusy(false);
         go("consent");
