@@ -1,13 +1,14 @@
 {
   "name": "axon",
   "version": "0.1.0",
-  "description": "Axon — a study companion for Cambridge (CAIE) students, IGCSE through A Level.",
+  "description": "Axon \u2014 a study companion for Cambridge (CAIE) students, IGCSE through A Level.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/check-production-config.mjs && tsc -b && vite build && node scripts/check-production-config.mjs --dist",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "node --test bench/*.test.mjs harness/*.test.mjs"
+    "test": "node --test bench/*.test.mjs harness/*.test.mjs",
+    "check:config": "node scripts/check-production-config.mjs"
   },
   "repository": {
     "type": "git",

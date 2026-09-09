@@ -224,19 +224,28 @@ What is not available, in any environment: relaxing `PROVIDER_POLICY` globally.
 It is a constant in `_shared/openrouter.ts`, not configuration, and there is no
 environment variable that changes it.
 
-## 6 · Passkeys
+## 6 · Passkeys — removed
 
-Off by default — see `supabase/config.toml`. Before switching Authentication →
-Passkeys on for `dlgcqieyevoebefhcggi` (or setting `rp_id` to anything but
-`localhost`):
+Passkeys are no longer part of the product. The client no longer opts into the
+beta API, `src/lib/auth/passkeys.ts` is gone, and the Settings → Security
+section and the onboarding offer went with it.
 
-1. Confirm the production Netlify domain is final. `rp_id` is bound into
-   every passkey a parent registers; changing it later invalidates all of
-   them, with no migration.
-2. Set `rp_display_name = "Axon"`, `rp_id` to the bare domain (no scheme,
-   no port, no path), and `rp_origins` to every origin the app is actually
-   served from, in the Dashboard's Passkey settings.
-3. Only then flip `enabled = true`.
+They were never enabled, so nothing was stranded: `enabled` was false in
+`config.toml`, the Dashboard toggle was never switched on for
+`dlgcqieyevoebefhcggi`, and `rp_id` was still `localhost`. `auth.mfa_factors`
+held zero rows and `auth.mfa_amr_claims` recorded only `otp` and `oauth`
+sign-ins when this was checked, so no parent had ever registered one.
+
+**Leave Authentication → Passkeys off in the Dashboard.** Switching it on now
+would enable a surface the app no longer has any code for.
+
+Two consequences worth knowing:
+
+- Signing in is email or phone OTP (and the OAuth providers) only.
+- Parent Mode's re-authentication is a code to the guardian's contact. A
+  passkey was the better factor on a shared family phone — the parent's face
+  is the one thing the student beside them cannot supply — so this is the
+  route to restore first if passkeys ever come back.
 
 ## 7 · OTP email template
 

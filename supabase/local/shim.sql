@@ -7,7 +7,7 @@
 -- and standing up a real Supabase project to check a CHECK constraint is a
 -- disproportionate amount of ceremony. This creates the parts of the platform
 -- the migrations actually touch — the two roles, auth.users, auth.uid(),
--- storage.objects and storage.foldername() — and nothing else.
+-- auth.jwt(), storage.objects and storage.foldername() — and nothing else.
 --
 -- It is a test fixture, not a model of Supabase. Anything that passes here
 -- still has to hold on the real thing, where auth and storage have their own
@@ -56,6 +56,17 @@ create or replace function auth.uid() returns uuid language sql stable as $$
     nullif(current_setting('request.jwt.claim.sub', true), ''),
     nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'
   )::uuid;
+$$;
+
+-- The whole claim set, which is what Supabase's own auth.jwt() returns. Parent
+-- Mode (20260909140000) reads the `amr` array out of it to answer "how long ago
+-- did a person actually prove they were here", so a shim without this cannot
+-- run the migrations at all, let alone test the boundary.
+create or replace function auth.jwt() returns jsonb language sql stable as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb,
+    '{}'::jsonb
+  );
 $$;
 
 create table storage.buckets (

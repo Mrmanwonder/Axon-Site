@@ -125,6 +125,29 @@ export const getVerificationAdapter = verificationMod.getVerificationAdapter as 
   verify: () => Promise<{ verifiedAt: string; method: string; reference: string }>;
 };
 
+/** Why the configured adapter cannot run, or null if it can. Ask this before
+    `getVerificationAdapter`: a build that has no usable adapter must render
+    that state, not an error boundary and not a button that fakes a pass. */
+export const verificationUnavailable = verificationMod.verificationUnavailable as () => {
+  reason: "unknown" | "dev_only_in_build" | "not_implemented";
+  detail: string;
+} | null;
+
+/** Records a completed verification. Deliberately an RPC and not an UPDATE:
+    the guardian's own grant on those three columns is revoked, so the browser
+    can no longer declare itself verified. */
+export const recordVerification = verificationMod.recordVerification as (
+  r: { method: string; reference: string },
+) => Promise<Guardian>;
+
+// ── parent mode ────────────────────────────────────────────────────────────
+/* P0-002. The boundary itself is in the database; these are the parts a person
+   touches. See src/lib/auth/parentMode.ts. */
+export {
+  parentModeState, sendParentCode, unlockWithCode, isParentModeRequired,
+} from "../../lib/auth/parentMode";
+export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
+
 // ── curriculum ─────────────────────────────────────────────────────────────
 /* AGENTS.md: this is the single source for the board, the stages, the
    class-level mapping and the syllabus codes. Nothing else may hardcode
@@ -442,15 +465,6 @@ export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (
 export const listSubjects = papersMod.listSubjects as unknown as (
   studentId: string,
 ) => Promise<Cached<{ subject: string; syllabus_code: string }[]>>;
-
-// ── passkeys ───────────────────────────────────────────────────────────────
-// Already TypeScript, so re-exported directly rather than cast — the untyped
-// boundary above is only for the plain ES modules.
-export {
-  isPasskeySupported, registerPasskey, signInWithPasskey,
-  listPasskeys, renamePasskey, deletePasskey, PASSKEY_MESSAGE,
-} from "../../lib/auth/passkeys";
-export type { Passkey, PasskeyOutcome } from "../../lib/auth/passkeys";
 
 // ── entitlements and billing ───────────────────────────────────────────────
 // The guardian's own account surface only. `src/billing.js` says it plainly:
