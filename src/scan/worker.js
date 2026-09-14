@@ -11,6 +11,7 @@
 // accuracy harness under Node.
 
 import { conditionPage } from './conditioning.js';
+import { serializeScanError } from './errors.js';
 
 self.onmessage = async (event) => {
   const { id, source, quad, pageNumber, capturePath, liveGate, sourceKind } = event.data;
@@ -51,6 +52,6 @@ self.onmessage = async (event) => {
     // structured cloning: without it a refusal — a page that cannot be used,
     // with the reason already written for the student — would arrive on the
     // other side indistinguishable from a crash, and be shown as one.
-    self.postMessage({ id, ok: false, error: error.message, refused: !!error.refused });
+    self.postMessage({ id, ok: false, error: serializeScanError(error) });
   }
 };

@@ -28,6 +28,7 @@ export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
     resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
+    pendingCaptureCount,
   } = useScan();
   const { addPaper, addLink } = useIngestion();
   const { student } = useApp();
@@ -61,7 +62,8 @@ export default function Scan() {
     return () => { for (const kind of kinds) unlisten(kind, stop); };
   }, []);
 
-  const badPages = tray.filter((p) => p.quality && p.quality.verdict !== "ok").length;
+  const committedPages = tray.filter((p) => !p.pending);
+  const badPages = committedPages.filter((p) => p.quality && p.quality.verdict !== "ok").length;
 
   return (
     <>
@@ -104,7 +106,7 @@ export default function Scan() {
           </PressBox>
 
           <PressBox as="button" type="button" className="shutter" aria-label="Take this page"
-                    disabled={!camera.on}
+                    disabled={!camera.on || pendingCaptureCount > 0}
                     onClick={() => { hapticTick(); shoot(); }}>
             <div className="ring" />
           </PressBox>
@@ -161,6 +163,7 @@ export default function Scan() {
               >
                 {p.thumb && <img src={p.thumb} alt="" />}
                 <span className="n">{p.page_number}</span>
+                {p.pending && <span className="pending">Preparing…</span>}
                 <span className="flag">
                   <svg viewBox="0 0 12 12" aria-hidden="true">
                     <path d="M6 2.5v4" /><path d="M6 9h.01" />
@@ -171,10 +174,11 @@ export default function Scan() {
           </div>
           <div className="traybar">
             <span className="cnt">
-              {tray.length} page{tray.length === 1 ? "" : "s"}
+              {committedPages.length} page{committedPages.length === 1 ? "" : "s"}
               {badPages ? ` · ${badPages} worth retaking` : ""}
             </span>
             <PressBox as="button" type="button" className="btn primary"
+                      disabled={pendingCaptureCount > 0}
                       onClick={() => { hapticFirm(); trayHandlers.onDone?.(); }}>
               Read this paper
             </PressBox>

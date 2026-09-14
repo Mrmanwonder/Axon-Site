@@ -344,7 +344,7 @@ export function shouldAutoCapture({
  *   badly.
  */
 export function liveGateVerdict(
-  { glare, clipping, fill, sharpness, skew, pageLongEdge, steady },
+  { glare, clipping, fill, sharpness, skew, pageLongEdge, steady, resolutionStatus = 'known' },
   holding = null,
 ) {
   // A condition that is already blocking has to clear its threshold by a
@@ -363,7 +363,8 @@ export function liveGateVerdict(
   // *leaving* a warning, never entering one.
   const easing = (reason) => (holding === reason ? 1 + GUIDANCE_HYSTERESIS : 1);
 
-  if (pageLongEdge < CONDITIONING.MIN_LONG_EDGE * easing('resolution')) {
+  if (resolutionStatus !== 'unknown'
+      && pageLongEdge < CONDITIONING.MIN_LONG_EDGE * easing('resolution')) {
     return { blocking: 'resolution', hint: 'Closer — the page needs to fill more of the frame for us to read the marking' };
   }
   if (fill < CAPTURE.MIN_FILL * easing('distance')) {
@@ -565,6 +566,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // canvas grab either way.
   let imageCapture = null;
   let capturePath = 'canvas-grab';
+  let shootInFlight = false;
 
   // ── §0 instrumentation ────────────────────────────────────────────────────
   // A rolling window rather than a log line per search: the search runs up to
@@ -634,6 +636,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       hasPage: false,
       fill: 0,
       pageLongEdge: 0,
+      resolutionStatus: capturePath === 'image-capture' ? 'unknown' : 'known',
       sharpness: null,
       glare: 0,
       clipping: 0,
@@ -1378,11 +1381,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   async function shoot(auto = false) {
-    if (!running || !video.videoWidth) return null;
+    if (!running || !video.videoWidth || shootInFlight) return null;
+    shootInFlight = true;
     const tShotStart = performance.now();
-    const captured = await grabStill();
+    let captured;
+    try {
+      captured = await grabStill();
+    } catch (error) {
+      shootInFlight = false;
+      throw error;
+    }
     const grabMs = performance.now() - tShotStart;
-    if (!captured) return null;
+    if (!captured) { shootInFlight = false; return null; }
     const { bitmap, path, original } = captured;
 
     // The quad travels with the frame so conditioning can warp it. Scaled into
@@ -1396,7 +1406,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
       : null;
 
     const tVerifyStart = performance.now();
-    if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
+    try {
+      if (shotQuad && !(await verifyQuad(bitmap, shotQuad))) shotQuad = null;
+    } catch (error) {
+      bitmap.close?.();
+      shootInFlight = false;
+      throw error;
+    }
     const verifyMs = performance.now() - tVerifyStart;
 
     // AXON_SCAN_LAG_BRIEF.md §0 — shoot() → onShot, split by stage. This is
@@ -1408,6 +1424,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     const shot = { bitmap, quad: shotQuad, auto, capturePath: path, original, gate: { ...state }, timing };
     onShot?.(shot);
+    shootInFlight = false;
     // Re-arm on the next frame that is not ready, so holding steady over one
     // page does not fire twice, and turning to the next page fires once.
     armed = false;

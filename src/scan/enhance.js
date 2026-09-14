@@ -68,6 +68,7 @@
 
 import { CONDITIONING, ENHANCE, QUALITY } from './contract.js';
 import { sharpness, toGray } from './quality.js';
+import { wrapImageData } from './imagedata.js';
 
 /**
  * Can this source be brought up to the floor, and should it be?
@@ -154,7 +155,7 @@ export function applyGain(img, gain) {
     out[i + 2] = b * k;
     out[i + 3] = data[i + 3];
   }
-  return { data: out, width, height };
+  return wrapImageData(out, width, height);
 }
 
 // ── illumination flattening ────────────────────────────────────────────────

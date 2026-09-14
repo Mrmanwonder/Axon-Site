@@ -22,6 +22,7 @@ import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMar
 import { releaseCrops } from './crops.js';
 import { RESCUED_NOTICE } from './enhance.js';
 import { PAPER_TYPES, tierForType } from '../papers.js';
+import { publicScanMessage } from './errors.js';
 
 const S = {
   ctx: null,
@@ -47,7 +48,7 @@ const S = {
 let host = {
   toast() {}, tick() {}, firm() {},
   scanSurface: () => null,
-  renderHint() {}, cameraLive() {},
+  renderHint() {}, cameraLive() {}, scannerState() {},
   renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {},
   openSheet() {}, openReview() {}, renderReview() {}, closeReview() {},
   goto() {}, refreshLibrary: async () => {},
@@ -147,8 +148,12 @@ function stopCamera() {
 // ── a page ─────────────────────────────────────────────────────────────────
 
 async function takePage(shot, replacing = null) {
-  if (S.busy) return;
+  if (S.busy) {
+    shot.bitmap?.close?.();
+    return;
+  }
   S.busy = true;
+  host.scannerState({ phase: 'processing', pendingCaptureCount: 1 });
   // AXON_SCAN_LAG_BRIEF.md §0 — the onShot → paintTray gap, split into
   // acceptPage() (its own breakdown lands in pipeline.js's console line and
   // in the saved page's conditioning_meta.capture_timing) and paintTray()
@@ -164,11 +169,6 @@ async function takePage(shot, replacing = null) {
     }
     // A retake replaces the thumbnail too — the cache is keyed by page number,
     // so without this the tray keeps showing the picture that was just rejected.
-    if (replacing !== null && S.thumbs.has(replacing)) {
-      URL.revokeObjectURL(S.thumbs.get(replacing));
-      S.thumbs.delete(replacing);
-    }
-
     // scan-ground-up-revamp-2026-09-07.md Phase 4: the tray slot appears the
     // instant the shutter fires, not several hundred milliseconds later when
     // conditioning finishes — the counter increments and a picture shows up
@@ -188,6 +188,13 @@ async function takePage(shot, replacing = null) {
       original: shot.original ?? null,
     });
     const tAccepted = performance.now();
+
+    // Release the old retake thumbnail only after the replacement has been
+    // durably accepted. A failed replacement must leave the original intact.
+    if (replacing !== null && S.thumbs.has(replacing)) {
+      URL.revokeObjectURL(S.thumbs.get(replacing));
+      S.thumbs.delete(replacing);
+    }
 
     await paintTray();
     console.debug('[scan:tray-timing]', {
@@ -219,9 +226,16 @@ async function takePage(shot, replacing = null) {
     // A refusal is advice, not a breakage: the page cannot be used and the
     // message already says what to do instead. Shown the same way a fail
     // verdict is, while the paper is still on the desk.
-    toast(error.message || 'That page could not be prepared.', 'warn');
+    S.placeholders.delete(replacing ?? (S.draft?.pages.length ?? 0) + 1);
+    await paintTray();
+    if (error?.refused) toast(error.message, 'warn');
+    else {
+      console.error('[scan] page processing failed', { code: error?.code, error });
+      toast(publicScanMessage(error), 'warn');
+    }
   } finally {
     S.busy = false;
+    host.scannerState({ phase: 'live-guiding', pendingCaptureCount: 0 });
     shot.bitmap?.close?.();
   }
 }
@@ -392,6 +406,7 @@ export function setPendingPaperType(type) {
 }
 
 function sendPaper() {
+  if (S.busy || S.placeholders.size) return toast('Wait for this page to finish preparing.');
   if (!S.draft?.pages.length) return toast('Take a page first.');
   const type = S.draft.paper_type ?? S.pendingType;
   if (type) { S.pendingType = null; return run(type); }

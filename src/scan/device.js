@@ -7,6 +7,9 @@
 // than a student who cannot scan at all.
 
 import { conditionPage } from './conditioning.js';
+import { deserializeScanError, scanError } from './errors.js';
+
+const PROCESS_TIMEOUT_MS = 30_000;
 
 let worker = null;
 let nextId = 1;
@@ -18,12 +21,13 @@ function ensureWorker() {
     worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     worker.onmessage = (event) => {
       const { id, ...rest } = event.data;
-      const resolve = pending.get(id);
-      if (!resolve) return;
+      const request = pending.get(id);
+      if (!request) return;
       pending.delete(id);
-      resolve(rest);
+      clearTimeout(request.timeout);
+      request.resolve(rest);
     };
-    worker.onerror = (event) => {
+    const failWorker = (event) => {
       // This failure mode was previously invisible — the fallback worked, so
       // nothing ever surfaced that it was the fallback. AXON_SCAN_LAG_BRIEF.md
       // §3: a Worker that fails and silently falls back to the main thread is
@@ -32,8 +36,21 @@ function ensureWorker() {
       console.error('[scan] worker failed, falling back to main-thread conditioning', {
         message: event?.message, filename: event?.filename, lineno: event?.lineno,
       });
+      const broken = worker;
       worker = false; // fall back from here on
+      broken?.terminate?.();
+      for (const request of pending.values()) {
+        clearTimeout(request.timeout);
+        request.reject(scanError('SCAN_WORKER_FAILED',
+          'That page could not be prepared. Try taking it again.', {
+            debugMessage: event?.message ?? 'Scanner worker failed',
+            details: { pageNumber: request.pageNumber },
+          }));
+      }
+      pending.clear();
     };
+    worker.onerror = failWorker;
+    worker.onmessageerror = failWorker;
   } catch {
     worker = false;
   }
@@ -53,16 +70,21 @@ export async function processPage(source, { quad = null, pageNumber = 1, capture
   let result;
   if (w) {
     const id = nextId++;
-    result = await new Promise((resolve) => {
-      pending.set(id, resolve);
+    result = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        pending.delete(id);
+        reject(scanError('SCAN_WORKER_TIMEOUT',
+          'Preparing that page took too long. Try taking it again.', {
+            details: { pageNumber },
+          }));
+      }, PROCESS_TIMEOUT_MS);
+      pending.set(id, { resolve, reject, timeout, startedAt: performance.now(), pageNumber });
       // The bitmap is transferred rather than copied. A copy of an
       // eight-megapixel frame is tens of megabytes moved for nothing.
       w.postMessage({ id, source, quad, pageNumber, capturePath, liveGate, sourceKind }, [source]);
     });
     if (!result.ok) {
-      const error = new Error(result.error);
-      error.refused = !!result.refused;
-      throw error;
+      throw deserializeScanError(result.error);
     }
   } else {
     result = await processOnThisThread(source, { quad, pageNumber, capturePath, liveGate, sourceKind });

@@ -22,6 +22,8 @@ import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
 import { assessRescue, enhancePage, flattenPage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
+import { imageDataForContext } from './imagedata.js';
+import { scanError } from './errors.js';
 
 /**
  * Pixels on the long edge a page of this size represents.
@@ -95,13 +97,16 @@ function surface(width, height) {
 function imageDataFrom(source, width, height) {
   const c = surface(width, height);
   const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw scanError('SCAN_CANVAS_CONTEXT', 'That page could not be prepared. Try taking it again.');
   ctx.drawImage(source, 0, 0, width, height);
   return ctx.getImageData(0, 0, width, height);
 }
 
 function toSurface(img) {
   const c = surface(img.width, img.height);
-  c.getContext('2d').putImageData(img, 0, 0);
+  const ctx = c.getContext('2d');
+  if (!ctx) throw scanError('SCAN_CANVAS_CONTEXT', 'That page could not be prepared. Try taking it again.');
+  ctx.putImageData(imageDataForContext(ctx, img), 0, 0);
   return c;
 }
 
@@ -124,13 +129,17 @@ async function encode(canvas, type, quality) {
  * fidelity one, and the fidelity that matters travels in the mask.
  */
 async function encodeBest(canvas, quality = CONDITIONING.ENCODE_QUALITY) {
-  for (const type of CONDITIONING.ENCODE_TYPES) {
-    const blob = await encode(canvas, type, quality);
-    if (blob) return { blob, type };
+  try {
+    for (const type of CONDITIONING.ENCODE_TYPES) {
+      const blob = await encode(canvas, type, quality);
+      if (blob) return { blob, type };
+    }
+    const blob = await new Promise((r) => toBlobAny(canvas, r));
+    if (blob) return { blob, type: blob.type ?? 'unknown' };
+  } catch (cause) {
+    throw scanError('SCAN_ENCODE_FAILED', 'That page could not be saved. Try taking it again.', { cause });
   }
-  // Last resort: whatever the browser gives back rather than nothing at all.
-  const blob = await new Promise((r) => toBlobAny(canvas, r));
-  return { blob, type: blob?.type ?? 'unknown' };
+  throw scanError('SCAN_ENCODE_FAILED', 'That page could not be saved. Try taking it again.');
 }
 
 function toBlobAny(canvas, cb) {
