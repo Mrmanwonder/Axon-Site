@@ -31,10 +31,34 @@ function open() {
 
 function tx(db, mode, fn) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE, mode);
-    const result = fn(transaction.objectStore(STORE));
-    transaction.oncomplete = () => resolve(result.result ?? result);
-    transaction.onerror = () => reject(transaction.error);
+    let transaction;
+    let result;
+    try {
+      transaction = db.transaction(STORE, mode);
+      result = fn(transaction.objectStore(STORE));
+    } catch (error) {
+      // Every call to open() creates a connection. Leaving even a failed one
+      // alive blocks indexedDB.deleteDatabase('axon-scan') during sign-out,
+      // which would leave the previous student's photographed pages on a
+      // shared device.
+      db.close();
+      reject(error);
+      return;
+    }
+    transaction.oncomplete = () => {
+      db.close();
+      resolve(result.result ?? result);
+    };
+    transaction.onerror = () => {
+      const error = transaction.error;
+      db.close();
+      reject(error);
+    };
+    transaction.onabort = () => {
+      const error = transaction.error;
+      db.close();
+      reject(error);
+    };
   });
 }
 
