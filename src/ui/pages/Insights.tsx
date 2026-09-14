@@ -1,30 +1,10 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   INSIGHTS — the deep dive
-
-   Which view this shows is a DATA question, not a tap affordance. In the
-   prototype it toggled on a second tap on the Insights tab, which meant a
-   student with two papers could reach the populated chart — the exact failure
-   `student_analytics_readiness` exists to prevent. AGENTS.md records that as a
-   bug; here readiness decides and nothing else can.
-
-   The populated view renders `lossByCause`, which reads `mark_loss_analytics`
-   and never the base table, so unsure and student-rejected rows are already
-   excluded — hard rule 3, enforced upstream of this file.
-
-   Cause colours are categorical and of equal weight. The bar is ordered by
-   size because that is what a reader needs, but the hues carry no ranking: a
-   green-to-red ramp would turn this into a shame map. Every headline states its
-   own sample size.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
+import { useMemo, useState } from "react";
 import { useAnalytics } from "../data/useAnalytics";
-import { useIngestion } from "../data/useIngestion";
+import { useApp } from "../data/AppProvider";
+import { paperTypeLabel } from "../data/modules";
 import PressBox from "../components/PressBox";
-import { NotEnoughDataArt } from "../components/EmptyArt";
+import { useIngestion } from "../data/useIngestion";
 
-/** The fixed enum, with the hues from CLAUDE.md and the student-facing wording
-    from the prototype. Not extensible without a decision — a new cause is an
-    "ask, don't guess" item. */
 const CAUSE = {
   conceptual_gap: { hue: "var(--cause-conceptual-gap)", label: "Concept gap" },
   procedural_slip: { hue: "var(--cause-procedural-slip)", label: "Slip in the working" },
@@ -34,114 +14,73 @@ const CAUSE = {
   keyword_miss: { hue: "var(--cause-keyword-miss)", label: "Missing keyword" },
   timed_out: { hue: "var(--cause-timed-out)", label: "Ran out of time" },
 } as const;
-
 type Cause = keyof typeof CAUSE;
-
 const THRESHOLD = 4;
 
+function EvidenceGap({ title, children }: { title: string; children: React.ReactNode }) {
+  return <div className="card evidencegap"><div className="unknownmark" aria-hidden="true">?</div><div><h3>{title}</h3><p>{children}</p></div></div>;
+}
+
 export default function Insights() {
-  const { state, readiness, loss } = useAnalytics();
+  const { papers, student } = useApp();
+  const { state, readiness, loss, stale } = useAnalytics();
   const { addPaper } = useIngestion();
+  const [subject, setSubject] = useState("all");
+  const [type, setType] = useState("all");
+  const [range, setRange] = useState("all");
+  const [tier, setTier] = useState("all");
 
-  // Loading is not "not enough data". Showing the insufficient-data state while
-  // the read is in flight tells a student their papers don't count.
-  if (state === "loading" || !readiness) return null;
-
-  if (state === "failed") {
-    return (
-      <>
-        <div className="greet"><h1>Insights</h1></div>
-        <div className="estate">
-          <h4>Can&rsquo;t reach your analysis</h4>
-          <p>
-            Your papers are still saved and still readable. This view needs a
-            connection to work out what changed.
-          </p>
-        </div>
-      </>
-    );
-  }
-
-  if (!readiness.has_enough_data) {
-    const have = readiness.papers_counted;
-    return (
-      <>
-        <div className="greet"><h1>Insights</h1></div>
-        <div className="estate">
-          <NotEnoughDataArt />
-          <h4>Not enough papers yet</h4>
-          <p>
-            Patterns need about four papers before they mean anything. With
-            {have === 1 ? " one, " : ` ${have}, `}
-            anything shown here would be noise dressed as insight.
-          </p>
-          <div className="prog">
-            <div className="tr">
-              <i style={{ width: `${Math.min(100, (have / THRESHOLD) * 100)}%` }} />
-            </div>
-            <span>{have} of {THRESHOLD}</span>
-          </div>
-          <PressBox as="button" type="button" className="btn primary" onClick={addPaper}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            Add a paper
-          </PressBox>
-        </div>
-      </>
-    );
-  }
-
-  const entries = Object.entries(loss ?? {})
-    .filter(([c, marks]) => c in CAUSE && marks > 0)
+  const subjects = student?.subjects ?? [];
+  const filtered = useMemo(() => papers.filter((p) =>
+    (subject === "all" || p.subject === subject) &&
+    (type === "all" || p.type === type) &&
+    (tier === "all" || p.tier === tier) &&
+    (range === "all" || new Date(p.date_taken).getTime() >= Date.now() - 90 * 86400000)
+  ), [papers, subject, type, range, tier]);
+  const trend = filtered.filter((p) => p.total_available != null && p.total_awarded != null).reverse();
+  const maxLost = Math.max(1, ...trend.map((p) => Number(p.total_available) - Number(p.total_awarded)));
+  const allEvidence = subject === "all" && type === "all" && range === "all" && tier === "all";
+  const entries = Object.entries(loss ?? {}).filter(([c, marks]) => c in CAUSE && marks > 0)
     .sort((a, b) => b[1] - a[1]) as [Cause, number][];
   const total = entries.reduce((n, [, marks]) => n + marks, 0);
 
-  return (
-    <>
-      <div className="greet">
-        <h1>Insights</h1>
-        <div className="sub">
-          {readiness.questions_counted} question
-          {readiness.questions_counted === 1 ? "" : "s"} · {readiness.papers_counted} paper
-          {readiness.papers_counted === 1 ? "" : "s"}
-        </div>
-      </div>
+  if (state === "loading" || !readiness) return null;
+  if (state === "failed") return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
-      <div className="sectitle">Marks lost by cause</div>
+  return <>
+    <div className="greet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work, never predicted marks.</div></div>
 
-      {!total ? (
-        <div className="card causecard">
-          <div className="subnote" style={{ margin: 0 }}>
-            No marks lost across the papers we&rsquo;ve read. Nothing to break down yet.
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="card causecard">
-            <div className="causebar">
-              {entries.map(([cause, marks]) => (
-                <i
-                  key={cause}
-                  style={{ flex: marks, background: CAUSE[cause].hue }}
-                  aria-hidden="true"
-                />
-              ))}
-            </div>
-            <div className="causegrid">
-              {entries.map(([cause, marks]) => (
-                <div className="cz" key={cause}>
-                  <span className="sw2" style={{ background: CAUSE[cause].hue }} aria-hidden="true" />
-                  <span className="n">{CAUSE[cause].label}</span>
-                  <span className="v">{marks}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="subnote">
-            Different kinds of problem, coloured categorically — no cause ranks
-            worse than another.
-          </div>
-        </>
-      )}
-    </>
-  );
+    <div className="filterbar insightfilters" aria-label="Filter insights">
+      <button className={`fchip ${subject === "all" ? "active" : ""}`} onClick={() => setSubject("all")}>All subjects</button>
+      {subjects.map((s) => <button key={s} className={`fchip ${subject === s ? "active" : ""}`} onClick={() => setSubject(s)}>{s}</button>)}
+      <button className={`fchip ${type === "all" ? "active" : ""}`} onClick={() => setType("all")}>All papers</button>
+      {[...new Set(papers.map((p) => p.type))].map((t) => <button key={t} className={`fchip ${type === t ? "active" : ""}`} onClick={() => setType(t)}>{paperTypeLabel(t)}</button>)}
+      <button className={`fchip ${range === "term" ? "active" : ""}`} onClick={() => setRange(range === "term" ? "all" : "term")}>Last 90 days</button>
+      <button className={`fchip ${tier === "tier_1" ? "active" : ""}`} onClick={() => setTier(tier === "tier_1" ? "all" : "tier_1")}>Teacher marks</button>
+      <button className={`fchip ${tier === "tier_2" ? "active" : ""}`} onClick={() => setTier(tier === "tier_2" ? "all" : "tier_2")}>Scheme match</button>
+    </div>
+
+    {!filtered.length && papers.length > 0 ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no evidence for this combination yet.</p><button onClick={() => { setSubject("all"); setType("all"); setRange("all"); setTier("all"); }}>Clear filters</button></div> : <div className="igrid">
+      <section className="isection">
+        <div className="sectitle">Coverage</div>
+        <div className="card coveragecard"><div className="coveragehead"><strong>{readiness.papers_counted} of {THRESHOLD} papers</strong><span>{readiness.has_enough_data ? "Patterns ready" : "Building evidence"}</span></div><div className="covertrack"><i style={{width: `${Math.min(100, readiness.papers_counted / THRESHOLD * 100)}%`}} /></div><p>{readiness.has_enough_data ? `${readiness.questions_counted} confirmed questions are behind this view.` : `Scan ${Math.max(0, THRESHOLD - readiness.papers_counted)} more comparable paper${THRESHOLD - readiness.papers_counted === 1 ? "" : "s"} before Axon calls anything a pattern.`}</p>{!readiness.has_enough_data && <PressBox as="button" type="button" className="miniadd" onClick={addPaper}>Add a paper</PressBox>}</div>
+      </section>
+
+      <section className="isection">
+        <div className="sectitle">Trend</div>
+        {trend.length >= 4 ? <div className="card trendcard"><div className="hd"><span className="k">Marks lost · paper by paper</span><span className="v">{subject === "all" ? "Comparable papers" : subject}</span></div><div className="spark" aria-label="Marks lost across papers">{trend.map((p, i) => { const v = Number(p.total_available) - Number(p.total_awarded); return <div className="sparkcol" key={p.id}><i style={{height:`${Math.max(8, v / maxLost * 100)}%`}}/><span>{i + 1}</span></div>; })}</div><p className="widgetnote">Paper order, not a date axis. Lower bars mean fewer teacher marks lost.</p></div> : <EvidenceGap title="Not enough comparable papers">A trend needs four papers with confirmed totals. {trend.length ? `${trend.length} ${trend.length === 1 ? "is" : "are"} ready for this filter.` : "None are ready for this filter yet."}</EvidenceGap>}
+      </section>
+
+      <section className="isection">
+        <div className="sectitle">Why marks are lost</div>
+        {!allEvidence ? <EvidenceGap title="No cause breakdown for this filter">The current aggregate cannot be narrowed safely to this selection yet. Axon won&rsquo;t show the all-paper total as if it matched.</EvidenceGap> : !readiness.has_enough_data ? <EvidenceGap title="This breakdown needs more evidence">A couple of questions can describe one bad day, not a pattern. Axon will show causes after four comparable papers.</EvidenceGap> : !total ? <EvidenceGap title="Nothing to break down yet">No confirmed marks lost were found in this evidence.</EvidenceGap> : <div className="card causecard"><div className="causebar">{entries.map(([c,m]) => <i key={c} style={{flex:m,background:CAUSE[c].hue}} />)}</div><div className="causegrid">{entries.map(([c,m]) => <div className="cz" key={c}><span className="sw2" style={{background:CAUSE[c].hue}}/><span className="n">{CAUSE[c].label}</span><span className="v">{m}</span></div>)}</div><p className="widgetnote">Confirmed teacher marks only. Colours identify kinds, not severity.</p></div>}
+      </section>
+
+      <section className="isection"><div className="sectitle">Question types</div><EvidenceGap title="Command-word view isn&rsquo;t ready yet">Questions do not yet store a reliable command word. Axon won&rsquo;t infer which kinds cost marks from loose text.</EvidenceGap></section>
+      <section className="isection"><div className="sectitle">Topic map</div><EvidenceGap title="No chapter evidence yet">Topic rows are not populated yet. Unknown topics stay unknown — they are not shown as weak or as 0%.</EvidenceGap></section>
+      <section className="isection"><div className="sectitle">Quick wins</div><EvidenceGap title="No defensible ranking yet">Axon can count marks, but cannot yet measure the effort a fix takes. It won&rsquo;t make a precise-looking list from a guess.</EvidenceGap></section>
+      <section className="isection"><div className="sectitle">Pacing check</div><EvidenceGap title="Pacing isn&rsquo;t captured yet">Blank or rushed final questions need to repeat across papers before this can be called out. That signal is not recorded yet.</EvidenceGap></section>
+    </div>}
+    {stale && <div className="subnote">Showing saved analysis. New evidence needs a connection.</div>}
+  </>;
 }
