@@ -284,7 +284,7 @@ export async function listPapers(studentId) {
     // not guess between them: an unqualified embed returns 300 PGRST201 and no
     // rows at all, so this whole read fails and the Library renders "No papers
     // yet" over a library that is not empty. Ownership is the one we mean.
-    .select('id,type,tier,date_taken,created_at,paper_page(count),' +
+    .select('id,type,tier,date_taken,created_at,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,paper_page(count),' +
             'student_attempt!student_attempt_paper_id_student_id_fkey(count)')
     .eq('student_id', studentId)
     .order('date_taken', { ascending: false });
