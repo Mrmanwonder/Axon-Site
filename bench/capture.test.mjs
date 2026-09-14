@@ -17,6 +17,23 @@ import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
+
+test('unknown ImageCapture still resolution is not a false Closer blocker', () => {
+  const verdict = liveGateVerdict({
+    glare: 0, clipping: 0, fill: 0.7, sharpness: 1, skew: 0,
+    pageLongEdge: 1500, steady: true, resolutionStatus: 'unknown',
+  });
+  assert.equal(verdict.blocking, null);
+  assert.equal(verdict.hint, 'Ready');
+});
+
+test('canvas-grab still uses preview pixels as a hard resolution signal', () => {
+  const verdict = liveGateVerdict({
+    glare: 0, clipping: 0, fill: 0.7, sharpness: 1, skew: 0,
+    pageLongEdge: 1500, steady: true, resolutionStatus: 'known',
+  });
+  assert.equal(verdict.blocking, 'resolution');
+});
 // A page quad, and the same page with every corner nudged by `px`.
 const page = (px = 0) => [
   { x: 40 + px, y: 60 + px }, { x: 200 - px, y: 62 + px },

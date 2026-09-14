@@ -116,6 +116,8 @@ type ScanValue = {
   overlayRef: React.RefObject<HTMLCanvasElement | null>;
 
   camera: { on: boolean; phase: string };
+  scanPhase: string;
+  pendingCaptureCount: number;
   hint: { hint: string; blocking?: string | null };
   tray: TrayPage[];
   trayHandlers: { onPage?: (n: number) => void; onDone?: () => void };
@@ -153,6 +155,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
   const [camera, setCamera] = useState({ on: false, phase: "idle" });
+  const [scanState, setScanState] = useState({ phase: "idle", pendingCaptureCount: 0 });
   const [hint, setHint] = useState<{ hint: string; blocking?: string | null }>({
     hint: "Starting the camera…",
   });
@@ -192,6 +195,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
         renderHint: (state: { hint: string; blocking?: string | null }) => setHint(state),
         cameraLive: (on: boolean, phase?: string) =>
           setCamera({ on, phase: on ? "live" : (phase ?? "idle") }),
+        scannerState: (state: { phase: string; pendingCaptureCount: number }) => setScanState(state),
         renderTray: (pages: TrayPage[], handlers: ScanValue["trayHandlers"]) => {
           setTray(pages);
           setTrayHandlers(() => handlers);
@@ -253,11 +257,12 @@ export function ScanProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ScanValue>(() => ({
     videoRef, overlayRef,
-    camera, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
+    camera, scanPhase: scanState.phase, pendingCaptureCount: scanState.pendingCaptureCount,
+    hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, auto,
   }), [
-    camera, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
+    camera, scanState, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, auto,
   ]);
