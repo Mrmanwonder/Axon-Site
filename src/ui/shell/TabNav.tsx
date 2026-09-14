@@ -29,6 +29,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { avatarStyleFor, initialFor } from "../data/modules";
@@ -184,6 +185,30 @@ export default function TabNav() {
     navigate(path);
   };
 
+  /* The prototype's keyboard pass taught the tab strip its arrow-key model,
+     but the React port only carried over the roles. A tablist with five
+     tabbable children is not complete keyboard behaviour: it adds five stops
+     to the page and advertises a composite widget without implementing the
+     composite-widget keys. Keep one tab in the page order, then move and
+     activate by visual axis. Home and End are useful on both the bottom bar
+     and the rail, and do not depend on an orientation. */
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const vertical = window.matchMedia("(min-width:768px)").matches;
+    const previous = vertical ? "ArrowUp" : "ArrowLeft";
+    const next = vertical ? "ArrowDown" : "ArrowRight";
+
+    let destination: number | null = null;
+    if (event.key === previous) destination = (index - 1 + destinations.length) % destinations.length;
+    if (event.key === next) destination = (index + 1) % destinations.length;
+    if (event.key === "Home") destination = 0;
+    if (event.key === "End") destination = destinations.length - 1;
+    if (destination == null) return;
+
+    event.preventDefault();
+    tabRefs.current[destination]?.focus();
+    go(destinations[destination].path);
+  };
+
   return (
     <div className="tabdock">
       <div className="tabbar">
@@ -197,6 +222,7 @@ export default function TabNav() {
               type="button"
               className={"tab" + (i === current ? " on" : "")}
               role="tab"
+              tabIndex={i === current ? 0 : -1}
               aria-selected={i === current}
               aria-current={i === current ? "page" : undefined}
               aria-label={d.label}
@@ -204,6 +230,7 @@ export default function TabNav() {
                 tabRefs.current[i] = el;
               }}
               onClick={() => go(d.path)}
+              onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => onTabKeyDown(event, i)}
             >
               {d.icon ? (
                 <svg className={d.solid ? "solid" : undefined} viewBox="0 0 24 24" aria-hidden="true">
