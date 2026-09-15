@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 import { paths } from "../app/paths";
+import DocumentMeta from "../components/DocumentMeta";
 
 export default function NotFound() {
   return (
-    <div style={{ padding: "16px var(--text-gutter)" }}>
+    <main className="not-found">
+      <DocumentMeta title="Page not found | Axon" description="The requested Axon page could not be found." path={location.pathname} noIndex />
+      <div className="wordmark">Axon</div>
       <h1
         style={{
           margin: 0,
@@ -13,14 +16,14 @@ export default function NotFound() {
           lineHeight: 1.06,
         }}
       >
-        Nothing here
+        Page not found
       </h1>
       <p style={{ marginTop: 10, fontSize: "var(--fs-body)", lineHeight: 1.5, color: "var(--label-2)" }}>
-        That link doesn&rsquo;t point at anything in your library.
+        That address does not point to an Axon page. It may have moved, or the link may be incomplete.
       </p>
       <Link to={paths.home} style={{ color: "var(--accent)", fontWeight: "var(--fw-semibold)" }}>
-        Go home
+        Open Axon
       </Link>
-    </div>
+    </main>
   );
 }

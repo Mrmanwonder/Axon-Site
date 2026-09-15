@@ -49,6 +49,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
 import { useToast } from "../components/ToastProvider";
@@ -65,6 +66,7 @@ import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
 import type { Prefs } from "../data/modules";
+import { paths } from "../app/paths";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -629,6 +631,18 @@ export default function Settings() {
       </div>
       <div className="note">
         No targeted advertising. There&rsquo;s nothing to opt out of because it was never built in.
+      </div>
+
+      <div className="sectitle">About Axon</div>
+      <div className="list">
+        <Link className="srow noicon" to={paths.privacy}>
+          <div className="lbl">Privacy Policy<small>Data, storage, choices and deletion</small></div>
+          <Chevron />
+        </Link>
+        <Link className="srow noicon" to={paths.terms}>
+          <div className="lbl">Terms of Service<small>Account and upload terms</small></div>
+          <Chevron />
+        </Link>
       </div>
 
       <div style={{ marginTop: 14 }} />

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Axon</title>
+  <desc id="desc">Understand where your marks go.</desc>
+  <defs>
+    <radialGradient id="background" cx="78%" cy="20%" r="75%">
+      <stop stop-color="#17396e"/>
+      <stop offset="1" stop-color="#050506"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <circle cx="990" cy="110" r="240" fill="#3a86ff" opacity=".13"/>
+  <path d="M116 447 222 183h52l106 264h-61l-23-61H199l-23 61zm103-114h57l-28-76z" fill="#3a86ff"/>
+  <text x="426" y="302" fill="#f5f5f7" font-family="Arial, sans-serif" font-size="102" font-weight="700" letter-spacing="-5">Axon</text>
+  <text x="430" y="376" fill="#c2c2ca" font-family="Arial, sans-serif" font-size="34">Understand where your marks go.</text>
+</svg>

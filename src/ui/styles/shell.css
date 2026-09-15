@@ -225,3 +225,26 @@
   opacity: .6;
   font-variant-numeric: tabular-nums;
 }
+/* Public legal and not-found surfaces sit outside the authenticated shell. */
+.public-page { min-height: 100%; background: var(--bg); color: var(--label); }
+.public-header, .public-footer { width: min(100% - 32px, 760px); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; }
+.public-header { min-height: 72px; border-bottom: 1px solid var(--hairline); }
+.wordmark { color: var(--label); font-size: 22px; font-weight: 700; letter-spacing: -.04em; text-decoration: none; }
+.public-cta { min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; border-radius: var(--r-btn); background: var(--accent); color: #fff; font-weight: 650; text-decoration: none; }
+.legal-content { width: min(100% - 32px, 720px); margin: 0 auto; padding: clamp(42px, 8vw, 84px) 0 64px; }
+.legal-content .eyebrow { margin: 0 0 10px; color: var(--accent); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.legal-content h1 { margin: 0; font-size: clamp(36px, 8vw, 62px); line-height: 1; letter-spacing: -.045em; }
+.legal-content .updated { color: var(--label-2); margin: 14px 0 42px; }
+.legal-content section { padding: 28px 0; border-top: 1px solid var(--hairline); }
+.legal-content h2 { margin: 0 0 12px; font-size: clamp(21px, 5vw, 27px); line-height: 1.2; }
+.legal-content h3 { margin: 24px 0 8px; font-size: 17px; }
+.legal-content p { margin: 0 0 14px; color: var(--label-2); font-size: 16px; line-height: 1.7; max-width: 68ch; overflow-wrap: anywhere; }
+.public-footer { min-height: 88px; border-top: 1px solid var(--hairline); color: var(--label-2); padding-bottom: env(safe-area-inset-bottom); }
+.public-footer nav { display: flex; gap: 20px; }
+.public-footer a { color: var(--label); text-underline-offset: 4px; }
+.not-found { min-height: 100%; display: grid; align-content: center; justify-items: start; gap: 14px; width: min(100% - 32px, 620px); margin: auto; padding: 48px 0; }
+.not-found h1 { margin: 18px 0 0; font-size: clamp(36px, 10vw, 64px); letter-spacing: -.045em; }
+.not-found p { color: var(--label-2); line-height: 1.6; max-width: 52ch; }
+.not-found a:last-child { min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); font-weight: 650; text-underline-offset: 4px; }
+:where(a, button, input, select, textarea):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 359px) { .public-header, .public-footer, .legal-content, .not-found { width: min(100% - 24px, 760px); } .public-footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 12px; } }

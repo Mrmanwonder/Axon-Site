@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /privacy
+Allow: /terms
+Disallow: /
+
+Sitemap: https://axonstudy.online/sitemap.xml
