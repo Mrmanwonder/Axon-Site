@@ -8,7 +8,11 @@ export default defineConfig({
     // The performance floor is 60fps on mid-tier Android, which starts with
     // not shipping more than is needed to paint the first screen.
     target: "es2022",
-    sourcemap: true,
+    // Production maps are not requested during a normal page load, but they add
+    // deployment weight and expose source artifacts we do not currently upload
+    // to an error-monitoring service. Turn this to "hidden" if that changes.
+    sourcemap: false,
+    cssCodeSplit: true,
   },
   server: {
     port: 5173,
