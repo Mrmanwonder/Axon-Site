@@ -27,6 +27,8 @@ import { publicScanMessage } from './errors.js';
 const S = {
   ctx: null,
   capture: null,
+  surface: null,
+  visible: false,
   draft: null,
   thumbs: new Map(),   // page number → object URL
   placeholders: new Map(), // page number → data URL, cleared once the real thumb lands
@@ -59,16 +61,27 @@ const tick = () => host.tick();
 const firm = () => host.firm();
 
 export async function initScanUI(ctx, surfaces = {}) {
-  S.ctx = ctx;
+  setScanContext(ctx);
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
-  const surface = host.scanSurface();
-  if (!surface?.video) return;
+  await restoreDraft();
+  await paintDrafts();
+}
 
+export function setScanContext(ctx) {
+  if (S.ctx?.student?.id !== ctx?.student?.id) detachSurface();
+  S.ctx = ctx;
+}
+
+export function attachSurface(video, overlay) {
+  if (S.surface === video && S.capture) return;
+  detachSurface();
+  if (!video || !S.ctx?.student) return;
+  S.surface = video;
   S.capture = createCapture({
-    video: surface.video,
-    overlay: surface.overlay,
+    video,
+    overlay,
     onState: (state) => host.renderHint(state),
     onShot: (shot) => {
       tick();
@@ -79,9 +92,12 @@ export async function initScanUI(ctx, surfaces = {}) {
       takePage(shot, replacing);
     },
   });
+}
 
-  await restoreDraft();
-  await paintDrafts();
+export function detachSurface() {
+  stopCamera();
+  S.capture = null;
+  S.surface = null;
 }
 
 /** The shutter. Exported rather than bound to a button id, so the control that
@@ -104,6 +120,7 @@ export function setAutoCapture(on) {
  *   is what keeps the permission sheet from waiting on this module's own load.
  */
 export function setScanVisible(visible, camera = null) {
+  S.visible = visible;
   return visible ? startCamera(camera) : stopCamera();
 }
 
@@ -114,8 +131,13 @@ export function setScanVisible(visible, camera = null) {
  *   The request app.js fired when the tab opened, if there was one. Adopting it
  *   is what keeps the permission sheet from waiting on this module's own load.
  */
+let cameraGeneration = 0;
 async function startCamera(camera = null) {
-  if (!S.capture?.supported) {
+  const activation = ++cameraGeneration;
+  // An already-requested stream is authoritative. Some WebKit shells expose
+  // getUserMedia to the permission initiator but not to a later lazy module,
+  // so feature detection here must not discard a valid adopted camera.
+  if (!S.capture?.supported && !camera) {
     // No camera, or a browser that will not give one up. Upload is a
     // first-class path, so this is a different route rather than a failure.
     host.cameraLive(false, 'unavailable');
@@ -126,10 +148,13 @@ async function startCamera(camera = null) {
   }
   host.cameraLive(false, 'starting');
   try {
-    await S.capture.start(camera);
+    const capture = S.capture;
+    await capture.start(camera);
+    if (activation !== cameraGeneration || !S.visible || capture !== S.capture) return;
     host.cameraLive(true);
     host.renderHint(S.capture.state);
   } catch (error) {
+    if (activation !== cameraGeneration || !S.visible) return;
     host.cameraLive(false, 'blocked');
     host.renderHint({
       hint: error?.name === 'NotAllowedError'
@@ -141,6 +166,7 @@ async function startCamera(camera = null) {
 }
 
 function stopCamera() {
+  ++cameraGeneration;
   S.capture?.stop();
   host.cameraLive(false);
 }
