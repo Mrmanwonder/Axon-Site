@@ -18,6 +18,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Escape literal source interpolation in the one-off patcher
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/oneoff-scanner-remediation.mjs')
+          path.write_text(path.read_text().replace('${', r'\${'))
+          PY
       - name: Apply scanner remediation patch
         run: node scripts/oneoff-scanner-remediation.mjs
       - name: Commit generated scanner changes
