@@ -3,16 +3,9 @@
 
    The providers, and the gate that decides whether there is an app to show yet.
 
-   The gate has three states and no fourth. `src/app.js` returned early to
-   onboarding from four different places — no session, no guardian, no student,
-   or a boot that threw — and every one of them lands on the same destination
-   here, because onboarding is the only surface that can re-establish who this
-   is. There is deliberately no error screen: an error screen a student cannot
-   act on is worse than the flow that can fix the problem.
-
-   While loading, this renders nothing rather than a spinner. The document is
-   already painted in the right theme by the inline script in index.html, and a
-   spinner that appears for 80ms and vanishes is worse than a still frame.
+   The gate has four states. A failed account read is never substituted with an
+   onboarding conclusion: infrastructure failure and account absence are
+   different facts.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { lazy, Suspense } from "react";
@@ -26,19 +19,37 @@ import PressBox from "../components/PressBox";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
-   and its notice text onto a critical path it has no business being on. The
-   performance floor is 60fps on a mid-tier Android, which starts with not
-   shipping what this session cannot use. */
+   and its notice text onto a critical path it has no business being on. */
 const Onboarding = lazy(() => import("../onboarding/Onboarding"));
 
-/* The recovery screen. Deliberately not the onboarding flow, and deliberately
-   not a blank page.
+/**
+ * A truthful first frame while Supabase restores identity.
+ *
+ * The old gate returned null. That made a fast document/React boot look like a
+ * slow site because the browser had nothing useful to paint until account I/O
+ * completed. This shell contains no account-derived claims and uses the final
+ * page geometry, so it can appear immediately without a layout jump.
+ */
+function BootShell() {
+  return (
+    <div className="app" aria-busy="true" aria-label="Loading Axon">
+      <div className="view on">
+        <div className="greet">
+          <div className="d">Axon</div>
+          <h1>Opening your workspace</h1>
+        </div>
+        <div className="card nextstep" aria-hidden="true">
+          <div className="skel" style={{ width: "38%" }} />
+          <div className="skel" style={{ width: "82%", marginTop: 12 }} />
+          <div className="skel" style={{ width: "62%", marginTop: 8 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-   What it must never say is anything about the account being empty or new. We
-   do not know that — we know the read failed — and a returning guardian told
-   "let's get you set up" reasonably concludes their child's papers are gone.
-   The copy says what happened, says nothing is lost, and offers the one action
-   that can help. No red: this is amber territory, per the design language. */
+/* The recovery screen. Deliberately not the onboarding flow, and deliberately
+   not a blank page. */
 function BootError() {
   const { bootError, retryBoot, online } = useApp();
   return (
@@ -57,8 +68,6 @@ function BootError() {
           <div className="lbl">Try again</div>
         </PressBox>
       </div>
-      {/* For us, not for them: the sentence above is what a parent needs, and
-          the message underneath is what a support conversation needs. */}
       {bootError && (
         <div className="note" style={{ marginTop: 12, opacity: 0.6 }}>{bootError}</div>
       )}
@@ -69,13 +78,10 @@ function BootError() {
 function Gate() {
   const { gate } = useApp();
 
-  // Nothing, not a spinner: the document is already painted in the right theme
-  // by the inline script in index.html, and a spinner that appears for 80ms and
-  // vanishes is worse than a still frame.
-  if (gate === "loading") return null;
+  if (gate === "loading") return <BootShell />;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
-    return <Suspense fallback={null}><Onboarding /></Suspense>;
+    return <Suspense fallback={<BootShell />}><Onboarding /></Suspense>;
   }
   return <AppShell />;
 }
