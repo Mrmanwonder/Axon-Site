@@ -27,12 +27,13 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import {
-  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+  sb, currentSession, signOut, onAuthChange, takeProviderError,
   loadPrefs, savePrefs, readLocal,
   readConsentState, recordConsent, withdrawConsent,
   listPapers, paperProgress, watchLibrary,
 } from "./modules";
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
+import { getCached } from "../../cache.js";
 
 
 /** What the boot sequence concluded about who this is.
@@ -68,6 +69,10 @@ type AppValue = {
   setConsent: (purpose: string, granted: boolean) => Promise<void>;
 
   papers: Paper[];
+  /** False only until we have either a cached/network answer or a named read
+      failure. It prevents the first frame of a returning account from saying
+      "No papers yet" while its library is still being read. */
+  papersLoaded: boolean;
   papersStale: boolean;
   /** Set when the library read itself failed — not when it came back empty.
       An empty library and an unreadable one look identical on screen unless
@@ -145,6 +150,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
   const [consent, setConsentState] = useState<ConsentState>({});
   const [papers, setPapers] = useState<Paper[]>([]);
+  const [papersLoaded, setPapersLoaded] = useState(false);
   const [papersStale, setPapersStale] = useState(false);
   const [papersError, setPapersError] = useState<string | null>(null);
   const [progress, setProgress] = useState<Map<string, ProgressRow>>(new Map());
@@ -207,25 +213,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshLibrary = useCallback(async () => {
     if (!student) return;
-    try {
-      const { data, stale } = await listPapers(student.id);
+
+    // Paint the last known library immediately while the authoritative network
+    // request is already in flight. The cache never substitutes for a live
+    // in-progress status: paperProgress remains network-only below.
+    const cachedPromise = getCached(`papers:${student.id}`).then((cached: unknown) => {
+      if (cached === null) return;
+      setPapers((cached as Paper[]) ?? []);
+      setPapersStale(!navigator.onLine);
+      setPapersError(null);
+      setPapersLoaded(true);
+    });
+
+    // Papers and progress are independent reads. Starting them together removes
+    // a full network RTT from every initial load and every realtime refresh.
+    const papersPromise = listPapers(student.id);
+    const progressPromise = paperProgress(student.id);
+    await cachedPromise;
+
+    const [paperResult, progressResult] = await Promise.allSettled([
+      papersPromise,
+      progressPromise,
+    ]);
+
+    if (paperResult.status === "fulfilled") {
+      const { data, stale } = paperResult.value;
       setPapers(data ?? []);
       setPapersStale(!!stale);
       setPapersError(null);
-    } catch (e) {
-      // NOT swallowed. This catch used to be empty, with a comment saying the
-      // cached view stays on screen — true when there is a cached view, and a
-      // silent, total blackout when there is not. `readThrough` only reaches
-      // here when the network read failed AND the cache had nothing, so by
-      // definition there is nothing on screen to keep.
-      console.error("library read failed", e);
-      setPapersError((e as Error)?.message || "We could not read your library.");
+      setPapersLoaded(true);
+    } else {
+      // A failed read is not "no papers". If a cached copy painted above it
+      // remains on screen; if there was no cache, the error state can now say
+      // exactly what happened instead of rendering a false empty library.
+      console.error("library read failed", paperResult.reason);
+      setPapersError(
+        (paperResult.reason as Error)?.message || "We could not read your library.",
+      );
+      setPapersLoaded(true);
     }
-    try {
-      setProgress(await paperProgress(student.id));
-    } catch {
-      /* not stale-tolerant the way papers is, but a live status you can't
-         reach right now is not a reason to blank out one you already had */
+
+    if (progressResult.status === "fulfilled") {
+      setProgress(progressResult.value);
     }
   }, [student]);
 
@@ -293,30 +322,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSession(s);
       if (!s) return setGate("onboarding");
 
-      const g = await currentGuardian();
+      // One RLS-preserving RPC replaces the previous guardian -> student ->
+      // subjects waterfall. PostgreSQL still executes the same ownership rules;
+      // the browser now pays one regional round trip instead of three.
+      const { data: bootstrap, error: bootstrapError } = await sb.rpc(
+        "bootstrap_current_user",
+      );
       if (cancelled) return;
+      if (bootstrapError) throw bootstrapError;
+
+      const g = (bootstrap?.guardian ?? null) as Guardian | null;
       setGuardian(g);
       if (!g) return setGate("onboarding");
 
-      // ORDER BY, not `.limit(1)` alone. SQL makes no promise about which row
-      // an unordered limit returns, so "the student" was an implementation
-      // accident encoded as identity — and on a two-child account it could
-      // change between loads. Oldest-first is at least stable and meaningful
-      // until an explicit active-profile choice exists.
-      const { data: students, error: studentError } = await sb
-        .from("student").select("*").order("created_at", { ascending: true }).limit(1);
-      if (cancelled) return;
-      // A failed read is not "no students". This is the exact substitution the
-      // boot_error state exists to prevent.
-      if (studentError) throw studentError;
-      const st = students?.[0] ?? null;
+      const st = (bootstrap?.student ?? null) as Student | null;
       if (!st) return setGate("onboarding");
-
-      const { data: subjectRows, error: subjectError } = await sb
-        .from("student_subject").select("subject").eq("student_id", st.id);
-      if (cancelled) return;
-      if (subjectError) throw subjectError;
-      st.subjects = (subjectRows ?? []).map((r: { subject: string }) => r.subject);
 
       setStudent(st);
       setGate("ready");
@@ -402,12 +422,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     gate, bootError, retryBoot, providerError, session, guardian, student,
     prefs, setPref,
     consent, refreshConsent, setConsent,
-    papers, papersStale, papersError, progress, refreshLibrary, setAvatar, updateStudentProfile,
+    papers, papersLoaded, papersStale, papersError, progress, refreshLibrary,
+    setAvatar, updateStudentProfile,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, bootError, retryBoot, providerError, session, guardian, student, prefs, setPref,
-    consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
-    setAvatar, updateStudentProfile, online, finishOnboarding, takePendingPaperType, signOutNow,
+    consent, refreshConsent, setConsent, papers, papersLoaded, papersStale, papersError,
+    progress, refreshLibrary, setAvatar, updateStudentProfile, online, finishOnboarding,
+    takePendingPaperType, signOutNow,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

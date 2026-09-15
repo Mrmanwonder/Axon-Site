@@ -9,41 +9,51 @@
    2 · Every overlay is a location. Sheets, modals and the fullscreen review
        are pushed onto history, not held in component state — so the browser
        back button closes them instead of leaving the screen underneath them.
-       The convention is the `?sheet=` search param (see paths.ts); the
-       fullscreen review is a route proper because it is a screen, not a sheet.
 
-   3 · Nothing that is a filter or a tab state gets its own path segment. Those
-       are search params on the screen they belong to, so a shared link carries
-       the filter and back steps through filter changes the way a user expects.
+   3 · Nothing that is a filter or a tab state gets its own path segment.
 
-   ── The Insights empty state ──
-   The prototype has two Insights views: the populated one and an honest
-   "not enough papers yet" state. That is not a second route — it is one route
-   rendering from `student_analytics_readiness`. Giving it a URL would make it
-   linkable, and a link to "you don't have enough data" is not a thing anyone
-   should be able to send.
+   Home, the persistent shell and the tiny NotFound safety surface stay eager.
+   Every substantive non-Home screen is a separate chunk so a cold Home visit
+   does not parse Settings, Scan, review, legal pages or QuestionDetail's KaTeX
+   dependency before the student asks for them.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../shell/Root";
 import Home from "../pages/Home";
-import Library from "../pages/Library";
-import PaperOverview from "../pages/PaperOverview";
-import QuestionDetail from "../pages/QuestionDetail";
-import Scan from "../pages/Scan";
-import PaperReview from "../pages/PaperReview";
-import Insights from "../pages/Insights";
-import Settings from "../pages/Settings";
 import NotFound from "../pages/NotFound";
-import Privacy from "../pages/Privacy";
-import Terms from "../pages/Terms";
+
+const Library = lazy(() => import("../pages/Library"));
+const PaperOverview = lazy(() => import("../pages/PaperOverview"));
+const QuestionDetail = lazy(() => import("../pages/QuestionDetail"));
+const Scan = lazy(() => import("../pages/Scan"));
+const PaperReview = lazy(() => import("../pages/PaperReview"));
+const Insights = lazy(() => import("../pages/Insights"));
+const Settings = lazy(() => import("../pages/Settings"));
+const Privacy = lazy(() => import("../pages/Privacy"));
+const Terms = lazy(() => import("../pages/Terms"));
 
 export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
 
+function RouteFallback() {
+  return (
+    <div className="greet" aria-busy="true" aria-label="Opening screen">
+      <div className="skel" style={{ width: "42%" }} aria-hidden="true" />
+      <div className="skel" style={{ width: "70%", marginTop: 12 }} aria-hidden="true" />
+    </div>
+  );
+}
+
+function deferred(node: ReactNode) {
+  return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
+}
+
 export const router = createBrowserRouter([
-  { path: "/privacy", element: <Privacy /> },
-  { path: "/terms", element: <Terms /> },
+  { path: "/privacy", element: deferred(<Privacy />) },
+  { path: "/terms", element: deferred(<Terms />) },
   {
     path: "/",
     element: <Root />,
@@ -51,22 +61,16 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
 
-      { path: "library", element: <Library /> },
-      { path: "library/:paperId", element: <PaperOverview /> },
-      { path: "library/:paperId/:qId", element: <QuestionDetail /> },
+      { path: "library", element: deferred(<Library />) },
+      { path: "library/:paperId", element: deferred(<PaperOverview />) },
+      { path: "library/:paperId/:qId", element: deferred(<QuestionDetail />) },
 
-      { path: "scan", element: <Scan /> },
-      /* The fullscreen paper review is a screen, not a sheet: it has its own
-         header, its own scroll and a save action, and it must survive a
-         reload mid-review. It slides in over the shell the way the prototype's
-         .reviewsheet did, but it is a real location. */
-      { path: "scan/review/:draftId", element: <PaperReview /> },
+      { path: "scan", element: deferred(<Scan />) },
+      { path: "scan/review/:draftId", element: deferred(<PaperReview />) },
 
-      { path: "insights", element: <Insights /> },
-      { path: "settings", element: <Settings /> },
+      { path: "insights", element: deferred(<Insights />) },
+      { path: "settings", element: deferred(<Settings />) },
 
-      /* The prototype's tab indices are not addresses. Anyone who bookmarked
-         one gets sent home rather than a 404. */
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],
   },
