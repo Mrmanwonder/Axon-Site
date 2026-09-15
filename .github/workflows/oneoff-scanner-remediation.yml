@@ -27,6 +27,18 @@ jobs:
           PY
       - name: Apply scanner remediation patch
         run: node scripts/oneoff-scanner-remediation.mjs
+      - name: Normalize generated text files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for name in [
+              'src/scan/capture.js', 'src/scan/edges.js', 'src/scan/corner-search.js',
+              'src/scan/detect-worker.js', 'src/scan/track.js',
+              'bench/capture.test.mjs', 'bench/tracking.test.mjs',
+          ]:
+              p = Path(name)
+              p.write_text(p.read_text().rstrip() + '\n')
+          PY
       - name: Commit generated scanner changes
         run: |
           git config user.name "github-actions[bot]"
