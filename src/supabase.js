@@ -36,6 +36,27 @@ export function isPhone(contact) {
   return /^\+?[0-9][0-9\s-]{6,}$/.test(contact.trim());
 }
 
+function normalisedContact(contact) {
+  const value = String(contact ?? '').trim();
+  return isPhone(value) ? value.replace(/[\s-]/g, '') : value.toLowerCase();
+}
+
+/**
+ * A pasted link is only allowed to complete the exact sign-in the guardian
+ * started on this screen. This is the login-CSRF/session-swapping boundary.
+ *
+ * A valid Supabase access token proves who Supabase authenticated; it does not
+ * prove that this browser meant to authenticate as that person. Without this
+ * comparison, anybody can paste a perfectly valid link for account A into a
+ * victim's browser while the victim believes they are signing into account B.
+ */
+export function sessionMatchesContact(session, contact) {
+  const expected = normalisedContact(contact);
+  if (!session?.user || !expected) return false;
+  if (isPhone(contact)) return normalisedContact(session.user.phone ?? '') === expected;
+  return normalisedContact(session.user.email ?? '') === expected;
+}
+
 /** Send a one-time code to an email address or phone number. */
 export async function sendOtp(contact) {
   const value = contact.trim();
@@ -163,6 +184,10 @@ export function takeProviderError() {
  * both the ?token_hash=… form and the #access_token=… fragment the redirect
  * lands with.
  *
+ * Only URLs from this app or this Supabase project are accepted. The stronger
+ * identity binding happens in verifyOtp(): an allowed-origin URL can still be a
+ * perfectly valid link for the wrong Supabase account.
+ *
  * @returns {{kind:'hash', token_hash:string, type:string}
  *          |{kind:'session', access_token:string, refresh_token:string}
  *          |null}
@@ -172,6 +197,10 @@ export function tokenFromPastedLink(text) {
   if (!/^https?:\/\//i.test(value)) return null;
   let url;
   try { url = new URL(value); } catch { return null; }
+
+  const projectOrigin = new URL(SUPABASE_URL).origin;
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : null;
+  if (url.origin !== projectOrigin && url.origin !== appOrigin) return null;
 
   const frag = new URLSearchParams(url.hash.replace(/^#/, ''));
   const q = url.searchParams;
@@ -190,13 +219,25 @@ export function tokenFromPastedLink(text) {
   return null;
 }
 
+/** A non-persistent client used to inspect a pasted link before main auth changes. */
+function verificationClient() {
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 /**
  * Exchange a code — or a pasted link — for a session.
  *
- * Accepting the link is not a nicety: with the default email template there is
- * no code to type, and a link that Gmail has already prefetched is dead by the
- * time it is clicked. Pasting it still works, because the token is only
- * consumed by the POST we make here.
+ * Pasted links are verified in an isolated, non-persistent client first. We do
+ * not install their session into the application until Supabase says the
+ * resulting user has the same email/phone that this browser requested. That
+ * prevents a valid link belonging to somebody else from silently swapping the
+ * browser into the attacker's account.
  */
 export async function verifyOtp(contact, input) {
   const value = contact.trim();
@@ -204,17 +245,36 @@ export async function verifyOtp(contact, input) {
 
   const fromLink = tokenFromPastedLink(raw);
   if (fromLink) {
+    const probe = verificationClient();
+    let candidate;
+
     if (fromLink.kind === 'session') {
-      const { data, error } = await sb.auth.setSession({
+      const { data, error } = await probe.auth.setSession({
         access_token: fromLink.access_token,
         refresh_token: fromLink.refresh_token,
       });
       if (error) throw error;
-      return data.session;
+      candidate = data.session;
+    } else {
+      const { data, error } = await probe.auth.verifyOtp({
+        token_hash: fromLink.token_hash,
+        type: fromLink.type,
+      });
+      if (error) throw error;
+      candidate = data.session;
     }
-    const { data, error } = await sb.auth.verifyOtp({
-      token_hash: fromLink.token_hash,
-      type: fromLink.type,
+
+    if (!sessionMatchesContact(candidate, value)) {
+      try { await probe.auth.signOut(); } catch { /* isolated client; best effort */ }
+      throw new Error('That sign-in link is for a different email or phone. Request a new code here.');
+    }
+    if (!candidate?.access_token || !candidate?.refresh_token) {
+      throw new Error('That sign-in link did not contain a usable session. Request a new code here.');
+    }
+
+    const { data, error } = await sb.auth.setSession({
+      access_token: candidate.access_token,
+      refresh_token: candidate.refresh_token,
     });
     if (error) throw error;
     return data.session;
