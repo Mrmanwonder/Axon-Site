@@ -514,6 +514,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let stream = null;
   let running = false;
   let rafHandle = 0;
+  let videoFrameHandle = 0;
+  let frameClock = null;
+  let lastRenderedFrame = -1;
   let detectHandle = 0;
 
   // The tracker, and the space it works in. `quad` is what the overlay draws:
@@ -555,7 +558,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let consecutiveFinds = 0;
   let autoCapture = true;
   let armed = true;         // disarms after a shot so one steady page is one page
-  let state = blankState();
 
   // ImageCapture.takePhoto() interrupts the stream, reconfigures the camera
   // hardware and returns a genuine sensor-resolution still — not a frame grab
@@ -567,6 +569,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let imageCapture = null;
   let capturePath = 'canvas-grab';
   let shootInFlight = false;
+  let state = blankState();
 
   // ── §0 instrumentation ────────────────────────────────────────────────────
   // A rolling window rather than a log line per search: the search runs up to
@@ -667,14 +670,34 @@ export function createCapture({ video, overlay, onState, onShot }) {
    *   answered. Passing the rejection through as a value rather than a rejected
    *   promise keeps that early request from becoming an unhandled rejection.
    */
+  let activation = 0;
   async function start(adopt = null) {
+    const generation = ++activation;
     if (running) return;
     const resolved = adopt ? await adopt : await requestCamera();
     if (resolved instanceof Error) throw resolved;
+    if (generation !== activation) {
+      resolved?.getTracks?.().forEach((track) => track.stop());
+      return;
+    }
     stream = resolved;
-    video.srcObject = stream;
+
+    // iPhone WebKit decides whether a MediaStream may render when srcObject is
+    // attached. Set every inline/autoplay signal first; doing this afterwards
+    // can leave an active camera behind a permanently black video element.
+    video.autoplay = true;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute('autoplay', '');
     video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.srcObject = stream;
     await video.play();
+    if (generation !== activation) {
+      resolved.getTracks().forEach((track) => track.stop());
+      return;
+    }
     running = true;
     armed = true;
     loop();
@@ -689,6 +712,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
         // Some implementations construct successfully but throw the first time
         // they are actually asked anything — this is the cheapest real probe.
         await candidate.getPhotoCapabilities();
+        if (generation !== activation) return;
         imageCapture = candidate;
         capturePath = 'image-capture';
       } catch {
@@ -700,8 +724,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   function stop() {
+    ++activation;
     running = false;
-    cancelAnimationFrame(rafHandle);
+    if (frameClock === 'video') video.cancelVideoFrameCallback?.(videoFrameHandle);
+    else cancelAnimationFrame(rafHandle);
+    videoFrameHandle = rafHandle = 0;
+    frameClock = null;
+    lastRenderedFrame = -1;
     clearTimeout(detectHandle);
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
@@ -1179,9 +1208,26 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // last search found. No decorative motion: the capture flow is the one place
   // CLAUDE.md gives a zero budget for it.
 
+  function scheduleLoop() {
+    // ProMotion displays can refresh at 120Hz while the camera supplies 30fps.
+    // Run overlay and tracking work only when the camera presents a new frame.
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      frameClock = 'video';
+      videoFrameHandle = video.requestVideoFrameCallback(loop);
+    } else {
+      frameClock = 'animation';
+      rafHandle = requestAnimationFrame(loop);
+    }
+  }
+
   function loop() {
     if (!running) return;
-    rafHandle = requestAnimationFrame(loop);
+    scheduleLoop();
+
+    // Older WebKit keeps the display-clock fallback. Do not redraw the same
+    // camera frame several times when its media timestamp has not advanced.
+    if (frameClock === 'animation' && video.currentTime === lastRenderedFrame) return;
+    lastRenderedFrame = video.currentTime;
 
     // The tracking cycle rides the display's clock rather than a timer of its
     // own. It is deliberately not awaited: this frame draws the pose the last

@@ -76,7 +76,7 @@ export default function Scan() {
             and the overlay by id to size them to the hero and to hide both while
             the camera is off. Without them the video renders at its natural
             size in the corner of a full-bleed viewfinder. */}
-        <video id="scanVideo" ref={videoRef} playsInline muted />
+        <video id="scanVideo" ref={videoRef} autoPlay playsInline muted disablePictureInPicture />
         <canvas id="scanOverlay" ref={overlayRef} />
 
         <div className="feed"><div className="feedgrid" /></div>

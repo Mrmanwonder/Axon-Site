@@ -35,8 +35,13 @@ test('text-based social, icon and manifest assets are wired and present', () => 
 
 test('production host configuration carries transport protections', () => {
   const netlify = read('netlify.toml');
+  const wrangler = read('wrangler.jsonc');
+  const cloudflareHeaders = read('public/_headers');
   assert.match(netlify, /Strict-Transport-Security/);
   assert.match(netlify, /Content-Security-Policy/);
   assert.match(netlify, /camera=\(self\)/);
+  assert.equal(JSON.parse(wrangler).assets.not_found_handling, 'single-page-application');
+  assert.match(cloudflareHeaders, /Permissions-Policy: camera=\(self\)/);
+  assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });

@@ -23,7 +23,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import {
-  createContext, useCallback, useContext, useMemo, useRef, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
@@ -102,10 +102,13 @@ export type ResumeReviewResult =
   | { state: "gone" };
 
 type ScanModule = {
+  setScanContext: (ctx: unknown) => void;
+  attachSurface: (video: HTMLVideoElement | null, overlay: HTMLCanvasElement | null) => void;
+  detachSurface: () => void;
   initScanUI: (ctx: unknown, host: unknown) => Promise<void>;
   setPendingPaperType: (t: string | null) => void;
   acceptUploads: (files: File[]) => Promise<void>;
-  setScanVisible: (visible: boolean, camera?: unknown) => void;
+  setScanVisible: (visible: boolean, camera?: unknown) => Promise<void> | void;
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
   resumeDraftReview: (draftId: string) => Promise<ResumeReviewResult>;
@@ -148,6 +151,8 @@ export function useScan(): ScanValue {
 
 export function ScanProvider({ children }: { children: ReactNode }) {
   const app = useApp();
+  const appRef = useRef(app);
+  appRef.current = app;
   const toast = useToast();
   const { openSheet } = useSheetControls();
 
@@ -173,6 +178,9 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const scanPromise = useRef<Promise<ScanModule> | null>(null);
   const scanReady = useRef<Promise<unknown> | null>(null);
   const modRef = useRef<ScanModule | null>(null);
+  const activation = useRef(0);
+  const visibleRef = useRef(false);
+  const cameraModule = useRef<typeof import("../../scan/camera.js") | null>(null);
 
   const gotoScan = useCallback(() => {
     // Retaking a page from the review screen has to put the student back in
@@ -182,71 +190,102 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const ensureScan = useCallback(async (): Promise<ScanModule> => {
-    scanPromise.current ??= import("../../scan/ui.js") as unknown as Promise<ScanModule>;
-    const scan = await scanPromise.current;
-    modRef.current = scan;
-    scanReady.current ??= Promise.resolve(scan.initScanUI(
-      { student: app.student, guardian: app.guardian },
-      {
-        toast: (m: string, tone?: "neutral" | "warn") => toast(m, tone),
-        tick: hapticTick,
-        firm: hapticFirm,
-        scanSurface: () => ({ video: videoRef.current, overlay: overlayRef.current }),
-        renderHint: (state: { hint: string; blocking?: string | null }) => setHint(state),
-        cameraLive: (on: boolean, phase?: string) =>
-          setCamera({ on, phase: on ? "live" : (phase ?? "idle") }),
-        scannerState: (state: { phase: string; pendingCaptureCount: number }) => setScanState(state),
-        renderTray: (pages: TrayPage[], handlers: ScanValue["trayHandlers"]) => {
-          setTray(pages);
-          setTrayHandlers(() => handlers);
+    try {
+      scanPromise.current ??= import("../../scan/ui.js") as unknown as Promise<ScanModule>;
+      const scan = await scanPromise.current;
+      modRef.current = scan;
+      scanReady.current ??= Promise.resolve(scan.initScanUI(
+        { student: appRef.current.student, guardian: appRef.current.guardian },
+        {
+          toast: (m: string, tone?: "neutral" | "warn") => toast(m, tone),
+          tick: hapticTick,
+          firm: hapticFirm,
+          scanSurface: () => ({ video: videoRef.current, overlay: overlayRef.current }),
+          renderHint: (state: { hint: string; blocking?: string | null }) => setHint(state),
+          cameraLive: (on: boolean, phase?: string) =>
+            setCamera({ on, phase: on ? "live" : (phase ?? "idle") }),
+          scannerState: (state: { phase: string; pendingCaptureCount: number }) => setScanState(state),
+          renderTray: (pages: TrayPage[], handlers: ScanValue["trayHandlers"]) => {
+            setTray(pages);
+            setTrayHandlers(() => handlers);
+          },
+          renderDrafts: (list: ScanValue["drafts"], handlers: ScanValue["draftsHandlers"]) => {
+            setDrafts(list);
+            setDraftsHandlers(() => handlers);
+          },
+          draftToast: (d: { id: string; pages: number } | null, handlers: { onResume?: (id: string) => void }) => {
+            setResumable(d);
+            setDraftsHandlers(() => handlers);
+          },
+          renderProgress: (m: ProgressModel) => setProgress(m),
+          openSheet: (cfg: SheetConfig) => openSheet(cfg),
+          openReview: () => setReviewOpen(true),
+          renderReview: (m: ReviewModel, h: ReviewHandlers) => {
+            setReview(m);
+            setReviewHandlers(() => h);
+          },
+          closeReview: () => setReviewOpen(false),
+          goto: gotoScan,
+          refreshLibrary: () => appRef.current.refreshLibrary(),
         },
-        renderDrafts: (list: ScanValue["drafts"], handlers: ScanValue["draftsHandlers"]) => {
-          setDrafts(list);
-          setDraftsHandlers(() => handlers);
-        },
-        draftToast: (d: { id: string; pages: number } | null, handlers: { onResume?: (id: string) => void }) => {
-          setResumable(d);
-          setDraftsHandlers(() => handlers);
-        },
-        renderProgress: (m: ProgressModel) => setProgress(m),
-        openSheet: (cfg: SheetConfig) => openSheet(cfg),
-        openReview: () => setReviewOpen(true),
-        renderReview: (m: ReviewModel, h: ReviewHandlers) => {
-          setReview(m);
-          setReviewHandlers(() => h);
-        },
-        closeReview: () => setReviewOpen(false),
-        goto: gotoScan,
-        refreshLibrary: () => app.refreshLibrary(),
-      },
-    )).then(() => scan.setPendingPaperType(app.takePendingPaperType()));
-    await scanReady.current;
-    return scan;
-  }, [app, toast, openSheet, gotoScan]);
+      )).then(() => scan.setPendingPaperType(appRef.current.takePendingPaperType()));
+      await scanReady.current;
+      scan.setScanContext({ student: appRef.current.student, guardian: appRef.current.guardian });
+      return scan;
+    } catch (error) {
+      scanPromise.current = null;
+      scanReady.current = null;
+      throw error;
+    }
+  }, [toast, openSheet, gotoScan]);
 
   /** Entry to and exit from the Scan screen. The camera request is fired here,
       before the pipeline has finished loading, and whichever wins waits for the
       other. */
   const onScreenVisible = useCallback((visible: boolean) => {
+    const request = ++activation.current;
+    visibleRef.current = visible;
     if (!visible) {
+      cameraModule.current?.releaseCamera();
       modRef.current?.setScanVisible(false);
+      modRef.current?.detachSurface();
       return;
     }
     setCamera({ on: false, phase: "starting" });
     setHint({ hint: "Starting the camera…" });
     void (async () => {
-      let cameraReq: unknown = null;
       try {
-        const { cameraSupported, requestCamera } =
-          await import("../../scan/camera.js") as {
-            cameraSupported: () => boolean; requestCamera: () => Promise<MediaStream>;
-          };
-        if (cameraSupported()) cameraReq = requestCamera().catch((e: Error) => e);
-      } catch { /* no camera module, no camera; upload still works */ }
-      const scan = await ensureScan();
-      scan.setScanVisible(true, cameraReq);
+        const cameraRequest = import("../../scan/camera.js").then(async (camera) => {
+          cameraModule.current = camera;
+          if (request !== activation.current || !visibleRef.current || !camera.cameraSupported()) return null;
+          const stream = await camera.requestCamera();
+          if (request !== activation.current || !visibleRef.current) {
+            stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+            return null;
+          }
+          return stream;
+        }).catch((error: Error) => error);
+
+        const [scan, stream] = await Promise.all([ensureScan(), cameraRequest]);
+        if (request !== activation.current || !visibleRef.current) return;
+        scan.attachSurface(videoRef.current, overlayRef.current);
+        await scan.setScanVisible(true, stream);
+      } catch {
+        if (request !== activation.current) return;
+        cameraModule.current?.releaseCamera();
+        setCamera({ on: false, phase: "failed" });
+        setHint({ hint: "The scanner could not start. Try again.", blocking: "scanner" });
+      }
     })();
   }, [ensureScan]);
+
+  useEffect(() => () => {
+    ++activation.current;
+    visibleRef.current = false;
+    cameraModule.current?.releaseCamera();
+    modRef.current?.setScanVisible(false);
+    modRef.current?.detachSurface();
+  }, []);
 
   const shoot = useCallback(() => { modRef.current?.shoot(); }, []);
   const setAutoCapture = useCallback((on: boolean) => {

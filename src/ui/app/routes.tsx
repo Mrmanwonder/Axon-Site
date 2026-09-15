@@ -26,44 +26,34 @@
 
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../shell/Root";
-import Home from "../pages/Home";
-import Library from "../pages/Library";
-import PaperOverview from "../pages/PaperOverview";
-import QuestionDetail from "../pages/QuestionDetail";
-import Scan from "../pages/Scan";
-import PaperReview from "../pages/PaperReview";
-import Insights from "../pages/Insights";
-import Settings from "../pages/Settings";
 import NotFound from "../pages/NotFound";
-import Privacy from "../pages/Privacy";
-import Terms from "../pages/Terms";
 
 export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
 
 export const router = createBrowserRouter([
-  { path: "/privacy", element: <Privacy /> },
-  { path: "/terms", element: <Terms /> },
+  { path: "/privacy", lazy: async () => ({ Component: (await import("../pages/Privacy")).default }) },
+  { path: "/terms", lazy: async () => ({ Component: (await import("../pages/Terms")).default }) },
   {
     path: "/",
     element: <Root />,
     errorElement: <NotFound />,
     children: [
-      { index: true, element: <Home /> },
+      { index: true, lazy: async () => ({ Component: (await import("../pages/Home")).default }) },
 
-      { path: "library", element: <Library /> },
-      { path: "library/:paperId", element: <PaperOverview /> },
-      { path: "library/:paperId/:qId", element: <QuestionDetail /> },
+      { path: "library", lazy: async () => ({ Component: (await import("../pages/Library")).default }) },
+      { path: "library/:paperId", lazy: async () => ({ Component: (await import("../pages/PaperOverview")).default }) },
+      { path: "library/:paperId/:qId", lazy: async () => ({ Component: (await import("../pages/QuestionDetail")).default }) },
 
-      { path: "scan", element: <Scan /> },
+      { path: "scan", lazy: async () => ({ Component: (await import("../pages/Scan")).default }) },
       /* The fullscreen paper review is a screen, not a sheet: it has its own
          header, its own scroll and a save action, and it must survive a
          reload mid-review. It slides in over the shell the way the prototype's
          .reviewsheet did, but it is a real location. */
-      { path: "scan/review/:draftId", element: <PaperReview /> },
+      { path: "scan/review/:draftId", lazy: async () => ({ Component: (await import("../pages/PaperReview")).default }) },
 
-      { path: "insights", element: <Insights /> },
-      { path: "settings", element: <Settings /> },
+      { path: "insights", lazy: async () => ({ Component: (await import("../pages/Insights")).default }) },
+      { path: "settings", lazy: async () => ({ Component: (await import("../pages/Settings")).default }) },
 
       /* The prototype's tab indices are not addresses. Anyone who bookmarked
          one gets sent home rather than a 404. */

@@ -22,6 +22,18 @@
 <link rel="manifest" href="/site.webmanifest">
 <title>Axon — understand where your marks go</title>
 
+<style>
+  /* Slow phones should never stare at an unexplained black page while the app
+     bundle and account session initialise. The mark appears only after 350ms,
+     so a normal fast boot still has no loading flash. React replaces it. */
+  .bootmark{position:fixed;inset:0;display:grid;place-items:center;color:#f5f5f7;
+    background:#000;font:650 20px/1 system-ui,sans-serif;letter-spacing:-.03em;
+    opacity:0;animation:bootmark-reveal 0s linear .35s forwards}
+  [data-theme="light"] .bootmark{color:#1d1d1f;background:#f4f4f7}
+  @keyframes bootmark-reveal{to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.bootmark{animation:none;opacity:1}}
+</style>
+
 <!-- The face is font-display: block, so it must arrive early or the first paint
      is blank text. Before the port it was a data URI inside this document and
      painted on the first frame with no network at all; as a real asset it is one
@@ -55,7 +67,7 @@
 </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div class="bootmark" role="status" aria-label="Loading Axon">Axon</div></div>
   <script type="module" src="/src/ui/main.tsx"></script>
 </body>
 </html>
