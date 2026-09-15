@@ -116,7 +116,9 @@ function handleTrack(id, bitmap, windows) {
   const observations = {};
   windows.forEach((w, i) => {
     const dx = (i % columns) * size, dy = Math.floor(i / columns) * size;
-    const found = findCorner(tileAt(tiles, dx, dy, size), { edgeA: w.edgeA, edgeB: w.edgeB });
+    const found = findCorner(tileAt(tiles, dx, dy, size), {
+      edgeA: w.edgeA, edgeB: w.edgeB, expectedX: w.expectedX, expectedY: w.expectedY,
+    });
     observations[w.id] = found
       ? { x: w.sx + found.x, y: w.sy + found.y, confidence: found.confidence,
           edgeDirectionA: w.edgeA, edgeDirectionB: w.edgeB }
