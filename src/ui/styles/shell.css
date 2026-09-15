@@ -226,7 +226,15 @@
   font-variant-numeric: tabular-nums;
 }
 /* Public legal and not-found surfaces sit outside the authenticated shell. */
-.public-page { min-height: 100%; background: var(--bg); color: var(--label); }
+.public-page {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  color: var(--label);
+}
 .public-header, .public-footer { width: min(100% - 32px, 760px); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; }
 .public-header { min-height: 72px; border-bottom: 1px solid var(--hairline); }
 .wordmark { color: var(--label); font-size: 22px; font-weight: 700; letter-spacing: -.04em; text-decoration: none; }
