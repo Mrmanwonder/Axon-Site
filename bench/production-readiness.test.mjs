@@ -35,8 +35,10 @@ test('text-based social, icon and manifest assets are wired and present', () => 
 
 test('production host configuration carries transport protections', () => {
   const netlify = read('netlify.toml');
+  const wrangler = read('wrangler.jsonc');
   assert.match(netlify, /Strict-Transport-Security/);
   assert.match(netlify, /Content-Security-Policy/);
   assert.match(netlify, /camera=\(self\)/);
+  assert.equal(JSON.parse(wrangler).assets.not_found_handling, 'single-page-application');
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
