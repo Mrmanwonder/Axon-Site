@@ -12,9 +12,10 @@
 
    3 · Nothing that is a filter or a tab state gets its own path segment.
 
-   Home and the persistent shell stay eager. Every other screen is a separate
-   chunk so a cold Home visit does not parse Settings, Scan, review, legal pages
-   or QuestionDetail's KaTeX dependency before the student asks for them.
+   Home, the persistent shell and the tiny NotFound safety surface stay eager.
+   Every substantive non-Home screen is a separate chunk so a cold Home visit
+   does not parse Settings, Scan, review, legal pages or QuestionDetail's KaTeX
+   dependency before the student asks for them.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { lazy, Suspense } from "react";
@@ -22,6 +23,7 @@ import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../shell/Root";
 import Home from "../pages/Home";
+import NotFound from "../pages/NotFound";
 
 const Library = lazy(() => import("../pages/Library"));
 const PaperOverview = lazy(() => import("../pages/PaperOverview"));
@@ -30,7 +32,6 @@ const Scan = lazy(() => import("../pages/Scan"));
 const PaperReview = lazy(() => import("../pages/PaperReview"));
 const Insights = lazy(() => import("../pages/Insights"));
 const Settings = lazy(() => import("../pages/Settings"));
-const NotFound = lazy(() => import("../pages/NotFound"));
 const Privacy = lazy(() => import("../pages/Privacy"));
 const Terms = lazy(() => import("../pages/Terms"));
 
@@ -56,7 +57,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <Root />,
-    errorElement: deferred(<NotFound />),
+    errorElement: <NotFound />,
     children: [
       { index: true, element: <Home /> },
 
@@ -73,5 +74,5 @@ export const router = createBrowserRouter([
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],
   },
-  { path: "*", element: deferred(<NotFound />) },
+  { path: "*", element: <NotFound /> },
 ]);
