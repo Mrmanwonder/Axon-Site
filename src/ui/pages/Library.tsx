@@ -46,7 +46,7 @@ function Thumb() {
 type CountRow = { count: number }[] | undefined;
 
 export default function Library() {
-  const { papers, papersStale, papersError, progress } = useApp();
+  const { papers, papersLoaded, papersStale, papersError, progress } = useApp();
   const navigate = useNavigate();
 
   return (
@@ -54,17 +54,27 @@ export default function Library() {
       <div className="greet">
         <h1>Library</h1>
         <div className="sub">
-          {papers.length} paper{papers.length === 1 ? "" : "s"}
-          {papersStale ? " · offline copy" : ""}
+          {papersLoaded
+            ? <>{papers.length} paper{papers.length === 1 ? "" : "s"}{papersStale ? " · offline copy" : ""}</>
+            : "Loading your papers…"}
         </div>
       </div>
 
-      <div className="list">
+      <div className="list" aria-busy={!papersLoaded || undefined}>
+        {!papersLoaded && (
+          <div className="srow noicon" aria-hidden="true">
+            <div className="lbl" style={{ width: "100%" }}>
+              <div className="skel" style={{ width: "54%" }} />
+              <div className="skel" style={{ width: "34%", marginTop: 8 }} />
+            </div>
+          </div>
+        )}
+
         {/* Two different states that used to render identically. A library
             that is empty and a library we could not read are not the same
             thing, and telling a student the first when it is the second is
             the confident lie hard rule 4 exists to prevent. */}
-        {!papers.length && papersError && (
+        {papersLoaded && !papers.length && papersError && (
           <div className="srow noicon">
             <div className="lbl">
               We couldn&rsquo;t load your papers
@@ -76,7 +86,7 @@ export default function Library() {
           </div>
         )}
 
-        {!papers.length && !papersError && (
+        {papersLoaded && !papers.length && !papersError && (
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet
