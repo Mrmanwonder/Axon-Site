@@ -15,6 +15,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
+    if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
+      url.protocol = 'https:'
+      return Response.redirect(url, 301)
+    }
+
     // Try to serve the requested asset
     let response = await env.ASSETS.fetch(request)
 
@@ -28,6 +33,12 @@ export default {
       }
     }
 
-    return response
+    const headers = new Headers(response.headers)
+    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    headers.set('X-Content-Type-Options', 'nosniff')
+    headers.set('X-Frame-Options', 'SAMEORIGIN')
+    headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
   },
 }

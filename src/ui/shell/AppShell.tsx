@@ -17,6 +17,7 @@ import Header from "./Header";
 import ThemeToggle from "./ThemeToggle";
 import { activeIndex, destinations } from "../app/nav";
 import ReviewSheet from "../scan/ReviewSheet";
+import DocumentMeta from "../components/DocumentMeta";
 
 export default function AppShell() {
   const { pathname } = useLocation();
@@ -38,6 +39,7 @@ export default function AppShell() {
 
   return (
     <div className="app">
+      <DocumentMeta title={title ? `${title} | Axon` : "Axon"} description="Your private Axon study workspace." path={pathname} noIndex />
       <ThemeToggle />
       <Header title={title} stuck={stuck} />
 

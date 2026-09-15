@@ -117,6 +117,12 @@ No Supabase project and no API key needed for any of them.
 Constitution specs, the blueprint, the design reference images, `bench/`, `harness/`
 and `reference/` all stay out of the deployed site.
 
+Copy `.env.example` for public build configuration. `VITE_SITE_URL` is the public,
+HTTPS canonical origin; no service credential may use Vite's browser-exposed prefix.
+Private deployment variables are documented in `supabase/DEPLOY.md`. Legal routes,
+indexing policy, consent/storage classification, security headers, owner follow-ups and
+the release QA checklist are documented in `PRODUCTION_READINESS.md`.
+
 Real routing needs a CDN-level rewrite: every path falls back to `/index.html` with a
 200, so a deep link to `/library/<paper>/<question>` resolves on a cold load rather
 than 404ing before React ever runs.

@@ -35,11 +35,15 @@ import PaperReview from "../pages/PaperReview";
 import Insights from "../pages/Insights";
 import Settings from "../pages/Settings";
 import NotFound from "../pages/NotFound";
+import Privacy from "../pages/Privacy";
+import Terms from "../pages/Terms";
 
 export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
 
 export const router = createBrowserRouter([
+  { path: "/privacy", element: <Privacy /> },
+  { path: "/terms", element: <Terms /> },
   {
     path: "/",
     element: <Root />,
@@ -64,7 +68,7 @@ export const router = createBrowserRouter([
       /* The prototype's tab indices are not addresses. Anyone who bookmarked
          one gets sent home rather than a 404. */
       { path: "index.html", element: <Navigate to="/" replace /> },
-      { path: "*", element: <NotFound /> },
     ],
   },
+  { path: "*", element: <NotFound /> },
 ]);
