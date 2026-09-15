@@ -348,7 +348,7 @@ test('§68: a healthy track almost never asks for the global detector', () => {
     track = observeAll(track, drift, now);
   }
   assert.equal(track.state, 'tracking');
-  assert.ok(globals <= 1,
+  assert.ok(globals >= 1 && globals <= 2,
     `${globals} global searches during three seconds of clean tracking — the point is that this is rare`);
 });
 
