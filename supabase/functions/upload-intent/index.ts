@@ -13,7 +13,8 @@ interface RequestedObject {
   kind: ObjectKind;
   name: string | number;
   content_type: string;
-  bytes?: number;
+  // Security boundary, not metadata: upload-complete verifies this against R2.
+  bytes: number;
 }
 
 interface Body {
@@ -34,8 +35,16 @@ const ALLOWED: Record<string, string[]> = {
   'application/pdf': ['pdf'],
 };
 
+function validDeclaredSize(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value > 0
+    && value <= MAX_BYTES;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method !== 'POST') return failure('Method not allowed.', 405);
 
   const user = clientFor(req);
   if (!user) return failure('Sign in first.', 401);
@@ -63,8 +72,11 @@ Deno.serve(async (req) => {
   for (const object of body.objects) {
     const extensions = ALLOWED[object.content_type];
     if (!extensions) return failure(`We cannot take a ${object.content_type} file.`);
-    if (object.bytes && object.bytes > MAX_BYTES) {
-      return failure('One of those files is too large to upload.');
+    // This used to be `if (object.bytes && ...)`, which let an authenticated
+    // caller omit/zero the field and receive an unconstrained presigned PUT.
+    // The completion endpoint independently checks the real R2 size too.
+    if (!validDeclaredSize(object.bytes)) {
+      return failure(`Each file must declare a size between 1 byte and ${MAX_BYTES} bytes.`);
     }
     if (!BUCKET_FOR[object.kind]) return failure('Unknown file kind.');
 
@@ -89,7 +101,7 @@ Deno.serve(async (req) => {
     // they are recorded on the page row when the paper is submitted, and a row
     // per crop would be bookkeeping nobody reads.
     if (object.kind === 'upload' || object.kind === 'raw') {
-      const { data: row } = await admin.from('upload').insert({
+      const { data: row, error } = await admin.from('upload').insert({
         paper_id: body.paper_id,
         student_id: body.student_id,
         kind: object.content_type === 'application/pdf' ? 'pdf' : 'image',
@@ -97,7 +109,11 @@ Deno.serve(async (req) => {
         r2_key: key,
         content_type: object.content_type,
       }).select('id').single();
-      entry.upload_id = row?.id;
+      if (error || !row?.id) {
+        console.error('upload-intent: could not create upload row', error?.message ?? 'missing id');
+        return failure('The upload could not be prepared.', 500);
+      }
+      entry.upload_id = row.id;
     }
 
     minted.push(entry);
