@@ -3,6 +3,8 @@ import { useAnalytics } from "../data/useAnalytics";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel } from "../data/modules";
 import PressBox from "../components/PressBox";
+import AppDropdown from "../components/AppDropdown";
+import type { AppDropdownOption } from "../components/AppDropdown";
 import { useIngestion } from "../data/useIngestion";
 
 const CAUSE = {
@@ -30,7 +32,18 @@ export default function Insights() {
   const [range, setRange] = useState("all");
   const [tier, setTier] = useState("all");
 
-  const subjects = student?.subjects ?? [];
+  const subjects = useMemo(() => {
+    const paperSubjects = papers
+      .map((paper) => paper.subject)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    return [...new Set([...(student?.subjects ?? []), ...paperSubjects])].sort();
+  }, [papers, student?.subjects]);
+
+  const types = useMemo(
+    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a).localeCompare(paperTypeLabel(b))),
+    [papers],
+  );
+
   const filtered = useMemo(() => papers.filter((p) =>
     (subject === "all" || p.subject === subject) &&
     (type === "all" || p.type === type) &&
@@ -44,6 +57,24 @@ export default function Insights() {
     .sort((a, b) => b[1] - a[1]) as [Cause, number][];
   const total = entries.reduce((n, [, marks]) => n + marks, 0);
 
+  const subjectOptions: AppDropdownOption[] = [
+    { value: "all", label: "All subjects" },
+    ...subjects.map((item) => ({ value: item, label: item })),
+  ];
+  const typeOptions: AppDropdownOption[] = [
+    { value: "all", label: "All papers" },
+    ...types.map((item) => ({ value: item, label: paperTypeLabel(item) })),
+  ];
+  const rangeOptions: AppDropdownOption[] = [
+    { value: "all", label: "Any date" },
+    { value: "term", label: "Last 90 days" },
+  ];
+  const tierOptions: AppDropdownOption[] = [
+    { value: "all", label: "Any tier" },
+    { value: "tier_1", label: "Teacher marks" },
+    { value: "tier_2", label: "Scheme match" },
+  ];
+
   if (state === "loading" || !readiness) return null;
   if (state === "failed") return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
@@ -51,13 +82,10 @@ export default function Insights() {
     <div className="greet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work, never predicted marks.</div></div>
 
     <div className="filterbar insightfilters" aria-label="Filter insights">
-      <button className={`fchip ${subject === "all" ? "active" : ""}`} onClick={() => setSubject("all")}>All subjects</button>
-      {subjects.map((s) => <button key={s} className={`fchip ${subject === s ? "active" : ""}`} onClick={() => setSubject(s)}>{s}</button>)}
-      <button className={`fchip ${type === "all" ? "active" : ""}`} onClick={() => setType("all")}>All papers</button>
-      {[...new Set(papers.map((p) => p.type))].map((t) => <button key={t} className={`fchip ${type === t ? "active" : ""}`} onClick={() => setType(t)}>{paperTypeLabel(t)}</button>)}
-      <button className={`fchip ${range === "term" ? "active" : ""}`} onClick={() => setRange(range === "term" ? "all" : "term")}>Last 90 days</button>
-      <button className={`fchip ${tier === "tier_1" ? "active" : ""}`} onClick={() => setTier(tier === "tier_1" ? "all" : "tier_1")}>Teacher marks</button>
-      <button className={`fchip ${tier === "tier_2" ? "active" : ""}`} onClick={() => setTier(tier === "tier_2" ? "all" : "tier_2")}>Scheme match</button>
+      <AppDropdown ariaLabel="Filter insights by subject" value={subject} options={subjectOptions} onChange={setSubject} selected={subject !== "all"} />
+      <AppDropdown ariaLabel="Filter insights by paper type" value={type} options={typeOptions} onChange={setType} selected={type !== "all"} />
+      <AppDropdown ariaLabel="Filter insights by date" value={range} options={rangeOptions} onChange={setRange} selected={range !== "all"} />
+      <AppDropdown ariaLabel="Filter insights by tier" value={tier} options={tierOptions} onChange={setTier} selected={tier !== "all"} />
     </div>
 
     {!filtered.length && papers.length > 0 ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no evidence for this combination yet.</p><button onClick={() => { setSubject("all"); setType("all"); setRange("all"); setTier("all"); }}>Clear filters</button></div> : <div className="igrid">
