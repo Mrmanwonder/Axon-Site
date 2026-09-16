@@ -81,11 +81,22 @@ export default function AppDropdown({
       if (!trigger) return;
 
       const rect = trigger.getBoundingClientRect();
-      const width = Math.min(Math.max(rect.width, variant === "sort" ? 190 : 176), Math.max(176, window.innerWidth - 24));
+      const viewportWidth = Math.max(120, window.innerWidth - 24);
+      const minimumWidth = variant === "sort" ? 190 : 176;
+      const width = Math.min(Math.max(rect.width, minimumWidth), viewportWidth);
       const preferredLeft = align === "right" ? rect.right - width : rect.left;
       const left = Math.max(12, Math.min(preferredLeft, window.innerWidth - width - 12));
-      const top = Math.min(rect.bottom + 8, window.innerHeight - 72);
-      const maxHeight = Math.max(96, window.innerHeight - top - 12);
+
+      const estimatedHeight = Math.min(280, options.length * 42 + 12);
+      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - 12);
+      const spaceAbove = Math.max(0, rect.top - 12);
+      const openAbove = spaceBelow < Math.min(160, estimatedHeight) && spaceAbove > spaceBelow;
+      const available = openAbove ? spaceAbove - 8 : spaceBelow - 8;
+      const maxHeight = Math.max(88, Math.min(280, available));
+      const menuHeight = Math.min(estimatedHeight, maxHeight);
+      const top = openAbove
+        ? Math.max(12, rect.top - 8 - menuHeight)
+        : Math.min(rect.bottom + 8, window.innerHeight - menuHeight - 12);
 
       setPosition({ top, left, width, maxHeight });
     };
@@ -114,7 +125,7 @@ export default function AppDropdown({
       document.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [align, open, variant]);
+  }, [align, open, options.length, variant]);
 
   const choose = (next: string) => {
     onChange(next);
