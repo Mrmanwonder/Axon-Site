@@ -14,6 +14,8 @@ import { paperTypeLabel, PAPER_STATUS, statusKeyForRun } from "../data/modules";
 import { paths } from "../app/paths";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
+import AppDropdown from "../components/AppDropdown";
+import type { AppDropdownOption } from "../components/AppDropdown";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
     exists. Decorative. */
@@ -33,52 +35,6 @@ function SearchIcon() {
       <circle cx="10.8" cy="10.8" r="6.9" />
       <path d="M15.9 15.9 21 21" />
     </svg>
-  );
-}
-
-function DownChevron() {
-  return (
-    <svg viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M1 1l4 4 4-4" />
-    </svg>
-  );
-}
-
-type SelectOption = { value: string; label: string };
-
-type FilterSelectProps = {
-  ariaLabel: string;
-  value: string;
-  options: SelectOption[];
-  onChange: (value: string) => void;
-};
-
-/** Native selects keep filtering keyboard- and touch-friendly. The select is
-    laid over the reference chip so the visual stays identical. */
-function FilterSelect({ ariaLabel, value, options, onChange }: FilterSelectProps) {
-  const label = options.find((option) => option.value === value)?.label ?? options[0]?.label ?? "";
-  return (
-    <label className="fchip" style={{ position: "relative" }}>
-      <span>{label}</span>
-      <DownChevron />
-      <select
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          opacity: 0,
-          cursor: "pointer",
-        }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </label>
   );
 }
 
@@ -163,26 +119,26 @@ export default function Library() {
     });
   }, [papers, query, subject, dateFilter, type, tier, sort]);
 
-  const subjectOptions: SelectOption[] = [
+  const subjectOptions: AppDropdownOption[] = [
     { value: "all", label: "All subjects" },
     ...subjects.map((item) => ({ value: item, label: item })),
   ];
-  const dateOptions: SelectOption[] = [
+  const dateOptions: AppDropdownOption[] = [
     { value: "any", label: "Any date" },
     { value: "30", label: "Last 30 days" },
     { value: "90", label: "Last 90 days" },
     { value: "year", label: "This year" },
   ];
-  const typeOptions: SelectOption[] = [
+  const typeOptions: AppDropdownOption[] = [
     { value: "all", label: "All types" },
     ...types.map((item) => ({ value: item, label: paperTypeLabel(item) })),
   ];
-  const tierOptions: SelectOption[] = [
+  const tierOptions: AppDropdownOption[] = [
     { value: "any", label: "Any tier" },
     { value: "tier_2", label: "Scheme-matched" },
     { value: "tier_1", label: "Teacher's marks" },
   ];
-  const sortOptions: SelectOption[] = [
+  const sortOptions: AppDropdownOption[] = [
     { value: "recent", label: "Most recent" },
     { value: "oldest", label: "Oldest first" },
     { value: "lost", label: "Most marks lost" },
@@ -208,28 +164,24 @@ export default function Library() {
       </div>
 
       <div className="filterbar" aria-label="Library filters">
-        <FilterSelect ariaLabel="Filter by subject" value={subject} options={subjectOptions} onChange={setSubject} />
-        <FilterSelect ariaLabel="Filter by date" value={dateFilter} options={dateOptions} onChange={(value) => setDateFilter(value as DateFilter)} />
-        <FilterSelect ariaLabel="Filter by paper type" value={type} options={typeOptions} onChange={setType} />
-        <FilterSelect ariaLabel="Filter by tier" value={tier} options={tierOptions} onChange={setTier} />
+        <AppDropdown ariaLabel="Filter by subject" value={subject} options={subjectOptions} onChange={setSubject} selected={subject !== "all"} />
+        <AppDropdown ariaLabel="Filter by date" value={dateFilter} options={dateOptions} onChange={(value) => setDateFilter(value as DateFilter)} selected={dateFilter !== "any"} />
+        <AppDropdown ariaLabel="Filter by paper type" value={type} options={typeOptions} onChange={setType} selected={type !== "all"} />
+        <AppDropdown ariaLabel="Filter by tier" value={tier} options={tierOptions} onChange={setTier} selected={tier !== "any"} />
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
           {filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}{papersStale ? " · offline copy" : ""}
         </span>
-        <label style={{ position: "relative", color: "var(--blue)", fontSize: 13.5, fontWeight: 500, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span>{sortOptions.find((option) => option.value === sort)?.label ?? "Most recent"}</span>
-          <span aria-hidden="true">▾</span>
-          <select
-            aria-label="Sort library"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as SortMode)}
-            style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
-          >
-            {sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
+        <AppDropdown
+          ariaLabel="Sort library"
+          value={sort}
+          options={sortOptions}
+          onChange={(value) => setSort(value as SortMode)}
+          variant="sort"
+          align="right"
+        />
       </div>
 
       <div className="list">
