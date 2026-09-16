@@ -1,0 +1,155 @@
+.app-dropdown-trigger {
+  box-sizing: border-box;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.app-dropdown-trigger.fchip {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 8px 13px;
+  border: .5px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--label-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  transition:
+    background var(--d-state) ease,
+    border-color var(--d-state) ease,
+    color var(--d-state) ease;
+}
+
+/* A selected filter should read as changed, not as a second primary action. */
+.app-dropdown-trigger.fchip.is-filtered {
+  background: var(--accent-wash);
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.app-dropdown-trigger.fchip[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--hairline));
+}
+
+.app-dropdown-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-dropdown-chevron {
+  width: 9px;
+  height: 6px;
+  flex: 0 0 auto;
+  opacity: .56;
+  transition: transform var(--d-disclose) var(--spring);
+}
+
+.app-dropdown-trigger[aria-expanded="true"] .app-dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.app-dropdown-sort {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 0 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.app-dropdown-sort .app-dropdown-chevron {
+  opacity: .72;
+}
+
+.app-dropdown-menu {
+  position: fixed;
+  z-index: 1000;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--surface);
+  color: var(--label);
+  border: .5px solid var(--hairline);
+  border-radius: 16px;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, .24),
+    0 2px 8px rgba(0, 0, 0, .14);
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-theme="light"] .app-dropdown-menu {
+  box-shadow:
+    0 18px 48px rgba(28, 28, 40, .12),
+    0 2px 8px rgba(28, 28, 40, .08);
+}
+
+.app-dropdown-option {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 10px;
+  margin: 0;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--label);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.app-dropdown-option:hover,
+.app-dropdown-option:focus-visible {
+  background: var(--surface-sunk);
+}
+
+.app-dropdown-option[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.app-dropdown-check {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+/* Insights used to render every possible value as a chip. Four compact
+   dropdowns keep the same filtering power without turning the top of the view
+   into a wall of controls. */
+.insightfilters {
+  gap: 7px;
+}
+
+@media (max-width: 359px) {
+  .app-dropdown-trigger.fchip {
+    padding-inline: 11px;
+  }
+}
