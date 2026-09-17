@@ -31,6 +31,13 @@ const AUTO_RETRY_COOLDOWN_MS = 550;
 const TRACK_CONFIDENCE_FLOOR = 0.64;
 const FOCUS_BREATHING_AREA_DELTA = 0.05;
 
+export const PAPER_EVIDENCE_CONFIRMATIONS = 2;
+export const PAPER_EVIDENCE_LOSS_MS = 700;
+export const SEARCH_GUIDANCE = Object.freeze({
+  blocking: null,
+  hint: 'Lay the page flat and fit all four corners in the frame',
+});
+
 function viewportScale() {
   return globalThis.visualViewport?.scale ?? 1;
 }
@@ -46,7 +53,7 @@ export function shouldAutoCapture({
 }) {
   if (!autoCapture || !armed || blocking || viewportScaled || processing) return false;
   if (consecutiveFinds < CAPTURE.CONSECUTIVE_FINDS) return false;
-  if (globalConfirmations < 2) return false;
+  if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS) return false;
   if (trackState !== 'tracking') return false;
   return true;
 }
@@ -94,6 +101,45 @@ export function liveGateVerdict(
 
 export const GUIDANCE_DWELL_MS = 700;
 export const GUIDANCE_HYSTERESIS = 0.05;
+
+/**
+ * Paper presence is deliberately stricter than a detector hit. A single
+ * document-shaped rectangle is only a candidate; two agreeing global searches
+ * plus a healthy local track are evidence. Once confirmed, brief corner misses
+ * retain that evidence so guidance cannot bounce back to searching frame by
+ * frame.
+ */
+export function settledPaperEvidence(
+  showing,
+  { globalConfirmations = 0, geometryReady = false, observedGeometry = false },
+  now,
+) {
+  const current = showing ?? { confirmed: false, lastObservedAt: null };
+  const confirmedNow = geometryReady
+    && globalConfirmations >= PAPER_EVIDENCE_CONFIRMATIONS;
+
+  if (!current.confirmed) {
+    return confirmedNow
+      ? { confirmed: true, lastObservedAt: now }
+      : { confirmed: false, lastObservedAt: null };
+  }
+  if (observedGeometry || confirmedNow) {
+    return { confirmed: true, lastObservedAt: now };
+  }
+  if (current.lastObservedAt != null
+      && now - current.lastObservedAt < PAPER_EVIDENCE_LOSS_MS) {
+    return current;
+  }
+  return { confirmed: false, lastObservedAt: null };
+}
+
+export function settledScannerGuidance(showing, verdict, paperEvidence, now) {
+  return settledGuidance(
+    showing,
+    paperEvidence?.confirmed ? verdict : SEARCH_GUIDANCE,
+    now,
+  );
+}
 
 export function settledGuidance(showing, verdict, now) {
   const settled = { hint: verdict.hint, blocking: verdict.blocking, since: now };
@@ -178,6 +224,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let measuredAt = 0;
   let measuredQuad = null;
   let guidance = null;
+  let paperEvidence = null;
 
   let quad = null;
   let consecutiveFinds = 0;
@@ -250,7 +297,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       geometryReady: false,
       qualityReady: false,
       steady: true,
-      hint: 'Lay the page flat and fit all four corners in the frame',
+      hint: SEARCH_GUIDANCE.hint,
       blocking: null,
       trackState: 'searching',
       trackConfidence: 0,
@@ -337,7 +384,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     quad = null;
     consecutiveFinds = globalConfirmations = 0;
     track = createTrack();
-    trackSize = measured = measuredQuad = guidance = null;
+    trackSize = measured = measuredQuad = guidance = paperEvidence = null;
     lastTrackedFrame = -1;
     lastTrackedArea = null;
     measuredAt = 0;
@@ -360,7 +407,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }
     const started = performance.now();
     try {
-      if (needsGlobal(track, started)) await step();
+      // A tentative rectangle gets another independent whole-frame search
+      // immediately. Local corner tracking alone must not promote a face or a
+      // background rectangle into user-visible paper guidance.
+      if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS || needsGlobal(track, started)) await step();
       else await measureStep(video.videoWidth, video.videoHeight);
     } catch { /* one bad frame costs one cycle */ }
     const cost = performance.now() - started;
@@ -498,12 +548,35 @@ export function createCapture({ video, overlay, onState, onShot }) {
     trackSize = { width: TRACK_WIDTH, height: Math.round(TRACK_WIDTH * vh / vw) };
 
     if (!result.found) {
+      const now = performance.now();
+      const tracked = quadOf(track);
+      const valid = !!tracked && geometryValid(track, trackSize.width, trackSize.height)
+        && track.state !== 'searching';
+      const observedGeometry = valid
+        && (track.state === 'tracking' || track.state === 'reacquiring');
+      const geometryReady = valid && track.state === 'tracking'
+        && documentConfidence(track) >= TRACK_CONFIDENCE_FLOOR;
+      paperEvidence = settledPaperEvidence(paperEvidence, {
+        globalConfirmations, geometryReady, observedGeometry,
+      }, now);
+
+      // One failed global re-check is not evidence that a confirmed page
+      // vanished. The local tracker owns that decision and the presence latch
+      // gives it time to recover without changing the sentence on screen.
+      if (paperEvidence.confirmed) {
+        if (!valid) publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
+        return;
+      }
+
       track = createTrack();
       consecutiveFinds = globalConfirmations = 0;
-      measured = measuredQuad = guidance = null;
+      measured = measuredQuad = null;
       lastTrackedArea = null;
       quad = null;
       armed = true;
+      guidance = settledScannerGuidance(guidance, null, paperEvidence, now);
+      next.blocking = guidance.blocking;
+      next.hint = guidance.hint;
       publish(next);
       return;
     }
@@ -545,17 +618,53 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const next = blankState();
     next.timing = timing ?? { detectMs: 0, measureMs: 0, focusMs: 0, trackMs, workerUsed: true };
 
-    if (!tracked || !geometryValid(track, tw, th) || track.state === 'searching') {
-      guidance = null;
-      consecutiveFinds = globalConfirmations = 0;
+    const now = performance.now();
+    const valid = !!tracked && geometryValid(track, tw, th) && track.state !== 'searching';
+    const confidence = documentConfidence(track);
+    const observedGeometry = valid
+      && (track.state === 'tracking' || track.state === 'reacquiring');
+    const geometryReady = valid && track.state === 'tracking'
+      && confidence >= TRACK_CONFIDENCE_FLOOR;
+    paperEvidence = settledPaperEvidence(paperEvidence, {
+      globalConfirmations, geometryReady, observedGeometry,
+    }, now);
+
+    // Keep searching guidance while the detector only has a candidate. This is
+    // the important separation: internal tracking may begin immediately, but a
+    // face/non-paper false positive never earns a "lock onto corners" message.
+    if (!paperEvidence.confirmed) {
+      consecutiveFinds = 0;
       lastTrackedArea = null;
       quad = null;
       armed = true;
+      guidance = settledScannerGuidance(guidance, null, paperEvidence, now);
+      next.blocking = guidance.blocking;
+      next.hint = guidance.hint;
       publish(next);
       return;
     }
 
     next.hasPage = true;
+    next.trackState = track.state;
+    next.trackConfidence = confidence;
+    next.geometryReady = geometryReady;
+
+    // Confirmed paper gets a short loss grace period. During it the capture is
+    // safely blocked, but the UI stays in the paper/locking family instead of
+    // alternating with the searching sentence on every weak frame.
+    if (!valid) {
+      consecutiveFinds = 0;
+      lastTrackedArea = null;
+      quad = null;
+      const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
+      guidance = settledScannerGuidance(guidance, verdict, paperEvidence, now);
+      next.blocking = guidance.blocking;
+      next.hint = guidance.hint;
+      armed = true;
+      publish(next);
+      return;
+    }
+
     next.fill = quadFill(tracked, tw, th);
     consecutiveFinds++;
 
@@ -563,10 +672,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const area = Math.max(1, size.width * size.height);
     const areaChange = lastTrackedArea === null ? 0 : Math.abs(area - lastTrackedArea) / lastTrackedArea;
     lastTrackedArea = area;
-
-    next.trackState = track.state;
-    next.trackConfidence = documentConfidence(track);
-    next.geometryReady = track.state === 'tracking' && next.trackConfidence >= TRACK_CONFIDENCE_FLOOR;
 
     // Autofocus breathing changes effective focal length and therefore the quad
     // area. Treat >5% frame-to-frame change as transient even if the corners
@@ -593,7 +698,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     );
 
     const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
-    guidance = settledGuidance(guidance, verdict, performance.now());
+    guidance = settledScannerGuidance(guidance, verdict, paperEvidence, now);
     next.blocking = guidance.blocking;
     next.hint = guidance.hint;
     publish(next);

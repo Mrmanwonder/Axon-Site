@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import {
   LIVE_SOURCE_FLOOR,
   MIN_EDGE_COVERAGE,
+  PAPER_EVIDENCE_CONFIRMATIONS,
+  SEARCH_GUIDANCE,
   liveGateVerdict,
   settledGuidance,
+  settledPaperEvidence,
+  settledScannerGuidance,
   shouldAutoCapture,
 } from '../src/scan/capture.js';
 import {
@@ -50,6 +54,18 @@ test('unconfirmed geometry can never publish Ready', () => {
   const verdict = liveGateVerdict({ ...clean, geometryReady: false });
   assert.equal(verdict.blocking, 'tracking');
   assert.match(verdict.hint, /corners/i);
+});
+
+test('unconfirmed detector candidates remain in the searching presentation', () => {
+  const evidence = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS - 1,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 0);
+  const tracking = liveGateVerdict({ ...clean, geometryReady: false });
+  const guidance = settledScannerGuidance(null, tracking, evidence, 0);
+  assert.equal(guidance.hint, SEARCH_GUIDANCE.hint);
+  assert.equal(guidance.blocking, null);
 });
 
 test('unknown native-still resolution does not bypass stale quality', () => {
