@@ -14,7 +14,6 @@ import {
 } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
-import { RESCUED_NOTICE } from './enhance.js';
 import { PAPER_TYPES } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
@@ -198,7 +197,9 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
-    if (page.meta?.enhance?.applied) toast(RESCUED_NOTICE);
+    if (page.meta?.enhance?.applied) {
+      toast('Page sharpened for readability — check its marks during review.');
+    }
   } catch (error) {
     // A failed retake remains a retake. The old page stays in the booklet and
     // the next successful shutter still targets the same slot.
