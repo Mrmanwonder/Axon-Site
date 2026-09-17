@@ -6,6 +6,7 @@
 
 import { CAPTURE, CONDITIONING, ENHANCE, QUALITY } from './contract.js';
 import {
+  FALLBACK_CAPTURE_HEIGHT, FALLBACK_CAPTURE_WIDTH,
   releaseCamera, requestCamera, requestContinuousFocus, requestFallbackCaptureResolution,
 } from './camera.js';
 import { detectQuad, easeQuad, scaleQuad } from './edges.js';
@@ -299,9 +300,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
         capturePath = 'image-capture';
         const maxW = Number(caps?.imageWidth?.max ?? 0);
         const maxH = Number(caps?.imageHeight?.max ?? 0);
+        const minW = Number(caps?.imageWidth?.min ?? 0);
+        const minH = Number(caps?.imageHeight?.min ?? 0);
+        const targetW = Math.min(maxW, FALLBACK_CAPTURE_WIDTH);
+        const targetH = Math.min(maxH, FALLBACK_CAPTURE_HEIGHT);
         photoSettings = {
-          ...(maxW > 0 ? { imageWidth: maxW } : {}),
-          ...(maxH > 0 ? { imageHeight: maxH } : {}),
+          ...(targetW > 0 && targetW >= minW ? { imageWidth: targetW } : {}),
+          ...(targetH > 0 && targetH >= minH ? { imageHeight: targetH } : {}),
         };
       } catch {
         imageCapture = null;
@@ -891,10 +896,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     get state() { return state; },
     setAutoCapture(on) { autoCapture = !!on; armed = true; },
     get autoCapture() { return autoCapture; },
-    /** Holds automatic capture while the previous page is being conditioned. */
+    /** Holds automatic capture while the previous page is being conditioned.
+        Releasing the hold must not itself arm another shot: the same document
+        may still be under the camera. Losing/blocking that document is what
+        arms the next automatic capture in publishFromTrack(). */
     setProcessing(on) {
       processingHold = !!on;
-      if (!processingHold) armed = true;
     },
     get capturePath() { return capturePath; },
     supported: !!navigator.mediaDevices?.getUserMedia,
