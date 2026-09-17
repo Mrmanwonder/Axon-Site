@@ -7,8 +7,6 @@
   --scan-tray-h: 196px;
 }
 
-/* Capture is an immersive task. The global navigation comes back as soon as
-   Scan unmounts and removes scanner-active from <html>. */
 html.scanner-active .tabdock {
   display: none !important;
 }
@@ -21,7 +19,6 @@ html.scanner-active:has(.tray) .scanhero {
   transition: bottom .2s var(--scan-snap);
 }
 
-/* Guidance must remain legible over white paper, tan desks and shadows alike. */
 .scanhero .scanhint {
   left: 50%;
   right: auto;
@@ -39,7 +36,9 @@ html.scanner-active:has(.tray) .scanhero {
   text-shadow: 0 1px 2px rgba(0,0,0,.35);
   line-height: 1.25;
   z-index: 8;
-  transition: background .16s var(--scan-snap), border-color .16s var(--scan-snap);
+  opacity: 1;
+  transition: opacity .12s var(--scan-snap), background .16s var(--scan-snap),
+              border-color .16s var(--scan-snap);
 }
 
 .scanhero .scanhint[data-blocking] {
@@ -47,7 +46,12 @@ html.scanner-active:has(.tray) .scanhero {
   border-color: rgba(255,190,70,.3);
 }
 
-/* A small bottom scrim protects controls without covering the page with cards. */
+/* A consequence/quality sheet is the single source of guidance while open.
+   Do not let the still diagnosis and the next live frame talk over each other. */
+html.scanner-active:has(.scrim.on) .scanhero .scanhint {
+  opacity: 0;
+}
+
 .scanhero::after {
   content: "";
   position: absolute;
@@ -91,8 +95,6 @@ html.scanner-active:has(.tray) .scanhero {
   opacity: .46;
 }
 
-/* The tray gets its own physical region instead of covering the lower corners
-   of the camera feed. */
 html.scanner-active .tray {
   position: absolute;
   left: 0;
@@ -181,9 +183,6 @@ html.scanner-active .tray .btn.primary:disabled {
   opacity: .48;
 }
 
-/* Scanner quality choices are not equivalent: another capture protects OCR;
-   accepting a known-bad page is an explicit fallback. Other consequence sheets
-   remain neutral because emphasis is opt-in at the SheetChoice level. */
 html.scanner-active .sheet .sh-choice.primary {
   background: var(--blue);
   color: #fff;
@@ -202,7 +201,6 @@ html.scanner-active .sheet .sh-choice {
               box-shadow .16s var(--scan-snap);
 }
 
-/* The resume card must not collide with the now-lower capture controls. */
 html.scanner-active .scanhero .drafttoast {
   bottom: 96px;
 }
@@ -219,6 +217,7 @@ html.scanner-active .scanhero .drafttoast {
 
 @media (prefers-reduced-motion: reduce) {
   .scanhero,
+  .scanhero .scanhint,
   .scanhero .shutter,
   .scanhero .sidebtn,
   .scanhero .autotoggle,
