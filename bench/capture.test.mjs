@@ -11,7 +11,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
-  liveGateVerdict, settledGuidance, shouldAutoCapture,
+  PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
+  liveGateVerdict, settledGuidance, settledPaperEvidence, settledScannerGuidance,
+  shouldAutoCapture,
 } from '../src/scan/capture.js';
 import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -85,7 +87,9 @@ test('a tracker that is not sure yet holds the shutter', () => {
 
 test('one global detection cannot auto-capture a random rectangle', () => {
   assert.equal(shouldAutoCapture({ ...ready, globalConfirmations: 1 }), false);
-  assert.equal(shouldAutoCapture({ ...ready, globalConfirmations: 2 }), true);
+  assert.equal(shouldAutoCapture({
+    ...ready, globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+  }), true);
 });
 
 test('quality blocking still overrides a confirmed lock', () => {
@@ -224,6 +228,78 @@ test('an unchanged hint does not restart its own clock', () => {
   // and the next one that needed to replace it never could.
   const showing = { hint: 'Hold still', blocking: null, since: 1000 };
   assert.equal(settledGuidance(showing, { hint: 'Hold still', blocking: null }, 5000).since, 1000);
+});
+
+// ── paper-presence evidence ─────────────────────────────────────────────────
+
+test('a tentative rectangle stays on calm searching guidance', () => {
+  const candidate = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS - 1,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, candidate, 1000);
+
+  assert.equal(candidate.confirmed, false);
+  assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
+  assert.equal(shown.blocking, null);
+});
+
+test('alternating false candidates and misses never flip into locking guidance', () => {
+  let evidence = null;
+  let guidance = null;
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+
+  for (let frame = 0; frame < 20; frame++) {
+    const candidate = frame % 2 === 0;
+    evidence = settledPaperEvidence(evidence, {
+      globalConfirmations: candidate ? PAPER_EVIDENCE_CONFIRMATIONS - 1 : 0,
+      geometryReady: candidate,
+      observedGeometry: candidate,
+    }, frame * 16);
+    guidance = settledScannerGuidance(guidance, lock, evidence, frame * 16);
+    assert.equal(guidance.hint, SEARCH_GUIDANCE.hint, `guidance flipped on frame ${frame}`);
+  }
+});
+
+test('locking guidance only appears after independently confirmed paper evidence', () => {
+  const evidence = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, evidence, 1000);
+
+  assert.equal(evidence.confirmed, true);
+  assert.equal(shown.blocking, 'tracking');
+  assert.match(shown.hint, /lock onto all four corners/i);
+});
+
+test('confirmed paper presence survives brief misses, then calmly returns to search', () => {
+  let evidence = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+
+  evidence = settledPaperEvidence(evidence, {
+    globalConfirmations: 0,
+    geometryReady: false,
+    observedGeometry: false,
+  }, 1000 + PAPER_EVIDENCE_LOSS_MS - 1);
+  assert.equal(evidence.confirmed, true, 'a brief miss discarded confirmed paper evidence');
+
+  evidence = settledPaperEvidence(evidence, {
+    globalConfirmations: 0,
+    geometryReady: false,
+    observedGeometry: false,
+  }, 1000 + PAPER_EVIDENCE_LOSS_MS);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, evidence, 1000 + PAPER_EVIDENCE_LOSS_MS);
+  assert.equal(evidence.confirmed, false);
+  assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
 });
 
 // ── the brackets: deadzone and adaptive damping ────────────────────────────
