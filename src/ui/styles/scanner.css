@@ -181,6 +181,27 @@ html.scanner-active .tray .btn.primary:disabled {
   opacity: .48;
 }
 
+/* Scanner quality choices are not equivalent: another capture protects OCR;
+   accepting a known-bad page is an explicit fallback. Other consequence sheets
+   remain neutral because emphasis is opt-in at the SheetChoice level. */
+html.scanner-active .sheet .sh-choice.primary {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 650;
+  box-shadow: 0 8px 20px rgba(58,134,255,.2);
+}
+
+html.scanner-active .sheet .sh-choice.secondary {
+  background: var(--surface-sunk);
+  color: var(--label);
+  font-weight: 500;
+}
+
+html.scanner-active .sheet .sh-choice {
+  transition: transform .12s var(--scan-snap), background .16s var(--scan-snap),
+              box-shadow .16s var(--scan-snap);
+}
+
 /* The resume card must not collide with the now-lower capture controls. */
 html.scanner-active .scanhero .drafttoast {
   bottom: 96px;
@@ -202,7 +223,8 @@ html.scanner-active .scanhero .drafttoast {
   .scanhero .sidebtn,
   .scanhero .autotoggle,
   html.scanner-active .tray .traypage,
-  html.scanner-active .tray .btn.primary {
+  html.scanner-active .tray .btn.primary,
+  html.scanner-active .sheet .sh-choice {
     transition: none !important;
   }
 }
