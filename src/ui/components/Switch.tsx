@@ -1,34 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SWITCH
 
-   A plain opaque thumb, not the glass lens the previous pass built. That was
-   built from a text description; the actual reference — a screen recording of
-   the stock iOS toggle — shows a solid white capsule with no tint, no
-   refraction, no specular rim. It nearly fills its track, and the only thing
-   remarkable about it is the elastic squash-stretch it does while crossing:
-   the thumb stretches wide in the direction of travel and snaps back round on
-   arrival.
-
-   That motion is not new to this codebase. `TabNav` already derives a
-   squash-stretch `transform: scale()` from a spring's velocity for the tab
-   pill's travel; this is the same technique on a second control, not a new
-   kind of motion. Only `transform` and `background` animate, which is what
-   the design system's motion rules allow.
+   Compact Apple-like switch: a plain white thumb, a slightly muted active
+   green, no state glyphs, and a very fast travel animation. While crossing,
+   the thumb scales down only a few percent and snaps back to full size as the
+   spring settles.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useId, useRef } from "react";
 import { spring, seed, releaseSpring } from "../lib/spring";
 import { hapticTick } from "../lib/haptics";
 
-/* Track and thumb sizes match the reference's proportions (iOS's own
-   51x31 / 27x27 with 2px inset) rather than the wider, shorter geometry the
-   glass version invented. */
-const TRACK_W = 51;
-const THUMB_W = 27;
+/* Keep the familiar iOS proportions while reducing the overall control size. */
+const TRACK_W = 45;
+const TRACK_H = 27;
+const THUMB_W = 23;
 const INSET = 2;
 const TRAVEL = TRACK_W - THUMB_W - INSET * 2;
 
-export const SWITCH_METRICS = { TRACK_W, THUMB_W, INSET, TRAVEL };
+/* Softer than the design-system positive green so the switch does not read as
+   fluorescent against the dark settings surface. */
+const SWITCH_ON = "#55C86C";
+
+export const SWITCH_METRICS = { TRACK_W, TRACK_H, THUMB_W, INSET, TRAVEL };
 
 export default function Switch({
   on,
@@ -53,12 +47,13 @@ export default function Switch({
     const place = (p: number, v: number) => {
       if (!thumb.current) return;
       const x = p * TRAVEL;
-      // Squash-stretch along the axis of travel, exactly as TabNav derives it
-      // for the tab pill: proportional to velocity, clamped, and gone the
-      // instant the spring settles because v is then 0.
-      const s = Math.abs(Math.max(-.16, Math.min(.16, v * .1)));
+
+      // The reference does not visibly stretch. It compresses by only a few
+      // percent during travel, then is perfectly round again on arrival.
+      const shrink = Math.min(.045, Math.abs(v) * .0065);
+      const scale = 1 - shrink;
       thumb.current.style.transform =
-        `translateX(${x.toFixed(2)}px) scale(${(1 + s).toFixed(3)}, ${(1 - s).toFixed(3)})`;
+        `translateX(${x.toFixed(2)}px) scale(${scale.toFixed(3)})`;
     };
 
     const reduced = document.documentElement.dataset.motion === "reduce"
@@ -72,7 +67,11 @@ export default function Switch({
       place(on ? 1 : 0, 0);
       return;
     }
-    spring(key, { to: on ? 1 : 0, stiffness: 300, damping: 22, onUpdate: place });
+
+    // Deliberately much quicker than the tab/navigation springs. The thumb is
+    // nearly at the opposite edge in ~100ms and settles without a visible
+    // bounce, which gives the switch the crisp Apple-like tap response.
+    spring(key, { to: on ? 1 : 0, stiffness: 560, damping: 34, onUpdate: place });
   }, [on, key]);
 
   useEffect(() => () => releaseSpring(key), [key]);
@@ -86,17 +85,34 @@ export default function Switch({
       aria-label={label}
       aria-busy={busy || undefined}
       disabled={disabled}
+      style={{ width: TRACK_W, height: TRACK_H }}
       onClick={() => {
         if (disabled) return;
         hapticTick();
         onChange(!on);
       }}
     >
-      <span className="tr" aria-hidden="true" />
-      <span className="th" ref={thumb} aria-hidden="true">
-        <span className="gI" />
-      </span>
-      <span className="gO" aria-hidden="true" />
+      <span
+        className="tr"
+        aria-hidden="true"
+        style={{
+          borderRadius: TRACK_H / 2,
+          background: on ? SWITCH_ON : "var(--track-off)",
+          transition: "background 90ms ease-out",
+        }}
+      />
+      <span
+        className="th"
+        ref={thumb}
+        aria-hidden="true"
+        style={{
+          top: INSET,
+          left: INSET,
+          width: THUMB_W,
+          height: THUMB_W,
+          borderRadius: "50%",
+        }}
+      />
     </button>
   );
 }
