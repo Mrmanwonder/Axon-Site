@@ -7,6 +7,8 @@
   --scan-tray-h: 196px;
 }
 
+/* The phone tab bar competes directly with the camera controls and paper edge.
+   Desktop uses a side rail instead; that navigation is restored below. */
 html.scanner-active .tabdock {
   display: none !important;
 }
@@ -95,6 +97,8 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   opacity: .46;
 }
 
+/* On phones the camera owns the screen, so reserve a real strip below it rather
+   than floating thumbnails over the paper. */
 html.scanner-active .tray {
   position: absolute;
   left: 0;
@@ -205,8 +209,35 @@ html.scanner-active .scanhero .drafttoast {
   bottom: 96px;
 }
 
-@media (min-width: 700px) {
+/* system.css turns the desktop scanner back into a contained, in-flow panel at
+   768px. Match that breakpoint: do not apply a mobile `bottom` offset to a
+   position:relative camera, and keep the tray in document flow under it. */
+@media (min-width: 768px) {
   :root { --scan-tray-h: 176px; }
+
+  html.scanner-active .tabdock {
+    display: flex !important;
+  }
+
+  html.scanner-active:has(.tray) .scanhero {
+    bottom: auto;
+  }
+
+  html.scanner-active .tray {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    height: auto;
+    min-height: 154px;
+    margin: 12px var(--gutter) 0;
+    padding: 12px 14px;
+    grid-template-rows: auto auto;
+    border: .5px solid var(--hairline);
+    border-radius: var(--r-card);
+    box-shadow: none;
+  }
 
   html.scanner-active .tray .traypage {
     flex-basis: 72px;
