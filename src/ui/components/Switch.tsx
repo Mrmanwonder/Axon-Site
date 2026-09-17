@@ -2,9 +2,9 @@
    SWITCH
 
    Elongated Apple-like switch: a low, wide track with a rounded-rectangle
-   white thumb, muted active green, no state glyphs, and immediate pointer-down
-   feedback. The visual state is optimistic so the control never waits for a
-   parent/network round trip before moving.
+   white thumb, saturated active green, no state glyphs, and immediate
+   pointer-down feedback. The visual state is optimistic so the control never
+   waits for a parent/network round trip before moving.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from "react";
@@ -17,7 +17,8 @@ const THUMB_H = 22;
 const INSET = 2;
 const TRAVEL = TRACK_W - THUMB_W - INSET * 2;
 
-const SWITCH_ON = "#55C86C";
+/* Bright, saturated system-style green for the enabled state. */
+const SWITCH_ON = "#34C759";
 const MOTION_MS = 120;
 const MOTION_CURVE = "cubic-bezier(0.1, 0.9, 0.2, 1)";
 
