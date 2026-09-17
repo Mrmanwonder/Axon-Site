@@ -276,6 +276,16 @@ function setRetake(pageNumber) {
   toast(`Retaking page ${pageNumber}. Keep all four corners visible.`);
 }
 
+async function keepCapture(pageNumber) {
+  const current = S.draft?.pages.find((p) => p.page_number === pageNumber);
+  if (!current) return;
+  current.quality = { ...current.quality, accepted: true };
+  await saveDraft(S.draft);
+  if (S.retaking === pageNumber) S.retaking = null;
+  await paintTray();
+  toast(`Page ${pageNumber} kept.`);
+}
+
 /** A fail needs an explicit decision before the booklet can be submitted. */
 function offerRetake(page) {
   const reason = page.quality?.reasons?.[0] ?? 'This page is not clear enough to read reliably.';
@@ -284,22 +294,15 @@ function offerRetake(page) {
     body: reason,
     items: [],
     choices: [
-      { label: 'Retake page', value: 'retake' },
-      { label: 'Keep this capture', value: 'keep' },
+      { label: 'Retake page', value: 'retake', emphasis: 'primary' },
+      { label: 'Keep this capture', value: 'keep', emphasis: 'secondary' },
     ],
     onChoice: async (choice) => {
       if (choice === 'retake') {
         setRetake(page.page_number);
         return;
       }
-      if (choice !== 'keep') return;
-      const current = S.draft?.pages.find((p) => p.page_number === page.page_number);
-      if (!current) return;
-      current.quality = { ...current.quality, accepted: true };
-      await saveDraft(S.draft);
-      if (S.retaking === page.page_number) S.retaking = null;
-      await paintTray();
-      toast(`Page ${page.page_number} kept.`);
+      if (choice === 'keep') await keepCapture(page.page_number);
     },
   });
 }
@@ -308,13 +311,21 @@ function openPageActions(pageNumber) {
   const page = S.draft?.pages.find((p) => p.page_number === pageNumber);
   if (!page) return;
   const reasons = page.quality?.reasons ?? [];
+  const unresolvedFail = page.quality?.verdict === 'fail' && !page.quality?.accepted;
 
   host.openSheet({
     title: `Page ${pageNumber}`,
     body: reasons.length ? reasons[0] : 'This page looks fine.',
     items: [],
     choices: [
-      { label: 'Take this page again', value: 'retake' },
+      {
+        label: 'Take this page again',
+        value: 'retake',
+        ...(unresolvedFail ? { emphasis: 'primary' } : {}),
+      },
+      ...(unresolvedFail
+        ? [{ label: 'Keep this capture', value: 'keep', emphasis: 'secondary' }]
+        : []),
       ...(pageNumber > 1 ? [{ label: 'Move earlier', value: 'up' }] : []),
       ...(pageNumber < S.draft.pages.length ? [{ label: 'Move later', value: 'down' }] : []),
       { label: 'Remove this page', value: 'remove' },
@@ -322,6 +333,10 @@ function openPageActions(pageNumber) {
     onChoice: async (choice) => {
       if (choice === 'retake') {
         setRetake(pageNumber);
+        return;
+      }
+      if (choice === 'keep') {
+        await keepCapture(pageNumber);
         return;
       }
       if (choice === 'up') S.draft = await movePage(S.draft, pageNumber, pageNumber - 1);
