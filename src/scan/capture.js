@@ -1,13 +1,8 @@
 // Stage 0 · capture.
 //
-// The viewfinder, the gate in front of the shutter, and the tray behind it.
-//
-// The capture boundary is deliberately dual-resolution. The live stream is a
-// cheap tracking source; a photographic still is requested only when the gate
-// has actually decided to shoot. Most importantly, the still is analysed again
-// after capture. A quad measured on a video frame is never blindly scaled onto
-// a sensor still taken hundreds of milliseconds later — the saved pixels are the
-// source of truth for their own geometry and quality.
+// The viewfinder, gate and shutter are a transaction. Live tracking is only a
+// prediction about a future photograph; the saved still is re-detected and
+// re-measured before automatic capture is allowed to commit it.
 
 import { CAPTURE, CONDITIONING, ENHANCE, QUALITY } from './contract.js';
 import {
@@ -25,18 +20,15 @@ const DETECT_INTERVAL_MS = 80;
 const DETECT_MAX_INTERVAL_MS = 320;
 const DETECT_TIMEOUT_MS = DETECT_MAX_INTERVAL_MS * 3;
 const DETECT_DUTY = 0.3;
-// A global search does not need the full 720p tracking surface. 360px keeps the
-// expensive whole-frame detector fast, while the per-frame corner tracker below
-// works at 720px for visibly tighter overlay placement.
 const PROXY_WIDTH = 360;
 const TRACK_WIDTH = 720;
 const FOCUS_WINDOW = 384;
 const MEASUREMENT_STALE_MS = 900;
 const VIEWPORT_SCALE_TOLERANCE = 0.01;
-// The frame that is actually stored gets one independent 720px analysis pass.
-// This is the transaction boundary that removes the old stale-frame race.
 const STILL_ANALYSIS_LONG_EDGE = 720;
 const AUTO_RETRY_COOLDOWN_MS = 550;
+const TRACK_CONFIDENCE_FLOOR = 0.64;
+const FOCUS_BREATHING_AREA_DELTA = 0.05;
 
 function viewportScale() {
   return globalThis.visualViewport?.scale ?? 1;
@@ -61,21 +53,19 @@ export function shouldAutoCapture({
 export const MIN_EDGE_COVERAGE = 0.72;
 export const LIVE_SOURCE_FLOOR = Math.ceil(CONDITIONING.MIN_LONG_EDGE / ENHANCE.MAX_SCALE);
 
-/**
- * One authoritative quality verdict. A stale measurement is not a good
- * measurement: the old implementation zeroed stale glare/exposure and turned
- * stale focus into null, which could accidentally produce "Ready" while the
- * phone or paper was still moving. `qualityReady` closes that hole.
- */
+/** One authoritative quality verdict for both live guidance and captured stills. */
 export function liveGateVerdict(
   {
     glare, clipping, fill, edgeCoverage = 1, sharpness, skew, pageLongEdge,
-    resolutionStatus = 'known', qualityReady = true,
+    resolutionStatus = 'known', qualityReady = true, geometryReady = true,
   },
   holding = null,
 ) {
   const easing = (reason) => (holding === reason ? 1 + GUIDANCE_HYSTERESIS : 1);
 
+  if (!geometryReady) {
+    return { blocking: 'tracking', hint: 'Hold steady while I lock onto all four corners' };
+  }
   if (resolutionStatus !== 'unknown'
       && pageLongEdge < LIVE_SOURCE_FLOOR * easing('resolution')) {
     return { blocking: 'resolution', hint: 'Move a little closer while keeping all four paper corners visible' };
@@ -109,6 +99,8 @@ export function settledGuidance(showing, verdict, now) {
   if (!showing || showing.hint === verdict.hint) {
     return { ...settled, since: showing?.since ?? now };
   }
+  // Entering/leaving a blocking state affects capture correctness, so it is
+  // immediate. Switching between two pieces of advice is debounced.
   if (!showing.blocking !== !verdict.blocking) return settled;
   if (now - showing.since < GUIDANCE_DWELL_MS) return showing;
   return settled;
@@ -164,8 +156,8 @@ function runDetectWorker(kind, bitmap, extra = null) {
  * @param {Object} options
  * @param {HTMLVideoElement} options.video
  * @param {HTMLCanvasElement} options.overlay
- * @param {(state: GateState) => void} options.onState
- * @param {(shot: {bitmap: ImageBitmap, quad: Array|null, auto: boolean}) => void} options.onShot
+ * @param {(state:Object) => void} options.onState
+ * @param {(shot:Object) => void} options.onShot
  */
 export function createCapture({ video, overlay, onState, onShot }) {
   let stream = null;
@@ -180,14 +172,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let trackSize = null;
   let trackInFlight = false;
   let lastTrackedFrame = -1;
+  let lastTrackedArea = null;
   let measured = null;
   let measuredAt = 0;
   let measuredQuad = null;
   let guidance = null;
 
   let quad = null;
-  let lastDetection = null;
-  let lastSearchSize = null;
   let consecutiveFinds = 0;
   let globalConfirmations = 0;
   let autoCapture = true;
@@ -204,7 +195,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   const stepStats = { count: 0, sumMs: 0, maxMs: 0, lastFlush: 0 };
 
-  function recordStepTiming({ detectMs, measureMs, focusMs, workerUsed }) {
+  function recordStepTiming({ detectMs = 0, measureMs = 0, focusMs = 0, workerUsed = false }) {
     const total = detectMs + measureMs + focusMs;
     stepStats.count++;
     stepStats.sumMs += total;
@@ -230,8 +221,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
   const focus = document.createElement('canvas');
   focus.width = focus.height = FOCUS_WINDOW;
   const focusCtx = focus.getContext('2d', { willReadFrequently: true });
-  // Worker startup is paid while the camera permission/first frame is arriving,
-  // not on the first useful page detection.
+
+  // Worker startup is paid while camera permission / the first frame is arriving.
   ensureDetectWorker();
 
   function focusInPageOnMainThread(source, quadInProxy, pw, ph, sw, sh, pageLongEdge) {
@@ -255,6 +246,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       clipping: 0,
       headroom: 0,
       skew: 0,
+      geometryReady: false,
       qualityReady: false,
       steady: true,
       hint: 'Lay the page flat and fit all four corners in the frame',
@@ -297,6 +289,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     imageCapture = null;
     photoSettings = null;
     capturePath = 'canvas-grab';
+
     if (cameraTrack && typeof ImageCapture !== 'undefined') {
       try {
         const candidate = new ImageCapture(cameraTrack);
@@ -316,11 +309,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
         capturePath = 'canvas-grab';
       }
     }
-    // Only browsers without a separate native still need a high-resolution
-    // video stream. This is the dual-resolution architecture's Safari branch.
-    if (cameraTrack && !imageCapture) {
-      await requestFallbackCaptureResolution(cameraTrack);
-    }
+
+    if (cameraTrack && !imageCapture) await requestFallbackCaptureResolution(cameraTrack);
     if (cameraTrack) await requestContinuousFocus(cameraTrack);
 
     loop();
@@ -339,12 +329,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
-    quad = lastDetection = lastSearchSize = null;
+    quad = null;
     consecutiveFinds = globalConfirmations = 0;
     track = createTrack();
     trackSize = measured = measuredQuad = guidance = null;
     lastTrackedFrame = -1;
-    video.style.removeProperty('transform');
+    lastTrackedArea = null;
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
@@ -352,6 +342,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     capturePath = 'canvas-grab';
     processingHold = false;
     autoRetryAfter = 0;
+    video.style.removeProperty('transform');
     releaseCamera();
   }
 
@@ -412,14 +403,22 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function searchOnWorker(pw, ph, vw, vh) {
     const proxyBitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
     const search = await runDetectWorker('search', proxyBitmap);
-    if (!search?.found) return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
+    if (!search?.found) {
+      return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
+    }
     const size = quadSize(search.found);
     const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
     const { sharpness: sharpnessScore, focusMs } =
       await focusOnWorker(video, search.found, pw, ph, vw, vh, pageLongEdge);
     return {
-      found: search.found, exposure: search.exposure, skew: search.skew, pageLongEdge,
-      sharpness: sharpnessScore, detectMs: search.detectMs, measureMs: search.measureMs, focusMs,
+      found: search.found,
+      exposure: search.exposure,
+      skew: search.skew,
+      pageLongEdge,
+      sharpness: sharpnessScore,
+      detectMs: search.detectMs,
+      measureMs: search.measureMs,
+      focusMs,
     };
   }
 
@@ -428,7 +427,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const rect = focusWindowRect(inFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return { sharpness: null, focusMs: 0 };
     const focusBitmap = await createImageBitmap(
-      source, rect.sx, rect.sy, rect.size, rect.size,
+      source,
+      rect.sx, rect.sy, rect.size, rect.size,
       { resizeWidth: rect.target, resizeHeight: rect.target },
     );
     const read = await runDetectWorker('focus', focusBitmap);
@@ -484,16 +484,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!running) return;
     const next = blankState();
     next.timing = {
-      detectMs: result.detectMs, measureMs: result.measureMs, focusMs: result.focusMs, workerUsed,
+      detectMs: result.detectMs,
+      measureMs: result.measureMs,
+      focusMs: result.focusMs,
+      workerUsed,
     };
     recordStepTiming(next.timing);
     trackSize = { width: TRACK_WIDTH, height: Math.round(TRACK_WIDTH * vh / vw) };
 
     if (!result.found) {
       track = createTrack();
-      lastDetection = null;
       consecutiveFinds = globalConfirmations = 0;
       measured = measuredQuad = guidance = null;
+      lastTrackedArea = null;
       quad = null;
       armed = true;
       publish(next);
@@ -538,8 +541,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.timing = timing ?? { detectMs: 0, measureMs: 0, focusMs: 0, trackMs, workerUsed: true };
 
     if (!tracked || !geometryValid(track, tw, th) || track.state === 'searching') {
-      lastDetection = guidance = null;
+      guidance = null;
       consecutiveFinds = globalConfirmations = 0;
+      lastTrackedArea = null;
       quad = null;
       armed = true;
       publish(next);
@@ -549,21 +553,29 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.hasPage = true;
     next.fill = quadFill(tracked, tw, th);
     consecutiveFinds++;
+
+    const size = quadSize(tracked);
+    const area = Math.max(1, size.width * size.height);
+    const areaChange = lastTrackedArea === null ? 0 : Math.abs(area - lastTrackedArea) / lastTrackedArea;
+    lastTrackedArea = area;
+
+    next.trackState = track.state;
+    next.trackConfidence = documentConfidence(track);
+    next.geometryReady = track.state === 'tracking' && next.trackConfidence >= TRACK_CONFIDENCE_FLOOR;
+
+    // Autofocus breathing changes effective focal length and therefore the quad
+    // area. Treat >5% frame-to-frame change as transient even if the corners
+    // themselves still happen to fit the drift tolerance.
+    const focusBreathing = areaChange > FOCUS_BREATHING_AREA_DELTA;
     const stale = measurementsStale(tracked, tw, th);
-    next.qualityReady = !stale;
+    next.qualityReady = next.geometryReady && !stale && !focusBreathing;
     next.glare = stale ? 0 : measured.glare;
     next.clipping = stale ? 0 : measured.clipping;
     next.headroom = stale ? 0 : measured.headroom;
     next.skew = stale ? 0 : measured.skew;
-    const size = quadSize(tracked);
     next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / tw));
     next.sharpness = stale ? null : measured.sharpness;
-
-    lastDetection = tracked;
-    lastSearchSize = { width: tw, height: th };
-    next.steady = !stale;
-    next.trackState = track.state;
-    next.trackConfidence = documentConfidence(track);
+    next.steady = !stale && !focusBreathing;
     next.edgeCoverage = next.pageLongEdge / Math.max(1, Math.min(vw, vh));
     next.resolutionStatus =
       capturePath === 'image-capture' || Math.min(vw, vh) < LIVE_SOURCE_FLOOR
@@ -583,9 +595,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (performance.now() < autoRetryAfter) return;
     if (shouldAutoCapture({
-      autoCapture, armed, blocking: next.blocking,
-      consecutiveFinds, globalConfirmations, trackState: track.state,
-      viewportScaled: viewportScaled(), processing: processingHold || shootInFlight,
+      autoCapture,
+      armed,
+      blocking: next.blocking,
+      consecutiveFinds,
+      globalConfirmations,
+      trackState: track.state,
+      viewportScaled: viewportScaled(),
+      processing: processingHold || shootInFlight,
     })) {
       armed = false;
       void shoot(true);
@@ -624,11 +641,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
     ctx.clearRect(0, 0, w, h);
     if (!video.videoWidth) return;
 
+    // Never paint extrapolated/recovering corners. A missing bracket is honest;
+    // a bracket floating over the desk actively teaches the user the wrong pose.
+    if (!quad || state.trackState !== 'tracking'
+        || state.trackConfidence < TRACK_CONFIDENCE_FLOOR || viewportScaled()) return;
+
     const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
     const offsetX = (w - video.videoWidth * scale) / 2;
     const offsetY = (h - video.videoHeight * scale) / 2;
     const toOverlay = (p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
-    if (!quad || viewportScaled()) return;
     const points = quad.map(toOverlay);
 
     ctx.strokeStyle = state.blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
@@ -659,38 +680,48 @@ export function createCapture({ video, overlay, onState, onShot }) {
     await new Promise((resolve) => setTimeout(resolve, Math.min(CAPTURE.SETTLE_MS, 100)));
   }
 
-  async function grabStill() {
-    if (imageCapture) {
+  async function takeNativePhoto() {
+    if (!imageCapture) return null;
+    if (Object.keys(photoSettings ?? {}).length) {
       try {
-        const blob = Object.keys(photoSettings ?? {}).length
-          ? await imageCapture.takePhoto(photoSettings)
-          : await imageCapture.takePhoto();
-        return { bitmap: await createImageBitmap(blob), path: 'image-capture', original: blob };
+        return await imageCapture.takePhoto(photoSettings);
       } catch {
-        // Some Chromium camera stacks advertise ImageCapture then reject the
-        // real shot. Fall through to the stream frame rather than losing it.
+        // Some camera stacks advertise dimensions they reject at capture time.
+        // Retry with browser-chosen settings before abandoning the native still.
       }
     }
+    try {
+      return await imageCapture.takePhoto();
+    } catch {
+      return null;
+    }
+  }
+
+  async function grabStill() {
+    const nativeBlob = await takeNativePhoto();
+    if (nativeBlob) {
+      return { bitmap: await createImageBitmap(nativeBlob), path: 'image-capture', original: nativeBlob };
+    }
+
     await waitForNextVideoFrame();
-    if (!video.videoWidth) return null;
-    // createImageBitmap freezes one decoded video frame immediately; the old
-    // canvas path performed an extra main-thread draw before the frame existed
-    // as an owned object and made the shutter/display race wider.
+    if (!running || !video.videoWidth) return null;
+
+    // Freeze exactly one decoded frame first. The old path performed an extra
+    // draw before owning the frame, widening the preview/shutter race.
     const bitmap = await createImageBitmap(video);
     const canvas = document.createElement('canvas');
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
     canvas.getContext('2d').drawImage(bitmap, 0, 0);
     const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+    // Release the only high-resolution canvas backing store immediately. The
+    // ImageBitmap remains the one live uncompressed source for conditioning.
+    canvas.width = 1;
+    canvas.height = 1;
     return { bitmap, path: 'canvas-grab', original };
   }
 
-  /**
-   * Analyse the pixels that will actually be stored. This is intentionally a
-   * fresh detection, not a verification of old coordinates. ImageCapture may
-   * refocus, change field of view, or return a different aspect/resolution; the
-   * old video quad is therefore evidence about the wrong frame.
-   */
+  /** Re-detect and re-measure the actual pixels that will be stored. */
   async function analyseStill(bitmap) {
     const scale = Math.min(1, STILL_ANALYSIS_LONG_EDGE / Math.max(bitmap.width, bitmap.height));
     const pw = Math.max(1, Math.round(bitmap.width * scale));
@@ -706,9 +737,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       proxyCtx.drawImage(bitmap, 0, 0, pw, ph);
       const frame = proxyCtx.getImageData(0, 0, pw, ph);
       const found = detectQuad(frame);
-      if (found) {
-        result = { found, exposure: measureQuad(frame, found), skew: skewDegrees(found) };
-      }
+      if (found) result = { found, exposure: measureQuad(frame, found), skew: skewDegrees(found) };
     }
 
     if (!result?.found) {
@@ -718,6 +747,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
           ...blankState(),
           hint: 'Fit all four paper corners in the frame',
           blocking: 'framing',
+          geometryReady: false,
           qualityReady: true,
           captureVerified: true,
         },
@@ -754,6 +784,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.clipping = result.exposure?.clipping ?? 0;
     next.headroom = result.exposure?.headroom ?? 0;
     next.skew = result.skew ?? 0;
+    next.geometryReady = true;
     next.qualityReady = true;
     next.trackState = 'captured';
     next.trackConfidence = 1;
@@ -769,7 +800,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.hint = verdict.hint;
 
     return {
-      quad: scaleQuad(result.found, { width: pw, height: ph }, { width: bitmap.width, height: bitmap.height }),
+      quad: scaleQuad(
+        result.found,
+        { width: pw, height: ph },
+        { width: bitmap.width, height: bitmap.height },
+      ),
       gate: next,
     };
   }
@@ -789,27 +824,37 @@ export function createCapture({ video, overlay, onState, onShot }) {
     shootInFlight = true;
     const transactionId = nextTransactionId++;
     const mediaTime = video.currentTime;
+    const shotActivation = activation;
     const tShotStart = performance.now();
-    let captured = null;
 
     try {
-      captured = await grabStill();
+      const captured = await grabStill();
       const grabMs = performance.now() - tShotStart;
       if (!captured) return null;
       const { bitmap, path, original } = captured;
+      if (!running || shotActivation !== activation) {
+        bitmap.close?.();
+        return null;
+      }
 
       const tAnalyseStart = performance.now();
       const analysed = await analyseStill(bitmap);
       const analyseMs = performance.now() - tAnalyseStart;
+      if (!running || shotActivation !== activation) {
+        bitmap.close?.();
+        return null;
+      }
 
-      // Automatic capture is allowed to assist, not to knowingly store a frame
-      // its own captured-pixel gate rejects. Manual shutter remains sovereign.
+      // Automatic capture is allowed to assist, not knowingly store a frame its
+      // own captured-pixel gate rejects. Manual shutter remains sovereign.
       if (auto && analysed.gate.blocking) {
         publish({ ...analysed.gate, autoRejected: true });
         bitmap.close?.();
         scheduleAutoRetry();
         console.debug('[scan:auto-rejected-still]', {
-          transactionId, reason: analysed.gate.blocking, grabMs: +grabMs.toFixed(1),
+          transactionId,
+          reason: analysed.gate.blocking,
+          grabMs: +grabMs.toFixed(1),
           analyseMs: +analyseMs.toFixed(1),
         });
         return null;
