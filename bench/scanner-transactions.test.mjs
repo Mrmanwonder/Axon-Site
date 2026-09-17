@@ -26,6 +26,7 @@ const clean = {
   skew: 0,
   pageLongEdge: LIVE_SOURCE_FLOOR + 400,
   resolutionStatus: 'known',
+  geometryReady: true,
   qualityReady: true,
 };
 
@@ -43,6 +44,12 @@ test('stale live measurements can never publish Ready', () => {
   const verdict = liveGateVerdict({ ...clean, qualityReady: false });
   assert.equal(verdict.blocking, 'measuring');
   assert.match(verdict.hint, /steady/i);
+});
+
+test('unconfirmed geometry can never publish Ready', () => {
+  const verdict = liveGateVerdict({ ...clean, geometryReady: false });
+  assert.equal(verdict.blocking, 'tracking');
+  assert.match(verdict.hint, /corners/i);
 });
 
 test('unknown native-still resolution does not bypass stale quality', () => {
@@ -83,7 +90,10 @@ test('camera starts with a cheap 720p tracking stream', () => {
   assert.equal(CAMERA_CONSTRAINTS.video.height.ideal, TRACKING_HEIGHT);
 });
 
-test('video-frame fallback asks for more pixels than the tracking stream', () => {
+test('video-frame fallback is higher resolution but capped at the practical 12MP tier', () => {
   assert.ok(FALLBACK_CAPTURE_WIDTH > TRACKING_WIDTH);
   assert.ok(FALLBACK_CAPTURE_HEIGHT > TRACKING_HEIGHT);
+  assert.equal(FALLBACK_CAPTURE_WIDTH, 4032);
+  assert.equal(FALLBACK_CAPTURE_HEIGHT, 3024);
+  assert.ok(FALLBACK_CAPTURE_WIDTH * FALLBACK_CAPTURE_HEIGHT < 13_000_000);
 });
