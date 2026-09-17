@@ -1,27 +1,21 @@
 // Scan and review, wired together.
 //
-// React owns the surfaces — the viewfinder, the tray, the review screen, the
-// confidence chips and the cause hues. This owns the flow: when the camera
-// runs, what happens to a page once it is taken, which stage is running, and
-// what a correction does. The two meet at the `host` handed in by initScanUI,
-// so neither reimplements the other.
-//
-// This module deliberately stayed plain JavaScript through the React port. It
-// is the only module that knows the ten stages and their order, and rewriting
-// it as components would have put the pipeline at risk for no gain — the DOM
-// coupling was never in the flow, only in the render calls, which are now the
-// host's job. What changed is that those calls went from `window.__axon*`
-// globals to an injected object; nothing about the order did.
+// React owns the surfaces. This module owns the capture/session transaction:
+// which page a shutter belongs to, when a page is durably accepted, and when a
+// retake has actually completed. A retake target is intentionally sticky until
+// the replacement is stored; merely firing the shutter is not success.
 
 import { createCapture } from './capture.js';
 import {
   acceptPage, currentRunForPaper, ingest, regionsForRun, startExplanations, watchExplanations,
 } from './pipeline.js';
-import { createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage } from './drafts.js';
+import {
+  createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage, saveDraft,
+} from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
 import { RESCUED_NOTICE } from './enhance.js';
-import { PAPER_TYPES, tierForType } from '../papers.js';
+import { PAPER_TYPES } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
 const S = {
@@ -30,23 +24,16 @@ const S = {
   surface: null,
   visible: false,
   draft: null,
-  thumbs: new Map(),   // page number → object URL
-  placeholders: new Map(), // page number → data URL, cleared once the real thumb lands
+  thumbs: new Map(),
+  placeholders: new Map(),
   run: null,
-  regions: null,        // this run's question_region rows, for watchExplanations
+  regions: null,
   review: null,
   busy: false,
-  saving: false,        // true while save() is waiting on explanations before commit
+  saving: false,
+  retaking: null,
 };
 
-/**
- * The surfaces this flow paints into, and the primitives it needs.
- *
- * Set once by initScanUI. Every entry is a no-op by default so a call that
- * arrives before the screen has mounted goes quiet rather than throwing —
- * `watchExplanations` lands questions asynchronously and can outlive the
- * screen that started it.
- */
 let host = {
   toast() {}, tick() {}, firm() {},
   scanSurface: () => null,
@@ -64,7 +51,6 @@ export async function initScanUI(ctx, surfaces = {}) {
   setScanContext(ctx);
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
-
   await restoreDraft();
   await paintDrafts();
 }
@@ -85,11 +71,10 @@ export function attachSurface(video, overlay) {
     onState: (state) => host.renderHint(state),
     onShot: (shot) => {
       tick();
-      // A retake replaces the page it was taken for, keeping its place in the
-      // booklet. Anything else is the next page.
+      // Snapshot the target for this transaction, but do NOT clear it here.
+      // It is cleared only after acceptPage has durably replaced that slot.
       const replacing = S.retaking;
-      S.retaking = null;
-      takePage(shot, replacing);
+      void takePage(shot, replacing);
     },
   });
 }
@@ -100,8 +85,6 @@ export function detachSurface() {
   S.surface = null;
 }
 
-/** The shutter. Exported rather than bound to a button id, so the control that
-    fires it is the screen's business and not this module's. */
 export function shoot() {
   S.capture?.shoot();
 }
@@ -111,35 +94,15 @@ export function setAutoCapture(on) {
   S.capture?.setAutoCapture(on);
 }
 
-/**
- * Called on every entry to and exit from the Scan screen.
- *
- * @param {boolean} visible
- * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
- *   The request fired the instant the tab opened, if there was one. Adopting it
- *   is what keeps the permission sheet from waiting on this module's own load.
- */
 export function setScanVisible(visible, camera = null) {
   S.visible = visible;
   return visible ? startCamera(camera) : stopCamera();
 }
 
-// ── the camera ─────────────────────────────────────────────────────────────
-
-/**
- * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
- *   The request app.js fired when the tab opened, if there was one. Adopting it
- *   is what keeps the permission sheet from waiting on this module's own load.
- */
 let cameraGeneration = 0;
 async function startCamera(camera = null) {
   const activation = ++cameraGeneration;
-  // An already-requested stream is authoritative. Some WebKit shells expose
-  // getUserMedia to the permission initiator but not to a later lazy module,
-  // so feature detection here must not discard a valid adopted camera.
   if (!S.capture?.supported && !camera) {
-    // No camera, or a browser that will not give one up. Upload is a
-    // first-class path, so this is a different route rather than a failure.
     host.cameraLive(false, 'unavailable');
     host.renderHint({
       hint: 'No camera here — add pages from your files instead', blocking: null,
@@ -171,20 +134,23 @@ function stopCamera() {
   host.cameraLive(false);
 }
 
-// ── a page ─────────────────────────────────────────────────────────────────
+// ── capture transaction ────────────────────────────────────────────────────
 
 async function takePage(shot, replacing = null) {
+  // capture.setProcessing() should make this unreachable for automatic shots,
+  // but keep the guard for double taps / browser re-entry. Crucially, it does
+  // not consume S.retaking.
   if (S.busy) {
     shot.bitmap?.close?.();
     return;
   }
+
   S.busy = true;
+  S.capture?.setProcessing?.(true);
   host.scannerState({ phase: 'processing', pendingCaptureCount: 1 });
-  // AXON_SCAN_LAG_BRIEF.md §0 — the onShot → paintTray gap, split into
-  // acceptPage() (its own breakdown lands in pipeline.js's console line and
-  // in the saved page's conditioning_meta.capture_timing) and paintTray()
-  // itself. Temporary, landed rather than dropped.
   const tOnShot = performance.now();
+  const slot = replacing ?? (S.draft?.pages.length ?? 0) + 1;
+
   try {
     if (!S.draft) {
       S.draft = await createDraft({
@@ -193,30 +159,24 @@ async function takePage(shot, replacing = null) {
         paperType: null,
       });
     }
-    // A retake replaces the thumbnail too — the cache is keyed by page number,
-    // so without this the tray keeps showing the picture that was just rejected.
-    // scan-ground-up-revamp-2026-09-07.md Phase 4: the tray slot appears the
-    // instant the shutter fires, not several hundred milliseconds later when
-    // conditioning finishes — the counter increments and a picture shows up
-    // in the same beat as the haptic (Scan.tsx's hapticTick, unmoved — this
-    // is a UI-feedback fix, not a reason to touch where the haptic sits).
-    // The raw, unwarped capture scaled down, per the brief's own "cheaper"
-    // option: no new pixels are produced, just a small draw of what was
-    // already captured. Swapped for the real conditioned thumbnail the
-    // moment paintTray() below actually runs.
+
     paintPlaceholder(shot.bitmap, replacing ?? S.draft.pages.length + 1);
 
     const { page } = await acceptPage({
-      draft: S.draft, bitmap: shot.bitmap, quad: shot.quad, replacing,
-      capturePath: shot.capturePath ?? null, liveGate: shot.gate ?? null,
-      // Recorded rather than assumed, on both paths. See CAPTURE.SOURCE_KINDS.
+      draft: S.draft,
+      bitmap: shot.bitmap,
+      quad: shot.quad,
+      replacing,
+      capturePath: shot.capturePath ?? null,
+      liveGate: shot.gate ?? null,
       sourceKind: shot.sourceKind ?? 'camera',
       original: shot.original ?? null,
     });
     const tAccepted = performance.now();
 
-    // Release the old retake thumbnail only after the replacement has been
-    // durably accepted. A failed replacement must leave the original intact.
+    // Only a successful durable replacement completes the retake transaction.
+    if (replacing !== null && S.retaking === replacing) S.retaking = null;
+
     if (replacing !== null && S.thumbs.has(replacing)) {
       URL.revokeObjectURL(S.thumbs.get(replacing));
       S.thumbs.delete(replacing);
@@ -224,18 +184,13 @@ async function takePage(shot, replacing = null) {
 
     await paintTray();
     console.debug('[scan:tray-timing]', {
+      transactionId: shot.transactionId ?? null,
       acceptMs: +(tAccepted - tOnShot).toFixed(1),
       paintMs: +(performance.now() - tAccepted).toFixed(1),
       totalMs: +(performance.now() - tOnShot).toFixed(1),
     });
 
-    // The verdict is delivered now, while the paper is still in front of the
-    // student. The same words forty seconds later usually mean a lost page.
-    // A fail interrupts rather than badges: losing the page bytes costs
-    // nothing, losing the moment the paper is still in hand costs everything.
-    // Retake is the default action; keeping the page is the explicit second
-    // choice, never the primary one.
-    if (page.quality?.verdict === 'fail') {
+    if (page.quality?.verdict === 'fail' && !page.quality?.accepted) {
       offerRetake(page);
     } else if (page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
@@ -243,24 +198,24 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
-    // A rescued page is told about. It was under the resolution floor, it has
-    // been brought up to it, and the student is the one who can tell whether
-    // that worked — so they are told plainly and pointed at the one thing to
-    // check. Never phrased as an apology and never as a question.
     if (page.meta?.enhance?.applied) toast(RESCUED_NOTICE);
   } catch (error) {
-    // A refusal is advice, not a breakage: the page cannot be used and the
-    // message already says what to do instead. Shown the same way a fail
-    // verdict is, while the paper is still on the desk.
-    S.placeholders.delete(replacing ?? (S.draft?.pages.length ?? 0) + 1);
+    // A failed retake remains a retake. The old page stays in the booklet and
+    // the next successful shutter still targets the same slot.
+    S.placeholders.delete(slot);
     await paintTray();
     if (error?.refused) toast(error.message, 'warn');
     else {
-      console.error('[scan] page processing failed', { code: error?.code, error });
+      console.error('[scan] page processing failed', {
+        transactionId: shot.transactionId ?? null,
+        code: error?.code,
+        error,
+      });
       toast(publicScanMessage(error), 'warn');
     }
   } finally {
     S.busy = false;
+    S.capture?.setProcessing?.(false);
     host.scannerState({ phase: 'live-guiding', pendingCaptureCount: 0 });
     shot.bitmap?.close?.();
   }
@@ -271,82 +226,84 @@ async function paintTray() {
   for (const page of pages) {
     if (S.thumbs.has(page.page_number)) continue;
     S.thumbs.set(page.page_number, URL.createObjectURL(page.proxy ?? page.blob));
-    // The real thumbnail has landed for this page number — whatever
-    // placeholder was standing in for it is done its job.
     S.placeholders.delete(page.page_number);
   }
   host.renderTray(
-    pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) })),
+    pages.map((p) => ({
+      ...p,
+      thumb: S.thumbs.get(p.page_number),
+      retakeRequested: S.retaking === p.page_number,
+    })),
     { onPage: openPageActions, onDone: sendPaper },
   );
 }
 
-/**
- * Paint one tray slot immediately, synchronously, from the frame the shutter
- * just captured — before acceptPage/processPage have even started, let alone
- * resolved. `canvas.toDataURL` rather than `toBlob` deliberately: this has to
- * be there in the same frame as the count updates, not a callback tick later.
- *
- * Draws straight from `bitmap`, which is why this has to run before
- * `takePage`'s `finally` closes it — a placeholder that raced the bitmap's
- * own cleanup would be a worse bug than not having one.
- */
 function paintPlaceholder(bitmap, pageNumber) {
   if (!bitmap || !bitmap.width || !bitmap.height) return;
-  // Best-effort and never load-bearing: a placeholder is purely cosmetic,
-  // and a browser quirk in one small canvas draw must not be the reason a
-  // real, already-captured page fails to accept — that would be this fix
-  // costing more than the lag it was meant to hide.
   try {
     const w = 160, h = Math.round(160 * bitmap.height / bitmap.width);
     const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
+    canvas.width = w;
+    canvas.height = h;
     canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
     S.placeholders.set(pageNumber, canvas.toDataURL('image/jpeg', 0.6));
 
     const pages = S.draft?.pages ?? [];
-    const rows = pages.map((p) => ({ ...p, thumb: S.thumbs.get(p.page_number) }));
+    const rows = pages.map((p) => ({
+      ...p,
+      thumb: S.thumbs.get(p.page_number),
+      retakeRequested: S.retaking === p.page_number,
+    }));
     const idx = rows.findIndex((r) => r.page_number === pageNumber);
-    const placeholderRow = { page_number: pageNumber, thumb: S.placeholders.get(pageNumber), pending: true };
+    const placeholderRow = {
+      page_number: pageNumber,
+      thumb: S.placeholders.get(pageNumber),
+      pending: true,
+      retakeRequested: S.retaking === pageNumber,
+    };
     if (idx >= 0) rows[idx] = { ...rows[idx], ...placeholderRow };
     else rows.push(placeholderRow);
 
     host.renderTray(rows, { onPage: openPageActions, onDone: sendPaper });
-  } catch { /* the real thumbnail is still coming from paintTray() below */ }
+  } catch {
+    // Cosmetic only. paintTray() will replace it with the durable thumbnail.
+  }
 }
 
-/**
- * The page just taken failed the quality gate on its actual, conditioned
- * pixels — not the live proxy's guess. Interrupt now, while the paper is
- * still in front of the student, rather than leaving it as a badge in the
- * tray the student may not even notice. Retake is the primary choice; keeping
- * a page we already know is bad is the explicit secondary one.
- */
+function setRetake(pageNumber) {
+  S.retaking = pageNumber;
+  void paintTray();
+  toast(`Retaking page ${pageNumber}. Keep all four corners visible.`);
+}
+
+/** A fail needs an explicit decision before the booklet can be submitted. */
 function offerRetake(page) {
-  const reason = page.quality?.reasons?.[0] ?? 'That page came out too badly to read.';
+  const reason = page.quality?.reasons?.[0] ?? 'This page is not clear enough to read reliably.';
   host.openSheet({
-    title: `Page ${page.page_number}`,
+    title: `Page ${page.page_number} needs another look`,
     body: reason,
     items: [],
     choices: [
-      { label: 'Take it again now', value: 'retake' },
-      { label: 'Use it anyway', value: 'keep' },
+      { label: 'Retake page', value: 'retake' },
+      { label: 'Keep this capture', value: 'keep' },
     ],
-    onChoice: (choice) => {
-      if (choice !== 'retake') return;
-      toast(`Point at page ${page.page_number} and take it again.`);
-      S.retaking = page.page_number;
+    onChoice: async (choice) => {
+      if (choice === 'retake') {
+        setRetake(page.page_number);
+        return;
+      }
+      if (choice !== 'keep') return;
+      const current = S.draft?.pages.find((p) => p.page_number === page.page_number);
+      if (!current) return;
+      current.quality = { ...current.quality, accepted: true };
+      await saveDraft(S.draft);
+      if (S.retaking === page.page_number) S.retaking = null;
+      await paintTray();
+      toast(`Page ${page.page_number} kept.`);
     },
   });
 }
 
-/**
- * What can be done to one page in the tray.
- *
- * A sheet that states the consequences rather than a confirmation that asks the
- * student to prove themselves — removing a page says what removing it does, and
- * then does it.
- */
 function openPageActions(pageNumber) {
   const page = S.draft?.pages.find((p) => p.page_number === pageNumber);
   if (!page) return;
@@ -364,13 +321,13 @@ function openPageActions(pageNumber) {
     ],
     onChoice: async (choice) => {
       if (choice === 'retake') {
-        toast(`Point at page ${pageNumber} and take it again.`);
-        S.retaking = pageNumber;
+        setRetake(pageNumber);
         return;
       }
       if (choice === 'up') S.draft = await movePage(S.draft, pageNumber, pageNumber - 1);
       if (choice === 'down') S.draft = await movePage(S.draft, pageNumber, pageNumber + 1);
       if (choice === 'remove') {
+        if (S.retaking === pageNumber) S.retaking = null;
         S.draft = await removePage(S.draft, pageNumber);
         toast(`Page ${pageNumber} removed. The rest keep their order.`);
       }
@@ -409,36 +366,43 @@ async function paintDrafts() {
 }
 
 async function resumeDraft(id) {
-  // Taken up, so it is no longer an outstanding offer.
   host.draftToast(null, { onResume: resumeDraft });
   S.draft = await readDraft(id);
+  S.retaking = null;
   S.thumbs.forEach((url) => URL.revokeObjectURL(url));
   S.thumbs.clear();
   await paintTray();
   toast(`Picking up where you left off — ${S.draft.pages.length} page(s) already taken.`);
 }
 
-// ── sending the paper up ───────────────────────────────────────────────────
+// ── send paper ─────────────────────────────────────────────────────────────
 
-/**
- * Onboarding's last step already asked what the first paper is. Carried here so
- * the very first scan is not asked the same question twice — and cleared on
- * use, so the second paper is asked rather than silently inheriting the first
- * one's type, which would file a board paper as a school test and cost it its
- * marking scheme.
- */
 export function setPendingPaperType(type) {
   S.pendingType = type ?? null;
+}
+
+function unresolvedPage() {
+  return S.draft?.pages.find((p) => p.quality?.verdict === 'fail' && !p.quality?.accepted) ?? null;
 }
 
 function sendPaper() {
   if (S.busy || S.placeholders.size) return toast('Wait for this page to finish preparing.');
   if (!S.draft?.pages.length) return toast('Take a page first.');
-  const type = S.draft.paper_type ?? S.pendingType;
-  if (type) { S.pendingType = null; return run(type); }
+  if (S.retaking !== null) {
+    return toast(`Finish retaking page ${S.retaking} before reading the paper.`, 'warn');
+  }
+  const unresolved = unresolvedPage();
+  if (unresolved) {
+    offerRetake(unresolved);
+    return;
+  }
 
-  // The type decides Tier 1 against Tier 2, which is the highest-leverage field
-  // in the app, so it is asked plainly rather than guessed from a filename.
+  const type = S.draft.paper_type ?? S.pendingType;
+  if (type) {
+    S.pendingType = null;
+    return run(type);
+  }
+
   host.openSheet({
     title: 'What kind of paper is this?',
     body: 'This decides whether we can match it to an official marking scheme.',
@@ -493,16 +457,7 @@ async function run(paperType) {
 
     S.run = result;
     S.regions = result.regions;
-    // The draft stays until the paper is committed. It holds the conditioned
-    // pages, and "Rescan this page" needs them: without it that button landed in
-    // an empty draft, tried to replace a page that was not there, and died on an
-    // undefined. The schema already expects this — a rescan starts a new run
-    // over the same paper.
     firm();
-    // Explanations start only once review is done (save()), never here — the
-    // student has confirmed nothing at this point, and starting them now is
-    // guaranteed to 409 against reviewComplete's outstanding-review gate, every
-    // time. See AXON_FIX_BRIEF.md §4.A1.
     await openReview(result.runId);
   } catch (error) {
     host.renderProgress({
@@ -524,31 +479,17 @@ async function openReview(runId) {
   host.openReview();
 }
 
-/**
- * Re-entry into review after the scan session that started it has ended —
- * the app was closed, or the student navigated away, while a paper sat at
- * `needs_review` (or later). The draft only ever remembers `paper_id`; the
- * run and its regions are resolved fresh here rather than persisted, so
- * this can never open a stale review.
- *
- * @param {string} draftId
- * @returns {Promise<{state:'reviewing'}|{state:'committed',paperId:string}|{state:'processing'}|{state:'stopped',reason:string|null}|{state:'gone'}>}
- */
 export async function resumeDraftReview(draftId) {
   const draft = await readDraft(draftId);
   if (!draft?.paper_id) return { state: 'gone' };
 
   const run = await currentRunForPaper(draft.paper_id);
   if (!run) return { state: 'gone' };
-
   if (run.status === 'committed') return { state: 'committed', paperId: draft.paper_id };
   if (run.status === 'failed' || run.status === 'rejected') {
     return { state: 'stopped', reason: run.status_reason ?? null };
   }
-  if (!['needs_review', 'explaining', 'ready'].includes(run.status)) {
-    // Still being read server-side — nothing to review yet.
-    return { state: 'processing' };
-  }
+  if (!['needs_review', 'explaining', 'ready'].includes(run.status)) return { state: 'processing' };
 
   S.draft = draft;
   S.regions = await regionsForRun(run.id);
@@ -556,14 +497,6 @@ export async function resumeDraftReview(draftId) {
   return { state: 'reviewing' };
 }
 
-/**
- * Ask for a re-render soon, rather than once per event.
- *
- * Explanations land one at a time and each one used to trigger a full reload and
- * a wholesale re-render — so the list reset its scroll under the student's
- * finger during the exact moment the whole design is for: reading question one
- * while question nine is still being worked out.
- */
 let refreshTimer = null;
 function scheduleReviewRefresh() {
   if (refreshTimer) return;
@@ -574,13 +507,6 @@ async function refreshReview() {
   if (!S.runId) return;
   S.review = await loadReview(S.runId);
   const paper = S.review.paper;
-
-  /* The old renderer rebuilt the list from innerHTML on every refresh, so the
-     scroll position had to be saved and put back around it — losing a student's
-     place mid-read is the same failure as the list jumping, arriving by another
-     route. React reconciles a keyed list instead of replacing it, so the scroll
-     is never lost in the first place and the save-and-restore is gone. The
-     requirement it served has not gone anywhere: keep the question key stable. */
 
   host.renderReview({
     title: paper?.subject
@@ -606,6 +532,7 @@ async function refreshReview() {
       answer: q.answer,
       remark: q.remark,
       crop: q.crop,
+      pageNumber: q.pageNumber,
       unreadableReason: q.unreadableReason,
       alternatives: q.alternatives,
       allocationUnusable: q.allocationUnusable,
@@ -635,17 +562,13 @@ function handleReviewAction(id, action) {
     confirmQuestion(id).then(refreshReview).catch((e) => toast(e.message, 'warn'));
     return;
   }
-
   if (action === 'cause') {
-    // Accepted immediately. This is self-knowledge and exactly the signal we
-    // want; there is nothing here to negotiate.
     rejectCause(id).then(() => {
       toast('Taken out. It will not count towards your patterns.');
       return refreshReview();
     }).catch((e) => toast(e.message, 'warn'));
     return;
   }
-
   if (action === 'type') {
     host.openSheet({
       title: 'Fix this',
@@ -653,9 +576,6 @@ function handleReviewAction(id, action) {
       items: [],
       input: { id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
-      // The sheet hands back what was typed, rather than this reaching into the
-      // document for it. The student is the authority here: whatever they type
-      // is accepted as-is, with no verification and no review queue.
       onConfirm: async (value) => {
         try { await correctAnswer(id, value ?? ''); await refreshReview(); }
         catch (e) { toast(e.message, 'warn'); }
@@ -663,7 +583,6 @@ function handleReviewAction(id, action) {
     });
     return;
   }
-
   if (action === 'rescan') {
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,
@@ -677,31 +596,16 @@ function handleReviewAction(id, action) {
         host.closeReview();
         releaseCrops();
         S.retaking = question.pageNumber;
-        // Back to the camera, which is where the next thing they do happens.
         host.goto('scan');
-        toast(`Point at page ${question.pageNumber} and take it again.`);
+        toast(`Retaking page ${question.pageNumber}. Keep all four corners visible.`);
       },
     });
   }
 }
 
-/**
- * Stage 9 → 10, in order: start explanations, wait for them to settle, only
- * then commit. `commit_extraction_run` copies `region_explanation` into
- * `mark_loss_event` at the moment it runs — committing right after *starting*
- * explanations (rather than after they finish) is what left `mark_loss_event`
- * empty on every paper this app has ever produced. See AXON_FIX_BRIEF.md §6.2.
- *
- * A failed or slow explanation pass does not block the marks themselves: this
- * still commits once explanations have either settled or timed out, so a
- * paper is never held hostage by stage 8. Whatever landed lands; nothing here
- * is a silent catch — every failure is logged and told to the student.
- */
 async function save() {
   if (!S.runId || S.saving) return;
   if (S.review?.outstanding) {
-    // The server refuses this too — the guard here is so the student hears why
-    // from the screen rather than from a rejected request.
     toast(`${S.review.outstanding} question(s) still need a look. They are at the top.`);
     return;
   }
@@ -718,9 +622,6 @@ async function save() {
         onQuestion: () => scheduleReviewRefresh(),
       });
     } catch (error) {
-      // Explanations are a layer on top of the marks, not a precondition for
-      // saving them. Log it, tell the student plainly, and still commit —
-      // the marks are real and confirmed either way.
       console.error('explanations', error);
       toast('We could not work out why marks were lost this time. Your marks are still saved.', 'warn');
     }
@@ -729,18 +630,12 @@ async function save() {
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
     host.closeReview();
-    // The paper is read, reviewed and saved: the progress panel is describing
-    // work that finished. Left standing it kept "Reading this paper" under the
-    // viewfinder for the rest of the session, so the next paper started against
-    // the last one's steps and Scan never returned to its idle state. This is
-    // the terminal path, and clearing it here is what makes the screen idle
-    // again. The refused and failed paths deliberately do NOT clear it — those
-    // panels are the only place the student is told what went wrong.
     host.renderProgress(null);
     releaseCrops();
     S.runId = null;
     S.regions = null;
-    // Now the pages have done their job.
+    S.retaking = null;
+
     if (S.draft) {
       await deleteDraft(S.draft.id);
       S.draft = null;
@@ -748,9 +643,6 @@ async function save() {
       S.thumbs.clear();
       await paintTray();
       await paintDrafts();
-      // The offer to resume outlived the thing it offered: the draft row is
-      // gone above, but the toast is only ever raised at boot, so it stayed on
-      // the viewfinder pointing at a deleted draft for the rest of the session.
       host.draftToast(null, { onResume: resumeDraft });
     }
     await host.refreshLibrary();
@@ -762,23 +654,13 @@ async function save() {
   }
 }
 
-/**
- * Bring uploaded images in through the same door as captured ones.
- *
- * Upload is a first-class path, not a fallback, so a page that arrives from the
- * gallery gets exactly what a captured page gets: conditioning, layer
- * separation, a quality verdict and a place in the tray. The only thing it does
- * not get is a quad, because a photo taken last week has no live edge detection
- * behind it — the page is used as it stands.
- */
+/** Uploaded photos enter the same transaction path as camera captures. */
 export async function acceptUploads(files) {
   if (!S.ctx?.student) return;
   const images = files.filter((f) => /^image\//.test(f.type));
   const rest = files.filter((f) => !/^image\//.test(f.type));
 
   if (rest.length) {
-    // Said plainly rather than dropped or half-handled. A PDF that looked
-    // accepted and was never read is the invisible failure hard rule 4 forbids.
     toast(`${rest.length} file(s) are not images. We can't read PDFs yet — photos of the pages work.`, 'warn');
   }
   if (!images.length) return;
@@ -786,9 +668,15 @@ export async function acceptUploads(files) {
   for (const file of images) {
     try {
       const bitmap = await createImageBitmap(file);
-      // The file itself is the original — already the least degraded copy
-      // there is, so nothing is re-encoded to produce one.
-      await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file });
+      const replacing = S.retaking;
+      await takePage({
+        bitmap,
+        quad: null,
+        auto: false,
+        sourceKind: 'upload',
+        original: file,
+        transactionId: `upload:${crypto.randomUUID()}`,
+      }, replacing);
     } catch {
       toast(`${file.name} could not be opened.`, 'warn');
     }
