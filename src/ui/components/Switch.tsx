@@ -1,28 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SWITCH
 
-   Compact Apple-like switch: a plain white thumb, a slightly muted active
-   green, no state glyphs, and a very fast travel animation. While crossing,
-   the thumb scales down only a few percent and snaps back to full size as the
-   spring settles.
+   Elongated Apple-like switch: a low, wide track with a rounded-rectangle
+   white thumb, muted active green, no state glyphs, and an intentionally very
+   fast snap between states. The thumb compresses only a touch while moving.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useId, useRef } from "react";
 import { spring, seed, releaseSpring } from "../lib/spring";
 import { hapticTick } from "../lib/haptics";
 
-/* Keep the familiar iOS proportions while reducing the overall control size. */
-const TRACK_W = 45;
-const TRACK_H = 27;
-const THUMB_W = 23;
+/* Reference geometry is deliberately much wider than it is tall. The white
+   thumb is a capsule too — not a circle — and leaves a narrow inset around it. */
+const TRACK_W = 58;
+const TRACK_H = 26;
+const THUMB_W = 32;
+const THUMB_H = 22;
 const INSET = 2;
 const TRAVEL = TRACK_W - THUMB_W - INSET * 2;
 
-/* Softer than the design-system positive green so the switch does not read as
-   fluorescent against the dark settings surface. */
+/* Slightly restrained so the enabled state does not look neon in dark mode. */
 const SWITCH_ON = "#55C86C";
 
-export const SWITCH_METRICS = { TRACK_W, TRACK_H, THUMB_W, INSET, TRAVEL };
+export const SWITCH_METRICS = {
+  TRACK_W,
+  TRACK_H,
+  THUMB_W,
+  THUMB_H,
+  INSET,
+  TRAVEL,
+};
 
 export default function Switch({
   on,
@@ -48,9 +55,8 @@ export default function Switch({
       if (!thumb.current) return;
       const x = p * TRAVEL;
 
-      // The reference does not visibly stretch. It compresses by only a few
-      // percent during travel, then is perfectly round again on arrival.
-      const shrink = Math.min(.045, Math.abs(v) * .0065);
+      // Only a tiny compression while in flight. No squash/stretch wobble.
+      const shrink = Math.min(.03, Math.abs(v) * .0016);
       const scale = 1 - shrink;
       thumb.current.style.transform =
         `translateX(${x.toFixed(2)}px) scale(${scale.toFixed(3)})`;
@@ -60,18 +66,21 @@ export default function Switch({
       || matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (first.current || reduced) {
-      // Mount in position rather than animating from off, or every switch on
-      // Settings slides on at once when the screen opens.
       first.current = false;
       seed(key, on ? 1 : 0);
       place(on ? 1 : 0, 0);
       return;
     }
 
-    // Deliberately much quicker than the tab/navigation springs. The thumb is
-    // nearly at the opposite edge in ~100ms and settles without a visible
-    // bounce, which gives the switch the crisp Apple-like tap response.
-    spring(key, { to: on ? 1 : 0, stiffness: 560, damping: 34, onUpdate: place });
+    // Much faster than the rest of the shell motion: most of the travel is
+    // completed in only a handful of frames, with effectively no visible
+    // overshoot. This is what gives the control its sharp, tactile snap.
+    spring(key, {
+      to: on ? 1 : 0,
+      stiffness: 1600,
+      damping: 70,
+      onUpdate: place,
+    });
   }, [on, key]);
 
   useEffect(() => () => releaseSpring(key), [key]);
@@ -98,7 +107,7 @@ export default function Switch({
         style={{
           borderRadius: TRACK_H / 2,
           background: on ? SWITCH_ON : "var(--track-off)",
-          transition: "background 90ms ease-out",
+          transition: "background 65ms ease-out",
         }}
       />
       <span
@@ -109,8 +118,8 @@ export default function Switch({
           top: INSET,
           left: INSET,
           width: THUMB_W,
-          height: THUMB_W,
-          borderRadius: "50%",
+          height: THUMB_H,
+          borderRadius: THUMB_H / 2,
         }}
       />
     </button>
