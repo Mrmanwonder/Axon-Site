@@ -2,16 +2,14 @@
    SWITCH
 
    Elongated Apple-like switch: a low, wide track with a rounded-rectangle
-   white thumb, muted active green, no state glyphs, and an intentionally very
-   fast snap between states. The thumb compresses only a touch while moving.
+   white thumb, muted active green, no state glyphs, and immediate pointer-down
+   feedback. The visual state is optimistic so the control never waits for a
+   parent/network round trip before moving.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useId, useRef } from "react";
-import { spring, seed, releaseSpring } from "../lib/spring";
+import { useEffect, useRef, useState } from "react";
 import { hapticTick } from "../lib/haptics";
 
-/* Reference geometry is deliberately much wider than it is tall. The white
-   thumb is a capsule too — not a circle — and leaves a narrow inset around it. */
 const TRACK_W = 58;
 const TRACK_H = 26;
 const THUMB_W = 32;
@@ -19,8 +17,9 @@ const THUMB_H = 22;
 const INSET = 2;
 const TRAVEL = TRACK_W - THUMB_W - INSET * 2;
 
-/* Slightly restrained so the enabled state does not look neon in dark mode. */
 const SWITCH_ON = "#55C86C";
+const MOTION_MS = 120;
+const MOTION_CURVE = "cubic-bezier(0.1, 0.9, 0.2, 1)";
 
 export const SWITCH_METRICS = {
   TRACK_W,
@@ -46,59 +45,68 @@ export default function Switch({
   /** In flight — the ledger has not answered yet. */
   busy?: boolean;
 }) {
-  const key = "sw" + useId().replace(/:/g, "");
-  const thumb = useRef<HTMLSpanElement>(null);
-  const first = useRef(true);
+  /*
+   * Do not drive the thumb directly from the controlled `on` prop. Some switch
+   * owners persist their value before feeding it back, which made a tap feel
+   * delayed. `visualOn` flips immediately, then reconciles with the canonical
+   * value when it arrives.
+   */
+  const [visualOn, setVisualOn] = useState(on);
+  const [pressed, setPressed] = useState(false);
+  const pointerActivated = useRef(false);
+  const wasBusy = useRef(Boolean(busy));
 
   useEffect(() => {
-    const place = (p: number, v: number) => {
-      if (!thumb.current) return;
-      const x = p * TRAVEL;
+    setVisualOn(on);
+  }, [on]);
 
-      // Only a tiny compression while in flight. No squash/stretch wobble.
-      const shrink = Math.min(.03, Math.abs(v) * .0016);
-      const scale = 1 - shrink;
-      thumb.current.style.transform =
-        `translateX(${x.toFixed(2)}px) scale(${scale.toFixed(3)})`;
-    };
+  /* If persistence finishes without changing `on`, treat that as a rejected
+     optimistic update and restore the canonical state. */
+  useEffect(() => {
+    if (wasBusy.current && !busy) setVisualOn(on);
+    wasBusy.current = Boolean(busy);
+  }, [busy, on]);
 
-    const reduced = document.documentElement.dataset.motion === "reduce"
-      || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const activate = () => {
+    if (disabled || busy) return;
 
-    if (first.current || reduced) {
-      first.current = false;
-      seed(key, on ? 1 : 0);
-      place(on ? 1 : 0, 0);
-      return;
-    }
-
-    // Much faster than the rest of the shell motion: most of the travel is
-    // completed in only a handful of frames, with effectively no visible
-    // overshoot. This is what gives the control its sharp, tactile snap.
-    spring(key, {
-      to: on ? 1 : 0,
-      stiffness: 1600,
-      damping: 70,
-      onUpdate: place,
-    });
-  }, [on, key]);
-
-  useEffect(() => () => releaseSpring(key), [key]);
+    const next = !visualOn;
+    setVisualOn(next);
+    hapticTick();
+    onChange(next);
+  };
 
   return (
     <button
       type="button"
-      className={"sw" + (on ? " on" : "")}
+      className={"sw" + (visualOn ? " on" : "")}
       role="switch"
-      aria-checked={on}
+      aria-checked={visualOn}
       aria-label={label}
       aria-busy={busy || undefined}
       disabled={disabled}
       style={{ width: TRACK_W, height: TRACK_H }}
+      onPointerDown={(event) => {
+        if (disabled || busy || event.button !== 0) return;
+
+        /* Pointer-down, not click: movement begins on the same interaction
+           frame instead of waiting for pointer-up + a controlled state round
+           trip. The following click is suppressed so one tap toggles once. */
+        pointerActivated.current = true;
+        setPressed(true);
+        activate();
+      }}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       onClick={() => {
-        if (disabled) return;
-        hapticTick();
-        onChange(!on);
+        if (pointerActivated.current) {
+          pointerActivated.current = false;
+          return;
+        }
+
+        /* Keyboard activation still follows the button's native click path. */
+        activate();
       }}
     >
       <span
@@ -106,13 +114,12 @@ export default function Switch({
         aria-hidden="true"
         style={{
           borderRadius: TRACK_H / 2,
-          background: on ? SWITCH_ON : "var(--track-off)",
-          transition: "background 65ms ease-out",
+          background: visualOn ? SWITCH_ON : "var(--track-off)",
+          transition: `background ${MOTION_MS}ms ${MOTION_CURVE}`,
         }}
       />
       <span
         className="th"
-        ref={thumb}
         aria-hidden="true"
         style={{
           top: INSET,
@@ -120,6 +127,9 @@ export default function Switch({
           width: THUMB_W,
           height: THUMB_H,
           borderRadius: THUMB_H / 2,
+          transform: `translateX(${visualOn ? TRAVEL : 0}px) scale(${pressed ? .97 : 1})`,
+          transition: `transform ${MOTION_MS}ms ${MOTION_CURVE}`,
+          willChange: "transform",
         }}
       />
     </button>
