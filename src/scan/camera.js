@@ -3,22 +3,19 @@
 // This module intentionally stays tiny. The permission sheet has to appear the
 // instant the Scan tab opens, while the rest of the scanner loads behind it.
 //
-// The scanner now uses two resolutions:
-//   1. a light 720p live stream for preview/tracking on browsers that can take a
-//      separate sensor-resolution still through ImageCapture;
-//   2. a higher-resolution live stream only on browsers (notably iOS Safari)
+// The scanner uses two resolutions:
+//   1. a light 1280x720 live stream for preview/tracking on browsers that can
+//      take a separate sensor-resolution still through ImageCapture;
+//   2. a high-resolution live stream only on browsers (notably iOS Safari)
 //      where the video frame itself is the best still the web platform exposes.
-//
-// Keeping those paths separate is important. Decoding a 12MP stream just to run
-// a detector wastes battery and main-thread bandwidth, but forcing every browser
-// to 720p makes the Safari fallback permanently incapable of producing a useful
-// page. The capture layer selects the second profile only when it has proved the
-// native-still route is unavailable.
 
 export const TRACKING_WIDTH = 1280;
 export const TRACKING_HEIGHT = 720;
-export const FALLBACK_CAPTURE_WIDTH = 2560;
-export const FALLBACK_CAPTURE_HEIGHT = 1440;
+// Practical 12MP ceiling from the architecture. Some phones advertise far
+// larger binned sensor modes; asking a web video track for 48MP is a memory trap,
+// not a quality win for document OCR.
+export const FALLBACK_CAPTURE_WIDTH = 4032;
+export const FALLBACK_CAPTURE_HEIGHT = 3024;
 
 /** Fast live stream. ImageCapture-capable browsers take the real photograph
     separately at the sensor's maximum supported still resolution. */
@@ -32,10 +29,7 @@ export const CAMERA_CONSTRAINTS = {
   audio: false,
 };
 
-/**
- * Ask the track to keep focusing continuously, where the platform exposes it.
- * Best-effort: unsupported camera controls must never stop the stream.
- */
+/** Best-effort continuous focus. Unsupported controls never stop the stream. */
 export async function requestContinuousFocus(track) {
   try {
     const caps = track?.getCapabilities?.();
@@ -50,14 +44,23 @@ export async function requestContinuousFocus(track) {
 /**
  * Safari/iOS does not expose ImageCapture.takePhoto(). In that case the video
  * frame is the capture source, so promote the stream after feature probing.
- * `ideal` deliberately down-negotiates instead of failing on weaker cameras.
+ * Use the device-reported maximum when lower than the practical 12MP ceiling.
  */
 export async function requestFallbackCaptureResolution(track) {
   if (!track?.applyConstraints) return false;
   try {
+    const caps = track.getCapabilities?.();
+    const width = Math.max(
+      TRACKING_WIDTH,
+      Math.min(FALLBACK_CAPTURE_WIDTH, Number(caps?.width?.max ?? FALLBACK_CAPTURE_WIDTH)),
+    );
+    const height = Math.max(
+      TRACKING_HEIGHT,
+      Math.min(FALLBACK_CAPTURE_HEIGHT, Number(caps?.height?.max ?? FALLBACK_CAPTURE_HEIGHT)),
+    );
     await track.applyConstraints({
-      width: { ideal: FALLBACK_CAPTURE_WIDTH },
-      height: { ideal: FALLBACK_CAPTURE_HEIGHT },
+      width: { ideal: width },
+      height: { ideal: height },
       frameRate: { ideal: 30, max: 30 },
     });
     return true;
@@ -68,9 +71,9 @@ export async function requestFallbackCaptureResolution(track) {
 
 export const cameraSupported = () => !!navigator.mediaDevices?.getUserMedia;
 
-/** Start the camera and hand the same promise to every caller. */
 let pending = null;
 
+/** Start the camera and hand the same promise to every caller. */
 export function requestCamera() {
   if (!cameraSupported()) {
     return Promise.reject(Object.assign(new Error('no camera on this device'), { name: 'NotFoundError' }));
