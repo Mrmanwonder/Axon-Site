@@ -1,23 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE CONSEQUENCE SHEET
 
-   `__axonOpenSheet` as a React provider. The copy rules make this a specific
-   kind of surface and not a generic modal:
-
-   · It never asks "are you sure?". It states what will happen and offers the
-     action. That is the whole reason it exists — CLAUDE.md rules the
-     reassurance prompt out, so the alternative has to carry its weight.
-   · Destructive rows do not turn red. Red is the sign-out row and nothing else,
-     so a delete action uses the ordinary primary treatment and lets the stated
-     consequences do the work.
-   · When the sheet offers choices, the primary button is hidden rather than left
-     on screen: the choices *are* the action, and a second way to do the same
-     thing is a dead control.
-
-   Opening pushes a history entry, so the back button and the hardware back
-   gesture close the sheet instead of leaving the screen under it. Dismissing by
-   scrim or Cancel pops that entry, which keeps the stack the length the user
-   expects.
+   Choice rows are neutral by default. Callers may explicitly mark one choice as
+   primary or secondary when the two actions do not have equal product weight;
+   existing sheets keep their current appearance because emphasis is opt-in.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import {
@@ -28,7 +14,11 @@ import { spring, seed, releaseSpring } from "../lib/spring";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import PressBox from "./PressBox";
 
-export type SheetChoice = { label: string; value: string };
+export type SheetChoice = {
+  label: string;
+  value: string;
+  emphasis?: "primary" | "secondary";
+};
 
 export type SheetConfig = {
   title: string;
@@ -80,8 +70,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     });
   }, [key, place]);
 
-  /** Animate out, then drop the config. Popping history is the caller's job so
-      a back-button dismissal doesn't pop twice. */
   const dismiss = useCallback(() => {
     spring(key, {
       to: 1,
@@ -97,7 +85,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const closeSheet = useCallback(() => {
     if (pushed.current) {
       pushed.current = false;
-      history.back();      // fires popstate, which calls dismiss
+      history.back();
     } else {
       dismiss();
     }
@@ -115,8 +103,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     };
   }, [dismiss, key]);
 
-  // Escape closes it, and focus moves into the sheet when it opens so a keyboard
-  // user is not left tabbing through the screen behind the scrim.
   useEffect(() => {
     if (!cfg) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeSheet(); };
@@ -128,8 +114,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({ openSheet, closeSheet }), [openSheet, closeSheet]);
 
   const confirm = () => {
-    // A destructive primary is consequential, so it gets the firmer pulse. A
-    // sheet offering choices has no primary at all.
     hapticFirm();
     const fn = cfg?.onConfirm;
     const v = inputValue;
@@ -137,8 +121,9 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     void fn?.(v);
   };
 
-  const choose = (v: string) => {
-    hapticTick();
+  const choose = (v: string, emphasis?: SheetChoice["emphasis"]) => {
+    if (emphasis === "primary") hapticFirm();
+    else hapticTick();
     const fn = cfg?.onChoice;
     closeSheet();
     void fn?.(v);
@@ -197,8 +182,9 @@ export function SheetProvider({ children }: { children: ReactNode }) {
                   as="button"
                   type="button"
                   key={c.value}
-                  className="sh-choice"
-                  onClick={() => choose(c.value)}
+                  className={"sh-choice" + (c.emphasis ? ` ${c.emphasis}` : "")}
+                  data-emphasis={c.emphasis}
+                  onClick={() => choose(c.value, c.emphasis)}
                 >
                   {c.label}
                 </PressBox>
@@ -207,8 +193,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
           )}
 
           <div className="acts">
-            {/* Choices are the action; a primary button beside them would be a
-                second way to do the same thing. */}
             {!cfg.choices && (
               <>
                 <PressBox as="button" type="button" className="btn primary" onClick={confirm}>
