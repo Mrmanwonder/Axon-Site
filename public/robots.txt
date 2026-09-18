@@ -1,6 +1,6 @@
+# Keep Axon out of search indexes, but allow clients to fetch the public
+# document and its Open Graph image so shared links can render a rich preview.
 User-agent: *
-Allow: /privacy
-Allow: /terms
-Disallow: /
+Allow: /
 
 Sitemap: https://axonstudy.online/sitemap.xml
