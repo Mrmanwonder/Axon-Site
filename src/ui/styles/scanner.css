@@ -5,16 +5,17 @@
 :root {
   --scan-snap: cubic-bezier(.2, .8, .2, 1);
   --scan-tray-h: 196px;
+  --scan-nav-clearance: calc(56px + var(--dock-pad));
 }
 
-/* The phone tab bar competes directly with the camera controls and paper edge.
-   Desktop uses a side rail instead; that navigation is restored below. */
-html.scanner-active .tabdock {
-  display: none !important;
+/* Keep the shared phone navigation visible and give it a real strip below the
+   camera. Controls remain camera-relative instead of floating over the dock. */
+html.scanner-active .scanhero {
+  bottom: var(--scan-nav-clearance);
 }
 
 html.scanner-active:has(.tray) .scanhero {
-  bottom: var(--scan-tray-h);
+  bottom: calc(var(--scan-nav-clearance) + var(--scan-tray-h));
 }
 
 .scanhero {
@@ -97,17 +98,17 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   opacity: .46;
 }
 
-/* On phones the camera owns the screen, so reserve a real strip below it rather
-   than floating thumbnails over the paper. */
+/* Reserve a real strip between camera and navigation for captured pages rather
+   than floating thumbnails over the paper or underneath the tab bar. */
 html.scanner-active .tray {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--scan-nav-clearance);
   z-index: 12;
   height: var(--scan-tray-h);
   box-sizing: border-box;
-  padding: 12px var(--gutter) max(12px, env(safe-area-inset-bottom));
+  padding: 12px var(--gutter);
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
@@ -206,6 +207,7 @@ html.scanner-active .sheet .sh-choice {
 }
 
 html.scanner-active .scanhero .drafttoast {
+  top: auto;
   bottom: 96px;
 }
 
@@ -215,10 +217,7 @@ html.scanner-active .scanhero .drafttoast {
 @media (min-width: 768px) {
   :root { --scan-tray-h: 176px; }
 
-  html.scanner-active .tabdock {
-    display: flex !important;
-  }
-
+  html.scanner-active .scanhero,
   html.scanner-active:has(.tray) .scanhero {
     bottom: auto;
   }

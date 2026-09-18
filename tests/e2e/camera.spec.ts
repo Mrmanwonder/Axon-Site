@@ -87,6 +87,92 @@ test("camera startup stays renderable until iPhone playback becomes live", async
   });
 });
 
+test("mobile Scan keeps the navbar visible without stretching the resume draft", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/browser/index.html");
+
+  const layout = await page.evaluate(async () => {
+    const viewport = document.createElement("meta");
+    viewport.name = "viewport";
+    viewport.content = "width=device-width, initial-scale=1";
+    document.head.append(viewport);
+
+    for (const href of [
+      "/src/ui/styles/app.css",
+      "/src/ui/styles/system.css",
+      "/src/ui/styles/shell.css",
+      "/src/ui/styles/scanner.css",
+    ]) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = href;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.onload = () => resolve();
+        stylesheet.onerror = () => reject(new Error(`${href} did not load`));
+      });
+      document.head.append(stylesheet);
+      await loaded;
+    }
+
+    document.documentElement.classList.add("scanner-active");
+    document.body.innerHTML = `
+      <main class="app">
+        <section class="view on" data-screen="scan">
+          <div class="scanhero" data-camera="on">
+            <div class="drafttoast" style="transform: translateY(0)">
+              <div class="dh"></div>
+              <div class="row2">
+                <div class="ic"></div>
+                <div class="b"><div class="t1">Resume draft</div><div class="t2">2 pages added</div></div>
+                <button class="go">Resume</button>
+              </div>
+            </div>
+            <div class="scanctrls"><button class="sidebtn"></button><button class="shutter"></button></div>
+          </div>
+        </section>
+        <nav class="tabdock"><div class="tabbar"><div class="refractlayer"><button class="tab">Scan</button></div></div></nav>
+      </main>`;
+
+    const hero = document.querySelector<HTMLElement>(".scanhero")!;
+    const toast = document.querySelector<HTMLElement>(".drafttoast")!;
+    const controls = document.querySelector<HTMLElement>(".scanctrls")!;
+    const dock = document.querySelector<HTMLElement>(".tabdock")!;
+    const navTop = dock.getBoundingClientRect().top;
+    const withoutTray = {
+      dockDisplay: getComputedStyle(dock).display,
+      heroBottom: hero.getBoundingClientRect().bottom,
+      controlsBottom: controls.getBoundingClientRect().bottom,
+      navTop,
+      toastHeight: toast.getBoundingClientRect().height,
+      toastBottomGap: hero.getBoundingClientRect().bottom - toast.getBoundingClientRect().bottom,
+    };
+
+    const tray = document.createElement("section");
+    tray.className = "tray";
+    tray.innerHTML = '<div class="trayscroll"></div><div class="traybar"><span class="cnt">2 pages</span></div>';
+    document.querySelector('[data-screen="scan"]')!.append(tray);
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+
+    return {
+      withoutTray,
+      withTray: {
+        heroBottom: hero.getBoundingClientRect().bottom,
+        trayTop: tray.getBoundingClientRect().top,
+        trayBottom: tray.getBoundingClientRect().bottom,
+        navTop: dock.getBoundingClientRect().top,
+      },
+    };
+  });
+
+  expect(layout.withoutTray.dockDisplay).not.toBe("none");
+  expect(layout.withoutTray.toastHeight).toBeLessThan(120);
+  expect(layout.withoutTray.toastBottomGap).toBeCloseTo(96, 0);
+  expect(layout.withoutTray.heroBottom).toBeLessThanOrEqual(layout.withoutTray.navTop + 1);
+  expect(layout.withoutTray.controlsBottom).toBeLessThanOrEqual(layout.withoutTray.navTop + 1);
+  expect(layout.withTray.heroBottom).toBeLessThanOrEqual(layout.withTray.trayTop + 1);
+  expect(layout.withTray.trayBottom).toBeLessThanOrEqual(layout.withTray.navTop + 1);
+});
+
 test("camera rendering follows video frames instead of a 120Hz display", async ({ page }) => {
   await page.goto("/tests/browser/index.html");
 
