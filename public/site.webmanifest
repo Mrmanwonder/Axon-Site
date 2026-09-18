@@ -9,9 +9,9 @@
   "icons": [
     {
       "src": "/axon-logo.png",
-      "sizes": "512x512",
+      "sizes": "176x112",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
