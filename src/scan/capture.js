@@ -31,6 +31,13 @@ const AUTO_RETRY_COOLDOWN_MS = 550;
 const TRACK_CONFIDENCE_FLOOR = 0.64;
 const FOCUS_BREATHING_AREA_DELTA = 0.05;
 
+export const CAPTURE_CONFIRM_TIMING = Object.freeze({
+  freezeEnd: 40,
+  morphEnd: 90,
+  edgesEnd: 160,
+  end: 180,
+});
+
 export const PAPER_EVIDENCE_CONFIRMATIONS = 2;
 export const PAPER_EVIDENCE_LOSS_MS = 700;
 export const SEARCH_GUIDANCE = Object.freeze({
@@ -44,6 +51,76 @@ function viewportScale() {
 
 function viewportScaled() {
   return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+}
+
+const clamp01 = (value) => Math.max(0, Math.min(1, value));
+
+// cubic-bezier(0.2, 0.9, 0.2, 1), solved from x to y. The strong initial
+// response makes the confirmation read as feedback rather than progress.
+export function captureConfirmEase(progress) {
+  const x = clamp01(progress);
+  const sample = (a, b, t) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t ** 2 + t ** 3;
+  const slope = (a, b, t) => 3 * a * (1 - t) ** 2
+    + 6 * (b - a) * (1 - t) * t
+    + 3 * (1 - b) * t ** 2;
+  let t = x;
+  for (let i = 0; i < 5; i++) {
+    const dx = sample(0.2, 0.2, t) - x;
+    const d = slope(0.2, 0.2, t);
+    if (Math.abs(dx) < 0.0001 || Math.abs(d) < 0.0001) break;
+    t = clamp01(t - dx / d);
+  }
+  return sample(0.9, 1, t);
+}
+
+export function captureConfirmFrame(elapsedMs, reducedMotion = false) {
+  if (elapsedMs < 0 || elapsedMs >= CAPTURE_CONFIRM_TIMING.end) {
+    return { active: false, morph: 0, edges: 0, opacity: 0 };
+  }
+  if (reducedMotion) {
+    const fadeStart = 120;
+    return {
+      active: true,
+      morph: 1,
+      edges: 1,
+      opacity: elapsedMs < fadeStart
+        ? 1
+        : 1 - clamp01((elapsedMs - fadeStart) / (CAPTURE_CONFIRM_TIMING.end - fadeStart)),
+    };
+  }
+  const morph = captureConfirmEase(
+    (elapsedMs - CAPTURE_CONFIRM_TIMING.freezeEnd)
+      / (CAPTURE_CONFIRM_TIMING.morphEnd - CAPTURE_CONFIRM_TIMING.freezeEnd),
+  );
+  const edges = captureConfirmEase(
+    (elapsedMs - CAPTURE_CONFIRM_TIMING.morphEnd)
+      / (CAPTURE_CONFIRM_TIMING.edgesEnd - CAPTURE_CONFIRM_TIMING.morphEnd),
+  );
+  const opacity = elapsedMs < CAPTURE_CONFIRM_TIMING.edgesEnd
+    ? 1
+    : 1 - clamp01(
+        (elapsedMs - CAPTURE_CONFIRM_TIMING.edgesEnd)
+          / (CAPTURE_CONFIRM_TIMING.end - CAPTURE_CONFIRM_TIMING.edgesEnd),
+      );
+  return { active: true, morph, edges, opacity };
+}
+
+export function isVerifiedQuad(candidate) {
+  return Array.isArray(candidate) && candidate.length === 4
+    && candidate.every((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+}
+
+export function resolveOverlayPhase({
+  confirming = false,
+  hasQuad = false,
+  trackState = 'searching',
+  trackConfidence = 0,
+  scaledViewport = false,
+} = {}) {
+  if (confirming) return 'captured-confirm';
+  if (hasQuad && trackState === 'tracking'
+      && trackConfidence >= TRACK_CONFIDENCE_FLOOR && !scaledViewport) return 'locked';
+  return 'searching';
 }
 
 /** Whether automatic capture is allowed to fire on this frame. */
@@ -225,6 +302,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let measuredQuad = null;
   let guidance = null;
   let paperEvidence = null;
+  let captureConfirmation = null;
+  let overlayPhase = 'searching';
 
   let quad = null;
   let consecutiveFinds = 0;
@@ -385,6 +464,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     consecutiveFinds = globalConfirmations = 0;
     track = createTrack();
     trackSize = measured = measuredQuad = guidance = paperEvidence = null;
+    captureConfirmation = null;
+    overlayPhase = 'searching';
     lastTrackedFrame = -1;
     lastTrackedArea = null;
     measuredAt = 0;
@@ -727,7 +808,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   // ── overlay ──────────────────────────────────────────────────────────────
   function scheduleLoop() {
-    if (typeof video.requestVideoFrameCallback === 'function') {
+    // Capture confirmation is clocked independently from the camera. Native
+    // still capture can briefly stall preview frames; feedback must remain fast.
+    if (!captureConfirmation && typeof video.requestVideoFrameCallback === 'function') {
       frameClock = 'video';
       videoFrameHandle = video.requestVideoFrameCallback(loop);
     } else {
@@ -739,7 +822,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
   function loop() {
     if (!running) return;
     scheduleLoop();
-    if (frameClock === 'animation' && video.currentTime === lastRenderedFrame) return;
+    if (frameClock === 'animation' && !captureConfirmation
+        && video.currentTime === lastRenderedFrame) return;
     lastRenderedFrame = video.currentTime;
     trackStep();
 
@@ -751,33 +835,134 @@ export function createCapture({ video, overlay, onState, onShot }) {
     ctx.clearRect(0, 0, w, h);
     if (!video.videoWidth) return;
 
-    // Never paint extrapolated/recovering corners. A missing bracket is honest;
-    // a bracket floating over the desk actively teaches the user the wrong pose.
-    if (!quad || state.trackState !== 'tracking'
-        || state.trackConfidence < TRACK_CONFIDENCE_FLOOR || viewportScaled()) return;
-
     const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
     const offsetX = (w - video.videoWidth * scale) / 2;
     const offsetY = (h - video.videoHeight * scale) / 2;
     const toOverlay = (p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
-    const points = quad.map(toOverlay);
 
-    ctx.strokeStyle = state.blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
-    ctx.lineWidth = 3 * dpr;
-    ctx.lineCap = 'round';
-    const armLength = 26 * dpr;
-    for (let i = 0; i < 4; i++) {
-      const p = points[i];
-      for (const q of [points[(i + 1) % 4], points[(i + 3) % 4]]) {
-        const dx = q.x - p.x, dy = q.y - p.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const t = Math.min(armLength, length * 0.4) / length;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x + dx * t, p.y + dy * t);
-        ctx.stroke();
+    overlayPhase = resolveOverlayPhase({
+      confirming: !!captureConfirmation,
+      hasQuad: !!quad,
+      trackState: state.trackState,
+      trackConfidence: state.trackConfidence,
+      scaledViewport: viewportScaled(),
+    });
+
+    if (overlayPhase === 'captured-confirm') {
+      const frame = captureConfirmFrame(
+        performance.now() - captureConfirmation.startedAt,
+        captureConfirmation.reducedMotion,
+      );
+      if (!frame.active) {
+        captureConfirmation = null;
+        overlayPhase = 'searching';
+        return;
       }
+      drawQuadMarkers(
+        ctx,
+        captureConfirmation.quad.map(toOverlay),
+        dpr,
+        { morph: frame.morph, edges: frame.edges, opacity: frame.opacity, captured: true },
+      );
+      return;
     }
+
+    // Never paint extrapolated/recovering corners. A missing marker is honest;
+    // a marker floating over the desk actively teaches the wrong pose.
+    if (overlayPhase !== 'locked') return;
+    drawQuadMarkers(ctx, quad.map(toOverlay), dpr, {
+      morph: 0,
+      edges: 0,
+      opacity: 1,
+      captured: false,
+      blocking: !!state.blocking,
+    });
+  }
+
+  function unitVector(from, to) {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    return { x: dx / length, y: dy / length };
+  }
+
+  function mixedUnit(from, to, amount) {
+    const x = from.x + (to.x - from.x) * amount;
+    const y = from.y + (to.y - from.y) * amount;
+    const length = Math.hypot(x, y) || 1;
+    return { x: x / length, y: y / length };
+  }
+
+  function lineAround(ctx, point, direction, behind, ahead) {
+    ctx.moveTo(point.x - direction.x * behind, point.y - direction.y * behind);
+    ctx.lineTo(point.x + direction.x * ahead, point.y + direction.y * ahead);
+  }
+
+  function drawQuadMarkers(ctx, points, dpr, {
+    morph, edges, opacity, captured, blocking = false,
+  }) {
+    const radius = 7 * dpr;
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = captured
+      ? 'rgba(255,255,255,.98)'
+      : blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const point = points[i];
+      const alongNext = unitVector(point, points[(i + 1) % 4]);
+      const alongPrevious = unitVector(point, points[(i + 3) % 4]);
+      const diagonalA = unitVector(
+        { x: 0, y: 0 },
+        { x: alongNext.x + alongPrevious.x, y: alongNext.y + alongPrevious.y },
+      );
+      const diagonalB = unitVector(
+        { x: 0, y: 0 },
+        { x: alongNext.x - alongPrevious.x, y: alongNext.y - alongPrevious.y },
+      );
+      // The cross first rotates into a plus. As its inward arms become the
+      // border, the two outward halves retract so the final shape is a clean
+      // document rectangle rather than a box with decorative whiskers.
+      const behind = captured ? radius * (1 - edges) : radius;
+      lineAround(ctx, point, mixedUnit(diagonalA, alongNext, morph), behind, radius);
+      lineAround(ctx, point, mixedUnit(diagonalB, alongPrevious, morph), behind, radius);
+    }
+    ctx.stroke();
+
+    if (edges > 0) {
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const from = points[i], to = points[(i + 1) % 4];
+        const direction = unitVector(from, to);
+        const half = Math.hypot(to.x - from.x, to.y - from.y) / 2;
+        const reach = radius + Math.max(0, half - radius) * edges;
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(from.x + direction.x * reach, from.y + direction.y * reach);
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - direction.x * reach, to.y - direction.y * reach);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function beginCaptureConfirmation(verifiedQuad) {
+    if (!isVerifiedQuad(verifiedQuad) || !running) return false;
+    if (frameClock === 'video') video.cancelVideoFrameCallback?.(videoFrameHandle);
+    else if (frameClock === 'animation') cancelAnimationFrame(rafHandle);
+    videoFrameHandle = rafHandle = 0;
+    frameClock = 'animation';
+    captureConfirmation = {
+      quad: verifiedQuad.map((point) => ({ ...point })),
+      startedAt: performance.now(),
+      reducedMotion: !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    };
+    overlayPhase = 'captured-confirm';
+    rafHandle = requestAnimationFrame(loop);
+    return true;
   }
 
   // ── shutter ──────────────────────────────────────────────────────────────
@@ -934,6 +1119,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     shootInFlight = true;
     const transactionId = nextTransactionId++;
     const mediaTime = video.currentTime;
+    const liveQuadAtShutter = overlayPhase === 'locked' && isVerifiedQuad(quad)
+      ? quad.map((point) => ({ ...point }))
+      : null;
     const shotActivation = activation;
     const tShotStart = performance.now();
 
@@ -986,6 +1174,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
         mediaTime,
         sourceKind: 'camera',
       };
+      // This line is deliberately below every failure/rejection return. The
+      // completed rectangle is a receipt for an accepted capture, never an
+      // optimistic loading animation. Prefer the frozen live quad because it
+      // is exactly what the student saw; fall back to the independently
+      // verified still geometry when manual capture preceded a live lock.
+      const confirmationQuad = liveQuadAtShutter ?? (isVerifiedQuad(analysed.quad)
+        ? scaleQuad(
+            analysed.quad,
+            { width: bitmap.width, height: bitmap.height },
+            { width: video.videoWidth, height: video.videoHeight },
+          )
+        : null);
+      beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
       armed = false;
       return shot;
@@ -999,6 +1200,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     stop,
     shoot: () => shoot(false),
     get state() { return state; },
+    get overlayPhase() { return overlayPhase; },
     setAutoCapture(on) { autoCapture = !!on; armed = true; },
     get autoCapture() { return autoCapture; },
     /** Holds automatic capture while the previous page is being conditioned.

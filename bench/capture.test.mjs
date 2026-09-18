@@ -10,10 +10,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CAPTURE_CONFIRM_TIMING,
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
   PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
-  liveGateVerdict, settledGuidance, settledPaperEvidence, settledScannerGuidance,
-  shouldAutoCapture,
+  captureConfirmFrame, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
+  settledGuidance, settledPaperEvidence, settledScannerGuidance, shouldAutoCapture,
 } from '../src/scan/capture.js';
 import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -300,6 +301,47 @@ test('confirmed paper presence survives brief misses, then calmly returns to sea
   const shown = settledScannerGuidance(null, lock, evidence, 1000 + PAPER_EVIDENCE_LOSS_MS);
   assert.equal(evidence.confirmed, false);
   assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
+});
+
+// ── capture-confirm overlay ─────────────────────────────────────────────────
+
+test('overlay phases are explicit and confirmation takes priority', () => {
+  assert.equal(resolveOverlayPhase(), 'searching');
+  assert.equal(resolveOverlayPhase({
+    hasQuad: true, trackState: 'tracking', trackConfidence: 1,
+  }), 'locked');
+  assert.equal(resolveOverlayPhase({
+    hasQuad: true, trackState: 'recovering', trackConfidence: 1,
+  }), 'searching');
+  assert.equal(resolveOverlayPhase({
+    confirming: true, hasQuad: false, trackState: 'searching', trackConfidence: 0,
+  }), 'captured-confirm');
+});
+
+test('capture confirmation follows the 40/90/160/180ms sequence', () => {
+  assert.deepEqual(captureConfirmFrame(0), { active: true, morph: 0, edges: 0, opacity: 1 });
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.freezeEnd - 1).morph, 0);
+  assert.ok(captureConfirmFrame(65).morph > 0);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.morphEnd).morph, 1);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.morphEnd).edges, 0);
+  assert.ok(captureConfirmFrame(125).edges > 0);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.edgesEnd).edges, 1);
+  assert.ok(captureConfirmFrame(170).opacity < 1);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.end).active, false);
+});
+
+test('reduced motion shows a static accepted rectangle instead of drawing it', () => {
+  const frame = captureConfirmFrame(0, true);
+  assert.equal(frame.morph, 1);
+  assert.equal(frame.edges, 1);
+  assert.equal(frame.opacity, 1);
+});
+
+test('capture confirmation requires a real four-point verified quad', () => {
+  assert.equal(isVerifiedQuad(page()), true);
+  assert.equal(isVerifiedQuad(null), false);
+  assert.equal(isVerifiedQuad(page().slice(0, 3)), false);
+  assert.equal(isVerifiedQuad([...page().slice(0, 3), { x: NaN, y: 4 }]), false);
 });
 
 // ── the brackets: deadzone and adaptive damping ────────────────────────────
