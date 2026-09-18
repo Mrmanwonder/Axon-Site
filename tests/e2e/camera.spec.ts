@@ -150,8 +150,8 @@ test("mobile Scan keeps the navbar visible without stretching the resume draft",
     const tray = document.createElement("section");
     tray.className = "tray";
     tray.innerHTML = '<div class="trayscroll"></div><div class="traybar"><span class="cnt">2 pages</span></div>';
+    hero.style.transition = "none";
     document.querySelector('[data-screen="scan"]')!.append(tray);
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
 
     return {
       withoutTray,
