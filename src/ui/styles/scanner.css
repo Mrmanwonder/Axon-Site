@@ -73,7 +73,8 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   gap: 30px;
 }
 
-.scanhero .autotoggle {
+.scanhero .autotoggle,
+.scanhero .draftsicon {
   z-index: 8;
   background: rgba(8,8,10,.62);
   border: 1px solid rgba(255,255,255,.12);
@@ -81,16 +82,26 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   backdrop-filter: blur(10px);
 }
 
+.scanhero .draftsicon {
+  padding: 0;
+  color: #fff;
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .scanhero .shutter,
 .scanhero .sidebtn,
-.scanhero .autotoggle {
+.scanhero .autotoggle,
+.scanhero .draftsicon {
   transition: transform .12s var(--scan-snap), opacity .12s var(--scan-snap),
               background .18s var(--scan-snap);
 }
 
 .scanhero .shutter:active:not(:disabled),
 .scanhero .sidebtn:active,
-.scanhero .autotoggle:active {
+.scanhero .autotoggle:active,
+.scanhero .draftsicon:active {
   transform: scale(.96);
 }
 
@@ -209,6 +220,43 @@ html.scanner-active .sheet .sh-choice {
 html.scanner-active .scanhero .drafttoast {
   top: auto;
   bottom: 96px;
+  opacity: var(--draft-alert-opacity, 1);
+  transform: translateY(var(--draft-alert-drag, 0));
+  transition: transform .14s var(--scan-snap), opacity .12s linear;
+  cursor: grab;
+}
+
+html.scanner-active .scanhero .drafttoast.is-dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+html.scanner-active .scanhero .drafttoast.is-dismissing {
+  opacity: 0;
+  transform: translateY(calc(100% + 110px));
+  pointer-events: none;
+}
+
+html.scanner-active .scanhero .drafttoast .dh {
+  display: block;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+html.scanner-active .scanhero .drafttoast .dh:focus-visible {
+  outline: 2px solid rgba(255,255,255,.9);
+  outline-offset: 3px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .scanhero[data-camera="on"] .draftsicon {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(30,30,34,.68);
+  }
 }
 
 /* system.css turns the desktop scanner back into a contained, in-flow panel at
@@ -251,6 +299,8 @@ html.scanner-active .scanhero .drafttoast {
   .scanhero .shutter,
   .scanhero .sidebtn,
   .scanhero .autotoggle,
+  .scanhero .draftsicon,
+  html.scanner-active .scanhero .drafttoast,
   html.scanner-active .tray .traypage,
   html.scanner-active .tray .btn.primary,
   html.scanner-active .sheet .sh-choice {

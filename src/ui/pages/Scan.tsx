@@ -10,17 +10,20 @@ import { useScan } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
+import { DraftAlert, DraftsButton } from "../components/ScanDrafts";
+import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import "../styles/scanner.css";
 
 export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
+    drafts, resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
     pendingCaptureCount,
   } = useScan();
   const { addPaper, addLink } = useIngestion();
   const { student } = useApp();
+  const { openSheet } = useSheetControls();
 
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
@@ -50,6 +53,23 @@ export default function Scan() {
     !p.pending && p.quality?.verdict === "warn").length;
   const firstRetake = unresolvedPages[0]?.page_number;
   const cannotSubmit = pendingCaptureCount > 0 || pendingPages > 0 || unresolvedPages.length > 0;
+  const openDrafts = () => {
+    hapticTick();
+    openSheet({
+      title: "Saved drafts",
+      body: drafts.length
+        ? "These unfinished scans are stored on this device until you resume and send them."
+        : "No saved scans yet. Pages you capture will be stored on this device until you send them.",
+      choices: drafts.length
+        ? drafts.map((draft) => ({
+            label: `${draft.title} · ${draft.pages} page${draft.pages === 1 ? "" : "s"}`,
+            value: draft.id,
+          }))
+        : undefined,
+      primary: "Done",
+      onChoice: (id) => draftsHandlers.onResume?.(id),
+    });
+  };
 
   return (
     <>
@@ -70,6 +90,8 @@ export default function Scan() {
         >
           {hint.hint}
         </div>
+
+        <DraftsButton count={drafts.length} onOpen={openDrafts} />
 
         <PressBox
           as="button"
@@ -105,27 +127,8 @@ export default function Scan() {
           </PressBox>
         </div>
 
-        {resumable && (
-          <div className="drafttoast" style={{ transform: "translateY(0)" }}>
-            <div className="dh" />
-            <div className="row2">
-              <div className="ic">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 7v5l3.5 2" /><circle cx="12" cy="12" r="9" />
-                </svg>
-              </div>
-              <div className="b">
-                <div className="t1">Resume draft</div>
-                <div className="t2">
-                  {resumable.pages} page{resumable.pages === 1 ? "" : "s"} added · not sent yet
-                </div>
-              </div>
-              <PressBox as="button" type="button" className="go"
-                        onClick={() => draftsHandlers.onResume?.(resumable.id)}>
-                Resume
-              </PressBox>
-            </div>
-          </div>
+        {resumable && draftsHandlers.onResume && (
+          <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
         )}
       </div>
 

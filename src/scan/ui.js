@@ -182,6 +182,7 @@ async function takePage(shot, replacing = null) {
     }
 
     await paintTray();
+    refreshDrafts();
     console.debug('[scan:tray-timing]', {
       transactionId: shot.transactionId ?? null,
       acceptMs: +(tAccepted - tOnShot).toFixed(1),
@@ -350,6 +351,7 @@ function openPageActions(pageNumber) {
       S.thumbs.forEach((url) => URL.revokeObjectURL(url));
       S.thumbs.clear();
       await paintTray();
+      refreshDrafts();
     },
   });
 }
@@ -379,6 +381,12 @@ async function paintDrafts() {
     })),
     { onResume: resumeDraft },
   );
+}
+
+function refreshDrafts() {
+  // The page transaction is already durable. A secondary list refresh must
+  // neither delay the shutter nor turn a saved capture into a reported failure.
+  void paintDrafts().catch((error) => console.warn('[scan] draft list refresh failed', error));
 }
 
 async function resumeDraft(id) {

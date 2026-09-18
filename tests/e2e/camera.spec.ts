@@ -173,6 +173,101 @@ test("mobile Scan keeps the navbar visible without stretching the resume draft",
   expect(layout.withTray.trayBottom).toBeLessThanOrEqual(layout.withTray.navTop + 1);
 });
 
+test("a draft alert slides away while its saved pages remain available", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/browser/index.html");
+
+  await page.evaluate(async () => {
+    const viewport = document.createElement("meta");
+    viewport.name = "viewport";
+    viewport.content = "width=device-width, initial-scale=1";
+    document.head.append(viewport);
+
+    for (const href of [
+      "/src/ui/styles/app.css",
+      "/src/ui/styles/system.css",
+      "/src/ui/styles/shell.css",
+      "/src/ui/styles/scanner.css",
+    ]) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = href;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.onload = () => resolve();
+        stylesheet.onerror = () => reject(new Error(`${href} did not load`));
+      });
+      document.head.append(stylesheet);
+      await loaded;
+    }
+
+    document.documentElement.classList.add("scanner-active");
+    document.body.innerHTML = `
+      <main class="app">
+        <section class="view on" data-screen="scan">
+          <div id="draft-root" class="scanhero" data-camera="on"></div>
+        </section>
+      </main>`;
+
+    const drafts = await import("/src/scan/drafts.js");
+    const draft = await drafts.createDraft({
+      id: "saved-draft-test",
+      studentId: "student-draft-test",
+      paperType: null,
+    });
+    await drafts.addPage(draft, {
+      blob: new Uint8Array([115, 97, 118, 101, 100]),
+      quality: { verdict: "ok", reasons: [] },
+    });
+
+    const { mountScanDraftsTest } = await import("/tests/browser/scan-drafts.tsx");
+    mountScanDraftsTest(document.querySelector<HTMLElement>("#draft-root")!, {
+      id: draft.id,
+      pages: draft.pages.length,
+    });
+  });
+
+  const draftsButton = page.getByRole("button", { name: "Open 1 saved draft" });
+  await expect(draftsButton).toBeVisible();
+  const buttonBox = await draftsButton.boundingBox();
+  expect(buttonBox?.x).toBeCloseTo(16, 0);
+  expect(buttonBox?.y).toBeCloseTo(16, 0);
+  await draftsButton.click();
+  await expect.poll(() => page.evaluate(() => (
+    window as typeof window & { __scanDraftsTest?: { opens: number } }
+  ).__scanDraftsTest?.opens)).toBe(1);
+
+  const alert = page.locator(".drafttoast");
+  await expect(alert).toBeVisible();
+  const alertBox = await alert.boundingBox();
+  if (!alertBox) throw new Error("draft alert has no layout box");
+  await page.mouse.move(alertBox.x + 8, alertBox.y + alertBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(alertBox.x + 8, alertBox.y + alertBox.height + 72, { steps: 4 });
+  await page.mouse.up();
+  await expect(alert).toHaveCount(0);
+
+  const persisted = await page.evaluate(async () => {
+    const drafts = await import("/src/scan/drafts.js");
+    const draft = await drafts.readDraft("saved-draft-test");
+    const list = await drafts.listDrafts("student-draft-test");
+    return { pages: draft?.pages.length ?? 0, listed: list.map((item) => item.id) };
+  });
+  expect(persisted).toEqual({ pages: 1, listed: ["saved-draft-test"] });
+
+  await page.evaluate(async () => {
+    const state = (window as typeof window & {
+      __scanDraftsTest?: { unmount: () => void };
+    }).__scanDraftsTest;
+    state?.unmount();
+    const { mountScanDraftsTest } = await import("/tests/browser/scan-drafts.tsx");
+    mountScanDraftsTest(document.querySelector<HTMLElement>("#draft-root")!, {
+      id: "saved-draft-test",
+      pages: 1,
+    });
+  });
+  await expect(page.locator(".drafttoast")).toHaveCount(0);
+});
+
 test("camera rendering follows video frames instead of a 120Hz display", async ({ page }) => {
   await page.goto("/tests/browser/index.html");
 

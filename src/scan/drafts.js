@@ -25,7 +25,7 @@ function open() {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error ?? new Error('The saved drafts database could not be opened.'));
   });
 }
 
@@ -50,12 +50,12 @@ function tx(db, mode, fn) {
       resolve(result.result ?? result);
     };
     transaction.onerror = () => {
-      const error = transaction.error;
+      const error = transaction.error ?? new Error('The saved draft transaction failed.');
       db.close();
       reject(error);
     };
     transaction.onabort = () => {
-      const error = transaction.error;
+      const error = transaction.error ?? new Error('The saved draft transaction was cancelled.');
       db.close();
       reject(error);
     };
