@@ -7,7 +7,8 @@ export function LibraryNavGlyph({ paperCount }: { paperCount: number }) {
     <>
       <rect x="5" y="3.5" width="14" height="17" rx="2" />
       {hasPapers ? (
-        <text className={paperCount > 99 ? "library-count compact" : "library-count"} x="12" y="12.4" textAnchor="middle" dominantBaseline="middle">
+        <text className="library-count" x="12" y="12.4" textAnchor="middle" dominantBaseline="middle"
+              textLength={paperCount > 9 ? 11 : undefined} lengthAdjust="spacingAndGlyphs">
           {label}
         </text>
       ) : (
