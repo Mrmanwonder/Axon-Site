@@ -627,6 +627,11 @@
   .tab svg{width:24px;height:24px;fill:none;stroke:var(--nav-icon);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;transition:stroke .25s ease,fill .25s ease;}
   .tab.on svg{stroke:var(--nav-icon-on);}
   .tab.on svg.solid{fill:var(--nav-icon-on);stroke:none;}
+  .tab svg .library-count{fill:var(--nav-icon);stroke:none;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.04em;}
+  .tab svg .library-count.compact{font-size:8px;}
+  .tab.on svg .library-count{fill:var(--nav-icon-on);}
+  .tab svg .insights-endpoint{fill:var(--nav-icon);stroke:none;}
+  .tab.on svg .insights-endpoint{fill:var(--nav-icon-on);}
   /* Not red: red is reserved for sign out, the one irreversible-feeling action
      in the interface. A notification dot is an accent, not a rebuke. */
   .tab .dot{position:absolute;top:12px;right:calc(50% - 14px);width:7.5px;height:7.5px;border-radius:4px;background:var(--blue);box-shadow:0 0 0 2px var(--nav-bg);}

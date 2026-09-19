@@ -34,6 +34,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { avatarStyleFor, initialFor } from "../data/modules";
 import { destinations, activeIndex } from "../app/nav";
+import { paths } from "../app/paths";
+import { LibraryNavGlyph } from "../components/NavGlyphs";
 import { lensMapFor, PILL_R } from "../lib/lens";
 import { spring, seed, releaseSpring, SPRING } from "../lib/spring";
 import { hapticTick } from "../lib/haptics";
@@ -52,7 +54,7 @@ export default function TabNav() {
      account in the world had the same nav avatar. Both this and the disc at
      the top of Settings read `avatarStyleFor` now, so there is one definition
      of what a student looks like and no way for the two to disagree. */
-  const { student, guardian } = useApp();
+  const { student, guardian, papers } = useApp();
   const avatar = avatarStyleFor(student);
   const initial = initialFor(student?.first_name ?? guardian?.name);
 
@@ -225,16 +227,20 @@ export default function TabNav() {
               tabIndex={i === current ? 0 : -1}
               aria-selected={i === current}
               aria-current={i === current ? "page" : undefined}
-              aria-label={d.label}
+              aria-label={d.path === paths.library && papers.length
+                ? `Library, ${papers.length} paper${papers.length === 1 ? "" : "s"}`
+                : d.label}
               ref={(el: HTMLButtonElement | null) => {
                 tabRefs.current[i] = el;
               }}
               onClick={() => go(d.path)}
               onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => onTabKeyDown(event, i)}
             >
-              {d.icon ? (
+              {d.path === paths.library || d.icon ? (
                 <svg className={d.solid ? "solid" : undefined} viewBox="0 0 24 24" aria-hidden="true">
-                  {d.icon}
+                  {d.path === paths.library
+                    ? <LibraryNavGlyph paperCount={papers.length} />
+                    : d.icon}
                 </svg>
               ) : (
                 <div
