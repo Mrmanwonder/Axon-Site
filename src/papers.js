@@ -139,7 +139,6 @@ export async function uploadScannedPage({ studentId, paperId, page }) {
   requireOnline('Uploading');
 
 const pageType = page.blob.type || 'image/jpeg';
-  const ext = (type) => CAPTURE.UPLOAD_EXTENSIONS[type] ?? 'jpg';
 
 // Four objects now, in two buckets. The page and its mask are derivatives and
 // go to axon-derived; the original goes to axon-originals, which is what makes
