@@ -92,8 +92,8 @@ Deno.serve(async (req) => {
       confirmed: true,
       bytes: head.bytes,
       etag: head.etag,
-      // Client-reported hashes are not an integrity guarantee.
-      sha256: null,
+      // Retained only as client telemetry; never an integrity guarantee.
+      client_reported_sha256: typeof claim.sha256 === 'string' ? claim.sha256 : null,
     }).eq('paper_id', body.paper_id).eq('r2_key', claim.key);
     if (error) {
       missing.push({ key: claim.key, reason: 'we could not record that file as complete' });
