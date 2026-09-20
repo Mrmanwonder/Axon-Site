@@ -9,6 +9,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "node --test bench/*.test.mjs harness/*.test.mjs",
     "check:config": "node scripts/check-production-config.mjs",
+    "check:contract-parity": "node scripts/check-cross-repo-contract.mjs",
     "test:e2e": "playwright test"
   },
   "repository": {
