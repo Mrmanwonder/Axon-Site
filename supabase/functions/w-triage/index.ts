@@ -12,13 +12,22 @@
 import { failRun, failRunHonestly, type RouteOverride, serveWorker } from '../_shared/worker.ts';
 import { callModel } from '../_shared/openrouter.ts';
 import { presignGet } from '../_shared/r2.ts';
-import { QUALITY } from '../_shared/contract.ts';
+import { CAPTURE, QUALITY } from '../_shared/contract.ts';
 import * as triage from '../_shared/prompts/triage.v1.ts';
 
 /** Enough to tell a marked script from a textbook, and no more than we must send. */
 const PAGES_TO_LOOK_AT = 6;
 
 type QualityPage = { quality_verdict?: string | null; quality_signals?: Record<string, number> | null };
+
+type TriagePage = QualityPage & { page_number: number; r2_bucket: string | null; r2_key: string };
+
+function samplePages<T>(pages: T[], limit = PAGES_TO_LOOK_AT): T[] {
+  if (pages.length <= limit) return pages;
+  return Array.from({ length: limit }, (_, i) =>
+    pages[Math.round((i * (pages.length - 1)) / (limit - 1))]
+  );
+}
 
 /**
  * The device already scored these pages, at capture, on the actual conditioned
@@ -72,20 +81,22 @@ serveWorker(async ({ sb, msg, beat }) => {
     .from('paper_page')
     .select('page_number, r2_bucket, r2_key, quality_verdict, quality_signals')
     .eq('paper_id', run.paper_id).not('r2_key', 'is', null)
-    .order('page_number').limit(PAGES_TO_LOOK_AT);
+    .order('page_number').limit(CAPTURE.MAX_PAGES);
 
   if (!pages?.length) {
     await failRun(sb, runId, 'We could not find the pages for this paper. Try scanning it again.');
     return { detail: { failed: 'no pages' } };
   }
 
+  const sampledPages = samplePages(pages as TriagePage[]);
+
   // The device already flagged every one of these pages unreadable, on the
   // conditioned image, while the paper was still in the student's hands. A
   // model call here would spend money to reach the same conclusion from a
   // worse copy of the same evidence — short-circuit with the real reason
   // instead.
-  if (pages.every((p) => p.quality_verdict === 'fail')) {
-    const message = qualityFailureMessage(pages) ?? 'These pages did not come out clearly enough to read. Please retake them and try again.';
+  if (sampledPages.every((p) => p.quality_verdict === 'fail')) {
+    const message = qualityFailureMessage(sampledPages) ?? 'These pages did not come out clearly enough to read. Please retake them and try again.';
     await sb.rpc('run_advance', { p_run_id: runId, p_to: 'rejected', p_reason: message });
     return { detail: { rejected: 'quality', pages: pages.length } };
   }
@@ -93,7 +104,7 @@ serveWorker(async ({ sb, msg, beat }) => {
   await sb.rpc('run_advance', { p_run_id: runId, p_to: 'triaging' });
   await beat();
 
-  const images = await Promise.all(pages.map(async (p) => ({
+  const images = await Promise.all(sampledPages.map(async (p) => ({
     key: p.r2_key as string,
     url: await presignGet((p.r2_bucket ?? 'derived') as 'derived', p.r2_key as string),
     // Low detail: the question here is "is there marking on this", not "what
@@ -106,7 +117,7 @@ serveWorker(async ({ sb, msg, beat }) => {
     sb,
     stage: 'triage',
     system: triage.SYSTEM,
-    instruction: triage.instruction(pages.length),
+    instruction: triage.instruction(sampledPages.length),
     images,
     schema: triage.SCHEMA as { name: string; schema: Record<string, unknown> },
     validate: triage.validate,
@@ -126,7 +137,7 @@ serveWorker(async ({ sb, msg, beat }) => {
     // high-confidence read, or a page-quality gate that never fired, keeps
     // the classifier's own wording.
     const isUncertainReject = parsed.classification === 'not_schoolwork' && parsed.confidence === 'low';
-    const reason = (isUncertainReject && qualityFailureMessage(pages))
+    const reason = (isUncertainReject && qualityFailureMessage(sampledPages))
       || triage.REJECTION_REASON[parsed.classification];
     // Rejected, not failed. The student photographed something and is owed a
     // sentence saying what we think it was.
