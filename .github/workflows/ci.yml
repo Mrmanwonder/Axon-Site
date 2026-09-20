@@ -33,6 +33,7 @@ jobs:
       # that builds, so without this the check would not run on a pull request
       # — which is the one place it can still stop the change.
       - run: npm run check:config
+      - run: npm run check:contract-parity
 
   sql-tests:
     name: supabase/tests/*.sql

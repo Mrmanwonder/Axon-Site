@@ -30,6 +30,7 @@ const S = {
   review: null,
   busy: false,
   saving: false,
+  explanationsStarted: false,
   retaking: null,
 };
 
@@ -498,6 +499,7 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 // ── review ─────────────────────────────────────────────────────────────────
 
 async function openReview(runId) {
+  if (S.runId !== runId) S.explanationsStarted = false;
   S.runId = runId;
   await refreshReview();
   host.openReview();
@@ -518,6 +520,9 @@ export async function resumeDraftReview(draftId) {
   S.draft = draft;
   S.regions = await regionsForRun(run.id);
   await openReview(run.id);
+  // The SQL gate is idempotent too, but do not make a duplicate request when a
+  // resumed run has already crossed into explanation generation.
+  S.explanationsStarted = ['explaining', 'ready'].includes(run.status);
   return { state: 'reviewing' };
 }
 
@@ -639,7 +644,10 @@ async function save() {
 
   try {
     try {
-      await startExplanations(S.runId);
+      if (!S.explanationsStarted) {
+        await startExplanations(S.runId);
+        S.explanationsStarted = true;
+      }
       await watchExplanations({
         runId: S.runId,
         regions: S.regions ?? [],
@@ -658,6 +666,7 @@ async function save() {
     releaseCrops();
     S.runId = null;
     S.regions = null;
+    S.explanationsStarted = false;
     S.retaking = null;
 
     if (S.draft) {
