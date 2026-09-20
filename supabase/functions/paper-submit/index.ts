@@ -10,7 +10,7 @@
 // and two papers from one booklet would double every model call downstream.
 
 import { CORS, clientFor, failure, json, readJson, serviceClient } from '../_shared/http.ts';
-import { PIPELINE_VERSION } from '../_shared/contract.ts';
+import { CAPTURE, PIPELINE_VERSION } from '../_shared/contract.ts';
 
 interface PageInput {
   page_number: number;
@@ -41,8 +41,6 @@ interface Body {
   stated_maximum?: number | null;
 }
 
-const MAX_PAGES = 25;
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
@@ -56,8 +54,8 @@ Deno.serve(async (req) => {
   if (!Array.isArray(body.pages) || !body.pages.length) {
     return failure('A paper needs at least one page.');
   }
-  if (body.pages.length > MAX_PAGES) {
-    return failure(`We can take up to ${MAX_PAGES} pages in one paper.`);
+  if (body.pages.length > CAPTURE.MAX_PAGES) {
+    return failure(`We can take up to ${CAPTURE.MAX_PAGES} pages in one paper.`);
   }
   if (body.pages.some((p) => !p.r2_key || !Number.isInteger(p.page_number) || p.page_number < 1)) {
     return failure('One of those pages has not finished uploading.');
