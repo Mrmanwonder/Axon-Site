@@ -15,7 +15,7 @@ export default function SkeletonLoader({ label = "Loading Axon" }: { label?: str
         <div className="axon-skeleton__bar axon-skeleton__bar--headline axon-skeleton__bar--short" />
       </div>
       <div className="axon-skeleton__grid">
-        {widths.map((width, i) => (
+        {widths.map((width) => (
           <div className="axon-skeleton__card" key={width}>
             <div className="axon-skeleton__bar axon-skeleton__bar--card-title" style={{ "--sk-width": width } as CSSProperties} />
             <div className="axon-skeleton__bar" />
