@@ -13,14 +13,14 @@ test('public legal and not-found routes are intentional', () => {
   assert.match(read('src/ui/pages/Terms.tsx'), /OWNER\/LEGAL TO CONFIRM/);
 });
 
-test('crawler files keep the app non-indexable while permitting rich-link fetches', () => {
+test('crawler files index public routes without advertising private routes', () => {
   const robots = read('public/robots.txt');
   const sitemap = read('public/sitemap.xml');
   const html = read('index.html');
   assert.match(robots, /User-agent: \*/);
   assert.match(robots, /Allow: \/\s/);
   assert.match(robots, /Sitemap: https:\/\//);
-  assert.match(html, /name="robots" content="noindex, nofollow, max-image-preview:large"/);
+  assert.match(html, /name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"/);
   assert.match(sitemap, /\/privacy<\/loc>/);
   assert.match(sitemap, /\/terms<\/loc>/);
   assert.doesNotMatch(sitemap, /library|scan|settings|insights/);
