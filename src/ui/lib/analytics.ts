@@ -7,6 +7,11 @@ type PostHogClient = {
   opt_out_capturing?: () => void;
 };
 
+type PostHogBootstrap = PostHogClient & {
+  __SV?: number;
+  _i?: unknown[][];
+};
+
 declare global {
   interface Window { posthog?: PostHogClient }
 }
@@ -17,7 +22,13 @@ const DEFAULT_ASSET_HOST = "https://us-assets.i.posthog.com";
 const CONSENT_KEY = "axon.analytics-consent.v1";
 export const ANALYTICS_CONSENT_EVENT = "axon:analytics-consent";
 
-let started = false;
+const STUB_METHODS = [
+  "capture",
+  "opt_in_capturing",
+  "opt_out_capturing",
+] as const;
+
+let state: "idle" | "loading" | "ready" = "idle";
 
 export function getAnalyticsConsent(): AnalyticsConsent {
   if (typeof window === "undefined") return null;
@@ -35,13 +46,42 @@ export function setAnalyticsConsent(granted: boolean): void {
   try { localStorage.setItem(CONSENT_KEY, value); } catch { /* preference still applies for this page */ }
 
   if (granted) {
-    if (started) window.posthog?.opt_in_capturing?.();
+    if (state === "ready") window.posthog?.opt_in_capturing?.();
     else initAnalytics();
   } else {
+    // This also works while the SDK is loading: our bootstrap stub queues the
+    // opt-out call and PostHog processes it once array.js is ready.
     window.posthog?.opt_out_capturing?.();
   }
 
   window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT, { detail: { granted } }));
+}
+
+/**
+ * Install the small queue PostHog's array.js loader expects.
+ *
+ * The supported PostHog snippet calls init on a stub first and only then loads
+ * array.js. Loading array.js and hoping it creates window.posthog is backwards:
+ * there is no init queue for the SDK to consume. We only stub methods Axon uses.
+ */
+function installPostHogStub(): PostHogBootstrap {
+  const existing = window.posthog as PostHogBootstrap | undefined;
+  if (existing?.__SV === 1 && Array.isArray(existing._i)) return existing;
+
+  const queue = [] as unknown[] as PostHogBootstrap & unknown[];
+  queue.__SV = 1;
+  queue._i = [];
+  queue.init = (key: string, options: Record<string, unknown> = {}) => {
+    for (const method of STUB_METHODS) {
+      (queue as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
+        queue.push([method, ...args]);
+      };
+    }
+    queue._i!.push([key, options]);
+  };
+
+  window.posthog = queue;
+  return queue;
 }
 
 /**
@@ -54,39 +94,61 @@ export function setAnalyticsConsent(granted: boolean): void {
  * to custom analytics events.
  */
 export function initAnalytics() {
-  if (started || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
-  started = true;
+  if (state !== "idle" || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
 
   const key = import.meta.env.VITE_POSTHOG_KEY || DEFAULT_KEY;
   const apiHost = import.meta.env.VITE_POSTHOG_HOST || DEFAULT_HOST;
   const assetHost = import.meta.env.VITE_POSTHOG_ASSET_HOST || DEFAULT_ASSET_HOST;
   if (!key) return;
 
+  state = "loading";
+  document.documentElement.dataset.analytics = "loading";
+
+  const posthog = installPostHogStub();
+
+  // Default to opted out even though this code path only starts after consent.
+  // That makes a consent change while the remote script is in flight safe.
+  posthog.init(key, {
+    api_host: apiHost,
+    ui_host: "https://us.posthog.com",
+    defaults: "2026-05-30",
+    autocapture: true,
+    capture_pageview: "history_change",
+    capture_pageleave: true,
+    capture_exceptions: true,
+    opt_out_capturing_by_default: true,
+    session_recording: {
+      maskAllInputs: true,
+      maskAllText: true,
+    },
+    persistence: "localStorage+cookie",
+    loaded: () => {
+      state = "ready";
+      if (getAnalyticsConsent() === "granted") {
+        window.posthog?.opt_in_capturing?.();
+        document.documentElement.dataset.analytics = "ready";
+      } else {
+        window.posthog?.opt_out_capturing?.();
+        document.documentElement.dataset.analytics = "disabled";
+      }
+    },
+  });
+
   const script = document.createElement("script");
   script.async = true;
+  script.crossOrigin = "anonymous";
+  script.dataset.axonPosthog = "true";
   script.src = assetHost + "/static/array.js";
-  script.onload = () => {
-    // The choice may have been withdrawn while the script was in flight.
-    if (getAnalyticsConsent() !== "granted") return;
-    window.posthog?.init(key, {
-      api_host: apiHost,
-      ui_host: "https://us.posthog.com",
-      autocapture: true,
-      capture_pageview: "history_change",
-      capture_pageleave: true,
-      capture_exceptions: true,
-      session_recording: {
-        maskAllInputs: true,
-        maskAllText: true,
-      },
-      persistence: "localStorage+cookie",
-      loaded: () => {
-        document.documentElement.dataset.analytics = "ready";
-      },
-    });
-  };
   script.onerror = () => {
+    state = "idle";
     document.documentElement.dataset.analytics = "unavailable";
+    script.remove();
+
+    // A failed load leaves only our queue stub behind. Drop it so a later
+    // consented retry starts with one clean init call rather than replaying an
+    // old queue twice.
+    const current = window.posthog as PostHogBootstrap | undefined;
+    if (current?.__SV === 1 && Array.isArray(current._i)) delete window.posthog;
   };
   document.head.appendChild(script);
 }
