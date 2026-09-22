@@ -58,6 +58,10 @@ export type Paper = {
   /** 'tier_1' (teacher's marks) or 'tier_2' (matched to an official scheme). */
   tier: string | null;
   date_taken: string;
+  subject?: string | null;
+  total_awarded?: number | null;
+  total_available?: number | null;
+  stated_maximum?: number | null;
   [k: string]: unknown;
 };
 

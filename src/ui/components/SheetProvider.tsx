@@ -1,23 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE CONSEQUENCE SHEET
 
-   `__axonOpenSheet` as a React provider. The copy rules make this a specific
-   kind of surface and not a generic modal:
-
-   · It never asks "are you sure?". It states what will happen and offers the
-     action. That is the whole reason it exists — CLAUDE.md rules the
-     reassurance prompt out, so the alternative has to carry its weight.
-   · Destructive rows do not turn red. Red is the sign-out row and nothing else,
-     so a delete action uses the ordinary primary treatment and lets the stated
-     consequences do the work.
-   · When the sheet offers choices, the primary button is hidden rather than left
-     on screen: the choices *are* the action, and a second way to do the same
-     thing is a dead control.
-
-   Opening pushes a history entry, so the back button and the hardware back
-   gesture close the sheet instead of leaving the screen under it. Dismissing by
-   scrim or Cancel pops that entry, which keeps the stack the length the user
-   expects.
+   Choice rows are neutral by default. Callers may explicitly mark one choice as
+   primary or secondary when the two actions do not have equal product weight;
+   existing sheets keep their current appearance because emphasis is opt-in.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +12,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Dialog from "./Dialog";
 
-export type SheetChoice = { label: string; value: string };
+export type SheetChoice = {
+  label: string;
+  value: string;
+  emphasis?: "primary" | "secondary";
+};
 
 export type SheetConfig = {
   title: string;
@@ -108,11 +98,12 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
       {cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
       {error && <p role="alert">{error}</p>}
-      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className="sh-choice" key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
+      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
       <div className="acts">
         {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
         <button type="button" className="btn plain" disabled={busy} onClick={closeSheet}>Cancel</button>
       </div>
     </Dialog>}
   </Ctx.Provider>;
+
 }

@@ -102,6 +102,14 @@ type AppValue = {
       an app that did not hear you. */
   setAvatar: (presetKey: string) => Promise<void>;
 
+  /** Save the identity fields as one database transaction. Class and subject
+      syllabus codes must never be allowed to drift apart. */
+  updateStudentProfile: (profile: {
+    firstName: string;
+    classLevel: number;
+    subjects: { subject: string; syllabus_code: string }[];
+  }) => Promise<void>;
+
   online: boolean;
   finishOnboarding: (r: { guardian?: Guardian; student?: Student; firstPaperType?: string | null }) => Promise<void>;
   /** Set by onboarding step 8; consumed by the next ingest, then cleared. */
@@ -263,6 +271,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(`axon.active_student_id:${guardian.id}`, id); } catch { /* This session still switches. */ }
     setStudent(profile); setGate("ready");
   }, [profiles, guardian]);
+  const updateStudentProfile = useCallback(async (profile: {
+    firstName: string;
+    classLevel: number;
+    subjects: { subject: string; syllabus_code: string }[];
+  }) => {
+    if (!student) throw new Error("There is no student profile to update.");
+    const { data, error } = await sb.rpc("update_student_profile", {
+      p_student_id: student.id,
+      p_first_name: profile.firstName,
+      p_class_level: profile.classLevel,
+      p_subjects: profile.subjects,
+    });
+    if (error) throw error;
+    const saved = Array.isArray(data) ? data[0] : data;
+    if (!saved) throw new Error("The profile was saved but could not be read back.");
+    const updated = { ...student, ...saved, subjects: profile.subjects.map(({ subject }) => subject) };
+    setStudent(current => current?.id === updated.id ? updated : current);
+    setProfiles(current => current.map(item => item.id === updated.id ? updated : item));
+  }, [student]);
+
 
   const finishOnboarding = useCallback(async (r: {
     guardian?: Guardian; student?: Student; firstPaperType?: string | null;
@@ -393,15 +421,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent,
-    papers, papersStale, papersError, progress, refreshLibrary, setAvatar,
+    papers, papersStale, papersError, progress, refreshLibrary, setAvatar, updateStudentProfile,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
-    setAvatar, online, finishOnboarding, takePendingPaperType, signOutNow,
+    setAvatar, updateStudentProfile, online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
-

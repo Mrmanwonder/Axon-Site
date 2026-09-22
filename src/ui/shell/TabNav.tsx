@@ -29,10 +29,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { avatarStyleFor, initialFor } from "../data/modules";
 import { destinations, activeIndex } from "../app/nav";
+import { paths } from "../app/paths";
+import { LibraryNavGlyph } from "../components/NavGlyphs";
 import { lensMapFor, PILL_R } from "../lib/lens";
 import { spring, seed, releaseSpring, SPRING } from "../lib/spring";
 import { hapticTick } from "../lib/haptics";
@@ -51,7 +54,7 @@ export default function TabNav() {
      account in the world had the same nav avatar. Both this and the disc at
      the top of Settings read `avatarStyleFor` now, so there is one definition
      of what a student looks like and no way for the two to disagree. */
-  const { student, guardian } = useApp();
+  const { student, guardian, papers } = useApp();
   const avatar = avatarStyleFor(student);
   const initial = initialFor(student?.first_name ?? guardian?.name);
 
@@ -187,6 +190,30 @@ export default function TabNav() {
     navigate(path);
   };
 
+  /* The prototype's keyboard pass taught the tab strip its arrow-key model,
+     but the React port only carried over the roles. A tablist with five
+     tabbable children is not complete keyboard behaviour: it adds five stops
+     to the page and advertises a composite widget without implementing the
+     composite-widget keys. Keep one tab in the page order, then move and
+     activate by visual axis. Home and End are useful on both the bottom bar
+     and the rail, and do not depend on an orientation. */
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const vertical = window.matchMedia("(min-width:768px)").matches;
+    const previous = vertical ? "ArrowUp" : "ArrowLeft";
+    const next = vertical ? "ArrowDown" : "ArrowRight";
+
+    let destination: number | null = null;
+    if (event.key === previous) destination = (index - 1 + destinations.length) % destinations.length;
+    if (event.key === next) destination = (index + 1) % destinations.length;
+    if (event.key === "Home") destination = 0;
+    if (event.key === "End") destination = destinations.length - 1;
+    if (destination == null) return;
+
+    event.preventDefault();
+    tabRefs.current[destination]?.focus();
+    go(destinations[destination].path);
+  };
+
   return (
     <nav className="tabdock" aria-label="Primary">
       <div className="tabbar">
@@ -199,16 +226,22 @@ export default function TabNav() {
               as="button"
               type="button"
               className={"tab" + (i === current ? " on" : "")}
+
               aria-current={i === current ? "page" : undefined}
-              aria-label={d.label}
+              aria-label={d.path === paths.library && papers.length
+                ? `Library, ${papers.length} paper${papers.length === 1 ? "" : "s"}`
+                : d.label}
               ref={(el: HTMLButtonElement | null) => {
                 tabRefs.current[i] = el;
               }}
               onClick={() => go(d.path)}
+              onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => onTabKeyDown(event, i)}
             >
-              {d.icon ? (
+              {d.path === paths.library || d.icon ? (
                 <svg className={d.solid ? "solid" : undefined} viewBox="0 0 24 24" aria-hidden="true">
-                  {d.icon}
+                  {d.path === paths.library
+                    ? <LibraryNavGlyph paperCount={papers.length} />
+                    : d.icon}
                 </svg>
               ) : (
                 <div

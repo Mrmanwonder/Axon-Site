@@ -15,6 +15,7 @@
 import { sb } from './supabase.js';
 import { readThrough } from './cache.js';
 import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
+import { CAPTURE } from './scan/contract.js';
 
 /** Papers are Tier 2 candidates only if they are board material. */
 export function tierForType(type) {
@@ -140,13 +141,10 @@ const { data, error } = await sb
 * @param {{studentId:string, paperId:string, page:Object}} args
 * @returns {{r2_bucket:string, r2_key:string, mask_key:string|null, bytes:number}}
 */
-const EXT_FOR_TYPE = { 'image/webp': 'webp', 'image/png': 'png', 'image/heic': 'heic', 'image/jpeg': 'jpg' };
-
 export async function uploadScannedPage({ studentId, paperId, page }) {
   requireOnline('Uploading');
 
 const pageType = page.blob.type || 'image/jpeg';
-  const ext = (type) => EXT_FOR_TYPE[type] ?? 'jpg';
 
 // Four objects now, in two buckets. The page and its mask are derivatives and
 // go to axon-derived; the original goes to axon-originals, which is what makes
@@ -154,21 +152,21 @@ const pageType = page.blob.type || 'image/jpeg';
 // thumbnail is the cheapest large latency win in the system — triage asks "is
 // this a marked exam paper", and it was being sent full pages to answer it.
 const wanted = [
-  { kind: 'page', name: `p${page.page_number}.${ext(pageType)}`, content_type: pageType, blob: page.blob },
+  { kind: 'page', name: `p${page.page_number}`, content_type: pageType, blob: page.blob },
   ];
   if (page.mask) {
-    wanted.push({ kind: 'mask', name: `p${page.page_number}.mask.png`, content_type: 'image/png', blob: page.mask });
+    wanted.push({ kind: 'mask', name: `p${page.page_number}-mask`, content_type: 'image/png', blob: page.mask });
   }
   if (page.thumb) {
-    wanted.push({ kind: 'thumb', name: `p${page.page_number}.thumb.jpg`, content_type: 'image/jpeg', blob: page.thumb });
+    wanted.push({ kind: 'thumb', name: `p${page.page_number}-thumb`, content_type: 'image/jpeg', blob: page.thumb });
   }
   if (page.original) {
     const originalType = page.original_type || page.original.type || 'image/jpeg';
     // An original in a type the upload endpoint will not mint a key for is not
     // silently dropped — it is skipped and said so in the return, so the gap is
     // visible in `original_key` being null rather than invisible.
-    if (EXT_FOR_TYPE[originalType]) {
-      wanted.push({ kind: 'raw', name: `p${page.page_number}.original.${ext(originalType)}`, content_type: originalType, blob: page.original });
+    if (CAPTURE.UPLOAD_EXTENSIONS[originalType]) {
+      wanted.push({ kind: 'raw', name: `p${page.page_number}-original`, content_type: originalType, blob: page.original });
     }
   }
 
@@ -290,7 +288,7 @@ export async function listPapers(studentId) {
     // not guess between them: an unqualified embed returns 300 PGRST201 and no
     // rows at all, so this whole read fails and the Library renders "No papers
     // yet" over a library that is not empty. Ownership is the one we mean.
-    .select('id,type,tier,date_taken,created_at,paper_page(count),' +
+    .select('id,type,tier,date_taken,created_at,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,paper_page(count),' +
             'student_attempt!student_attempt_paper_id_student_id_fkey(count)')
     .eq('student_id', studentId)
     .order('date_taken', { ascending: false });

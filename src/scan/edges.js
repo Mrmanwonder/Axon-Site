@@ -50,7 +50,7 @@ const MAX_FILL = 0.92;
 // Standard deviation of interior brightness a page-shaped quad is allowed
 // before it reads as textured surface rather than blank paper. See the gate
 // in detectQuad() for where this number comes from.
-const TEXTURE_MAX = 32;
+const TEXTURE_MAX = 30;
 
 /** Otsu's threshold: the split that best separates the histogram into two lumps. */
 export function otsu(gray) {
@@ -100,7 +100,7 @@ export function detectQuad(img, { minFill = 0.16 } = {}) {
     // Edge strength decides between quads that all look like paper, and the
     // larger of two plausible pages wins ties — a page's own ruled lines can
     // otherwise carve a strong-edged box out of its middle.
-    const score = verdict.paper.score * 2 + Math.min(1, support) + verdict.fill;
+    const score = verdict.paper.score * 2.5 + Math.min(1, support) * 1.5 + Math.min(0.35, verdict.fill) * 0.2;
     if (!best || score > best.score) best = { quad, score };
   };
 
@@ -264,7 +264,7 @@ function gateQuad(img, quad, width, height, minFill) {
   // tone step across the edge looked like it should catch that and does not —
   // it stays in the ranking score, where being wrong costs nothing, and out of
   // the gate, where it cost real pages.
-  if (paper.paper < 0.85) return null;
+  if (paper.paper < 0.90) return null;
   // What actually separates the floor from a page is texture, not colour or
   // brightness: a floor's grain and veining put real variance into a 5x5 grid
   // even where it is bright and neutral enough to pass the check above, and a
@@ -343,11 +343,11 @@ export function scaleQuad(quad, from, to) {
 // floor can sit this high because holding a still page still is no longer this
 // function's job — see the note below about the anchor — so all it has to damp
 // now is detection noise during real movement.
-const EASE_MIN = 0.25;
-const EASE_MAX = 0.9;
+const EASE_MIN = 0.50;
+const EASE_MAX = 0.95;
 // The drift at which the ease reaches EASE_MAX — about a fifth of the frame,
 // which is a reframe rather than a wobble.
-const EASE_FULL_DRIFT = 0.2;
+const EASE_FULL_DRIFT = 0.12;
 
 /**
  * Smooth the quad between detections.

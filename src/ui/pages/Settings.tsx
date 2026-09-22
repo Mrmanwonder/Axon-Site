@@ -51,6 +51,7 @@
 import ProfileChooser from "../components/ProfileChooser";
 import { LocalDataService } from "../../local-data.js";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
 import { useToast } from "../components/ToastProvider";
@@ -60,12 +61,14 @@ import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isParentModeRequired,
   AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
+  BOARD_LABEL, CLASS_LEVELS, classLabel, subjectsForClass, syllabusCode,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
 import type { Prefs } from "../data/modules";
+import { paths } from "../app/paths";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -118,7 +121,8 @@ const PLAN_NOTE: Record<string, string> = {
 export default function Settings() {
   const {
     guardian, student, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
-    setAvatar, signOutNow,
+    setAvatar, updateStudentProfile, signOutNow,
+
   } = useApp();
   const { state: billingRead, entitlements } = useEntitlements();
   const toast = useToast();
@@ -130,6 +134,10 @@ export default function Settings() {
      refusal is a prompt rather than an error. */
   const { guard } = useParentMode();
   const [busy, setBusy] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState(student?.first_name ?? "");
+  const [profileClass, setProfileClass] = useState(student?.class_level ?? 11);
+  const [profileSubjects, setProfileSubjects] = useState<string[]>(student?.subjects ?? []);
   const name = student?.first_name ?? guardian?.name ?? "";
   const initial = initialFor(name);
 
@@ -137,6 +145,49 @@ export default function Settings() {
      this student and neither owns the definition. */
   const avatar = avatarStyleFor(student);
   const chosen = isChosenAvatar(student);
+
+  const beginProfileEdit = () => {
+    if (!student) return;
+    hapticTick();
+    setProfileName(student.first_name);
+    setProfileClass(student.class_level);
+    setProfileSubjects(student.subjects ?? []);
+    setEditingProfile(true);
+  };
+
+  const pickProfileClass = (next: number) => {
+    hapticTick();
+    const offered = new Set(subjectsForClass(next).map(({ subject }) => subject));
+    setProfileClass(next);
+    // Keep subjects whose names exist at the new stage. Their syllabus codes
+    // are remapped on save; a Physics student should not have to pick Physics
+    // again merely because 0625 became 9702.
+    setProfileSubjects((current) => current.filter((subject) => offered.has(subject)));
+  };
+
+  const saveProfile = async () => {
+    const firstName = profileName.trim();
+    if (!firstName) return toast("Enter the student's first name.", "warn");
+    if (!profileSubjects.length) return toast("Pick at least one subject.", "warn");
+    setBusy("profile");
+    hapticFirm();
+    try {
+      await updateStudentProfile({
+        firstName,
+        classLevel: profileClass,
+        subjects: profileSubjects.map((subject) => ({
+          subject,
+          syllabus_code: syllabusCode(subject, profileClass)!,
+        })),
+      });
+      setEditingProfile(false);
+      toast("Profile saved.");
+    } catch (e) {
+      toast((e as Error).message || "The profile could not be saved.", "warn");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const pickAvatar = async (key: string) => {
     hapticTick();
@@ -264,22 +315,80 @@ export default function Settings() {
       )}
 
       <div className="sectitle">Profile</div>
-      <div className="list">
-        <div className="srow noicon">
-          <div className="lbl">Board</div>
-          <div className="aux">{student?.board ?? "—"}</div>
-        </div>
-        <div className="srow noicon">
-          <div className="lbl">Class</div>
-          <div className="aux">{student ? String(student.class_level) : "—"}</div>
-        </div>
-        <div className="srow noicon">
-          <div className="lbl">Subjects</div>
-          <div className="aux">
-            {student?.subjects?.length ? student.subjects.join(", ") : "None yet"}
+      {editingProfile && student ? (
+        <div className="card profileedit">
+          <label className="profilefield" htmlFor="settings-student-name">
+            <span>First name</span>
+            <input
+              id="settings-student-name"
+              value={profileName}
+              autoComplete="given-name"
+              onChange={(event) => setProfileName(event.target.value)}
+            />
+          </label>
+
+          <div className="profilelabel">Stage</div>
+          <div className="seg" role="group" aria-label="Class">
+            {CLASS_LEVELS.map((level) => (
+              <button key={level} type="button" className={level === profileClass ? "on" : undefined}
+                      aria-pressed={level === profileClass} onClick={() => pickProfileClass(level)}>
+                {level}
+              </button>
+            ))}
+          </div>
+          <div className="profilehint">{classLabel(profileClass)} · {BOARD_LABEL}</div>
+
+          <div className="profilelabel">Subjects</div>
+          <div className="profilechips" role="group" aria-label="Subjects">
+            {subjectsForClass(profileClass).map(({ subject, code }) => {
+              const selected = profileSubjects.includes(subject);
+              return (
+                <button key={subject} type="button" className={"fchip" + (selected ? " active" : "")}
+                        aria-pressed={selected} onClick={() => {
+                          hapticTick();
+                          setProfileSubjects((current) => selected
+                            ? current.filter((item) => item !== subject)
+                            : [...current, subject]);
+                        }}>
+                  {subject} · {code}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="profileactions">
+            <PressBox as="button" type="button" className="btn primary"
+                      disabled={busy === "profile"} onClick={() => void saveProfile()}>
+              {busy === "profile" ? "Saving…" : "Save profile"}
+            </PressBox>
+            <button type="button" className="btn plain" disabled={busy === "profile"}
+                    onClick={() => setEditingProfile(false)}>Cancel</button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="list">
+          <PressBox as="button" type="button" className="srow noicon" data-interactive=""
+                    disabled={!student} onClick={beginProfileEdit}>
+            <div className="lbl">Student<small>{student?.first_name ?? "No profile"}</small></div>
+            <div className="aux">Edit</div>
+            <Chevron />
+          </PressBox>
+          <div className="srow noicon">
+            <div className="lbl">Board</div>
+            <div className="aux">{student ? BOARD_LABEL : "—"}</div>
+          </div>
+          <div className="srow noicon">
+            <div className="lbl">Stage</div>
+            <div className="aux">{student ? classLabel(student.class_level) : "—"}</div>
+          </div>
+          <div className="srow noicon">
+            <div className="lbl">Subjects</div>
+            <div className="aux">
+              {student?.subjects?.length ? student.subjects.join(", ") : "None yet"}
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* ── Billing ──
@@ -529,6 +638,18 @@ export default function Settings() {
       </div>
       <div className="note">
         No targeted advertising. There&rsquo;s nothing to opt out of because it was never built in.
+      </div>
+
+      <div className="sectitle">About Axon</div>
+      <div className="list">
+        <Link className="srow noicon" to={paths.privacy}>
+          <div className="lbl">Privacy Policy<small>Data, storage, choices and deletion</small></div>
+          <Chevron />
+        </Link>
+        <Link className="srow noicon" to={paths.terms}>
+          <div className="lbl">Terms of Service<small>Account and upload terms</small></div>
+          <Chevron />
+        </Link>
       </div>
 
       <div style={{ marginTop: 14 }} />

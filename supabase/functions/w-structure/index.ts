@@ -25,7 +25,7 @@ serveWorker(async ({ sb, msg, beat }) => {
     .from('paper_page')
     // One string literal, not a concatenation: supabase-js infers the row type
     // from the select at compile time, and a joined string types as `unknown`.
-    .select('id, paper_id, student_id, page_number, r2_bucket, r2_key, mask_key, structure_status, layer_fallback, teacher_marks, conditioning_meta')
+    .select('id, paper_id, student_id, page_number, r2_bucket, r2_key, mask_key, structure_status, layer_fallback, teacher_marks, margin_band, conditioning_meta')
     .eq('id', pageId).single();
 
   if (!page) return { detail: { skipped: 'no such page' } };
@@ -141,7 +141,7 @@ serveWorker(async ({ sb, msg, beat }) => {
     const attributed = attribute({
       regions,
       marks,
-      marginBands: new Map([[page.page_number, null]]),
+      marginBands: new Map([[page.page_number, page.margin_band ?? null]]),
       pageWidths: new Map([[page.page_number, width]]),
     });
 

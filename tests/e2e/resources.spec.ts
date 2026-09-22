@@ -1,58 +1,111 @@
-import { test, expect } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-test("cold library remains loading until the delayed empty result", async ({ page }) => {
-  await page.goto("/tests/browser/index.html"); await expect(page.getByText("Loading papers…")).toBeVisible();
-  await expect(page.getByText("Nothing here yet")).toHaveCount(0); await expect(page.getByText("0 papers", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Nothing here yet")).toBeVisible();
-});
-test("Home does not confuse early analytics with paper completion", async ({ page }) => {
-  await page.goto("/tests/browser/index.html?view=home"); await expect(page.getByText("Loading papers…")).toBeVisible(); await expect(page.getByText("No papers yet")).toHaveCount(0); await expect(page.getByText("No papers yet")).toBeVisible();
-});
-test("cached analysis is identified", async ({ page }) => { await page.goto("/tests/browser/index.html?view=insights&scenario=cached"); await expect(page.getByText("Last available analysis.")).toBeVisible(); });
-test("auth read failure is a boot error", async ({ page }) => { await page.goto("/tests/browser/index.html?scenario=auth-error"); await expect(page.getByText("boot_error")).toBeVisible(); });
-test("consent failure stays explicit", async ({ page }) => { await page.goto("/tests/browser/index.html?scenario=consent-error"); await expect(page.getByText("Consent failed")).toBeVisible(); });
-test("resource status accessibility @a11y", async ({ page }) => { await page.goto("/tests/browser/index.html"); await expect(page.getByText("Nothing here yet")).toBeVisible(); expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]); });
+import { test, expect } from "@playwright/test";
+
+import AxeBuilder from "@axe-core/playwright";
+
+test("cold library remains loading until the delayed empty result", async ({ page }) => {
+
+  await page.goto("/tests/browser/index.html"); await expect(page.getByText("Loading papers…")).toBeVisible();
+
+  await expect(page.getByText("Nothing here yet")).toHaveCount(0); await expect(page.getByText("0 papers", { exact: true })).toHaveCount(0);
+
+  await expect(page.getByText("Nothing here yet")).toBeVisible();
+
+});
+
+test("Home does not confuse early analytics with paper completion", async ({ page }) => {
+
+  await page.goto("/tests/browser/index.html?view=home"); await expect(page.getByText("Loading papers…")).toBeVisible(); await expect(page.getByText("No papers yet")).toHaveCount(0); await expect(page.getByText("No papers yet")).toBeVisible();
+
+});
+
+test("cached analysis is identified", async ({ page }) => { await page.goto("/tests/browser/index.html?view=insights&scenario=cached"); await expect(page.getByText("Last available analysis.")).toBeVisible(); });
+
+test("auth read failure is a boot error", async ({ page }) => { await page.goto("/tests/browser/index.html?scenario=auth-error"); await expect(page.getByText("boot_error")).toBeVisible(); });
+
+test("consent failure stays explicit", async ({ page }) => { await page.goto("/tests/browser/index.html?scenario=consent-error"); await expect(page.getByText("Consent failed")).toBeVisible(); });
+
+test("resource status accessibility @a11y", async ({ page }) => { await page.goto("/tests/browser/index.html"); await expect(page.getByText("Nothing here yet")).toBeVisible(); expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]); });
+
 test("capture stops a permission result after detachment", async ({ page }) => {
-  await page.goto("/tests/browser/index.html");
-  const stopped = await page.evaluate(async () => {
-    const { createCapture } = await import("/src/scan/capture.js");
-    const video = document.createElement("video"); const overlay = document.createElement("canvas");
-    const capture = createCapture({ video, overlay, onState() {}, onShot() {} });
-    let resolve: (stream: any) => void = () => {}; let stops = 0;
-    const pending = new Promise(resolvePromise => { resolve = resolvePromise; });
-    const start = capture.start(pending); capture.stop(); resolve({ getTracks: () => [{ stop() { ++stops; } }] }); await start;
-    return { stops, attached: video.srcObject !== null };
-  });
-  expect(stopped).toEqual({ stops: 1, attached: false });
-});
-
-test("dialog traps focus, labels input and restores trigger @a11y", async ({ page }) => {
-  await page.goto("/tests/browser/index.html?view=dialog");
-  await page.getByRole("button", { name: "Open dialog" }).click();
-  await expect(page.getByRole("dialog", { name: "Enter your answer" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Your answer", exact: true })).toBeFocused();
-  for (let i = 0; i < 7; ++i) await page.keyboard.press("Tab");
-  expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open dialog" })).toBeFocused();
-});
-test("consequential dialog waits then preserves callback navigation", async ({ page }) => {
-  await page.goto("/tests/browser/index.html?view=dialog"); await page.getByRole("button", { name: "Open dialog" }).click();
-  await page.getByRole("textbox", { name: "Your answer", exact: true }).fill("42"); await page.getByRole("button", { name: "Save answer" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible(); await expect(page.getByRole("button", { name: "Working…" })).toBeDisabled();
-  await expect(page.getByText("/saved", { exact: true })).toBeVisible(); await expect(page.getByRole("dialog")).toHaveCount(0);
-});
+  await page.goto("/tests/browser/index.html");
+
+  const stopped = await page.evaluate(async () => {
+
+    const { createCapture } = await import("/src/scan/capture.js");
+
+    const video = document.createElement("video"); const overlay = document.createElement("canvas");
+
+    const capture = createCapture({ video, overlay, onState() {}, onShot() {} });
+
+    let resolve: (stream: any) => void = () => {}; let stops = 0;
+
+    const pending = new Promise(resolvePromise => { resolve = resolvePromise; });
+
+    const start = capture.start(pending); capture.stop(); resolve({ getTracks: () => [{ stop() { ++stops; } }] }); await start;
+
+    return { stops, attached: video.srcObject !== null };
+
+  });
+
+  expect(stopped).toEqual({ stops: 1, attached: false });
+
+});
+
+
+
+test("dialog traps focus, labels input and restores trigger @a11y", async ({ page }) => {
+
+  await page.goto("/tests/browser/index.html?view=dialog");
+
+  await page.getByRole("button", { name: "Open dialog" }).click();
+
+  await expect(page.getByRole("dialog", { name: "Enter your answer" })).toBeVisible();
+
+  await expect(page.getByRole("textbox", { name: "Your answer", exact: true })).toBeFocused();
+
+  for (let i = 0; i < 7; ++i) await page.keyboard.press("Tab");
+
+  expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
+
+  await page.keyboard.press("Escape");
+
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await expect(page.getByRole("button", { name: "Open dialog" })).toBeFocused();
+
+});
+
+test("consequential dialog waits then preserves callback navigation", async ({ page }) => {
+
+  await page.goto("/tests/browser/index.html?view=dialog"); await page.getByRole("button", { name: "Open dialog" }).click();
+
+  await page.getByRole("textbox", { name: "Your answer", exact: true }).fill("42"); await page.getByRole("button", { name: "Save answer" }).click();
+
+  await expect(page.getByRole("dialog")).toBeVisible(); await expect(page.getByRole("button", { name: "Working…" })).toBeDisabled();
+
+  await expect(page.getByText("/saved", { exact: true })).toBeVisible(); await expect(page.getByRole("dialog")).toHaveCount(0);
+
+});
+
 test("Reduce Motion cancels active springs without decorative frames", async ({ page }) => {
-  await page.goto("/tests/browser/index.html");
-  const result = await page.evaluate(async () => {
-    const { spring, seed } = await import("/src/ui/lib/spring.ts");
-    document.documentElement.dataset.motion = "reduce";
-    let frames = 0; let position = 0; const original = window.requestAnimationFrame;
-    window.requestAnimationFrame = callback => { ++frames; return original(callback); };
-    seed("test", 0); spring("test", { to: 1, onUpdate: value => { position = value; } });
-    window.requestAnimationFrame = original; return { frames, position };
-  });
+  await page.goto("/tests/browser/index.html");
+
+  const result = await page.evaluate(async () => {
+
+    const { spring, seed } = await import("/src/ui/lib/spring.ts");
+
+    document.documentElement.dataset.motion = "reduce";
+
+    let frames = 0; let position = 0; const original = window.requestAnimationFrame;
+
+    window.requestAnimationFrame = callback => { ++frames; return original(callback); };
+
+    seed("test", 0); spring("test", { to: 1, onUpdate: value => { position = value; } });
+
+    window.requestAnimationFrame = original; return { frames, position };
+
+  });
+
   expect(result).toEqual({ frames: 0, position: 1 });
 });
 
@@ -199,7 +252,7 @@ test("runtime route failures and unknown URLs have distinct recovery UI", async 
   await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible();
 
   await page.goto("/tests/browser/index.html?view=route-errors&route=/unknown");
-  await expect(page.getByRole("heading", { name: "Nothing here" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expect(page.getByText("This page could not open")).toHaveCount(0);
 });
 

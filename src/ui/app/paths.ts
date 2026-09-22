@@ -13,6 +13,8 @@
 
 export const paths = {
   home: "/",
+  privacy: "/privacy",
+  terms: "/terms",
   library: "/library",
   paper: (paperId: string) => `/library/${paperId}`,
   question: (paperId: string, qId: string) => `/library/${paperId}/${qId}`,

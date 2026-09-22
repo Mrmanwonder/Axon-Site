@@ -1,25 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE SCAN HOST
 
-   `src/scan/ui.js` owns the flow and knows the ten stages in order. This owns
-   the surfaces it paints into. The two meet at the `host` object handed to
-   `initScanUI`, which replaced the `window.__axon*` globals — nothing about
-   the pipeline moved.
-
-   Everything the flow pushes lands in state here: the viewfinder hint, the tray,
-   the progress model, the drafts, the review model. Components read it. That is
-   the whole bridge.
-
-   ── Load order, which is measured and not incidental ──
-
-   The pipeline is sixteen modules, and none of them are needed to read a paper
-   scanned last week. `ensureScan()` in useIngestion is the only way in, and it
-   imports them dynamically; as static imports they cost about 0.7s of extra boot
-   on a throttled mid-tier profile, against a hard 60fps floor.
-
-   The camera request races that load rather than following it. Asking at the end
-   of the chain put roughly ten seconds between tapping Scan and seeing the
-   permission sheet, which reads as an app that does not work.
+   `src/scan/ui.js` owns the flow and capture transactions. This provider owns
+   the React surfaces it paints into.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import {
@@ -38,11 +21,17 @@ import { hapticTick, hapticFirm } from "../lib/haptics";
 export type TrayPage = {
   page_number: number;
   thumb?: string;
-  quality?: { verdict: "ok" | "warn" | "fail"; reasons: string[] };
-  /** True for the beat between the shutter firing and conditioning actually
-      finishing — `thumb` is the raw, unwarped capture scaled down, not yet
-      the real conditioned page. scan-ground-up-revamp-2026-09-07.md Phase 4. */
+  quality?: {
+    verdict: "ok" | "warn" | "fail";
+    reasons: string[];
+    /** Explicit user decision to keep a page that the capture gate failed. */
+    accepted?: boolean;
+  };
+  /** True while this slot is being conditioned. A retake uses the existing
+      page number, so pending replacement never creates a phantom extra page. */
   pending?: boolean;
+  /** Sticky until a replacement is durably stored. */
+  retakeRequested?: boolean;
 };
 
 export type ProgressModel = {
@@ -64,13 +53,10 @@ export type ReviewQuestion = {
   marksAvailable?: number | null;
   answer?: string | null;
   remark?: string | null;
-  /* The region's box on its page, not a rendered image — <Crop> cuts it in CSS. */
   crop?: { paperId: string; page: number; box: CropBox } | null;
   pageNumber?: number;
   unreadableReason?: string | null;
   alternatives?: number[];
-  /** The marks-available read off the page is not a whole number, so no
-      correction grid is offered and the sheet explains the gap instead. */
   allocationUnusable?: boolean;
   explanation?: { cause?: string; body?: string; doThisNext?: string } | null;
 };
@@ -81,9 +67,6 @@ export type ReviewModel = {
   delta?: { message: string; ours: number; theirs: number } | null;
   outstanding: number;
   cleanCount: number;
-  /** True from the moment Save is tapped until the paper is committed (or the
-      attempt fails) — explanations are generated in this window, before the
-      commit that would otherwise ship with none of them. */
   saving?: boolean;
   saveLabel: string;
   questions: ReviewQuestion[];
@@ -105,6 +88,7 @@ export type ResumeReviewResult =
 
 type ScanModule = {
   resetScan: () => void;
+
   setScanContext: (ctx: unknown) => void;
   attachSurface: (video: HTMLVideoElement | null, overlay: HTMLCanvasElement | null) => void;
   detachSurface: () => void;
@@ -112,6 +96,7 @@ type ScanModule = {
   setPendingPaperType: (t: string | null) => void;
   acceptUploads: (files: File[]) => Promise<{ accepted: { name: string }[]; rejected: { name: string; reason: string }[] }>;
   setScanVisible: (visible: boolean, camera?: unknown) => void;
+
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
   resumeDraftReview: (draftId: string) => Promise<ResumeReviewResult>;
@@ -120,8 +105,9 @@ type ScanModule = {
 type ScanValue = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   overlayRef: React.RefObject<HTMLCanvasElement | null>;
-
   camera: { on: boolean; phase: string };
+  scanPhase: string;
+  pendingCaptureCount: number;
   hint: { hint: string; blocking?: string | null };
   tray: TrayPage[];
   trayHandlers: { onPage?: (n: number) => void; onDone?: () => void };
@@ -133,8 +119,6 @@ type ScanValue = {
   reviewHandlers: ReviewHandlers | null;
   reviewOpen: boolean;
   closeReview: () => void;
-
-  /** Load the pipeline and hand it the student. The only way in. */
   ensureScan: () => Promise<ScanModule>;
   onScreenVisible: (visible: boolean) => void;
   shoot: () => void;
@@ -162,6 +146,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const activation = useRef(0);
   const visibleRef = useRef(false);
   const cameraModule = useRef<typeof import("../../scan/camera.js") | null>(null);
+
   const toast = useToast();
   const { openSheet } = useSheetControls();
 
@@ -169,6 +154,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
 
   const [camera, setCamera] = useState({ on: false, phase: "idle" });
+  const [scanState, setScanState] = useState({ phase: "idle", pendingCaptureCount: 0 });
   const [hint, setHint] = useState<{ hint: string; blocking?: string | null }>({
     hint: "Starting the camera…",
   });
@@ -189,6 +175,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const scanReady = useRef<Promise<unknown> | null>(null);
   const modRef = useRef<ScanModule | null>(null);
 
+
   useEffect(() => {
     const clear = (event: Event) => {
       if ((event as CustomEvent).detail.action !== "purge") return;
@@ -198,6 +185,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     };
     addEventListener("axon:local-data", clear);
     return () => removeEventListener("axon:local-data", clear);
+
   }, []);
 
   useEffect(() => {
@@ -217,6 +205,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
       {
         toast: (m: string, tone?: "neutral" | "warn") => toast(m, tone),
         submissionBusy: setSubmitting,
+        scannerState: setScanState,
         navigationIntent: () => locationRef.current.key,
         tick: hapticTick,
         firm: hapticFirm,
@@ -257,6 +246,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     await scanReady.current;
     scan.setScanContext({ student: appRef.current.student, guardian: appRef.current.guardian });
     return scan;
+
     } catch (error) {
       scanPromise.current = null;
       scanReady.current = null;
@@ -264,9 +254,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     }
   }, [toast, openSheet, gotoScan, navigate]);
 
-  /** Entry to and exit from the Scan screen. The camera request is fired here,
-      before the pipeline has finished loading, and whichever wins waits for the
-      other. */
+
   const onScreenVisible = useCallback((visible: boolean) => {
     const request = ++activation.current;
     visibleRef.current = visible;
@@ -281,6 +269,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         const cameraRequest = import("../../scan/camera.js").then(async camera => {
+
           cameraModule.current = camera;
           if (request !== activation.current || !visibleRef.current || !camera.cameraSupported()) return null;
           const stream = await camera.requestCamera();
@@ -290,6 +279,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
           }
           return stream;
         }).catch(error => error);
+
         const [scan, stream] = await Promise.all([ensureScan(), cameraRequest]);
         if (request !== activation.current || !visibleRef.current) return;
         scan.attachSurface(videoRef.current, overlayRef.current);
@@ -299,13 +289,22 @@ export function ScanProvider({ children }: { children: ReactNode }) {
         // Cancel both halves of startup, including a camera module or permission
         // request that has not returned yet. Retry receives a new activation.
         ++activation.current;
+
         cameraModule.current?.releaseCamera();
         setCamera({ on: false, phase: "failed" });
         setHint({ hint: "The scanner could not start. Try again.", blocking: "scanner" });
       }
     })();
   }, [ensureScan]);
-  useEffect(() => () => { ++activation.current; visibleRef.current = false; cameraModule.current?.releaseCamera(); modRef.current?.setScanVisible(false); modRef.current?.detachSurface(); }, []);
+
+
+  useEffect(() => () => {
+    ++activation.current;
+    visibleRef.current = false;
+    cameraModule.current?.releaseCamera();
+    modRef.current?.setScanVisible(false);
+    modRef.current?.detachSurface();
+  }, []);
 
   const shoot = useCallback(() => { modRef.current?.shoot(); }, []);
   const setAutoCapture = useCallback((on: boolean) => {
@@ -316,11 +315,12 @@ export function ScanProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ScanValue>(() => ({
     videoRef, overlayRef,
-    camera, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
+    camera, scanPhase: scanState.phase, pendingCaptureCount: scanState.pendingCaptureCount,
+    hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, auto, submitting,
   }), [
-    camera, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
+    camera, scanState, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, auto, submitting,
   ]);

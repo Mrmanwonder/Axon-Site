@@ -28,15 +28,16 @@ import { useApp } from "../data/AppProvider";
 import { useAnalytics } from "../data/useAnalytics";
 import { paperPresentation } from "../data/paperPresentation";
 import { paths } from "../app/paths";
-import { paperTypeLabel } from "../data/modules";
+import { paperTypeLabel, statusKeyForRun } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
 
 export default function Home() {
-  const { student, guardian, papers, papersStale, papersError, papersResource, progressResource } = useApp();
-  const { state, stale, needsCheck } = useAnalytics();
+  const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
+  const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
+
   const { addPaper } = useIngestion();
   const navigate = useNavigate();
 
@@ -88,6 +89,20 @@ export default function Home() {
   }
 
   const recent = papers.slice(0, 3);
+  const subjects = student?.subjects ?? [];
+  const unreadableCount = unreadable?.length ?? 0;
+  const waiting = [...progress.values()].filter((p) => {
+    const key = statusKeyForRun(p.status);
+    return key === "needs_review" || key === "ready";
+  }).length;
+  const attentionCount = (needsCheck?.count ?? 0) + unreadableCount + waiting;
+  const nextCopy = state !== "ready" || progressResource.state !== "ready"
+    ? "Checking what needs your attention…"
+    : attentionCount
+    ? `${attentionCount} ${attentionCount === 1 ? "thing needs" : "things need"} your eyes before the analysis can move on.`
+    : readiness?.has_enough_data
+      ? "Nothing needs you right now. Your latest evidence is ready in Insights."
+      : "Nothing needs you right now. Scan your next marked paper when you get it back.";
 
   return (
     <>
@@ -97,9 +112,22 @@ export default function Home() {
       </div>
 
       {(stale || state === "failed") && <div role="status">Last available analysis. Live analysis is unavailable.</div>}
+      <div className="subjectchips" aria-label="Your subjects">
+        {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
+      </div>
+
+      <div className="card nextstep">
+        <div className="eyebrow">Next step</div>
+        <div className="line">{nextCopy}</div>
+        {attentionCount > 0 && (
+          <PressBox as={Link} to={paths.library} className="textaction">Review now <Chevron /></PressBox>
+        )}
+      </div>
+
+
       {/* Shown only when there is something to check. The count and the paper
           count are both real; the surface states its own sample size. */}
-      {needsCheck && needsCheck.count > 0 && (
+      {attentionCount > 0 && (
         <PressBox
           as="button"
           type="button"
@@ -115,12 +143,10 @@ export default function Home() {
           </div>
           <div className="b">
             <div className="t1">
-              {needsCheck.count === 1
-                ? "1 answer needs a quick check"
-                : `${needsCheck.count} answers need a quick check`}
+              Needs your eyes
             </div>
             <div className="t2">
-              Across {needsCheck.papers} paper{needsCheck.papers === 1 ? "" : "s"} · marked Unsure
+              {needsCheck?.count ?? 0} to confirm · {unreadableCount} unreadable · {waiting} ready to review
             </div>
           </div>
           <Chevron />
@@ -140,8 +166,9 @@ export default function Home() {
             data-interactive=""
           >
             <div className="b">
-              <div className="t1">{paperTypeLabel(p.type)}</div>
+              <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type)}</div>
               <div className="t2">{presentation.statusLabel}{presentation.stale ? " · last-known status" : ""}</div>
+
               <div className="t2">
                 <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
                   {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
@@ -153,6 +180,9 @@ export default function Home() {
                 </span>
               </div>
             </div>
+            {p.total_available != null && p.total_awarded != null && (
+              <div className="lost">{Number(p.total_available) - Number(p.total_awarded)}<small>marks lost</small></div>
+            )}
             <Chevron />
           </PressBox>
         ); })}
@@ -167,8 +197,12 @@ export default function Home() {
           <path d="M12 16V5M12 5 8 9M12 5l4 4" />
           <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" />
         </svg>
-        Add a paper
+        Just got a test back? Scan it now
       </PressBox>
+
+      <div className="card examcard">
+        <div><div className="eyebrow">What&rsquo;s coming up</div><div className="t1">No exam date set</div><div className="t2">Axon won&rsquo;t guess your school calendar. Exam planning will appear here when dates can be saved.</div></div>
+      </div>
     </>
   );
 }

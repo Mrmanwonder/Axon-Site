@@ -18,6 +18,7 @@ import Header from "./Header";
 import ThemeToggle from "./ThemeToggle";
 import { activeIndex, destinations } from "../app/nav";
 import ReviewSheet from "../scan/ReviewSheet";
+import DocumentMeta from "../components/DocumentMeta";
 
 export default function AppShell() {
   const { profileStale } = useApp();
@@ -29,7 +30,6 @@ export default function AppShell() {
   const title = i >= 0 ? destinations[i].label : "";
 
   useEffect(() => {
-    document.title = `${title || (pathname.startsWith("/scan/review/") ? "Review paper" : "Axon")} · Axon`;
     scrollRef.current?.focus();
   }, [pathname, title]);
 
@@ -46,6 +46,8 @@ export default function AppShell() {
   return (
     <div className="app">
       <a className="skip-link" href="#main-content">Skip to main content</a>
+      <DocumentMeta title={`${pathname.startsWith("/scan/review/") ? "Review paper" : title || "Axon"} · Axon`} description="Your private Axon study workspace." path={pathname} noIndex />
+
       <ThemeToggle />
       <Header title={title} stuck={stuck} />
 

@@ -1,38 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    LIBRARY — the archive
 
-   A direct port of `__axonRenderLibrary`, extended per AXON_FIX_BRIEF.md §6.5:
-   every paper shows a live status from upload onward, not just "Not read yet"
-   or a real row — Scanning → Reading → Needs your eyes → Ready to save →
-   (committed rows render as before). A failed or rejected paper stays
-   visible, says so, and offers a way back to it, rather than vanishing.
-
-   Three things carried over from the original port, still true and still load
-   bearing:
-
-   · The count line states its own sample size, and says so when the copy on
-     screen came from the offline cache rather than the network.
-   · A committed paper with no attempts is a different, older bug (should not
-     happen once `progress` covers the in-flight states below); a paper mid-
-     pipeline is no longer shown that way at all — it shows what it's actually
-     doing.
-   · Tier is stated in the student's terms — "Scheme-matched" or "Teacher's
-     marks" — not as tier_1 / tier_2.
-
-   Rows stay single-column at every width. They are already dense, and a second
-   column would only shorten each row's usable text.
+   The Library deliberately follows the original Axon reference surface: a
+   large title, search, horizontally-scrollable filters, count + sort, then one
+   dense paper list. The controls below are real controls rather than static
+   prototype chips, while keeping the visual language of the reference.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
+import AppDropdown from "../components/AppDropdown";
+import type { AppDropdownOption } from "../components/AppDropdown";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
-    exists. Decorative. thumb_key (AXON_FIX_BRIEF.md §7.2) is still null on
-    every page live — nothing to point this at yet. */
+    exists. Decorative. */
 function Thumb() {
   return (
     <div className="thumb" aria-hidden="true">
@@ -43,38 +29,170 @@ function Thumb() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="10.8" cy="10.8" r="6.9" />
+      <path d="M15.9 15.9 21 21" />
+    </svg>
+  );
+}
+
 type CountRow = { count: number }[] | undefined;
+type DateFilter = "any" | "30" | "90" | "year";
+type SortMode = "recent" | "oldest" | "lost";
+
+function numeric(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function marksLost(paper: Record<string, unknown>): number | null {
+  const awarded = numeric(paper.total_awarded);
+  const available = numeric(paper.total_available) ?? numeric(paper.stated_maximum);
+  if (awarded === null || available === null) return null;
+  return Math.max(0, available - awarded);
+}
 
 export default function Library() {
   const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
   const navigate = useNavigate();
 
+  const [query, setQuery] = useState("");
+  const [subject, setSubject] = useState("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("any");
+  const [type, setType] = useState("all");
+  const [tier, setTier] = useState("any");
+  const [sort, setSort] = useState<SortMode>("recent");
+
+  const subjects = useMemo(
+    () => [...new Set(papers.map((paper) => paper.subject).filter((value): value is string => typeof value === "string" && value.trim().length > 0))].sort(),
+    [papers],
+  );
+
+  const types = useMemo(
+    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a).localeCompare(paperTypeLabel(b))),
+    [papers],
+  );
+
+  const filteredPapers = useMemo(() => {
+    const now = new Date();
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+
+    const result = papers.filter((paper) => {
+      if (subject !== "all" && paper.subject !== subject) return false;
+      if (type !== "all" && paper.type !== type) return false;
+      if (tier !== "any" && paper.tier !== tier) return false;
+
+      const taken = new Date(paper.date_taken);
+      if (!Number.isNaN(taken.getTime())) {
+        if (dateFilter === "30" && now.getTime() - taken.getTime() > 30 * 86_400_000) return false;
+        if (dateFilter === "90" && now.getTime() - taken.getTime() > 90 * 86_400_000) return false;
+        if (dateFilter === "year" && taken.getFullYear() !== now.getFullYear()) return false;
+      }
+
+      if (normalizedQuery) {
+        const searchable = [
+          paper.subject ?? "",
+          paperTypeLabel(paper.type),
+          new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+        ].join(" ").toLocaleLowerCase();
+        if (!searchable.includes(normalizedQuery)) return false;
+      }
+
+      return true;
+    });
+
+    return [...result].sort((a, b) => {
+      if (sort === "lost") {
+        const aLost = marksLost(a as Record<string, unknown>);
+        const bLost = marksLost(b as Record<string, unknown>);
+        if (aLost !== null || bLost !== null) return (bLost ?? -1) - (aLost ?? -1);
+      }
+      const aTime = new Date(a.date_taken).getTime();
+      const bTime = new Date(b.date_taken).getTime();
+      return sort === "oldest" ? aTime - bTime : bTime - aTime;
+    });
+  }, [papers, query, subject, dateFilter, type, tier, sort]);
+
+  const subjectOptions: AppDropdownOption[] = [
+    { value: "all", label: "All subjects" },
+    ...subjects.map((item) => ({ value: item, label: item })),
+  ];
+  const dateOptions: AppDropdownOption[] = [
+    { value: "any", label: "Any date" },
+    { value: "30", label: "Last 30 days" },
+    { value: "90", label: "Last 90 days" },
+    { value: "year", label: "This year" },
+  ];
+  const typeOptions: AppDropdownOption[] = [
+    { value: "all", label: "All types" },
+    ...types.map((item) => ({ value: item, label: paperTypeLabel(item) })),
+  ];
+  const tierOptions: AppDropdownOption[] = [
+    { value: "any", label: "Any tier" },
+    { value: "tier_2", label: "Scheme-matched" },
+    { value: "tier_1", label: "Teacher's marks" },
+  ];
+  const sortOptions: AppDropdownOption[] = [
+    { value: "recent", label: "Most recent" },
+    { value: "oldest", label: "Oldest first" },
+    { value: "lost", label: "Most marks lost" },
+  ];
+
   return (
     <>
       <div className="greet">
         <h1>Library</h1>
-        <div className="sub">
-          {papersResource.state === "ready" || papersResource.data !== null ? <>{papers.length} paper{papers.length === 1 ? "" : "s"}</> : ""}
-          {papersStale ? " · offline copy" : ""}
+      </div>
+
+      <div className="searchwrap">
+        <div className="search">
+          <SearchIcon />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search questions, chapters, concepts"
+            aria-label="Search library"
+          />
         </div>
+      </div>
+
+      <div className="filterbar" aria-label="Library filters">
+        <AppDropdown ariaLabel="Filter by subject" value={subject} options={subjectOptions} onChange={setSubject} selected={subject !== "all"} />
+        <AppDropdown ariaLabel="Filter by date" value={dateFilter} options={dateOptions} onChange={(value) => setDateFilter(value as DateFilter)} selected={dateFilter !== "any"} />
+        <AppDropdown ariaLabel="Filter by paper type" value={type} options={typeOptions} onChange={setType} selected={type !== "all"} />
+        <AppDropdown ariaLabel="Filter by tier" value={tier} options={tierOptions} onChange={setTier} selected={tier !== "any"} />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
+        <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
+          {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}{papersStale ? " · offline copy" : ""}
+        </span>
+        <AppDropdown
+          ariaLabel="Sort library"
+          value={sort}
+          options={sortOptions}
+          onChange={(value) => setSort(value as SortMode)}
+          variant="sort"
+          align="right"
+        />
       </div>
 
       {papersResource.state === "loading" && <div role="status">Loading papers…</div>}
       {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
       {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
       <div className="list">
-        {/* Two different states that used to render identically. A library
-            that is empty and a library we could not read are not the same
-            thing, and telling a student the first when it is the second is
-            the confident lie hard rule 4 exists to prevent. */}
         {!papers.length && papersError && (
           <div className="srow noicon">
             <div className="lbl">
               We couldn&rsquo;t load your papers
-              <small>
-                Your papers are safe — this is us failing to read them, not them
-                being gone. Try again in a moment.
-              </small>
+              <small>Your papers are safe — this is us failing to read them, not them being gone. Try again in a moment.</small>
             </div>
           </div>
         )}
@@ -88,53 +206,50 @@ export default function Library() {
           </div>
         )}
 
-        {papers.map((p) => {
-          const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
+        {!!papers.length && !filteredPapers.length && (
+          <div className="srow noicon">
+            <div className="lbl">
+              No matching papers
+              <small>Try changing the search or one of the filters.</small>
+            </div>
+          </div>
+        )}
 
+        {filteredPapers.map((p) => {
+          const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
+          const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
           const presentation = paperPresentation(p, progressResource);
           const status = { label: presentation.statusLabel, tone: presentation.tone };
+          const lost = marksLost(p as Record<string, unknown>);
+          const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
           const meta = (
             <>
               <Thumb />
               <div className="b">
-                <div className="t1">{paperTypeLabel(p.type)}</div>
+                <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type)}</div>
                 <div className="t2">
-                  <span>
-                    {new Date(p.date_taken).toLocaleDateString("en-IN", {
-                      day: "numeric", month: "short",
-                    })}
-                  </span>
+                  <span>{pages ? `${pages} page${pages === 1 ? "" : "s"}` : "Paper"}</span>
                   <span>·</span>
-                  <span>{pages} page{pages === 1 ? "" : "s"}</span>
+                  <span>{date}</span>
                 </div>
                 <div className="t2" style={{ marginTop: 6 }}>
                   <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
                     {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
                   </span>
                   {status
-                    ? (
-                      // "wait" (still being read) is neutral; "attention" and
-                      // "stopped" both use the existing amber .uns treatment —
-                      // red is reserved for signing out, nothing else.
-                      <span className={"tier " + (status.tone === "wait" ? "t1" : "uns")}>
-                        {status.label}
-                      </span>
-                    )
-                    // Not a zero. "We haven't read this" and "nothing was
-                    // lost" are different claims and must not look the same.
-                    : null}
+                    ? <span className={"tier " + (status.tone === "wait" ? "t1" : "uns")}>{status.label}</span>
+                    : (!questions && <span className="tier uns">Not read yet</span>)}
                 </div>
                 {presentation.reason && <div className="t2">{presentation.reason}</div>}
+              </div>
+              <div className="lost" aria-label={lost === null ? "Marks lost unavailable" : `${lost} marks lost`}>
+                {lost === null ? "—" : Number.isInteger(lost) ? lost : lost.toFixed(1)}
+                <small>lost</small>
               </div>
             </>
           );
 
-          // A paper mid-pipeline, or one that never produced a committed
-          // attempt, has nothing for PaperOverview to open. Route it back to
-          // Scan instead, where the resumable-draft flow already lives, so
-          // "needs your eyes" / "ready" / "failed" all have a real place to
-          // land rather than a dead link or a misleading empty screen.
           if (status) {
             return (
               <PressBox
@@ -166,6 +281,8 @@ export default function Library() {
           );
         })}
       </div>
+
+      <div className="subnote">Search matches paper subjects, types and dates.</div>
     </>
   );
 }

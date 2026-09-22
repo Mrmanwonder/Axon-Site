@@ -1,7 +1,9 @@
 # Frontend remediation validation
 
-Validated locally on 2026-09-22 against the working tree based on `bd5729a`.
-The changes are uncommitted. This report does not attest to a deployed revision.
+Validated locally on 2026-09-22 after reconciling the remediation with upstream
+`510d17d`. The current scanner transaction controls, lazy routes, profile editor,
+filters, security changes, metadata, and analytics bootstrap are preserved.
+Deployment identity is recorded separately once publication succeeds.
 
 ## Implementation
 
@@ -14,27 +16,29 @@ The changes are uncommitted. This report does not attest to a deployed revision.
 | FE-026–030: paper presentation and ingestion | Home and Library share `paperPresentation`. Status failures remain explicit. Uploads return accepted/rejected results, navigate to Scan when pages are accepted, and advertise only supported image types. |
 | FE-031–035: local data and offline | LocalDataService owns cache/draft handles, cross-tab purge, invalidation, and retention. Browser tests cover deletion, late writes, sibling-tab cleanup, and expiration. The production-build test loads Library and a paper through the real readers with mocked server responses, disables the network, then reloads and verifies readable cached content and its offline label. |
 | FE-036–039: mutation ordering | Preferences and avatars serialize writes. Pending preference patches remain visible until settled, with failure rollback. Interaction tests verify rapid edits cannot restore an older choice. |
-| FE-040–044: settings and profiles | Reasoning preference has a consumer; unavailable notifications and export limitations are explicit. Unsupported subject-management copy is removed. Guardian-controlled profile selection persists an `active_student_id` per guardian on this device. |
+| FE-040–044: settings and profiles | Reasoning preference has a consumer; unavailable notifications and export limitations are explicit. The current profile editor is preserved; unsupported subject-management copy is removed. Guardian-controlled profile selection persists an `active_student_id` per guardian on this device. |
 | FE-045–054: accessibility | Shared native dialog, labelled inputs, closed-review unmounting, route-level review focus, native mark radios, answer descriptions, reduced-motion springs, scoped gestures, route focus/titles, skip link, and delayed loading states. Browser checks cover Chromium and mobile WebKit; axe runs in both. |
 
-## Additional failure cases fixed in this continuation
+## Additional failure cases fixed during continuation
 
 - Failed scanner initialization invalidates pending camera startup before allowing retry.
 - Save clears its displayed busy state independently of whether a subsequent review read succeeds.
 - A profile reset during explanations prevents the old save from committing or navigating the next profile.
 - A profile reset during review re-entry prevents old regions/review state from being restored.
+- Offline installation includes lazy reader-route assets and their dependencies without importing or executing the scanner.
+- The image-processing development dependency is patched to sharp 0.35.4; npm audit reports zero vulnerabilities.
 - Pending review refresh timers are cleared when scanner context resets; background refresh failures are surfaced.
 
 ## Local verification
 
 | Check | Result |
 | --- | --- |
-| `npm test` | 196 passed |
+| `npm test` | 212 passed |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed; existing large-chunk warning remains |
 | `npm run test:ui` | 26 passed |
 | `npm run test:db` | 1 transaction suite passed |
-| `npm run test:e2e` | 43 passed, 1 intentional skip |
+| `npm run test:e2e` | 57 passed, 1 intentional skip |
 | `npm run test:a11y` | 10 passed |
 | `git diff --check` | Passed |
 
@@ -44,9 +48,10 @@ production extraction service is not invoked by these fixtures.
 
 ## Release requirements and limits
 
-- Apply and verify `supabase/migrations/20260912040233_frontend_atomic_mutations.sql`
-  before releasing the frontend that calls its new functions. This session did
-  not modify the live database or deploy the site.
+- The user applied `supabase/migrations/20260912040233_frontend_atomic_mutations.sql`.
+  Live catalog verification confirmed both RPCs exist, use invoker security,
+  grant authenticated execution, and deny anonymous execution. No additional
+  database schema change was made during release integration.
 - The local database check uses PGlite. Full Supabase schema checks are configured
   in CI and were not executed against a local Supabase stack in this session.
 - Playwright's service-worker inspection test intentionally skips WebKit. The

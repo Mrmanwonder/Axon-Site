@@ -70,6 +70,7 @@ console.log(`page found         ${found} of ${r.states.length} searches`);
 console.log(`ever steady        ${r.states.some((s) => s.steady)}`);
 console.log(`auto-captured      ${r.shots > 0 ? `yes, at ${r.firstShotMs}ms` : 'NO'}`);
 if (r.lastShot) console.log(`shot               ${r.lastShot.size}, quad ${r.lastShot.hasQuad ? 'kept' : 'MISSING'}`);
+if (r.lastShot) console.log(`capture overlay     ${r.lastShot.overlayPhase}`);
 
 // The preview stabiliser must actually be driving the video element, and it
 // must be driving it with a real transform rather than an identity one. A
@@ -90,6 +91,9 @@ if (!found) failures.push('the detector never found the page');
 if (!r.states.some((s) => s.steady)) failures.push('the page was never called steady');
 if (!r.shots) failures.push(`nothing was captured within ${budgetMs}ms of a held page`);
 if (r.lastShot && !r.lastShot.hasQuad) failures.push('the shot carried no quad, so it cannot be deskewed');
+if (r.lastShot && r.lastShot.overlayPhase !== 'captured-confirm') {
+  failures.push(`accepted shot entered overlay state ${r.lastShot.overlayPhase}, not captured-confirm`);
+}
 if (r.firstShotMs > budgetMs) failures.push(`first capture took ${r.firstShotMs}ms, over the ${budgetMs}ms budget`);
 r.errors.forEach((e) => failures.push(e));
 

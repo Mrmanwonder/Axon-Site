@@ -19,9 +19,10 @@ const stamp = draft => { if (draft) Object.defineProperty(draft, '_epoch', { val
 
 function tx(db, mode, fn) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE, mode);
+    let transaction;
     let result;
     try {
+      transaction = db.transaction(STORE, mode);
       result = fn(transaction.objectStore(STORE));
     } catch (error) {
       closeLocalDatabase(db);
@@ -30,6 +31,7 @@ function tx(db, mode, fn) {
     }
     transaction.oncomplete = () => { closeLocalDatabase(db); resolve(result.result ?? result); };
     transaction.onerror = transaction.onabort = () => { closeLocalDatabase(db); reject(transaction.error); };
+
   });
 }
 

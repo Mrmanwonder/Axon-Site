@@ -21,13 +21,20 @@ type SpringState = { pos: number; vel: number };
 type SpringLoop = { raf: number; state: SpringState; finish?: () => void };
 
 const loops = new Map<string, SpringLoop>();
-const reduced = () => document.documentElement.dataset.motion === "reduce" || matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reduced = () => document.documentElement.dataset.motion === "reduce"
+  || matchMedia("(prefers-reduced-motion: reduce)").matches;
 let observing = false;
+
 function observeMotion() {
   if (observing) return;
   observing = true;
-  const finish = () => { if (reduced()) for (const loop of loops.values()) loop.finish?.(); };
-  new MutationObserver(finish).observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
+  const finish = () => {
+    if (reduced()) for (const loop of loops.values()) loop.finish?.();
+  };
+  new MutationObserver(finish).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-motion"],
+  });
   matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", finish);
 }
 
@@ -47,15 +54,22 @@ export function spring(key: string, { to, stiffness = 200, damping = 25, onUpdat
   const finish = () => {
     const loop = loops.get(key);
     if (loop?.raf) cancelAnimationFrame(loop.raf);
-    s.pos = to; s.vel = 0;
+    s.pos = to;
+    s.vel = 0;
     loops.set(key, { raf: 0, state: s });
     onUpdate(to, 0);
   };
-  if (reduced()) { finish(); return; }
+  if (reduced()) {
+    finish();
+    return;
+  }
   const dt = 1 / 60;
 
   const step = () => {
-    if (reduced()) { finish(); return; }
+    if (reduced()) {
+      finish();
+      return;
+    }
     s.vel += (-stiffness * (s.pos - to) - damping * s.vel) * dt;
     s.pos += s.vel * dt;
     onUpdate(s.pos, s.vel);

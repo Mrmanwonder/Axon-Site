@@ -11,9 +11,36 @@ interface Env {
   AXON_SITE_URL: string
 }
 
+// Keep this in lock-step with netlify.toml. Security headers are part of the
+// application boundary, not a hosting-provider preference: moving the same Vite
+// build from Netlify to Cloudflare must not silently remove the CSP.
+//
+// `unsafe-inline` is currently required for the tiny pre-paint theme script in
+// index.html and for the existing inline style path. Removing those exceptions
+// is tracked as a separate hardening item; parity is the immediate security fix.
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self' https://*.supabase.co",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com",
+  "font-src 'self'",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
+  "worker-src 'self' blob:",
+  "media-src 'self' blob:",
+].join('; ')
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+
+    if (url.protocol !== 'https:' && url.hostname !== 'localhost') {
+      url.protocol = 'https:'
+      return Response.redirect(url, 301)
+    }
 
     // Try to serve the requested asset
     let response = await env.ASSETS.fetch(request)
@@ -28,6 +55,13 @@ export default {
       }
     }
 
-    return response
+    const headers = new Headers(response.headers)
+    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    headers.set('X-Content-Type-Options', 'nosniff')
+    headers.set('X-Frame-Options', 'SAMEORIGIN')
+    headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
+    headers.set('Content-Security-Policy', CONTENT_SECURITY_POLICY)
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
   },
 }

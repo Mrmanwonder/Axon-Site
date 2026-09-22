@@ -16,7 +16,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import ProfileChooser from "../components/ProfileChooser";
-import DelayedLoading from "../components/DelayedLoading";
+
 import { lazy, Suspense } from "react";
 import { AppProvider, useApp } from "../data/AppProvider";
 import { ToastProvider } from "../components/ToastProvider";
@@ -25,6 +25,7 @@ import { IngestionProvider } from "../data/useIngestion";
 import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 import PressBox from "../components/PressBox";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
@@ -76,11 +77,12 @@ function Gate() {
   // Nothing, not a spinner: the document is already painted in the right theme
   // by the inline script in index.html, and a spinner that appears for 80ms and
   // vanishes is worse than a still frame.
-  if (gate === "loading") return <DelayedLoading label="Loading your account…" />;
+  if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" />;
   if (gate === "choose_profile") return <main><ProfileChooser /></main>;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
-    return <Suspense fallback={<DelayedLoading />}><Onboarding /></Suspense>;
+    return <Suspense fallback={<SkeletonLoader label="Loading setup" />}><Onboarding /></Suspense>;
+
   }
   return <AppShell />;
 }

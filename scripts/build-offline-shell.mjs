@@ -10,6 +10,11 @@ function include(key) {
   for (const imported of entry.imports ?? []) include(imported);
 }
 for (const [key, entry] of Object.entries(manifest)) if (entry.isEntry) include(key);
+// Reader routes are lazy at runtime but must exist after an offline reopen.
+// Installing their assets does not import/execute them or load the scanner.
+for (const page of ['Home', 'Library', 'PaperOverview', 'QuestionDetail', 'Insights']) {
+  include(`src/ui/pages/${page}.tsx`);
+}
 for (const font of await readdir('dist/fonts')) files.add('/fonts/' + font);
 const version = createHash('sha256').update(JSON.stringify([...files])).digest('hex').slice(0, 16);
 await writeFile('dist/sw.js', `
@@ -33,7 +38,8 @@ self.addEventListener('fetch', event => {
   } else if (!url.search && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/fonts/'))) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(url.pathname);
+      // Public fingerprinted assets are identical across Origin request headers.
+      const cached = await cache.match(url.pathname, { ignoreVary: true });
       if (cached) return cached;
       const response = await fetch(request);
       if (response.ok) await cache.put(request, response.clone());
