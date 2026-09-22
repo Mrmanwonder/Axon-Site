@@ -69,11 +69,6 @@
    burns paint work while the app is already busy. Static skeleton geometry is
    enough to communicate loading. */
 .skel { animation: none; }
-.axon-skeleton__bar::after,
-.axon-skeleton__disc::after {
-  display: none;
-  animation: none;
-}
 
 /* The reduced-motion rules in app.css/system.css remain authoritative and are
    intentionally not weakened here. */
