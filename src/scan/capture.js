@@ -42,7 +42,7 @@ export const PAPER_EVIDENCE_CONFIRMATIONS = 2;
 export const PAPER_EVIDENCE_LOSS_MS = 700;
 export const SEARCH_GUIDANCE = Object.freeze({
   blocking: null,
-  hint: 'Lay the page flat and fit all four corners in the frame',
+  hint: 'Fit all four page corners in frame',
 });
 
 function viewportScale() {
