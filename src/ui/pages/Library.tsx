@@ -16,6 +16,7 @@ import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
+import PageSkeleton from "../components/PageSkeleton";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
     exists. Decorative. */
@@ -145,6 +146,10 @@ export default function Library() {
     { value: "lost", label: "Most marks lost" },
   ];
 
+  if (papersResource.state === "loading" && papersResource.data === null) {
+    return <PageSkeleton variant="library" label="Loading papers…" />;
+  }
+
   return (
     <>
       <div className="greet">
@@ -186,7 +191,7 @@ export default function Library() {
         />
       </div>
 
-      {papersResource.state === "loading" && <div role="status">Loading papers…</div>}
+      {papersResource.state === "loading" && papersResource.data !== null && <div role="status" className="subnote">Refreshing papers…</div>}
       {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
       {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
       <div className="list">
