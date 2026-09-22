@@ -128,10 +128,10 @@ Real routing needs a CDN-level rewrite: every path falls back to `/index.html` w
 than 404ing before React ever runs.
 
 The production extraction and explanation runtime is the Cloudflare Workers
-monorepo at `Mrmanwonder/axon-backend`, not the historical pipeline copies under
-`supabase/functions/`. The Workers use Cloudflare Queues/R2 and the shared Gemini
-client in `axon-backend/shared/src/openrouter.ts`; deploy and secret changes for
-the model pipeline belong there.
+monorepo at `Mrmanwonder/axon-backend`. Supabase Edge Functions in this repository
+are billing-only. The Workers use Cloudflare Queues/R2 and the shared Gemini client
+in `axon-backend/shared/src/openrouter.ts`; deploy and secret changes for the
+model pipeline belong there.
 
 ### Provider sign-in
 
