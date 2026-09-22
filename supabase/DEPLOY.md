@@ -29,7 +29,6 @@ below are Edge Functions.
 ```bash
 supabase secrets set --project-ref dlgcqieyevoebefhcggi \
   OPENROUTER_API_KEY=sk-or-... \
-  TAVILY_API_KEY=tvly-... \
   R2_ACCOUNT_ID=... \
   R2_ACCESS_KEY_ID=... \
   R2_SECRET_ACCESS_KEY=... \
@@ -42,7 +41,6 @@ supabase secrets set --project-ref dlgcqieyevoebefhcggi \
 `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are injected
 by the platform; do not set them by hand.
 
-`TAVILY_API_KEY` powers the optional live-web tools in `_shared/tavily.ts`. It is a backend secret: never create a `VITE_TAVILY_*` variable and never expose it in the browser bundle. Model callers must opt in with `webTools: true`; scanner/document extraction stays tool-free by default so page-derived student data is not sent to a search provider.
 
 `OPENCODE_API_KEY` is not in this list on purpose. opencode is the build agent
 from `REVIEW_PIPELINE.md` §14 — it runs on a developer's machine and writes this
