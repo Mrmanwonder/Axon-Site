@@ -80,7 +80,6 @@ shape of requests and responses independently of implementation details.
 
 ## AI APIs
 
--   Mentor Chat
 -   Explainability
 -   Recommendations
 -   Mission Generation
