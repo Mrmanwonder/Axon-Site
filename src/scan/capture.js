@@ -544,8 +544,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // A tentative rectangle gets another independent whole-frame search
       // immediately. Local corner tracking alone must not promote a face or a
       // background rectangle into user-visible paper guidance.
-      if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS || needsGlobal(track, started)) await step();
-      else await measureStep(video.videoWidth, video.videoHeight);
+      const workerAvailable = !!ensureDetectWorker();
+      if (!workerAvailable
+          || globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS
+          || needsGlobal(track, started)) {
+        await step();
+      } else {
+        await measureStep(video.videoWidth, video.videoHeight);
+      }
     } catch { /* one bad frame costs one cycle */ }
     const cost = performance.now() - started;
     const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
