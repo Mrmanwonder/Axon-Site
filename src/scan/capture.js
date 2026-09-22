@@ -30,6 +30,10 @@ const STILL_ANALYSIS_LONG_EDGE = 720;
 const AUTO_RETRY_COOLDOWN_MS = 550;
 const TRACK_CONFIDENCE_FLOOR = 0.64;
 const FOCUS_BREATHING_AREA_DELTA = 0.05;
+const NATIVE_PHOTO_TIMEOUT_MS = 1200;
+const VIDEO_FRAME_TIMEOUT_MS = 220;
+const STILL_MIN_FILL = 0.07;
+const DETECT_TIMEOUT_LIMIT = 2;
 
 export const CAPTURE_CONFIRM_TIMING = Object.freeze({
   freezeEnd: 40,
@@ -51,6 +55,28 @@ function viewportScale() {
 
 function viewportScaled() {
   return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+}
+
+/**
+ * Source rectangle visible through an object-fit: cover preview.
+ *
+ * Global detection must search what the student can actually see. On a portrait
+ * phone a 16:9 camera stream can be horizontally cropped by more than half; the
+ * old detector searched those invisible sensor margins and then rejected the
+ * visible sheet for occupying too little of the full source frame.
+ */
+export function coverCropRect(sourceWidth, sourceHeight, viewWidth, viewHeight) {
+  if (!(sourceWidth > 0 && sourceHeight > 0 && viewWidth > 0 && viewHeight > 0)) {
+    return { x: 0, y: 0, width: Math.max(1, sourceWidth || 1), height: Math.max(1, sourceHeight || 1) };
+  }
+  const sourceAspect = sourceWidth / sourceHeight;
+  const viewAspect = viewWidth / viewHeight;
+  if (sourceAspect > viewAspect) {
+    const width = sourceHeight * viewAspect;
+    return { x: (sourceWidth - width) / 2, y: 0, width, height: sourceHeight };
+  }
+  const height = sourceWidth / viewAspect;
+  return { x: 0, y: (sourceHeight - height) / 2, width: sourceWidth, height };
 }
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -233,6 +259,7 @@ export function settledGuidance(showing, verdict, now) {
 // ── worker bridge ──────────────────────────────────────────────────────────
 let detectWorker = null;
 let nextDetectId = 1;
+let detectTimeouts = 0;
 const detectPending = new Map();
 
 function ensureDetectWorker() {
@@ -244,6 +271,7 @@ function ensureDetectWorker() {
       const resolve = detectPending.get(id);
       if (!resolve) return;
       detectPending.delete(id);
+      detectTimeouts = 0;
       resolve(rest);
     };
     detectWorker.onerror = (event) => {
@@ -251,6 +279,7 @@ function ensureDetectWorker() {
         message: event?.message, filename: event?.filename, lineno: event?.lineno,
       });
       detectWorker = false;
+      detectTimeouts = 0;
     };
   } catch {
     detectWorker = false;
@@ -264,14 +293,27 @@ function runDetectWorker(kind, bitmap, extra = null) {
   const id = nextDetectId++;
   return new Promise((resolve) => {
     let done = false;
+    let timeout = 0;
     const finish = (value) => {
       if (done) return;
       done = true;
+      clearTimeout(timeout);
       detectPending.delete(id);
       resolve(value);
     };
     detectPending.set(id, finish);
-    setTimeout(() => finish(null), DETECT_TIMEOUT_MS);
+    timeout = setTimeout(() => {
+      detectTimeouts++;
+      finish(null);
+      // A worker that repeatedly misses its deadline is not a worker path at
+      // all. Falling back to the 360px main-thread detector is preferable to a
+      // scanner that can search forever without ever publishing a page.
+      if (detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
+        w.terminate?.();
+        detectWorker = false;
+        detectTimeouts = 0;
+      }
+    }, DETECT_TIMEOUT_MS);
     w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
   });
 }
@@ -352,13 +394,24 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // Worker startup is paid while camera permission / the first frame is arriving.
   ensureDetectWorker();
 
-  function focusInPageOnMainThread(source, quadInProxy, pw, ph, sw, sh, pageLongEdge) {
-    const inFrame = quadInProxy.map((p) => ({ x: p.x * (sw / pw), y: p.y * (sh / ph) }));
-    const rect = focusWindowRect(inFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
+  function focusInFrameOnMainThread(source, quadInFrame, sw, sh, pageLongEdge) {
+    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return null;
     focusCtx.drawImage(source, rect.sx, rect.sy, rect.size, rect.size, 0, 0, rect.target, rect.target);
     const read = sharpness(focusCtx.getImageData(0, 0, rect.target, rect.target), { scale: 1 });
     return read.blank ? null : read.score;
+  }
+
+  function visibleSourceCrop(vw = video.videoWidth, vh = video.videoHeight) {
+    const rect = video.getBoundingClientRect();
+    return coverCropRect(vw, vh, rect.width, rect.height);
+  }
+
+  function cropQuadToVideo(quadInCrop, crop, pw, ph) {
+    return quadInCrop.map((p) => ({
+      x: crop.x + p.x * (crop.width / pw),
+      y: crop.y + p.y * (crop.height / ph),
+    }));
   }
 
   function blankState() {
