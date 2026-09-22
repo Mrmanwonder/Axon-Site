@@ -91,6 +91,7 @@ test('Tavily live-web tools stay server-side and opt-in', () => {
   assert.match(tavily, /web_extract/);
   assert.match(modelClient, /webTools\?: boolean/);
   assert.match(modelClient, /TAVILY_TOOLS/);
+  assert.match(modelClient, /webSources: string\[\]/);
   assert.match(deploy, /TAVILY_API_KEY=tvly-/);
   assert.doesNotMatch(envExample, /VITE_TAVILY|TAVILY_API_KEY/);
 
