@@ -91,7 +91,7 @@ test('production AI runtime is Cloudflare-only', () => {
   assert.match(deploy, /deployed with Wrangler/);
   assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=/);
 
-  const bashBlocks = [...deploy.matchAll(/```bash\\n([\\s\\S]*?)```/g)].map((match) => match[1]);
+  const bashBlocks = [...deploy.matchAll(/```bash\n([\s\S]*?)```/g)].map((match) => match[1]);
   const deployCommand = bashBlocks.find((block) => block.includes('supabase functions deploy')) ?? '';
   assert.ok(deployCommand, 'Supabase billing deploy command is documented');
   assert.match(deployCommand, /billing-checkout/);
