@@ -272,404 +272,81 @@ minted per model call. Storage RLS mirrors the table policies.
 
 ## 5. Queues
 
-```sql
-select pgmq.create('axon_triage');
-select pgmq.create('axon_structure');
-select pgmq.create('axon_content');
-select pgmq.create('axon_explain');
+Production fan-out and retry use **Cloudflare Queues**. The queue topology and
+consumer settings are defined in `Mrmanwonder/axon-backend/workers/*/wrangler.toml`.
 
-select cron.schedule(
-  'axon-tick', '10 seconds',
-  $$ select net.http_post(
-       url := 'https://<ref>.supabase.co/functions/v1/queue-tick',
-       headers := jsonb_build_object(
-         'Authorization','Bearer '||current_setting('app.service_key'),
-         'Content-Type','application/json'),
-       body := '{}'::jsonb,
-       timeout_milliseconds := 5000
-     ) $$
-);
+The active queue chain is:
+
+```
+triage-queue
+  -> structure-queue
+  -> crop-queue (when the crop stage is enabled)
+  -> content-queue
+  -> reconcile-queue
+  -> adjudicate-queue (only when reconciliation needs it)
+  -> explain-queue
 ```
 
-Visibility timeout 120s, max 5 attempts, then dead-letter. A dead-lettered
-message sets the owning row's status to `failed` with a student-readable reason —
-never a silent stall, per the fail-visibly rule.
+Each queue consumer processes a bounded unit of work and is idempotent. The
+shared consumer harness lives in `axon-backend/shared/src/worker.ts`. Retry and
+dead-letter behavior belong to the Cloudflare queue configuration, not pgmq or
+`queue-tick`.
+
+`mastery-sweep` is the scheduled recovery worker. It handles stuck-run
+recovery and R2 cleanup; there is no Supabase cron-driven pipeline tick in the
+production path.
 
 ---
 
-## 6. Function inventory
+## 6. Cloudflare Worker inventory
 
-Nine functions. Each has one job.
+The production runtime is the `Mrmanwonder/axon-backend` monorepo:
 
-| Function | Trigger | Model calls | Wall clock |
-|---|---|---|---|
-| `paper-submit` | client POST | 0 | <2s |
-| `queue-tick` | pg_cron 10s | 0 | <10s |
-| `w-triage` | queue-tick | 1 | ~15s |
-| `w-structure` | queue-tick | 1 per page | ~20s |
-| `w-content` | queue-tick | 1 per question | ~25s |
-| `reconcile` | w-content completion | 0 | <2s |
-| `w-adjudicate` | reconcile failure | 1 per paper | ~40s |
-| `w-explain` | queue-tick | 1 per question | ~30s |
-| `question-correct` | client POST | 0 | <2s |
+| Worker | Responsibility |
+| --- | --- |
+| `mastery-api` | Student-facing HTTP entrypoint, upload/submit/review orchestration |
+| `mastery-triage` | Fast page/run triage and routing |
+| `mastery-structure` | Question-region and page structure extraction |
+| `mastery-crop` | Server-side crop/image work that must not run in Supabase Edge Functions |
+| `mastery-content` | Per-region content/handwriting extraction |
+| `mastery-reconcile` | Arithmetic/provenance reconciliation |
+| `mastery-adjudicate` | Rare ambiguity resolution |
+| `mastery-explain` | Per-question explanation generation |
+| `mastery-sweep` | Scheduled stuck-run recovery and R2 garbage collection |
 
-### 6.1 `paper-submit`
-
-Client has already uploaded conditioned pages to Storage. This creates the
-paper row, validates, and enqueues triage. No model calls.
-
-```ts
-// supabase/functions/paper-submit/index.ts
-import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { z } from 'npm:zod@3'
-
-const Body = z.object({
-  student_id: z.string().uuid(),
-  subject: z.string().min(1),
-  test_type: z.enum(['unit_test','mid_term','final','pyq','sample','other']),
-  date_taken: z.string().date().optional(),
-  pages: z.array(z.object({
-    idx: z.number().int().min(0),
-    storage_key: z.string(),
-    mask_key: z.string().optional(),
-    quality: z.object({
-      blur: z.number(), glare: z.number(), long_edge_px: z.number()
-    })
-  })).min(1).max(25),
-  idempotency_key: z.string().uuid()
-})
-
-Deno.serve(async (req) => {
-  const jwt = req.headers.get('Authorization')?.replace('Bearer ','')
-  if (!jwt) return json({ error: 'unauthorised' }, 401)
-
-  const parsed = Body.safeParse(await req.json())
-  if (!parsed.success) return json({ error: 'invalid', detail: parsed.error.flatten() }, 400)
-  const body = parsed.data
-
-  // User-scoped client: RLS proves this student belongs to this caller.
-  const user = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
-  )
-  const { data: student } = await user
-    .from('students').select('id, board, class_level')
-    .eq('id', body.student_id).single()
-  if (!student) return json({ error: 'forbidden' }, 403)
-
-  const admin = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
-
-  const { data: paper, error } = await admin.rpc('create_paper_idempotent', {
-    p_idempotency_key: body.idempotency_key,
-    p_student_id: student.id,
-    p_board: student.board,
-    p_class_level: student.class_level,
-    p_subject: body.subject,
-    p_test_type: body.test_type,
-    p_date_taken: body.date_taken ?? null,
-    p_pages: body.pages
-  })
-  if (error) return json({ error: 'create_failed' }, 500)
-
-  await admin.rpc('pgmq_send', {
-    queue_name: 'axon_triage',
-    msg: { paper_id: paper.id }
-  })
-
-  return json({ paper_id: paper.id, status: 'queued' }, 202)
-})
-```
-
-`create_paper_idempotent` is a plpgsql function that inserts the paper and its
-pages in one transaction, keyed on `idempotency_key` with `on conflict do
-nothing` and a select-back. A retried submit from a flaky Indian connection must
-not create two papers.
-
-### 6.2 `queue-tick`
-
-The dispatcher. Reads a bounded batch from each queue, invokes the matching
-worker, and returns. It does not do work itself; it does not await workers.
-
-```ts
-const QUEUES = [
-  { name: 'axon_triage',    fn: 'w-triage',    batch: 5  },
-  { name: 'axon_structure', fn: 'w-structure', batch: 20 },
-  { name: 'axon_content',   fn: 'w-content',   batch: 30 },
-  { name: 'axon_explain',   fn: 'w-explain',   batch: 20 },
-]
-
-Deno.serve(async () => {
-  const admin = adminClient()
-  const dispatched: Record<string, number> = {}
-
-  for (const q of QUEUES) {
-    const { data: msgs } = await admin.rpc('pgmq_read', {
-      queue_name: q.name, vt: 120, qty: q.batch
-    })
-    if (!msgs?.length) continue
-    dispatched[q.name] = msgs.length
-
-    // Fire and forget: each worker acks its own message.
-    for (const m of msgs) {
-      fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/${q.fn}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ msg_id: m.msg_id, queue: q.name, ...m.message })
-      }).catch(() => { /* vt expiry re-delivers */ })
-    }
-  }
-  return json({ dispatched })
-})
-```
-
-Deliberately not awaited. If an invocation is lost, the visibility timeout
-expires and the message is redelivered. That is the retry mechanism, and it is
-more reliable than anything built in-process.
-
-Batch sizes are the concurrency control. Tune them against OpenRouter rate
-limits, not against wishful latency targets.
-
-### 6.3 `w-content` — the representative worker
-
-Full shape, since every other worker is this with a different prompt.
-
-```ts
-Deno.serve(async (req) => {
-  const { msg_id, queue, question_id } = await req.json()
-  const admin = adminClient()
-
-  const { data: q } = await admin
-    .from('questions')
-    .select('*, papers!inner(id, board, class_level, subject, status)')
-    .eq('id', question_id).single()
-
-  if (!q || q.extract_status === 'done') {
-    await admin.rpc('pgmq_delete', { queue_name: queue, msg_id })   // idempotent no-op
-    return json({ skipped: true })
-  }
-
-  const crop = await signedUrl(admin, q.crop_key, 600)
-  const mask = q.mask_key ? await signedUrl(admin, q.mask_key, 600) : null
-
-  try {
-    const result = await callModel({
-      stage: 'content',
-      paper_id: q.papers.id,
-      question_id,
-      system: CONTENT_SYSTEM_PROMPT,
-      user: buildContentUserMessage({ q, crop, mask }),
-      schema: CONTENT_SCHEMA
-    })
-
-    await admin.rpc('apply_content_extraction', {
-      p_question_id: question_id,
-      p_payload: result
-    })
-    await admin.rpc('pgmq_delete', { queue_name: queue, msg_id })
-    await admin.rpc('maybe_advance_to_reconcile', { p_paper_id: q.papers.id })
-    return json({ ok: true })
-
-  } catch (err) {
-    if (isRetryable(err)) {
-      // Leave the message; vt expiry redelivers with backoff.
-      await logCall({ ok: false, error_code: err.code })
-      return json({ retry: true }, 503)
-    }
-    await admin.from('questions').update({
-      extract_status: 'failed',
-      confidence: 'unreadable',
-      needs_review: true
-    }).eq('id', question_id)
-    await admin.rpc('pgmq_delete', { queue_name: queue, msg_id })
-    await admin.rpc('maybe_advance_to_reconcile', { p_paper_id: q.papers.id })
-    return json({ ok: false })
-  }
-})
-```
-
-Note the two failure paths. A retryable failure leaves the message and returns.
-A permanent failure **marks the question unreadable and lets the paper
-proceed** — a question that can't be read becomes a visible gap in the review
-screen rather than a stuck paper. That is the fail-visibly rule expressed in
-control flow.
-
-`maybe_advance_to_reconcile` is an advisory-locked plpgsql function that checks
-whether all questions are terminal and, if so, transitions the paper. Doing the
-completion check in Postgres rather than in the worker avoids a race between
-concurrent workers finishing simultaneously.
+Shared code is under `axon-backend/shared/src/`. Changes to model calls,
+prompts, queue behavior, R2 access, or worker bindings belong in that repository.
+The similarly named files under this repo's `supabase/functions/` are historical
+copies and are not the production runtime.
 
 ---
 
-## 7. OpenRouter integration
+## 7. Gemini + live-web integration
 
-One shared module, `_shared/openrouter.ts`, used by every worker.
+All production model calls go through
+`Mrmanwonder/axon-backend/shared/src/openrouter.ts`. The filename is historical;
+the client calls Gemini directly through Google's OpenAI-compatible endpoint
+using the Cloudflare Worker secret `GOOGLE_API_KEY`.
 
-### 7.1 Provider routing policy
+Model selection still comes from `model_route` in Postgres and responses are
+validated against strict application schemas before they are written.
 
-Non-negotiable on every request, because this is children's data:
+Optional current-web grounding is implemented in
+`axon-backend/shared/src/tavily.ts` and exposed through
+`callModel({ webTools: true })`. Tavily provides two custom tools:
 
-```ts
-const PROVIDER_POLICY = {
-  zdr: true,                  // Zero Data Retention endpoints only
-  data_collection: 'deny',    // no provider that stores or trains on input
-  require_parameters: true,   // must support our response_format
-  allow_fallbacks: true,
-} as const
-```
+- `web_search` for current public-web discovery.
+- `web_extract` for extracting content from known public URLs.
 
-<cite index="49-1">Setting `zdr` to true restricts routing to Zero Data Retention endpoints, and `data_collection: "deny"` blocks providers that store or train on your data</cite>. <cite index="49-1">With `allow_fallbacks` false, OpenRouter returns an error rather than routing to a non-compliant provider</cite> — worth knowing, but here `allow_fallbacks` stays true, because the policy filters already exclude non-compliant providers and a hard failure on a student's paper is a worse outcome than a compliant secondary provider.
+The integration is deliberately opt-in. Paper extraction workers must not send
+student names, answer text, teacher remarks, signed URLs, or other private
+document data to Tavily. The Tavily adapter rejects local/private-network URLs,
+bounds results and tool rounds, treats returned content as untrusted reference
+material, and returns consulted public URLs separately as `webSources`.
 
-Also set account-wide: **prompt logging off.** <cite index="54-1">OpenRouter offers a discount in exchange for enabling prompt logging</cite> — do not take it. The discount is small and the data is a minor's exam paper.
-
-Be aware of the cost: <cite index="50-1">limiting requests to ZDR endpoints reduces the number of providers that can serve a model, which affects latency, fallback behaviour, and availability</cite>. Verify each chosen model actually has a compliant endpoint before pinning it, and re-verify when routes change.
-
-### 7.2 The client
-
-```ts
-// supabase/functions/_shared/openrouter.ts
-const OR_URL = 'https://openrouter.ai/api/v1/chat/completions'
-
-export async function callModel(opts: CallOpts) {
-  const route = await getRoute(opts.stage)          // cached 60s from model_routes
-  const started = performance.now()
-
-  const body = {
-    model: route.primary_model,
-    models: route.fallbacks,                        // model-layer fallback chain
-    provider: PROVIDER_POLICY,
-    temperature: route.temperature,
-    max_tokens: route.max_tokens,
-    messages: [
-      { role: 'system', content: opts.system },
-      { role: 'user',   content: opts.user }
-    ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: { name: opts.schema.name, strict: true, schema: opts.schema.schema }
-    },
-    usage: { include: true }
-  }
-
-  const res = await fetch(OR_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${Deno.env.get('OPENROUTER_API_KEY')}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://axonstudy.online',
-      'X-Title': 'Axon'
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(90_000)
-  })
-
-  if (!res.ok) throw new ModelError(res.status, await res.text())
-
-  const data = await res.json()
-  const raw = data.choices[0].message.content
-  const parsed = opts.schema.parse(JSON.parse(raw))   // zod, validate don't trust
-
-  await logCall({
-    stage: opts.stage,
-    paper_id: opts.paper_id,
-    question_id: opts.question_id,
-    requested_model: route.primary_model,
-    model_id: data.model,                             // what actually served it
-    prompt_version: route.prompt_version,
-    input_tokens: data.usage?.prompt_tokens,
-    output_tokens: data.usage?.completion_tokens,
-    cost_usd: data.usage?.cost,
-    latency_ms: Math.round(performance.now() - started),
-    ok: true
-  })
-
-  return parsed
-}
-```
-
-Four details that matter:
-
-- **`models` array, not just `model`.** <cite index="60-1">Provider failover is automatic and on by default; model fallbacks are opt-in</cite>. Both layers are wanted.
-- **`data.model` is logged, not the requested one.** With fallbacks live, you frequently didn't get what you asked for, and an eval that assumes otherwise is measuring noise.
-- **Structured outputs are enforced server-side.** <cite index="10-1">Include a `response_format` with `type: json_schema`, and support is per-endpoint rather than per-model — the same model served by different providers may or may not support it</cite>, which is exactly why `require_parameters: true` is in the policy.
-- **Validate the parse anyway.** Strict schema mode is a strong constraint, not a proof.
-
-### 7.3 Images
-
-OpenAI-compatible content blocks. Signed Storage URLs rather than base64 — a
-base64 page is ~1.3× the bytes through an isolate with a tight memory budget,
-and constructing it costs CPU you don't have.
-
-```ts
-const user = [
-  { type: 'text', text: instructionBlock },
-  { type: 'image_url', image_url: { url: cropSignedUrl, detail: 'high' } },
-  ...(maskUrl ? [{ type: 'image_url', image_url: { url: maskUrl, detail: 'low' } }] : [])
-]
-```
-
-The red-ink mask goes in as a second image at low detail. It costs little and it
-tells the model exactly where the teacher wrote, which is the hardest thing for
-it to see unaided on a busy page.
-
-### 7.4 Model matrix
-
-Current OpenRouter pricing, August 2026. These are **starting positions, not
-conclusions** — the golden set decides, and `model_routes` exists so changing
-them is an UPDATE.
-
-| Stage | Primary | Fallbacks | Why |
-|---|---|---|---|
-| triage | `openai/gpt-5.6-luna` | `xiaomi/mimo-v2.5` | Trivial classification, wants to be near-free |
-| structure | `google/gemini-3.6-flash` | `openai/gpt-5.6-luna` | Layout and boundaries; strong document geometry, cheap |
-| content | `anthropic/claude-sonnet-5` | `google/gemini-3.7-flash` | Handwriting plus strict schema plus refusal-to-guess |
-| adjudicate | `anthropic/claude-opus-5` | `openai/gpt-5.6-sol` | Rare, hard, expensive — reserved for unreconciled papers |
-| explain | `anthropic/claude-sonnet-5` | `google/gemini-3.7-flash` | Text-only pedagogy; tone consistency matters most |
-
-Reference prices per million tokens: <cite index="16-1">GPT-5.6 Luna at $0.20 input / $1.20 output; Gemini 3.6 Flash at $0.75 / $3.75; Claude Sonnet 5 at $2 / $10; Claude Opus 5 at $5 / $25; MiMo-V2.5 at $0.119 / $0.238</cite>.
-
-### 7.5 Cost, honestly
-
-Estimate for a 6-page, 20-question paper on the matrix above:
-
-| Stage | Calls | Est. cost |
-|---|---|---|
-| triage | 1 | $0.002 |
-| structure | 6 | $0.02 |
-| content | 20 | $0.18 |
-| explain | 20 | $0.20 |
-| **Total** | **47** | **≈ $0.40** |
-
-**That's roughly ₹35 per paper.** A student scanning eight papers a month is
-₹280/month in inference alone, before Supabase, before margin. Against realistic
-Indian consumer subscription pricing, that does not work as specified.
-
-Levers, in order of how much they cost you elsewhere:
-
-1. **Explanations on a cheaper model.** They're text-only and tone-bound, not
-   reasoning-hard. Gemini 3.6 Flash halves that line. Test tone on the golden
-   set before committing — voice consistency is a product asset.
-2. **Prompt caching on the system prompt.** The content and explain system
-   prompts are long and identical across every question in a paper. Cached
-   input is dramatically cheaper and this is the highest-yield single change.
-3. **Batch questions per call.** Three or four question crops in one request
-   cuts overhead meaningfully, at the cost of localised failure — a bad call
-   now takes four questions with it. Worth doing only once accuracy is stable.
-4. **Explanations on demand.** Generate for the top three marks-lost questions
-   eagerly, the rest when tapped. Most students don't read all twenty. This is
-   probably the single largest saving available and it barely changes the
-   product.
-5. **Cap per account.** A fair-use ceiling with an honest message beats silent
-   degradation.
-
-Instrument this from day one. `model_calls.cost_usd` divided by papers is the
-number that decides pricing, and retrofitting it is painful.
+`TAVILY_API_KEY` is a **Cloudflare Worker secret**, never a browser variable
+and never a Supabase Edge Function secret. `TAVILY_PROJECT` is optional for
+usage attribution.
 
 ---
 
