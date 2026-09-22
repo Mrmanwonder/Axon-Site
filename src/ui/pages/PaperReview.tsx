@@ -16,6 +16,7 @@ import { useScan } from "../scan/ScanProvider";
 import type { ResumeReviewResult } from "../scan/ScanProvider";
 import { useApp } from "../data/AppProvider";
 import { paths } from "../app/paths";
+import PageSkeleton from "../components/PageSkeleton";
 
 export default function PaperReview() {
   const { draftId } = useParams();
@@ -56,7 +57,7 @@ export default function PaperReview() {
     );
   }
 
-  if (!result) return <div role="status">Loading review…</div>; // resolving — nothing dishonest to show yet
+  if (!result) return <PageSkeleton variant="review" label="Loading review…" />;
 
   if (result.state === "committed") {
     return (
