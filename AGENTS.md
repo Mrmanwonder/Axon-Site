@@ -84,8 +84,10 @@ there is nothing to tamper with. The advisor flags it; that flag is expected.
 handful of things about that arrangement which are easy to get wrong.
 
 Ten stages in three places. `src/scan/` is stages 0 to 2 and the client half of
-9; `supabase/functions/` is 3 to 8 and 10; the student is 9. `src/scan/ui.js`
-walks the whole thing and is the only module that knows the order.
+9; the production server stages live in `Mrmanwonder/axon-backend` as Cloudflare
+Workers (`workers/{triage,structure,crop,content,reconcile,adjudicate,explain,api,sweep}`);
+the student is 9. The pipeline files under this repo's `supabase/functions/` are
+a stale historical copy and are not the production runtime.
 
 - **Provenance is the load-bearing rule.** Every extracted value carries the box
   on the page it was read from, and `question_region` has a CHECK making a value
@@ -93,15 +95,14 @@ walks the whole thing and is the only module that knows the order.
   producing plausible fiction, and it is the only reason the review screen can
   show a field against its own crop. If you add a field, add its box column and
   its constraint in the same migration.
-- **`src/scan/contract.js` and `supabase/functions/_shared/contract.ts` are the
-  same file twice, deliberately.** The browser is served as static files and the
-  functions run on Deno; there is no build step that could bridge them, and
-  inventing one to share four constants would cost more than it saves. Change
-  both, or neither — the thresholds mean nothing if the two ends disagree.
-- **Nothing in the pipeline runs as `service_role`.** Every edge function builds
-  its Supabase client from the caller's own JWT, so RLS applies exactly as it
-  does to a direct insert. A pipeline running with the service role would be one
-  bug away from writing one student's marks onto another student's paper.
+- **`src/scan/contract.js` and `Mrmanwonder/axon-backend/shared/src/contract.ts`
+  are the cross-repo contract pair.** Change both or neither. Each repository has
+  a contract-parity check because the browser and Cloudflare Workers are built
+  independently and the thresholds mean nothing if the two ends disagree.
+- **The student-facing Cloudflare API preserves caller authorization; background
+  Cloudflare Workers use server credentials only for the pipeline operations they
+  own.** Do not move authority into the browser, and do not bypass the ownership
+  checks/RPC contracts when adding a Worker path.
 - **The stage modules are pure and must stay that way.** `geometry`, `quality`,
   `layers`, `conditioning`, `raster` touch no DOM beyond an optional canvas, which
   is what lets them run on the main thread, in the worker, and in the harness
@@ -219,15 +220,16 @@ one of those handlers, keep all of them on the same mapping.
 `REVIEW_PIPELINE.md` is the specification; these are the rules that are easiest to
 break by accident.
 
-- **No image processing in an Edge Function.** The CPU limit is two seconds and a
-  single JPEG decode of a full page exceeds it. Pixel work happens on the device or
-  it does not happen. A function that crops, resizes or re-encodes is not slow, it is
-  dead.
-- **Every model call goes through `_shared/openrouter.ts`.** No direct fetch to a
-  provider anywhere else, so the provider policy, the route lookup and the cost ledger
-  cannot be bypassed by a new worker in a hurry.
-- **`PROVIDER_POLICY` is never overridden.** Zero Data Retention, provider data
-  collection denied. This is a minor's exam paper and prompt logging stays off at the
+- **Heavy server-side image work belongs in the Cloudflare crop Worker, not a
+  Supabase Edge Function.** Device conditioning stays device-side; production
+  server processing is implemented in `axon-backend`.
+- **Every Gemini call goes through
+  `Mrmanwonder/axon-backend/shared/src/openrouter.ts`.** No production Worker
+  should fetch the model provider directly, because routing, retries, validation,
+  logging, and optional Tavily tools belong in one shared client.
+- **Model credentials and Tavily credentials are Cloudflare Worker secrets.**
+  Never expose `GOOGLE_API_KEY` or `TAVILY_API_KEY` to the browser or put them
+  in `VITE_*` variables. This is a minor's exam paper and prompt logging stays off at the
   account level too, discount or no discount.
 - **Model IDs never appear in code.** They live in `model_routes`, so changing one is
   an UPDATE rather than a redeploy — which is what makes the eval harness able to
@@ -295,12 +297,15 @@ break by accident.
 Three suites, all runnable without a Supabase project or an API key:
 
 ```bash
-psql -d axon -f supabase/local/shim.sql     # then apply migrations/, then tests/
-deno test --allow-env supabase/functions/_shared/pipeline_test.ts
-deno test --allow-env supabase/functions/_shared/worker_test.ts
+psql -d axon -f supabase/local/shim.sql     # then apply site migrations/tests
 node --test harness/metrics.test.mjs
 node harness/run.mjs harness/runs/EXAMPLE-run.json --goldenset example
-npm test                                    # bench/golden.test.mjs + harness/metrics.test.mjs
+npm test
+
+# In Mrmanwonder/axon-backend:
+npm run typecheck
+npm test
+npm run dry-run
 ```
 
 `supabase/local/shim.sql` stands up just enough of the platform — the two roles,

@@ -76,15 +76,6 @@ Responsible for:
 -   Time estimation
 -   Conflict resolution
 
-## 6. Mentor Engine
-
-Responsible for:
-
--   Conversational assistance
--   Concept explanation
--   Reflection guidance
--   Socratic questioning
-
 ------------------------------------------------------------------------
 
 # Memory Architecture

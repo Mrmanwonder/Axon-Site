@@ -83,7 +83,6 @@ Screens MUST compose components rather than redefining their behavior.
 -   Revision Queue
 -   Planner Block
 -   Resource Card
--   Mentor Chat Panel
 
 ## Feedback
 

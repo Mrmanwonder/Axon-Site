@@ -38,7 +38,7 @@ Below we outline each AXON page’s purpose, layout, and key elements, ensuring 
 - ### Dashboard (AXON Hub)
   **Role:** The student’s home base (“Atelier”). Displays today’s greeting, mission, and shortcuts.  
   **Layout:** Top: Greeting banner (e.g. “Good Evening, [Name]. Let’s tackle a new challenge.”). Below, a **Mission Card** (white `.card` container) showing current subject/paper (e.g. “Physics – Paper 42” with icon). Right of Mission: quick-stats widgets (e.g. progress chart by topic, upcoming tasks). Below, a **Focus to Plan** prompt (“Begin Session” button in primary color). Possibly a preview of this week’s plan (similar to OnePrep’s calendar view, but simplified).  
-  **Components:** Mission card with large title (H2), subject icon, countdown badge; Button: primary style, animated hover; Sidebar (left) with icons (Dashboard, Planner, Timer, Analytics, Mentor). Sidebar background dark (token), active page highlighted.  
+  **Components:** Mission card with large title (H2), subject icon, countdown badge; Button: primary style, animated hover; Sidebar (left) with icons (Dashboard, Planner, Timer, Analytics). Sidebar background dark (token), active page highlighted.  
   **Motion:** Mission card and widgets can fade/slide into view on load (duration 400ms, ease-out). Buttons have hover transform (scale 1.05). Hovering Mission Card could elevate (shadow increase).  
   **Content:** Clear microcopy (“Today’s Mission”, “Time left: 1h 15m”, etc.). CTA “Begin Session” leads to the Timer. All text uses tokens for font-size/weight.  
 
@@ -85,12 +85,6 @@ Below we outline each AXON page’s purpose, layout, and key elements, ensuring 
   **Motion:** Charts animate on load (bars grow over 600ms). Numbers (scores) can count up (e.g. 1180→1250). Use `easeOutExpo` for number transitions.  
   **Content:** Clear headings (e.g. “Accuracy by Topic”), concise text. Legend or labels on charts with >= 12px font.  
 
-- ### AI Mentor (Guidance Lounge)
-  **Role:** Chat interface with the mentor (“Preppy AI”).  
-  **Layout:** Two-column on desktop: left – conversation log; right – contextual info/quick tips. On mobile, toggle between chat and info.  
-  **Components:** Chat bubbles (mentor vs user), text input at bottom. Inline suggestions (“Did you try practice test?”). “End Session” button.  
-  **Motion:** Typing indicator animation (moving dots). New messages slide in from side (200ms ease).  
-  **Content:** Persona: friendly and concise. Use first person for the mentor (“I think…”). Show user goals at top (“Your goal: 1500 SAT”), similar to OnePrep’s focus on targets.  
 
 For **all pages**, adhere to the tokenized design system (colors, fonts, spacing above) and the motion guidelines. Ensure responsive behavior: e.g. on mobile, sidebars collapse to top menus, multi-column layouts become single-column, text reflows. 
 
@@ -116,17 +110,14 @@ graph LR
         PastPapers[Past Papers]
         Notes[Notes]
         Analytics[Analytics]
-        Mentor[AI Mentor Chat]
     end
     Dashboard --> Planner
     Planner --> Timer
     Timer --> Analytics
     Dashboard --> PastPapers
     Dashboard --> Notes
-    Dashboard --> Mentor
     PastPapers --> Analytics
     Notes --> Analytics
-    Mentor --> Analytics
 ```
 
 ```mermaid
@@ -139,14 +130,12 @@ graph TD
     Sidebar --> PastPapers
     Sidebar --> Notes
     Sidebar --> Analytics
-    Sidebar --> Mentor
     MainContent -->|renders| DashboardPage[Dashboard Page]
     MainContent --> PlannerPage[Planner Page]
     MainContent --> TimerPage[Timer Page]
     MainContent --> PastPapersPage[Past Papers Page]
     MainContent --> NotesPage[Notes Page]
     MainContent --> AnalyticsPage[Analytics Page]
-    MainContent --> MentorPage[AI Mentor Page]
 ```
 
 ## 3. Prioritized Design Improvements
@@ -248,15 +237,15 @@ We provide ready-to-use AI prompts (with variables) to generate UI mockups and a
 
 - **UI Mockup Generation:**  
   - *Prompt:* “Generate a high-fidelity mockup for AXON’s **[page_name]** page. AXON’s design style is clean and modern (sans-serif fonts, blue accent, generous whitespace). The mockup should include [key_elements], consistent with our new design tokens (e.g. buttons use var(--color-primary) etc). Use a calm, educational feel – no neon or 3D. The structure: [outline layout].”  
-  - *Variables:* `[page_name]` (Dashboard/Planner/Timer/Past Papers/Notes/Analytics/Mentor), `[key_elements]` (e.g. “greeting, mission card, weekly plan”), `[outline layout]` (e.g. “sidebar on left, main content with two columns”).  
+  - *Variables:* `[page_name]` (Dashboard/Planner/Timer/Past Papers/Notes/Analytics), `[key_elements]` (e.g. “greeting, mission card, weekly plan”), `[outline layout]` (e.g. “sidebar on left, main content with two columns”).  
   - *Example:* “Generate a mockup for **Dashboard**. Include: greeting banner, today’s mission card, progress chart, ‘Begin Session’ CTA. Layout with left sidebar, header shows greeting. Colors: white background, primary blue (#0062FF) for buttons, gray sidebar.”  
 
 - **Assets (Icons, Illustrations, Environments):**  
   - *Icon Prompt:* “Create a set of flat, modern icons for AXON: [icon_list]. Style: line icons with 2px stroke, primary color #0062FF. Icons should match an academic theme (e.g. [examples]).”  
-    - *Variables:* `[icon_list]` (e.g. “dashboard, planner, timer, analytics, mentor chat”), `[examples]` (“book, clock, graph, speech bubble”).  
+    - *Variables:* `[icon_list]` (e.g. “dashboard, planner, timer, analytics”), `[examples]` (“book, clock, graph, speech bubble”).  
     - *Example:* “Generate an icon for the ‘timer’ function: a minimal stopwatch outline in AXON’s blue.”  
   - *Illustration Prompt:* “Generate a hero illustration or environment image for the **[page_name]** page of AXON. Style: digital painting with soft lighting, in AXON’s color palette (blue, white, gray). The image should reflect the theme: [theme_description].”  
-    - *Variables:* `[page_name]`, `[theme_description]` (e.g. “a quiet study room with mountains visible” for Mentor).  
+    - *Variables:* `[page_name]`, `[theme_description]` (e.g. “a quiet study room with mountains visible”).  
     - *Example:* “Illustrate a study desk with books and a laptop for the Dashboard, in a semi-realistic style, colors: white/blue.”  
   - *Environmental Prompt:* “Create a background scene for the **[page]** mood. Style: calming academic environment (the **Workshop**, **Library**, **Summit**, etc). Use perspective. Colors should be muted (grays/blues) with a focus point.”  
 
@@ -281,7 +270,7 @@ Use these templates with Antigravity or GPT-4 Turbo. Substitute the variables wi
 
 The diagrams above illustrate the **page-to-room relationships** and **component hierarchy**:
 
-- **Page-to-Room Diagram:** Shows how users navigate through AXON “rooms” (Dashboard → Planner → Timer → Analytics, with lateral access to Past Papers, Notes, Mentor).
+- **Page-to-Room Diagram:** Shows how users navigate through AXON “rooms” (Dashboard → Planner → Timer → Analytics, with lateral access to Past Papers and Notes).
 - **Component Hierarchy:** Shows the app shell (sidebar + main area) structure and how each page is rendered within it.
 
 ## 7. Next Steps
@@ -292,8 +281,8 @@ The diagrams above illustrate the **page-to-room relationships** and **component
 4. **AI Integration:** Feed the prompt templates to your chosen AI designer (Antigravity or GPT) to generate mockups for each page; refine as needed. Also generate icons/illustrations to populate the UI (e.g. hero images).  
 5. **Iteration & Testing:** Conduct usability tests (even with a few students) to validate the new interface. Adjust copy, microcopy, and layout per feedback.  
 6. **Deployment Pipeline:** Set up staging to deploy the updated frontend. Monitor performance and error logs during beta.  
-7. **Final Review:** Ensure all styles match the design tokens. Prepare styleguide documentation for future devs. Confirm all user stories (login, take quiz, view analytics, chat with mentor) work end-to-end.
+7. **Final Review:** Ensure all styles match the design tokens. Prepare styleguide documentation for future devs. Confirm all user stories (login, take quiz, view analytics) work end-to-end.
 
-**Implementation Roadmap:** Start with core pages (Dashboard, Planner, Timer) since they contain critical flows. Then build the rest (Past Papers, Notes, Analytics, Mentor). Integrate with backend APIs for data (study blocks, questions, analytics). Throughout, refer back to this design bible to ensure pixel-perfect fidelity and a consistent user experience.
+**Implementation Roadmap:** Start with core pages (Dashboard, Planner, Timer) since they contain critical flows. Then build the rest (Past Papers, Notes, Analytics). Integrate with backend APIs for data (study blocks, questions, analytics). Throughout, refer back to this design bible to ensure pixel-perfect fidelity and a consistent user experience.
 
 **Sources:** The above guidelines drew on our audit of OnePrep’s live site (July 2026), WCAG standards, and UX best practices. All OnePrep examples cited are annotated in the text. By following this specification, AXON’s development can be largely automated via AI (prompting the design style) and then fine-tuned by engineers to deliver a polished, production-ready study platform.

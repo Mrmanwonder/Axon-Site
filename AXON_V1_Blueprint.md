@@ -3,7 +3,7 @@
 
 ## Product Vision
 AXON is not an AI study app.
-AXON is the mentor every student wishes they had.
+AXON is the study system that tells every student what to do next.
 
 Core promise:
 - Tell students exactly what to study.
@@ -33,8 +33,7 @@ Principles:
 3. Dashboard
 4. Study Planner
 5. Analytics
-6. AI Mentor
-7. Settings
+6. Settings
 
 ## Dashboard
 Questions answered:
@@ -48,13 +47,11 @@ Sections:
 - Continue studying
 - Weakness insights
 - Recent mistakes
-- AI mentor
 
 ## Beta Features
 - Authentication
 - Planner
 - Analytics
-- AI Mentor
 - Past paper launcher
 - Progress tracking
 
@@ -69,4 +66,4 @@ Sections:
 - Multi-model selection
 
 ## Brand
-Premium, calm, confident, mentor-like.
+Premium, calm, confident, focused.

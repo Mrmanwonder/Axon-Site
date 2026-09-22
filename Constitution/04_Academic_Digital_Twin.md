@@ -29,7 +29,6 @@ The ADT governs:
 
 -   Adaptive planning
 -   Mission generation
--   AI mentor context
 -   Confidence estimation
 -   Knowledge tracking
 -   Behaviour modelling

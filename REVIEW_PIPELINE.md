@@ -1,9 +1,14 @@
 # REVIEW_PIPELINE.md
 
-The runtime for everything downstream of capture. Supabase Edge Functions
-orchestrate, OpenRouter serves the models, Postgres holds the state machine.
+The runtime for everything downstream of capture. Production execution lives in
+`Mrmanwonder/axon-backend`: Cloudflare Workers + Cloudflare Queues orchestrate
+the pipeline, Cloudflare R2 holds document objects, Gemini is called directly
+through `shared/src/openrouter.ts`, and Supabase Postgres holds the durable
+state machine. The pipeline copies under this repo's `supabase/functions/` are
+historical and are not deployed.
+
 Companion to SCANNING_SYSTEM.md, which defines *what* the pipeline does; this
-defines *how it runs*.
+defines *how the active Cloudflare runtime runs*.
 
 **Reading assumption:** opencode is the build agent (the terminal coding agent),
 not a runtime component. Section 14 covers its configuration. If you meant
@@ -13,67 +18,46 @@ something else by it, that section is the one to rewrite.
 
 ## 1. The constraint that shapes everything
 
-Supabase Edge Functions run in Deno V8 isolates under a supervisor that enforces
-three separate limits. <cite index="25-1">The wall-clock limit is 400 seconds, and CPU time is capped at 2000 milliseconds</cite> — CPU time meaning actual
-processing cycles, excluding time spent waiting on I/O. <cite index="18-1">There is also a 150-second request idle timeout: a function that hasn't responded by then returns a 504.</cite>
+The production pipeline is a set of small Cloudflare Workers. Long booklets fan
+out through Cloudflare Queues, not pgmq or a Supabase cron tick. R2 carries page
+and crop objects; Postgres remains the durable source of run state, provenance,
+review state and model-call accounting.
 
-Read those numbers together and the architecture writes itself:
+Pixel-heavy server work belongs in the dedicated `mastery-crop` Worker.
+Model work belongs in the model-stage Workers and every Gemini call goes through
+`axon-backend/shared/src/openrouter.ts`. This keeps retries, structured-output
+validation, logging and optional Tavily web tools in one shared path.
 
-**Two seconds of CPU means no image processing in an Edge Function. Ever.**
-No resizing, no cropping, no re-encoding, no OpenCV, no canvas work. A single
-JPEG decode of a 3000px page will blow the CPU budget on its own. Every byte of
-pixel manipulation happens either on the device (stages 0–2, per
-SCANNING_SYSTEM.md) or in Postgres/Storage via signed URLs handed straight to
-the model provider.
-
-**400 seconds of wall clock means no single function owns a paper.** A 16-page
-booklet with 20 questions is 40-odd model calls. One function attempting all of
-them dies partway and leaves the paper in an undefined state.
-
-So: Edge Functions are **thin, stateless, single-purpose orchestrators**. They
-read a job off a queue, make one or two network calls, write results back, and
-exit. State lives in Postgres. Progress lives in Postgres. Retries live in
-Postgres. The functions themselves are disposable.
-
-<cite index="19-1">Background work uses `EdgeRuntime.waitUntil`, which holds the isolate open past the response — 150 seconds on free, 400 on paid</cite>. Useful, but it
-is not a substitute for a queue, because a waitUntil promise that dies takes its
-work with it silently.
+No production pipeline change should be made to this repository's
+`supabase/functions/w-*` files. They are retained only as historical reference.
 
 ---
 
 ## 2. Architecture
 
-A queue-driven state machine. pgmq for queues, pg_cron for the tick, Edge
-Functions as workers, Realtime for client progress.
+A queue-driven Cloudflare state machine:
 
 ```
-                       ┌──────────────────────────┐
-   device  ──upload──▶ │  Supabase Storage        │
-                       │  papers/{paper_id}/...   │
-                       └────────────┬─────────────┘
-                                    │
-                       POST /paper-submit
-                                    │
-                       ┌────────────▼─────────────┐
-                       │ papers (status=queued)   │
-                       │ pgmq.send(triage)        │
-                       └────────────┬─────────────┘
-                                    │
-     pg_cron every 10s ─▶ /queue-tick ─▶ reads batch, invokes workers
-                                    │
-     ┌──────────────┬───────────────┼───────────────┬──────────────┐
-     ▼              ▼               ▼               ▼              ▼
- /w-triage    /w-structure    /w-content     /w-reconcile    /w-explain
-  1 call       1 per page      1 per Q        0 model calls   1 per Q
-     │              │               │               │              │
-     └──────────────┴───────────────┴───────┬───────┴──────────────┘
-                                            ▼
-                              papers.status transitions
-                              Realtime → client progress
+device capture/conditioning
+        │
+        ▼
+mastery-api ──▶ Cloudflare Queue
+                  │
+        ┌─────────┴──────────────────────────────────────────┐
+        ▼         ▼          ▼          ▼          ▼          ▼
+     triage   structure     crop      content   reconcile  adjudicate
+                                                        │
+                                                        ▼
+                                                     explain
+        │
+        └──────────────▶ Supabase Postgres state/provenance
+                         + Cloudflare R2 objects
 ```
 
-Each worker is idempotent, handles exactly one unit of work, and is safe to
-retry. Fan-out is by enqueueing N messages, not by looping inside a function.
+The active source lives in `Mrmanwonder/axon-backend` under
+`workers/{api,triage,structure,crop,content,reconcile,adjudicate,explain,sweep}`
+and `shared/src/`. Cloudflare Queues provide retry and concurrency control;
+`mastery-sweep` handles stuck-run recovery and garbage collection.
 
 ### Why a queue rather than direct invocation
 
@@ -81,7 +65,7 @@ Three reasons, all learned expensively by people who didn't:
 
 1. **Retries survive process death.** A model call that 503s at second 380
    retries from the queue. A model call that 503s inside a `waitUntil` is gone.
-2. **Concurrency is controllable.** OpenRouter has rate limits; a class of 40
+2. **Concurrency is controllable.** Gemini has rate limits; a class of 40
    students scanning after a test lands as a burst. The queue absorbs it.
 3. **Partial progress is real progress.** Question 14 failing doesn't cost you
    questions 1–13.
@@ -691,7 +675,7 @@ number that decides pricing, and retrofitting it is painful.
 
 ## 8. Prompts
 
-Versioned files under `supabase/functions/_shared/prompts/`, referenced by
+Versioned files under `axon-backend/shared/src/prompts/`, referenced by
 `model_routes.prompt_version`. Never edited in place — a changed prompt gets a
 new version, so `model_calls` stays comparable across the change.
 
