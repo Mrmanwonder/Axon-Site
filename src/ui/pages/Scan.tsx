@@ -139,7 +139,7 @@ export default function Scan() {
           </PressBox>
 
           <PressBox as="button" type="button" className="shutter" aria-label="Take this page"
-                    disabled={!camera.on || submitting || pendingCaptureCount > 0}
+                    disabled={!camera.on || submitting || pendingCaptureCount >= 2}
 
                     onClick={() => { hapticTick(); shoot(); }}>
             <div className="ring" />
