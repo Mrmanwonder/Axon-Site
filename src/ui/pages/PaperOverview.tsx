@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
-import DelayedLoading from "../components/DelayedLoading";
+import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
 import { readPaper, paperTypeLabel } from "../data/modules";
 import type { PaperDetail } from "../data/modules";
@@ -57,7 +57,7 @@ export default function PaperOverview() {
     );
   }
 
-  if (!paper) return <DelayedLoading label="Loading paper…" />;
+  if (!paper) return <PageSkeleton variant="paper" label="Loading paper…" />;
 
   const attempts = paper.student_attempt;
   const marksRows = attempts.filter((a) => a.marks_awarded != null && a.max_marks != null);

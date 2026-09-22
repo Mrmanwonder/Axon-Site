@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 test("cold library remains loading until the delayed empty result", async ({ page }) => {
 
-  await page.goto("/tests/browser/index.html"); await expect(page.getByText("Loading papers…")).toBeVisible();
+  await page.goto("/tests/browser/index.html"); const loading = page.getByRole("status", { name: "Loading papers…" }); await expect(loading).toBeVisible(); await expect(loading).toHaveAttribute("data-skeleton", "library");
 
   await expect(page.getByText("Nothing here yet")).toHaveCount(0); await expect(page.getByText("0 papers", { exact: true })).toHaveCount(0);
 
@@ -14,7 +14,7 @@ test("cold library remains loading until the delayed empty result", async ({ pag
 
 test("Home does not confuse early analytics with paper completion", async ({ page }) => {
 
-  await page.goto("/tests/browser/index.html?view=home"); await expect(page.getByText("Loading papers…")).toBeVisible(); await expect(page.getByText("No papers yet")).toHaveCount(0); await expect(page.getByText("No papers yet")).toBeVisible();
+  await page.goto("/tests/browser/index.html?view=home"); const loading = page.getByRole("status", { name: "Loading papers…" }); await expect(loading).toBeVisible(); await expect(loading).toHaveAttribute("data-skeleton", "home"); await expect(page.getByText("No papers yet")).toHaveCount(0); await expect(page.getByText("No papers yet")).toBeVisible();
 
 });
 
