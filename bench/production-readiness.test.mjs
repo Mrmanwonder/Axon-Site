@@ -87,7 +87,8 @@ test('production AI runtime is Cloudflare-only', () => {
   const envExample = read('.env.example');
 
   assert.match(deploy, /axon-backend/);
-  assert.match(deploy, /Cloudflare Workers/);
+  assert.match(deploy, /Cloudflare\s+Queues/);
+  assert.match(deploy, /deployed with Wrangler/);
   assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=/);
 
   const bashBlocks = [...deploy.matchAll(/```bash\\n([\\s\\S]*?)```/g)].map((match) => match[1]);
