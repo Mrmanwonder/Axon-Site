@@ -8,9 +8,11 @@ test('public legal and not-found routes are intentional', () => {
   const routes = read('src/ui/app/routes.tsx');
   assert.match(routes, /path: "\/privacy"/);
   assert.match(routes, /path: "\/terms"/);
+  assert.match(routes, /path: "\/cookies"/);
   assert.match(routes, /path: "\*", element: <NotFound/);
-  assert.match(read('src/ui/pages/Privacy.tsx'), /OWNER TO CONFIRM/);
-  assert.match(read('src/ui/pages/Terms.tsx'), /OWNER\/LEGAL TO CONFIRM/);
+  assert.match(read('src/ui/pages/Privacy.tsx'), /support@axonstudy\.online/);
+  assert.match(read('src/ui/pages/Terms.tsx'), /hallucinated/);
+  assert.match(read('src/ui/pages/Cookies.tsx'), /PostHog/);
 });
 
 test('crawler files index public routes without advertising private routes', () => {
@@ -23,6 +25,7 @@ test('crawler files index public routes without advertising private routes', () 
   assert.match(html, /name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"/);
   assert.match(sitemap, /\/privacy<\/loc>/);
   assert.match(sitemap, /\/terms<\/loc>/);
+  assert.match(sitemap, /\/cookies<\/loc>/);
   assert.doesNotMatch(sitemap, /library|scan|settings|insights/);
 });
 
@@ -50,14 +53,15 @@ test('production host configuration carries transport protections', () => {
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
 
-
 test('optional PostHog analytics is consent gated', () => {
   const main = read('src/ui/main.tsx');
   const analytics = read('src/ui/lib/analytics.ts');
   const banner = read('src/ui/components/CookieConsent.tsx');
+  const settings = read('src/ui/pages/Settings.tsx');
   assert.match(main, /getAnalyticsConsent\(\) === "granted"/);
   assert.match(analytics, /getAnalyticsConsent\(\) !== "granted"/);
   assert.match(analytics, /opt_out_capturing/);
   assert.match(banner, /Necessary only/);
   assert.match(banner, /Allow analytics/);
+  assert.match(settings, /Product analytics/);
 });
