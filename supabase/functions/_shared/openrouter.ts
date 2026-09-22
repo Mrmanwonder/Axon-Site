@@ -24,7 +24,6 @@
 // STORAGE_R2.md §6 rather than assumed away.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { TAVILY_TOOLS, WEB_TOOL_SYSTEM_GUARD, runTavilyTool, type TavilyToolCall } from './tavily.ts';
 
 const OR_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -208,8 +207,6 @@ export interface CallOpts<T> {
   studentId?: string | null;
   attempt?: number;
   timeoutMs?: number;
-  /** Opt in to Tavily-backed Search/Extract. Keep false for document-extraction stages. */
-  webTools?: boolean;
   /** Set by eval-run only, to compare one stage across models. */
   routeOverride?: Partial<Route> | null;
 }
@@ -222,8 +219,6 @@ export interface CallResult<T> {
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
-  /** Public source URLs consulted by optional live-web tools. */
-  webSources: string[];
   latencyMs: number;
 }
 
@@ -240,13 +235,23 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
     content.push({ type: 'image_url', image_url: { url: image.url, detail: image.detail ?? 'high' } });
   }
 
-  const system = opts.webTools
-    ? `${opts.system}\n\n${WEB_TOOL_SYSTEM_GUARD}`
-    : opts.system;
-  const messages: Record<string, unknown>[] = [
-    { role: 'system', content: system },
-    { role: 'user', content },
-  ];
+  const body = {
+    model: route.primary_model,
+    // Provider failover is automatic; model fallback is opt-in. Both are wanted.
+    models: route.fallbacks?.length ? route.fallbacks : undefined,
+    provider: route.allow_training ? RELAXED_POLICY : PROVIDER_POLICY,
+    temperature: route.temperature,
+    max_tokens: route.max_tokens,
+    messages: [
+      { role: 'system', content: opts.system },
+      { role: 'user', content },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: opts.schema.name, strict: true, schema: opts.schema.schema },
+    },
+    usage: { include: true },
+  };
 
   const log = (patch: Record<string, unknown>) =>
     logCall(opts.sb, {
@@ -265,242 +270,84 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
       ...patch,
     });
 
-  let inputTokens: number | null = null;
-  let outputTokens: number | null = null;
-  let costUsd: number | null = null;
-  let served = route.primary_model;
-  let toolCallsUsed = 0;
-  const webSources = new Set<string>();
-
-  const add = (current: number | null, value: number | undefined): number | null =>
-    typeof value === 'number' && Number.isFinite(value) ? (current ?? 0) + value : current;
-
-  // Three web calls is enough for search -> extract -> one refinement. A bounded
-  // loop prevents a tool-using model from turning a student request into a bill.
-  const maxRounds = opts.webTools ? 4 : 1;
-  for (let round = 0; round < maxRounds; round++) {
-    const body = {
-      model: route.primary_model,
-      // Provider failover is automatic; model fallback is opt-in. Both are wanted.
-      models: route.fallbacks?.length ? route.fallbacks : undefined,
-      provider: route.allow_training ? RELAXED_POLICY : PROVIDER_POLICY,
-      temperature: route.temperature,
-      max_tokens: route.max_tokens,
-      messages,
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: opts.schema.name, strict: true, schema: opts.schema.schema },
+  let res: Response;
+  try {
+    res = await fetch(OR_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': Deno.env.get('AXON_SITE_URL') ?? 'https://axonstudy.online',
+        'X-Title': 'Axon',
       },
-      usage: { include: true },
-      ...(opts.webTools ? {
-        tools: TAVILY_TOOLS,
-        tool_choice: 'auto',
-        parallel_tool_calls: false,
-      } : {}),
-    };
-
-    let res: Response;
-    try {
-      res = await fetch(OR_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': Deno.env.get('AXON_SITE_URL') ?? 'https://axonstudy.online',
-          'X-Title': 'Axon',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),
-      });
-    } catch (cause) {
-      const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
-      const err = new ModelError(
-        timedOut ? 'timeout' : 'network',
-        timedOut ? 'the model did not answer in time' : String(cause),
-        0,
-        true,
-      );
-      await log({
-        model_id: served,
-        ok: false,
-        error_code: err.code,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_usd: costUsd,
-      });
-      throw err;
-    }
-
-    if (!res.ok) {
-      const err = classify(res.status, await res.text());
-      await log({
-        model_id: served,
-        ok: false,
-        error_code: err.code,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_usd: costUsd,
-      });
-      throw err;
-    }
-
-    const data = await res.json() as {
-      model?: string;
-      choices?: {
-        message?: {
-          content?: string | null;
-          tool_calls?: TavilyToolCall[];
-        };
-        finish_reason?: string;
-      }[];
-      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
-      error?: { message?: string };
-    };
-
-    served = data.model ?? served;
-    inputTokens = add(inputTokens, data.usage?.prompt_tokens);
-    outputTokens = add(outputTokens, data.usage?.completion_tokens);
-    costUsd = add(costUsd, data.usage?.cost);
-
-    const message = data.choices?.[0]?.message;
-    const toolCalls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
-
-    // A 200 carrying an error object happens on OpenRouter. Handle it before a
-    // missing message gets misreported as an empty model answer.
-    if (data.error) {
-      const err = new ModelError('empty_response', data.error.message ?? 'the model returned an error', 200, true);
-      await log({
-        model_id: served,
-        ok: false,
-        error_code: err.code,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_usd: costUsd,
-      });
-      throw err;
-    }
-
-    if (toolCalls.length) {
-      if (!opts.webTools) {
-        const err = new ModelError('unexpected_tool_call', 'the model requested a tool on a tool-free route', 200, false);
-        await log({
-          model_id: served,
-          ok: false,
-          error_code: err.code,
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          cost_usd: costUsd,
-        });
-        throw err;
-      }
-
-      // Do not spend a Tavily call on the last permitted model round: there
-      // would be no following turn in which the model could consume its result.
-      if (round === maxRounds - 1) {
-        const err = new ModelError('tool_loop_limit', 'the model exhausted the live-web round budget', 200, false);
-        await log({
-          model_id: served,
-          ok: false,
-          error_code: err.code,
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          cost_usd: costUsd,
-        });
-        throw err;
-      }
-
-      messages.push({
-        role: 'assistant',
-        content: message?.content ?? null,
-        tool_calls: toolCalls,
-      });
-
-      for (const call of toolCalls) {
-        if (toolCallsUsed >= 3) {
-          const err = new ModelError('tool_loop_limit', 'the model exceeded the live-web tool-call limit', 200, false);
-          await log({
-            model_id: served,
-            ok: false,
-            error_code: err.code,
-            input_tokens: inputTokens,
-            output_tokens: outputTokens,
-            cost_usd: costUsd,
-          });
-          throw err;
-        }
-        toolCallsUsed += 1;
-        const toolResult = await runTavilyTool(call);
-        for (const source of toolResult.sources) webSources.add(source);
-        messages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: call.function.name,
-          content: toolResult.content,
-        });
-      }
-      continue;
-    }
-
-    const raw = message?.content;
-    if (typeof raw !== 'string' || raw.length === 0) {
-      const err = new ModelError('empty_response', 'the model returned nothing', 200, true);
-      await log({
-        model_id: served,
-        ok: false,
-        error_code: err.code,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_usd: costUsd,
-      });
-      throw err;
-    }
-
-    let parsed: T;
-    try {
-      parsed = opts.validate(JSON.parse(raw));
-    } catch (cause) {
-      const err = new ModelError('bad_shape', `the model's answer did not fit the schema: ${cause}`, 200, true);
-      await log({
-        model_id: served,
-        ok: false,
-        error_code: err.code,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_usd: costUsd,
-      });
-      throw err;
-    }
-
-    await log({
-      model_id: served,
-      ok: true,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_usd: costUsd,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 90_000),
     });
-
-    return {
-      parsed,
-      model: served,
-      promptVersion: route.prompt_version,
-      inputTokens,
-      outputTokens,
-      costUsd,
-      webSources: [...webSources],
-      latencyMs: Math.round(performance.now() - started),
-    };
+  } catch (cause) {
+    const timedOut = cause instanceof DOMException && cause.name === 'TimeoutError';
+    const err = new ModelError(
+      timedOut ? 'timeout' : 'network',
+      timedOut ? 'the model did not answer in time' : String(cause),
+      0,
+      true,
+    );
+    await log({ model_id: route.primary_model, ok: false, error_code: err.code });
+    throw err;
   }
 
-  const err = new ModelError('tool_loop_limit', 'the model did not finish after the live-web tool budget', 200, false);
-  await log({
-    model_id: served,
-    ok: false,
-    error_code: err.code,
-    input_tokens: inputTokens,
-    output_tokens: outputTokens,
-    cost_usd: costUsd,
-  });
-  throw err;
+  if (!res.ok) {
+    const err = classify(res.status, await res.text());
+    await log({ model_id: route.primary_model, ok: false, error_code: err.code });
+    throw err;
+  }
+
+  const data = await res.json() as {
+    model?: string;
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+    error?: { message?: string };
+  };
+
+  const served = data.model ?? route.primary_model;
+  const usage = {
+    input_tokens: data.usage?.prompt_tokens ?? null,
+    output_tokens: data.usage?.completion_tokens ?? null,
+    cost_usd: data.usage?.cost ?? null,
+  };
+
+  // A 200 carrying an error object happens on OpenRouter, and reading
+  // choices[0] off it produces "the page was blank" rather than "the call
+  // failed" — which is exactly the invisible failure hard rule 4 forbids.
+  const raw = data.choices?.[0]?.message?.content;
+  if (data.error || typeof raw !== 'string' || raw.length === 0) {
+    const err = new ModelError('empty_response', data.error?.message ?? 'the model returned nothing', 200, true);
+    await log({ model_id: served, ok: false, error_code: err.code, ...usage });
+    throw err;
+  }
+
+  let parsed: T;
+  try {
+    parsed = opts.validate(JSON.parse(raw));
+  } catch (cause) {
+    // Retryable: with a fallback chain and a nonzero temperature, the same
+    // request can produce a schema-clean answer next time. It is capped by the
+    // queue's attempt count, not by hope.
+    const err = new ModelError('bad_shape', `the model's answer did not fit the schema: ${cause}`, 200, true);
+    await log({ model_id: served, ok: false, error_code: err.code, ...usage });
+    throw err;
+  }
+
+  await log({ model_id: served, ok: true, ...usage });
+
+  return {
+    parsed,
+    model: served,
+    promptVersion: route.prompt_version,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    costUsd: usage.cost_usd,
+    latencyMs: Math.round(performance.now() - started),
+  };
 }
 
 // ── the ledger ──────────────────────────────────────────────────────────────
