@@ -127,11 +127,11 @@ Real routing needs a CDN-level rewrite: every path falls back to `/index.html` w
 200, so a deep link to `/library/<paper>/<question>` resolves on a cold load rather
 than 404ing before React ever runs.
 
-The four edge functions in `supabase/functions/` deploy separately and need
-`ANTHROPIC_API_KEY` set on the project. `AXON_MODEL_STRUCTURE`,
-`AXON_MODEL_CONTENT` and `AXON_MODEL_EXPLANATION` override the models per stage;
-the defaults are a small model for finding boundaries and a frontier one for reading
-handwriting, which is the cost lever `SCANNING_SYSTEM.md` §15 names.
+The production extraction and explanation runtime is the Cloudflare Workers
+monorepo at `Mrmanwonder/axon-backend`, not the historical pipeline copies under
+`supabase/functions/`. The Workers use Cloudflare Queues/R2 and the shared Gemini
+client in `axon-backend/shared/src/openrouter.ts`; deploy and secret changes for
+the model pipeline belong there.
 
 ### Provider sign-in
 
