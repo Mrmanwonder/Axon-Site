@@ -9,7 +9,8 @@ export type PageSkeletonVariant =
   | "review"
   | "scan"
   | "settings"
-  | "onboarding";
+  | "onboarding"
+  | "legal";
 
 type BlockProps = {
   width?: string;
@@ -333,6 +334,30 @@ function SettingsSkeleton() {
   );
 }
 
+function LegalSkeleton() {
+  return (
+    <div className="page-skeleton__legal">
+      <div className="page-skeleton__legal-header">
+        <Block width="68px" height="22px" radius="7px" />
+        <Block width="104px" height="44px" radius="16px" />
+      </div>
+      <div className="page-skeleton__legal-content">
+        <Block width="76px" height="10px" />
+        <Block width="82%" height="52px" radius="12px" />
+        <Block width="132px" height="12px" />
+        {[0, 1, 2, 3].map((section) => (
+          <div className="page-skeleton__legal-section" key={section}>
+            <Block width={section % 2 ? "38%" : "46%"} height="24px" radius="8px" />
+            <Block width="96%" height="12px" />
+            <Block width="91%" height="12px" />
+            <Block width={section % 2 ? "72%" : "84%"} height="12px" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OnboardingSkeleton() {
   return (
     <div className="page-skeleton__onboarding">
@@ -375,9 +400,25 @@ function SkeletonBody({ variant }: { variant: PageSkeletonVariant }) {
       return <SettingsSkeleton />;
     case "onboarding":
       return <OnboardingSkeleton />;
+    case "legal":
+      return <LegalSkeleton />;
     default:
       return <HomeSkeleton />;
   }
+}
+
+export function skeletonVariantForPath(pathname: string): PageSkeletonVariant {
+  if (pathname === "/privacy" || pathname === "/terms" || pathname === "/cookies") return "legal";
+  if (pathname.startsWith("/scan/review/")) return "review";
+  if (pathname === "/scan" || pathname.startsWith("/scan/")) return "scan";
+  if (pathname === "/insights") return "insights";
+  if (pathname === "/settings") return "settings";
+  if (pathname.startsWith("/library/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    return parts.length >= 3 ? "question" : "paper";
+  }
+  if (pathname === "/library") return "library";
+  return "home";
 }
 
 export default function PageSkeleton({
@@ -397,7 +438,7 @@ export default function PageSkeleton({
       aria-busy="true"
     >
       <span className="sr-only">{label}</span>
-      {standalone && variant !== "scan" && variant !== "review" && (
+      {standalone && !["scan", "review", "legal"].includes(variant) && (
         <div className="page-skeleton__chrome" aria-hidden="true">
           <Block width="84px" height="18px" />
           <Block width="36px" height="36px" radius="50%" />
@@ -406,7 +447,7 @@ export default function PageSkeleton({
       <div className="page-skeleton__content" aria-hidden="true">
         <SkeletonBody variant={variant} />
       </div>
-      {standalone && !["scan", "review", "onboarding"].includes(variant) && (
+      {standalone && !["scan", "review", "onboarding", "legal"].includes(variant) && (
         <div className="page-skeleton__tabbar" aria-hidden="true">
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i}>
