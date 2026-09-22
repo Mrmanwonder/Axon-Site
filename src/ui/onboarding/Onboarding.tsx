@@ -583,7 +583,7 @@ export default function Onboarding() {
         )}
         <div className="sectitle">What we never do</div>
         <div className="list">
-          {["Advertising of any kind", "Behavioural tracking", "Selling data to anyone",
+          {["Advertising of any kind", "Behavioural advertising", "Selling data to anyone",
             "Ranking against other students"].map((label) => (
             <SRow key={label} tone="ic-n" icon={ICONS.never} label={label}
                   trailing={<span className="tier t1">Never</span>} />
