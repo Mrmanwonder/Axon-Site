@@ -35,6 +35,10 @@ export const LIVE_SEARCH_MIN_FILL = 0.055;
 export const LIVE_PROXY_LONG_EDGE = 480;
 export const LIVE_PROXY_RECOVERY_LONG_EDGE = 720;
 const LIVE_RECOVERY_AFTER_MISSES = 2;
+// A tentative page should survive one noisy detector miss. Requiring two
+// literally consecutive global hits made acquisition probability collapse on
+// the exact low-light/hand-shadow frames where each individual pass is flaky.
+const TENTATIVE_CANDIDATE_GRACE_MS = 500;
 const TRACK_LONG_EDGE = 720;
 const TRACK_INTERVAL_MS = 45;
 const FOCUS_WINDOW = 384;
@@ -380,6 +384,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let lastTrackStartedAt = 0;
   let lastTrackedArea = null;
   let globalMisses = 0;
+  let candidateLastSeenAt = 0;
   let measured = null;
   let measuredAt = 0;
   let measuredQuad = null;
@@ -570,6 +575,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     lastTrackStartedAt = 0;
     lastTrackedArea = null;
     globalMisses = 0;
+    candidateLastSeenAt = 0;
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
@@ -785,6 +791,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
         return;
       }
 
+      // The first global hit is a candidate, not a lock. Keep it briefly across
+      // noisy misses so the next independent pass (including the higher-res
+      // recovery pass) can confirm the same sheet. The UI deliberately stays on
+      // calm searching guidance until confirmation, so false positives never
+      // become visible locks during this grace period.
+      if (globalConfirmations > 0 && valid && candidateLastSeenAt
+          && now - candidateLastSeenAt < TENTATIVE_CANDIDATE_GRACE_MS) {
+        publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
+        return;
+      }
+
+      candidateLastSeenAt = 0;
       track = createTrack();
       consecutiveFinds = globalConfirmations = 0;
       measured = measuredQuad = null;
@@ -801,6 +819,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     globalMisses = 0;
     const found = scaleQuad(result.found, { width: vw, height: vh }, trackSize);
     const now = performance.now();
+    candidateLastSeenAt = now;
     const sameDetectedDocument = isSameDocument(track, found, trackSize.width, trackSize.height);
     globalConfirmations = sameDetectedDocument ? Math.min(3, globalConfirmations + 1) : 1;
     track = sameDetectedDocument
@@ -1432,7 +1451,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
     shoot: () => shoot(false),
     get state() { return state; },
     get overlayPhase() { return overlayPhase; },
-    setAutoCapture(on) { autoCapture = !!on; armed = true; },
+    setAutoCapture(on) {
+      const next = !!on;
+      if (autoCapture === next) return;
+      autoCapture = next;
+      armed = true;
+      autoRetryAfter = 0;
+      resetAutoTiming();
+    },
     get autoCapture() { return autoCapture; },
     /** Holds automatic capture while the previous page is being conditioned.
         Releasing the hold must not itself arm another shot: the same document
