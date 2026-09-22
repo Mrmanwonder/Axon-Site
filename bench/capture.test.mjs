@@ -69,8 +69,29 @@ const ready = {
   consecutiveFinds: 8, globalConfirmations: 2,
 };
 
-test('an unblocked independently confirmed page fires', () => {
-  assert.equal(shouldAutoCapture(ready), true);
+test('an unblocked independently confirmed page fires after the steady window', () => {
+  assert.equal(shouldAutoCapture({ ...ready, stableForMs: CAPTURE.STABILITY_MS }), true);
+});
+
+test('auto capture waits for real time, not just five fast tracker frames', () => {
+  assert.equal(shouldAutoCapture({
+    ...ready,
+    stableForMs: CAPTURE.STABILITY_MS - 1,
+    candidateForMs: CAPTURE.PATIENCE_MS - 1,
+  }), false);
+  assert.equal(shouldAutoCapture({
+    ...ready,
+    stableForMs: CAPTURE.STABILITY_MS,
+    candidateForMs: CAPTURE.STABILITY_MS,
+  }), true);
+});
+
+test('patience eventually fires a valid page that never becomes perfectly still', () => {
+  assert.equal(shouldAutoCapture({
+    ...ready,
+    stableForMs: 0,
+    candidateForMs: CAPTURE.PATIENCE_MS,
+  }), true);
 });
 
 test('anything blocking holds the shutter', () => {
@@ -158,21 +179,38 @@ test('low area fill alone does not block a fully framed portrait page', () => {
   assert.equal(v.hint, 'Ready');
 });
 
-test('glare over the live line blocks, ahead of exposure and focus', () => {
+test('warning-level glare is advice and does not disable Auto', () => {
   const v = liveGateVerdict({
-    ...clean, glare: QUALITY.GLARE_WARN + 0.001, clipping: 1, sharpness: 0, skew: 999, steady: false,
+    ...clean, glare: QUALITY.GLARE_WARN + 0.001,
+  });
+  assert.equal(v.blocking, null);
+  assert.match(v.hint, /glare/i);
+});
+
+test('only failed glare blocks the live shutter', () => {
+  const v = liveGateVerdict({
+    ...clean, glare: QUALITY.GLARE_FAIL + 0.001,
   });
   assert.equal(v.blocking, 'glare');
 });
 
-test('a uniformly over-exposed page blocks on exposure, which glare cannot see', () => {
+test('uniform over-exposure is advisory because the durable scorer treats it as a warning', () => {
   const v = liveGateVerdict({ ...clean, clipping: QUALITY.CLIP_WARN + 0.001 });
-  assert.equal(v.blocking, 'exposure');
+  assert.equal(v.blocking, null);
   assert.match(v.hint, /bright/i);
 });
 
-test('soft focus blocks, once resolution, distance and exposure are clear', () => {
-  const v = liveGateVerdict({ ...clean, sharpness: QUALITY.BLUR_WARN - 0.01 });
+test('warning-level softness is advice and does not disable Auto', () => {
+  const v = liveGateVerdict({
+    ...clean,
+    sharpness: (QUALITY.BLUR_FAIL + QUALITY.BLUR_WARN) / 2,
+  });
+  assert.equal(v.blocking, null);
+  assert.match(v.hint, /soft/i);
+});
+
+test('genuinely unreadable focus still blocks', () => {
+  const v = liveGateVerdict({ ...clean, sharpness: QUALITY.BLUR_FAIL - 0.01 });
   assert.equal(v.blocking, 'focus');
 });
 
@@ -217,9 +255,9 @@ test('a measurement sitting on the line does not answer twice', () => {
   assert.equal(liveGateVerdict(clear, 'distance').blocking, null);
 });
 
-test('the margin only ever delays leaving a warning, never entering one', () => {
-  // Holding a different reason must not soften this one.
-  const soft = { ...clean, sharpness: QUALITY.BLUR_WARN - 0.001 };
+test('the margin only ever delays leaving a blocking failure, never entering one', () => {
+  // Holding a different reason must not soften a genuinely failed focus read.
+  const soft = { ...clean, sharpness: QUALITY.BLUR_FAIL - 0.001 };
   assert.equal(liveGateVerdict(soft, 'distance').blocking, 'focus');
   assert.equal(liveGateVerdict(soft, null).blocking, 'focus');
 });
