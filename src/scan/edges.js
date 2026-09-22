@@ -251,7 +251,7 @@ const ANCHOR_SPREAD = 12;
 function gateQuad(img, quad, width, height, minFill) {
   const fill = quadFill(quad, width, height);
   if (fill < minFill) return null;
-  if (!isPageShaped(quad, width, height)) return null;
+  if (!isPageShaped(quad, width, height, minFill)) return null;
 
   const paper = paperScore(img, quad);
   // How much of the inside is actually paper. This is the strongest single
@@ -291,9 +291,9 @@ const THETA_HALF_TURN = 180;
  * wall, a window, or a desk lamp, and all three produce a quad that is
  * geometrically fine and completely wrong.
  */
-export function isPageShaped(quad, width, height) {
+export function isPageShaped(quad, width, height, minFill = 0.16) {
   const fill = quadFill(quad, width, height);
-  if (fill < 0.18) return false;
+  if (fill < minFill) return false;
   // A page filling the whole frame has no visible edges, so there is nothing
   // here that could be deskewed and nothing worth firing the shutter at.
   if (fill > MAX_FILL) return false;
