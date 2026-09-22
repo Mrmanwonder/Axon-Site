@@ -128,7 +128,7 @@ export default function Switch({
           width: THUMB_W,
           height: THUMB_H,
           borderRadius: THUMB_H / 2,
-          transform: `translateX(${visualOn ? TRAVEL : 0}px) scale(${pressed ? .97 : 1})`,
+          transform: `translateX(${visualOn ? TRAVEL : 0}px) scale(${pressed ? .92 : 1})`,
           transition: `transform ${MOTION_MS}ms ${MOTION_CURVE}`,
           willChange: "transform",
         }}
