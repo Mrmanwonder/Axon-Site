@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { findCorner, strongestLine, intersectLines } from '../src/scan/corner-search.js';
 import {
   CORNER_IDS, acquire, advanceState, coherentMotion, createTrack, documentConfidence,
-  edgesFrom, geometryValid, needsGlobal, observe, poseOf, predict, quadOf, searchRadius,
+  edgesFrom, geometryValid, needsGlobal, observe, poseOf, predict, quadOf, searchRadius, searchWindows,
 } from '../src/scan/track.js';
 
 // ── synthetic pixels ───────────────────────────────────────────────────────
@@ -320,6 +320,24 @@ test('§22: the search radius grows when confidence falls and when the page move
   const quick = { velocity: { x: 1.6, y: 0.9 }, confidence: 0.95, lastSeen: 1000 };
   assert.ok(searchRadius(shaky, 1000) > searchRadius(still, 1000));
   assert.ok(searchRadius(quick, 1000) > searchRadius(still, 1000));
+});
+
+test('§22: a slow or dropped frame expands recovery instead of assuming 60fps', () => {
+  const quick = { velocity: { x: 1.6, y: 0.9 }, confidence: 0.95, lastSeen: 1000 };
+  assert.ok(searchRadius(quick, 1050) > searchRadius(quick, 1000),
+    '50ms without an observation did not widen the corner search');
+});
+
+test('§22: fast-motion corner windows are not silently capped at the old 128px size', () => {
+  const track = acquire(createTrack(), squareQuad(120, 100, 220, 280), 1000,
+    { width: 640, height: 480 });
+  for (const id of CORNER_IDS) {
+    track.corners[id].velocity = { x: 1.6, y: 0.9 };
+    track.corners[id].confidence = 0.95;
+  }
+  const windows = searchWindows(track, 1050, { width: 640, height: 480 });
+  assert.equal(windows.length, 4);
+  assert.equal(windows[0].size, 192);
 });
 
 test('§14: a bowtie is not a valid document however confident its corners are', () => {
