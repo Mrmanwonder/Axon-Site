@@ -1,13 +1,13 @@
 // Supabase client and auth.
 //
-// Auth is passwordless: email or phone OTP, or Google or Apple. Only the
+// Auth is passwordless: email or phone OTP, or Google. Only the
 // guardian ever holds credentials; the student works inside the guardian's
 // session and is never an auth user.
 //
 // A provider sign-in changes who vouches for the email address and nothing
 // else. It does not shorten the flow: the guardian row, the age gate,
 // verification and consent all still happen, because none of them is something
-// Google or Apple can assert on a parent's behalf.
+// Google can assert on a parent's behalf.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { clearLocalData, readThrough } from './cache.js';
@@ -80,12 +80,12 @@ export async function sendOtp(contact) {
 }
 
 /** Providers offered on the account step, in the order they are shown. */
-export const OAUTH_PROVIDERS = ['google', 'apple'];
+export const OAUTH_PROVIDERS = ['google'];
 
-export const PROVIDER_LABEL = { google: 'Google', apple: 'Apple' };
+export const PROVIDER_LABEL = { google: 'Google' };
 
 /**
- * Hand off to Google or Apple.
+ * Hand off to Google.
  *
  * This navigates away, so nothing after it runs on success — a resolved promise
  * only means the redirect was accepted. The session comes back in the URL on
