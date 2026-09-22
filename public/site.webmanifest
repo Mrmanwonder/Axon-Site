@@ -8,8 +8,14 @@
   "theme_color": "#000000",
   "icons": [
     {
+      "src": "/axon-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "/axon-logo.png",
-      "sizes": "176x112",
+      "sizes": "100x100",
       "type": "image/png",
       "purpose": "any"
     }
