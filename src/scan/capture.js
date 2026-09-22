@@ -17,12 +17,30 @@ import {
   needsGlobal, observe, quadOf, searchWindows,
 } from './track.js';
 
-const DETECT_INTERVAL_MS = 80;
-const DETECT_MAX_INTERVAL_MS = 320;
-const DETECT_TIMEOUT_MS = DETECT_MAX_INTERVAL_MS * 3;
-const DETECT_DUTY = 0.3;
-const PROXY_WIDTH = 360;
-const TRACK_WIDTH = 720;
+// Live tracking must feel continuous, but it must never monopolise a phone.
+const DETECT_INTERVAL_MS = 65;
+const DETECT_MAX_INTERVAL_MS = 220;
+const DETECT_TIMEOUT_MS = 700;
+const DETECT_DUTY = 0.55;
+
+// Detection and capture quality are deliberately separate. The tracker should
+// find a small page early and tell the student to move closer; it must not wait
+// until the page is already capture-sized before it admits that paper exists.
+export const LIVE_SEARCH_MIN_FILL = 0.055;
+
+// Bound work by the proxy's long edge. The previous fixed 360px *width* became
+// ~360x800 on a portrait object-fit crop, doing 2–3x the intended pixel work.
+// A small fast pass runs normally; one larger recovery pass is tried after
+// misses so faint/shadowed boundaries still get a second chance.
+export const LIVE_PROXY_LONG_EDGE = 480;
+export const LIVE_PROXY_RECOVERY_LONG_EDGE = 720;
+const LIVE_RECOVERY_AFTER_MISSES = 2;
+// A tentative page should survive one noisy detector miss. Requiring two
+// literally consecutive global hits made acquisition probability collapse on
+// the exact low-light/hand-shadow frames where each individual pass is flaky.
+const TENTATIVE_CANDIDATE_GRACE_MS = 500;
+const TRACK_LONG_EDGE = 720;
+const TRACK_INTERVAL_MS = 45;
 const FOCUS_WINDOW = 384;
 const MEASUREMENT_STALE_MS = 900;
 const VIEWPORT_SCALE_TOLERANCE = 0.01;
@@ -77,6 +95,16 @@ export function coverCropRect(sourceWidth, sourceHeight, viewWidth, viewHeight) 
   }
   const height = sourceWidth / viewAspect;
   return { x: 0, y: (sourceHeight - height) / 2, width: sourceWidth, height };
+}
+
+/** Fit a rectangle inside a long-edge budget without changing its aspect. */
+export function fitLongEdge(width, height, longEdge) {
+  if (!(width > 0 && height > 0 && longEdge > 0)) return { width: 1, height: 1 };
+  const scale = longEdge / Math.max(width, height);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
 }
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -353,7 +381,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let trackSize = null;
   let trackInFlight = false;
   let lastTrackedFrame = -1;
+  let lastTrackStartedAt = 0;
   let lastTrackedArea = null;
+  let globalMisses = 0;
+  let candidateLastSeenAt = 0;
   let measured = null;
   let measuredAt = 0;
   let measuredQuad = null;
@@ -374,8 +405,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let autoCandidateSince = 0;
 
   let imageCapture = null;
+  let cameraTrack = null;
   let photoSettings = null;
   let capturePath = 'canvas-grab';
+  let nativeStillDemoted = false;
   let shootInFlight = false;
   let state = blankState();
   let nextTransactionId = 1;
@@ -483,10 +516,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
     running = true;
     armed = true;
 
-    const cameraTrack = stream.getVideoTracks?.()[0] ?? null;
+    cameraTrack = stream.getVideoTracks?.()[0] ?? null;
     imageCapture = null;
     photoSettings = null;
     capturePath = 'canvas-grab';
+    nativeStillDemoted = false;
 
     if (cameraTrack && typeof ImageCapture !== 'undefined') {
       try {
@@ -538,12 +572,17 @@ export function createCapture({ video, overlay, onState, onShot }) {
     captureConfirmation = null;
     overlayPhase = 'searching';
     lastTrackedFrame = -1;
+    lastTrackStartedAt = 0;
     lastTrackedArea = null;
+    globalMisses = 0;
+    candidateLastSeenAt = 0;
     measuredAt = 0;
     trackInFlight = false;
     imageCapture = null;
+    cameraTrack = null;
     photoSettings = null;
     capturePath = 'canvas-grab';
+    nativeStillDemoted = false;
     processingHold = false;
     autoRetryAfter = 0;
     autoStableAnchor = null;
@@ -583,8 +622,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
     const crop = visibleSourceCrop(vw, vh);
-    const pw = PROXY_WIDTH;
-    const ph = Math.max(1, Math.round(PROXY_WIDTH * crop.height / crop.width));
+    // Most frames use the bounded fast proxy. After misses, every third global
+    // attempt gets a higher-resolution recovery pass instead of permanently
+    // switching the scanner into an expensive mode.
+    const recovery = globalMisses >= LIVE_RECOVERY_AFTER_MISSES
+      && globalMisses % 3 === LIVE_RECOVERY_AFTER_MISSES;
+    const proxySize = fitLongEdge(
+      crop.width,
+      crop.height,
+      recovery ? LIVE_PROXY_RECOVERY_LONG_EDGE : LIVE_PROXY_LONG_EDGE,
+    );
+    const pw = proxySize.width;
+    const ph = proxySize.height;
     const workerUsed = !!ensureDetectWorker();
     const result = workerUsed
       ? await searchOnWorker(pw, ph, vw, vh, crop)
@@ -596,6 +645,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function trackStep() {
     if (trackInFlight || !running || document.hidden) return;
     if (!ensureDetectWorker()) return;
+    const now = performance.now();
+    if (now - lastTrackStartedAt < TRACK_INTERVAL_MS) return;
+    lastTrackStartedAt = now;
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh || !trackSize) return;
     if (video.currentTime === lastTrackedFrame) return;
@@ -624,7 +676,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       crop.x, crop.y, crop.width, crop.height,
       { resizeWidth: pw, resizeHeight: ph },
     );
-    const search = await runDetectWorker('search', proxyBitmap);
+    const search = await runDetectWorker('search', proxyBitmap, { minFill: LIVE_SEARCH_MIN_FILL });
     if (!search?.found) {
       return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
     }
@@ -660,7 +712,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function measureStep(vw, vh) {
     const tracked = quadOf(track);
     if (!tracked || !trackSize || !ensureDetectWorker()) return;
-    const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    const proxySize = fitLongEdge(vw, vh, LIVE_PROXY_LONG_EDGE);
+    const pw = proxySize.width, ph = proxySize.height;
     const inProxy = scaleQuad(tracked, trackSize, { width: pw, height: ph });
     const inVideo = scaleQuad(tracked, trackSize, { width: vw, height: vh });
     const size = quadSize(inVideo);
@@ -688,7 +741,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     proxyCtx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, pw, ph);
     const frame = proxyCtx.getImageData(0, 0, pw, ph);
     const tDetectStart = performance.now();
-    const inCrop = detectQuad(frame);
+    const inCrop = detectQuad(frame, { minFill: LIVE_SEARCH_MIN_FILL });
     const detectMs = performance.now() - tDetectStart;
     if (!inCrop) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
     const tMeasureStart = performance.now();
@@ -714,9 +767,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
       workerUsed,
     };
     recordStepTiming(next.timing);
-    trackSize = { width: TRACK_WIDTH, height: Math.round(TRACK_WIDTH * vh / vw) };
+    trackSize = fitLongEdge(vw, vh, TRACK_LONG_EDGE);
 
     if (!result.found) {
+      globalMisses = Math.min(999, globalMisses + 1);
       const now = performance.now();
       const tracked = quadOf(track);
       const valid = !!tracked && geometryValid(track, trackSize.width, trackSize.height)
@@ -737,6 +791,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
         return;
       }
 
+      // The first global hit is a candidate, not a lock. Keep it briefly across
+      // noisy misses so the next independent pass (including the higher-res
+      // recovery pass) can confirm the same sheet. The UI deliberately stays on
+      // calm searching guidance until confirmation, so false positives never
+      // become visible locks during this grace period.
+      if (globalConfirmations > 0 && valid && candidateLastSeenAt
+          && now - candidateLastSeenAt < TENTATIVE_CANDIDATE_GRACE_MS) {
+        publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
+        return;
+      }
+
+      candidateLastSeenAt = 0;
       track = createTrack();
       consecutiveFinds = globalConfirmations = 0;
       measured = measuredQuad = null;
@@ -750,8 +816,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return;
     }
 
+    globalMisses = 0;
     const found = scaleQuad(result.found, { width: vw, height: vh }, trackSize);
     const now = performance.now();
+    candidateLastSeenAt = now;
     const sameDetectedDocument = isSameDocument(track, found, trackSize.width, trackSize.height);
     globalConfirmations = sameDetectedDocument ? Math.min(3, globalConfirmations + 1) : 1;
     track = sameDetectedDocument
@@ -1126,16 +1194,40 @@ export function createCapture({ video, overlay, onState, onShot }) {
       : { blob: result, timedOut: false };
   }
 
+  async function demoteNativeStill() {
+    if (nativeStillDemoted) return;
+    nativeStillDemoted = true;
+    imageCapture = null;
+    photoSettings = null;
+    capturePath = 'canvas-grab';
+    // A browser that exposed ImageCapture but cannot actually complete a still
+    // should not pay that stall on every shutter press. Promote the live stream
+    // once so future canvas grabs retain useful document resolution.
+    if (cameraTrack) {
+      await requestFallbackCaptureResolution(cameraTrack);
+      await requestContinuousFocus(cameraTrack);
+    }
+  }
+
   async function takeNativePhoto() {
     if (!imageCapture) return null;
     if (Object.keys(photoSettings ?? {}).length) {
       const first = await takePhotoAttempt(photoSettings);
       if (first.blob) return first.blob;
-      if (first.timedOut) return null;
+      if (first.timedOut) {
+        await demoteNativeStill();
+        return null;
+      }
       // Some camera stacks advertise dimensions they reject at capture time.
       // Retry with browser-chosen settings before abandoning the native still.
     }
-    return (await takePhotoAttempt(undefined)).blob;
+    const second = await takePhotoAttempt(undefined);
+    if (second.timedOut) {
+      await demoteNativeStill();
+      return null;
+    }
+    if (!second.blob) await demoteNativeStill();
+    return second.blob;
   }
 
   async function grabStill() {
@@ -1338,7 +1430,13 @@ export function createCapture({ video, overlay, onState, onShot }) {
             { width: video.videoWidth, height: video.videoHeight },
           )
         : null);
-      if (auto || !liveQuadAtShutter) beginCaptureConfirmation(confirmationQuad);
+      // Never manufacture a "live tracking" lock only after a manual shutter.
+      // That was the exact failure mode seen in the recording: the low-res live
+      // detector missed, the higher-res still detector succeeded, and the UI
+      // suddenly drew corners after the button press. Auto may confirm its
+      // accepted frame; manual capture only animates a quad it had already
+      // visibly locked before the press (started above).
+      if (auto) beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
       armed = false;
       return shot;
@@ -1353,7 +1451,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
     shoot: () => shoot(false),
     get state() { return state; },
     get overlayPhase() { return overlayPhase; },
-    setAutoCapture(on) { autoCapture = !!on; armed = true; },
+    setAutoCapture(on) {
+      const next = !!on;
+      if (autoCapture === next) return;
+      autoCapture = next;
+      armed = true;
+      autoRetryAfter = 0;
+      resetAutoTiming();
+    },
     get autoCapture() { return autoCapture; },
     /** Holds automatic capture while the previous page is being conditioned.
         Releasing the hold must not itself arm another shot: the same document

@@ -229,9 +229,17 @@ export function predict(track, now) {
  */
 export function searchRadius(corner, now) {
   const speed = Math.hypot(corner.velocity.x, corner.velocity.y); // px per ms
-  const perFrame = speed * 16.7;
+  // Use the interval this corner has actually gone unobserved for. The old
+  // hard-coded 16.7ms horizon assumed 60fps even though the camera is normally
+  // 30fps and the worker may intentionally track at a lower cadence. After a
+  // dropped/slow frame that made the search window *smaller than the distance
+  // uncertainty had grown*, which is exactly backwards.
+  const elapsed = corner.lastSeen == null
+    ? 16.7
+    : Math.max(16.7, Math.min(MAX_PREDICT_MS, Math.max(0, now - corner.lastSeen)));
+  const travel = speed * elapsed;
   const fromConfidence = RADIUS_MIN + (1 - clamp01(corner.confidence)) * (RADIUS_MAX - RADIUS_MIN) * 0.7;
-  const fromMotion = perFrame * RADIUS_MOTION_FACTOR;
+  const fromMotion = travel * RADIUS_MOTION_FACTOR;
   const stale = corner.lastSeen != null && now - corner.lastSeen > VELOCITY_STALE_MS;
   const radius = Math.max(fromConfidence, stale ? RADIUS_MIN : fromMotion);
   return Math.round(Math.max(RADIUS_MIN, Math.min(RADIUS_MAX, radius)));
@@ -427,7 +435,7 @@ const CORNER_EDGES = {
  * in trouble, which is exactly when spending a little more on the other three
  * is the right trade.
  */
-export function searchWindows(track, now, { width, height, minSize = 32, maxSize = 128 } = {}) {
+export function searchWindows(track, now, { width, height, minSize = 32, maxSize = 192 } = {}) {
   const predicted = predict(track, now);
   const edges = edgesFrom(track.corners);
 

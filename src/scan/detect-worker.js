@@ -12,7 +12,10 @@ import { measureQuad, sharpness, skewDegrees } from './quality.js';
 
 const canvas = new OffscreenCanvas(1, 1);
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
-const SHADOW_FALLBACK_AFTER_MS = 2000;
+// Two seconds of a dead viewfinder is far longer than a student interprets as
+// "recovering". The fast raw pass still runs first; illumination normalisation
+// is only paid after a short sustained miss.
+const SHADOW_FALLBACK_AFTER_MS = 450;
 const NORMALIZE_CELL = 24;
 let missingSince = 0;
 

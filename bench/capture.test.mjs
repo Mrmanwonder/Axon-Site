@@ -12,8 +12,9 @@ import assert from 'node:assert/strict';
 import {
   CAPTURE_CONFIRM_TIMING,
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
+  LIVE_SEARCH_MIN_FILL, LIVE_PROXY_LONG_EDGE, LIVE_PROXY_RECOVERY_LONG_EDGE,
   PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
-  captureConfirmFrame, coverCropRect, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
+  captureConfirmFrame, coverCropRect, fitLongEdge, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
   settledGuidance, settledPaperEvidence, settledScannerGuidance, shouldAutoCapture,
 } from '../src/scan/capture.js';
 import { easeQuad, isPageShaped } from '../src/scan/edges.js';
@@ -53,7 +54,25 @@ test('portrait object-fit cover searches the same source crop the student sees',
   assert.ok(Math.abs(crop.width / crop.height - 390 / 844) < 0.001);
 });
 
-test('still-frame detection can use a lower fill floor without weakening the live default', () => {
+test('live detection is allowed to find a page before it is capture-sized', () => {
+  const quad = [
+    { x: 37, y: 37 }, { x: 63, y: 37 },
+    { x: 63, y: 63 }, { x: 37, y: 63 },
+  ];
+  assert.ok(LIVE_SEARCH_MIN_FILL < 0.16);
+  assert.equal(isPageShaped(quad, 100, 100), false, 'legacy live floor would still reject this early page');
+  assert.equal(isPageShaped(quad, 100, 100, LIVE_SEARCH_MIN_FILL), true);
+});
+
+test('live proxies are bounded by long edge instead of portrait width', () => {
+  assert.deepEqual(fitLongEdge(450, 1000, LIVE_PROXY_LONG_EDGE), { width: 216, height: 480 });
+  assert.deepEqual(
+    fitLongEdge(450, 1000, LIVE_PROXY_RECOVERY_LONG_EDGE),
+    { width: 324, height: 720 },
+  );
+});
+
+test('still-frame detection keeps its own permissive fill floor', () => {
   const quad = [
     { x: 34, y: 34 }, { x: 66, y: 34 },
     { x: 66, y: 66 }, { x: 34, y: 66 },
