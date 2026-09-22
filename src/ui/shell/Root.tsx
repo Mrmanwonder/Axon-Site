@@ -20,7 +20,7 @@ import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 import PressBox from "../components/PressBox";
 import SkeletonLoader from "../components/SkeletonLoader";
-import type { PageSkeletonVariant } from "../components/PageSkeleton";
+import { skeletonVariantForPath } from "../components/PageSkeleton";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
@@ -54,23 +54,10 @@ function BootError() {
   );
 }
 
-function skeletonVariantFor(pathname: string): PageSkeletonVariant {
-  if (pathname.startsWith("/scan/review/")) return "review";
-  if (pathname === "/scan" || pathname.startsWith("/scan/")) return "scan";
-  if (pathname === "/insights") return "insights";
-  if (pathname === "/settings") return "settings";
-  if (pathname.startsWith("/library/")) {
-    const parts = pathname.split("/").filter(Boolean);
-    return parts.length >= 3 ? "question" : "paper";
-  }
-  if (pathname === "/library") return "library";
-  return "home";
-}
-
 function Gate() {
   const { gate } = useApp();
   const { pathname } = useLocation();
-  const skeletonVariant = skeletonVariantFor(pathname);
+  const skeletonVariant = skeletonVariantForPath(pathname);
   const cleanupError = sessionStorage.getItem("axon.cleanup-error");
   if (cleanupError) return <main><h1>Local cleanup needs attention</h1><p>{cleanupError}</p><button onClick={async () => { try { const { LocalDataService } = await import("../../local-data.js"); await LocalDataService.clearAll(); sessionStorage.removeItem("axon.cleanup-error"); location.reload(); } catch { /* Keep the recovery message visible. */ } }}>Retry local cleanup</button></main>;
 
