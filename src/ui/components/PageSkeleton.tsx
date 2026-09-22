@@ -434,8 +434,10 @@ export default function PageSkeleton({
     <div
       className={`page-skeleton page-skeleton--${variant}${standalone ? " is-standalone" : ""}`}
       role="status"
+      aria-label={label}
       aria-live="polite"
       aria-busy="true"
+      data-skeleton={variant}
     >
       <span className="sr-only">{label}</span>
       {standalone && !["scan", "review", "legal"].includes(variant) && (
