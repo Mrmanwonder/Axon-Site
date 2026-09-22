@@ -153,11 +153,13 @@ export function resolveOverlayPhase({
 export function shouldAutoCapture({
   autoCapture, armed, blocking, consecutiveFinds, globalConfirmations = 0,
   trackState = 'tracking', viewportScaled = false, processing = false,
+  stableForMs = Infinity, candidateForMs = Infinity,
 }) {
   if (!autoCapture || !armed || blocking || viewportScaled || processing) return false;
   if (consecutiveFinds < CAPTURE.CONSECUTIVE_FINDS) return false;
   if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS) return false;
   if (trackState !== 'tracking') return false;
+  if (stableForMs < CAPTURE.STABILITY_MS && candidateForMs < CAPTURE.PATIENCE_MS) return false;
   return true;
 }
 
@@ -187,14 +189,23 @@ export function liveGateVerdict(
   if (!qualityReady) {
     return { blocking: 'measuring', hint: 'Hold steady for a moment' };
   }
-  if (glare > QUALITY.GLARE_WARN / easing('glare')) {
-    return { blocking: 'glare', hint: 'Light is bouncing off the page — tilt it slightly away from the light' };
+  // Warning-level quality signals are advice, not an infinite veto on Auto.
+  // The durable page scorer already distinguishes warn from fail, so live
+  // capture only blocks quality that is genuinely unusable.
+  if (glare > QUALITY.GLARE_FAIL / easing('glare')) {
+    return { blocking: 'glare', hint: 'Strong glare is washing out part of the page — tilt it slightly away from the light' };
   }
-  if (clipping > QUALITY.CLIP_WARN / easing('exposure')) {
-    return { blocking: 'exposure', hint: 'Too bright — move into shade, or turn a lamp away from the page' };
+  if (sharpness !== null && sharpness < QUALITY.BLUR_FAIL * easing('focus')) {
+    return { blocking: 'focus', hint: 'Hold still — the page is too blurred to read clearly' };
   }
-  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN * easing('focus')) {
-    return { blocking: 'focus', hint: 'Hold still — the page is not sharp yet' };
+  if (glare > QUALITY.GLARE_WARN) {
+    return { blocking: null, hint: 'A little glare is visible — tilt the page slightly if you can' };
+  }
+  if (clipping > QUALITY.CLIP_WARN) {
+    return { blocking: null, hint: 'The page is very bright — more shade will preserve faint marking' };
+  }
+  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN) {
+    return { blocking: null, hint: 'Slightly soft — hold still for a sharper scan' };
   }
   if (skew > QUALITY.SKEW_WARN_DEG) {
     return { blocking: null, hint: 'Square the page up a little if you can' };
@@ -278,6 +289,10 @@ function ensureDetectWorker() {
       console.error('[scan] detect worker failed, falling back to main-thread search', {
         message: event?.message, filename: event?.filename, lineno: event?.lineno,
       });
+      // A crashed worker is already a failed detection. Release every waiter
+      // immediately instead of making the viewfinder sit through the timeout.
+      for (const finish of [...detectPending.values()]) finish(null);
+      detectPending.clear();
       detectWorker = false;
       detectTimeouts = 0;
     };
@@ -354,6 +369,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let armed = true;
   let processingHold = false;
   let autoRetryAfter = 0;
+  let autoStableAnchor = null;
+  let autoStableSince = 0;
+  let autoCandidateSince = 0;
 
   let imageCapture = null;
   let photoSettings = null;
@@ -528,6 +546,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     capturePath = 'canvas-grab';
     processingHold = false;
     autoRetryAfter = 0;
+    autoStableAnchor = null;
+    autoStableSince = 0;
+    autoCandidateSince = 0;
     video.style.removeProperty('transform');
     releaseCamera();
   }
@@ -760,6 +781,37 @@ export function createCapture({ video, overlay, onState, onShot }) {
     return quadDrift(current, measuredQuad, width, height) > CAPTURE.STABILITY_TOLERANCE;
   }
 
+  function resetAutoTiming() {
+    autoStableAnchor = null;
+    autoStableSince = 0;
+    autoCandidateSince = 0;
+  }
+
+  function updateAutoTiming(current, width, height, now, {
+    blocking = null, geometryReady = false, qualityReady = false,
+  } = {}) {
+    // Patience bypasses hand-held motion only. A genuine framing or quality
+    // failure still needs the student to fix the shot before Auto may fire.
+    if (!geometryReady || !qualityReady || blocking) {
+      resetAutoTiming();
+      return { stableForMs: 0, candidateForMs: 0 };
+    }
+
+    if (!autoCandidateSince) autoCandidateSince = now;
+    if (!autoStableAnchor
+        || quadDrift(current, autoStableAnchor, width, height) > CAPTURE.STABILITY_TOLERANCE) {
+      autoStableAnchor = current.map((point) => ({ ...point }));
+      autoStableSince = now;
+    } else if (!autoStableSince) {
+      autoStableSince = now;
+    }
+
+    return {
+      stableForMs: Math.max(0, now - autoStableSince),
+      candidateForMs: Math.max(0, now - autoCandidateSince),
+    };
+  }
+
   function publishFromTrack(tw, th, vw, vh, trackMs, timing = null) {
     if (!running) return;
     const tracked = quadOf(track);
@@ -784,6 +836,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       consecutiveFinds = 0;
       lastTrackedArea = null;
       quad = null;
+      resetAutoTiming();
       armed = true;
       guidance = settledScannerGuidance(guidance, null, paperEvidence, now);
       next.blocking = guidance.blocking;
@@ -804,6 +857,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       consecutiveFinds = 0;
       lastTrackedArea = null;
       quad = null;
+      resetAutoTiming();
       const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
       guidance = settledScannerGuidance(guidance, verdict, paperEvidence, now);
       next.blocking = guidance.blocking;
@@ -851,6 +905,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.hint = guidance.hint;
     publish(next);
 
+    const autoTiming = updateAutoTiming(tracked, tw, th, now, next);
+
     if (performance.now() < autoRetryAfter) return;
     if (shouldAutoCapture({
       autoCapture,
@@ -861,6 +917,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
       trackState: track.state,
       viewportScaled: viewportScaled(),
       processing: processingHold || shootInFlight,
+      stableForMs: autoTiming.stableForMs,
+      candidateForMs: autoTiming.candidateForMs,
     })) {
       armed = false;
       void shoot(true);
@@ -1214,6 +1272,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const tShotStart = performance.now();
 
     try {
+      // Start feedback before the camera hardware is asked for the still.
+      // Android camera stacks can pause the preview texture during takePhoto();
+      // the independently-clocked confirmation keeps that pause from reading as
+      // an application freeze.
+      if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
+
       const captured = await grabStill();
       const grabMs = performance.now() - tShotStart;
       if (!captured) return null;
@@ -1222,12 +1286,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
         bitmap.close?.();
         return null;
       }
-
-      // Manual capture gets immediate feedback from the live lock. Native
-      // takePhoto can briefly stall the camera texture; showing the captured
-      // outline before still analysis starts prevents that hardware pause from
-      // reading as an app freeze.
-      if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
 
       const tAnalyseStart = performance.now();
       const analysed = await analyseStill(bitmap);
