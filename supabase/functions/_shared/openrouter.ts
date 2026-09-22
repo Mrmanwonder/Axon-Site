@@ -222,6 +222,8 @@ export interface CallResult<T> {
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
+  /** Public source URLs consulted by optional live-web tools. */
+  webSources: string[];
   latencyMs: number;
 }
 
@@ -268,6 +270,7 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
   let costUsd: number | null = null;
   let served = route.primary_model;
   let toolCallsUsed = 0;
+  const webSources = new Set<string>();
 
   const add = (current: number | null, value: number | undefined): number | null =>
     typeof value === 'number' && Number.isFinite(value) ? (current ?? 0) + value : current;
@@ -391,6 +394,21 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
         throw err;
       }
 
+      // Do not spend a Tavily call on the last permitted model round: there
+      // would be no following turn in which the model could consume its result.
+      if (round === maxRounds - 1) {
+        const err = new ModelError('tool_loop_limit', 'the model exhausted the live-web round budget', 200, false);
+        await log({
+          model_id: served,
+          ok: false,
+          error_code: err.code,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cost_usd: costUsd,
+        });
+        throw err;
+      }
+
       messages.push({
         role: 'assistant',
         content: message?.content ?? null,
@@ -411,12 +429,13 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
           throw err;
         }
         toolCallsUsed += 1;
-        const toolContent = await runTavilyTool(call);
+        const toolResult = await runTavilyTool(call);
+        for (const source of toolResult.sources) webSources.add(source);
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
           name: call.function.name,
-          content: toolContent,
+          content: toolResult.content,
         });
       }
       continue;
@@ -467,6 +486,7 @@ export async function callModel<T>(opts: CallOpts<T>): Promise<CallResult<T>> {
       inputTokens,
       outputTokens,
       costUsd,
+      webSources: [...webSources],
       latencyMs: Math.round(performance.now() - started),
     };
   }
