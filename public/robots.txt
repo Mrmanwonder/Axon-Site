@@ -1,6 +1,30 @@
+# Axon's public web surface is intentionally crawlable.
+# Authenticated/student-specific URLs are not advertised in the sitemap and
+# remain protected by application authentication and database authorization.
 User-agent: *
-Allow: /privacy
-Allow: /terms
-Disallow: /
+Allow: /
+
+# Search and AI/LLM crawlers — explicit for clarity. The wildcard rule above
+# already permits these agents; these entries document Axon's intended policy.
+User-agent: Googlebot
+Allow: /
+User-agent: Bingbot
+Allow: /
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
 
 Sitemap: https://axonstudy.online/sitemap.xml

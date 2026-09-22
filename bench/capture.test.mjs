@@ -10,8 +10,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS,
-  liveGateVerdict, settledGuidance, shouldAutoCapture, stabApply, stabiliseStep, steadyWindow,
+  CAPTURE_CONFIRM_TIMING,
+  GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
+  PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
+  captureConfirmFrame, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
+  settledGuidance, settledPaperEvidence, settledScannerGuidance, shouldAutoCapture,
 } from '../src/scan/capture.js';
 import { easeQuad } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -40,59 +43,14 @@ const page = (px = 0) => [
   { x: 198 - px, y: 280 - px }, { x: 42 + px, y: 278 - px },
 ];
 
-test('a first sighting opens the window rather than closing it', () => {
-  const w = steadyWindow({ anchor: null, found: page(), width: W, height: H, since: 0, now: 1000 });
-  assert.equal(w.steady, false);
-  assert.equal(w.since, 1000);
-  assert.deepEqual(w.anchor, page());
-});
-
-test('jitter around one pose keeps the clock running', () => {
-  // Three pixels of wobble — the amount that used to reset the clock every
-  // single search, which is why the hint sat on "Hold still" indefinitely.
-  let w = steadyWindow({ anchor: null, found: page(), width: W, height: H, since: 0, now: 0 });
-  for (let t = 100; t <= CAPTURE.STABILITY_MS; t += 100) {
-    w = steadyWindow({
-      anchor: w.anchor, found: page(t % 200 === 0 ? 3 : -3),
-      width: W, height: H, since: w.since, now: t,
-    });
-    assert.equal(w.since, 0, `the window restarted at t=${t}`);
-  }
-  assert.equal(w.steady, true);
-});
-
-test('real movement restarts the window', () => {
-  const opened = steadyWindow({ anchor: null, found: page(), width: W, height: H, since: 0, now: 0 });
-  // Well past the tolerance: the phone moved, not the estimate.
-  const moved = steadyWindow({
-    anchor: opened.anchor, found: page(30), width: W, height: H, since: opened.since, now: 400,
-  });
-  assert.equal(moved.since, 400);
-  assert.equal(moved.steady, false);
-});
-
-test('the window closes only after the full stability period', () => {
-  const opened = steadyWindow({ anchor: null, found: page(), width: W, height: H, since: 0, now: 0 });
-  const early = steadyWindow({
-    anchor: opened.anchor, found: page(1), width: W, height: H,
-    since: opened.since, now: CAPTURE.STABILITY_MS - 1,
-  });
-  assert.equal(early.steady, false);
-  const due = steadyWindow({
-    anchor: opened.anchor, found: page(1), width: W, height: H,
-    since: opened.since, now: CAPTURE.STABILITY_MS,
-  });
-  assert.equal(due.steady, true);
-});
-
 // ── the shutter decision ───────────────────────────────────────────────────
 
 const ready = {
   autoCapture: true, armed: true, blocking: null,
-  steady: true, heldFor: 5000, consecutiveFinds: 8,
+  consecutiveFinds: 8, globalConfirmations: 2,
 };
 
-test('a steady unblocked page fires', () => {
+test('an unblocked independently confirmed page fires', () => {
   assert.equal(shouldAutoCapture(ready), true);
 });
 
@@ -128,18 +86,15 @@ test('a tracker that is not sure yet holds the shutter', () => {
   assert.equal(shouldAutoCapture({ ...ready, trackState: 'tracking' }), true);
 });
 
-test('a page held long enough fires even if it never reads as steady', () => {
-  const restless = { ...ready, steady: false };
-  assert.equal(shouldAutoCapture({ ...restless, heldFor: 0 }), false);
-  assert.equal(shouldAutoCapture({ ...restless, heldFor: CAPTURE.PATIENCE_MS - 1 }), false);
-  assert.equal(shouldAutoCapture({ ...restless, heldFor: CAPTURE.PATIENCE_MS }), true);
+test('one global detection cannot auto-capture a random rectangle', () => {
+  assert.equal(shouldAutoCapture({ ...ready, globalConfirmations: 1 }), false);
+  assert.equal(shouldAutoCapture({
+    ...ready, globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+  }), true);
 });
 
-test('patience does not override the gate', () => {
-  assert.equal(
-    shouldAutoCapture({ ...ready, steady: false, heldFor: 60000, blocking: 'focus' }),
-    false,
-  );
+test('quality blocking still overrides a confirmed lock', () => {
+  assert.equal(shouldAutoCapture({ ...ready, blocking: 'focus' }), false);
 });
 
 // ── the live gate's own verdict ─────────────────────────────────────────────
@@ -151,18 +106,12 @@ test('patience does not override the gate', () => {
 // Every signal comfortably inside its "ok" band — nothing should block or
 // even earn advice beyond steadiness.
 const clean = {
-  glare: 0, clipping: 0, fill: CAPTURE.MIN_FILL + 0.1, sharpness: QUALITY.BLUR_WARN + 0.1,
-  skew: 0, pageLongEdge: CONDITIONING.MIN_LONG_EDGE + 100, steady: true,
+  glare: 0, clipping: 0, fill: 0.4, edgeCoverage: MIN_EDGE_COVERAGE + 0.1,
+  sharpness: QUALITY.BLUR_WARN + 0.1, skew: 0, pageLongEdge: LIVE_SOURCE_FLOOR + 100,
 };
 
-test('every signal clean and steady reads Ready', () => {
+test('every signal clean reads Ready without a stillness requirement', () => {
   assert.deepEqual(liveGateVerdict(clean), { blocking: null, hint: 'Ready' });
-});
-
-test('not yet steady, otherwise clean, blocks nothing but says so', () => {
-  const v = liveGateVerdict({ ...clean, steady: false });
-  assert.equal(v.blocking, null);
-  assert.equal(v.hint, 'Hold still');
 });
 
 // Resolution comes first now, and it is a block rather than advice — the two
@@ -173,15 +122,21 @@ test('not yet steady, otherwise clean, blocks nothing but says so', () => {
 // withholds *auto*-capture, and the student can always take the shot.
 test('a page that will land under the capture floor blocks, ahead of every other check', () => {
   const v = liveGateVerdict({
-    ...clean, pageLongEdge: CONDITIONING.MIN_LONG_EDGE - 1,
+    ...clean, pageLongEdge: LIVE_SOURCE_FLOOR - 1,
     glare: 1, clipping: 1, fill: 0, sharpness: 0, skew: 999, steady: false,
   });
   assert.equal(v.blocking, 'resolution');
 });
 
-test('too far away blocks on distance, once resolution is clear', () => {
-  const v = liveGateVerdict({ ...clean, fill: CAPTURE.MIN_FILL - 0.01 });
+test('too far away blocks on edge coverage, independent of frame aspect ratio', () => {
+  const v = liveGateVerdict({ ...clean, edgeCoverage: MIN_EDGE_COVERAGE - 0.01 });
   assert.equal(v.blocking, 'distance');
+});
+
+test('low area fill alone does not block a fully framed portrait page', () => {
+  const v = liveGateVerdict({ ...clean, fill: 0.32, edgeCoverage: MIN_EDGE_COVERAGE + 0.08 });
+  assert.equal(v.blocking, null);
+  assert.equal(v.hint, 'Ready');
 });
 
 test('glare over the live line blocks, ahead of exposure and focus', () => {
@@ -232,14 +187,14 @@ test('a page just over the floor is not blocked on resolution', () => {
 test('a measurement sitting on the line does not answer twice', () => {
   // Right on the distance threshold, where a hand-held phone crosses back and
   // forth on ordinary jitter.
-  const onTheLine = { ...clean, fill: CAPTURE.MIN_FILL };
+  const onTheLine = { ...clean, edgeCoverage: MIN_EDGE_COVERAGE };
   // Nothing showing: the plain reading, which is that this is fine.
   assert.equal(liveGateVerdict(onTheLine).blocking, null);
   // Already warning about distance: it stays, because coming back to exactly
   // the line is not evidence that anything changed.
   assert.equal(liveGateVerdict(onTheLine, 'distance').blocking, 'distance');
   // And it goes as soon as the page is genuinely clear of the line.
-  const clear = { ...clean, fill: CAPTURE.MIN_FILL * (1 + GUIDANCE_HYSTERESIS) + 0.001 };
+  const clear = { ...clean, edgeCoverage: MIN_EDGE_COVERAGE * (1 + GUIDANCE_HYSTERESIS) + 0.001 };
   assert.equal(liveGateVerdict(clear, 'distance').blocking, null);
 });
 
@@ -276,6 +231,119 @@ test('an unchanged hint does not restart its own clock', () => {
   assert.equal(settledGuidance(showing, { hint: 'Hold still', blocking: null }, 5000).since, 1000);
 });
 
+// ── paper-presence evidence ─────────────────────────────────────────────────
+
+test('a tentative rectangle stays on calm searching guidance', () => {
+  const candidate = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS - 1,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, candidate, 1000);
+
+  assert.equal(candidate.confirmed, false);
+  assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
+  assert.equal(shown.blocking, null);
+});
+
+test('alternating false candidates and misses never flip into locking guidance', () => {
+  let evidence = null;
+  let guidance = null;
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+
+  for (let frame = 0; frame < 20; frame++) {
+    const candidate = frame % 2 === 0;
+    evidence = settledPaperEvidence(evidence, {
+      globalConfirmations: candidate ? PAPER_EVIDENCE_CONFIRMATIONS - 1 : 0,
+      geometryReady: candidate,
+      observedGeometry: candidate,
+    }, frame * 16);
+    guidance = settledScannerGuidance(guidance, lock, evidence, frame * 16);
+    assert.equal(guidance.hint, SEARCH_GUIDANCE.hint, `guidance flipped on frame ${frame}`);
+  }
+});
+
+test('locking guidance only appears after independently confirmed paper evidence', () => {
+  const evidence = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, evidence, 1000);
+
+  assert.equal(evidence.confirmed, true);
+  assert.equal(shown.blocking, 'tracking');
+  assert.match(shown.hint, /lock onto all four corners/i);
+});
+
+test('confirmed paper presence survives brief misses, then calmly returns to search', () => {
+  let evidence = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+
+  evidence = settledPaperEvidence(evidence, {
+    globalConfirmations: 0,
+    geometryReady: false,
+    observedGeometry: false,
+  }, 1000 + PAPER_EVIDENCE_LOSS_MS - 1);
+  assert.equal(evidence.confirmed, true, 'a brief miss discarded confirmed paper evidence');
+
+  evidence = settledPaperEvidence(evidence, {
+    globalConfirmations: 0,
+    geometryReady: false,
+    observedGeometry: false,
+  }, 1000 + PAPER_EVIDENCE_LOSS_MS);
+  const lock = liveGateVerdict({ ...clean, geometryReady: false });
+  const shown = settledScannerGuidance(null, lock, evidence, 1000 + PAPER_EVIDENCE_LOSS_MS);
+  assert.equal(evidence.confirmed, false);
+  assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
+});
+
+// ── capture-confirm overlay ─────────────────────────────────────────────────
+
+test('overlay phases are explicit and confirmation takes priority', () => {
+  assert.equal(resolveOverlayPhase(), 'searching');
+  assert.equal(resolveOverlayPhase({
+    hasQuad: true, trackState: 'tracking', trackConfidence: 1,
+  }), 'locked');
+  assert.equal(resolveOverlayPhase({
+    hasQuad: true, trackState: 'recovering', trackConfidence: 1,
+  }), 'searching');
+  assert.equal(resolveOverlayPhase({
+    confirming: true, hasQuad: false, trackState: 'searching', trackConfidence: 0,
+  }), 'captured-confirm');
+});
+
+test('capture confirmation follows the 40/90/160/180ms sequence', () => {
+  assert.deepEqual(captureConfirmFrame(0), { active: true, morph: 0, edges: 0, opacity: 1 });
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.freezeEnd - 1).morph, 0);
+  assert.ok(captureConfirmFrame(65).morph > 0);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.morphEnd).morph, 1);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.morphEnd).edges, 0);
+  assert.ok(captureConfirmFrame(125).edges > 0);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.edgesEnd).edges, 1);
+  assert.ok(captureConfirmFrame(170).opacity < 1);
+  assert.equal(captureConfirmFrame(CAPTURE_CONFIRM_TIMING.end).active, false);
+});
+
+test('reduced motion shows a static accepted rectangle instead of drawing it', () => {
+  const frame = captureConfirmFrame(0, true);
+  assert.equal(frame.morph, 1);
+  assert.equal(frame.edges, 1);
+  assert.equal(frame.opacity, 1);
+});
+
+test('capture confirmation requires a real four-point verified quad', () => {
+  assert.equal(isVerifiedQuad(page()), true);
+  assert.equal(isVerifiedQuad(null), false);
+  assert.equal(isVerifiedQuad(page().slice(0, 3)), false);
+  assert.equal(isVerifiedQuad([...page().slice(0, 3), { x: NaN, y: 4 }]), false);
+});
+
 // ── the brackets: deadzone and adaptive damping ────────────────────────────
 //
 // scan-tracking-zoom-stability-2026-09-08 §2/§3. A fixed-factor lerp did both
@@ -310,8 +378,8 @@ test('a small correction stays damped', () => {
   const from = page();
   const to = from.map((p) => ({ x: p.x + 12, y: p.y }));
   const moved = easeQuad(from, to, FRAME)[0].x - from[0].x;
-  assert.ok(moved > 0 && moved < 12 * 0.35,
-    `moved ${moved.toFixed(1)}px of 12 in one frame — that is a snap, not damping`);
+  assert.ok(moved > 12 * 0.35 && moved < 12 * 0.70,
+    `moved ${moved.toFixed(1)}px of 12 in one frame — smoothing is no longer responsive`);
 });
 
 test('easing always converges, never parks short of the page', () => {
@@ -357,98 +425,4 @@ test('a pinched viewport holds the shutter', () => {
   // straight. The gesture is blocked at source; this is the backstop.
   assert.equal(shouldAutoCapture({ ...ready, viewportScaled: true }), false);
   assert.equal(shouldAutoCapture({ ...ready, viewportScaled: false }), true);
-});
-
-// ── preview stabilisation ──────────────────────────────────────────────────
-//
-// scan-digital-stabilization-2026-09-08. Render the video a little larger than
-// its viewport and pan it against the shake, so tremor moves the cropped-off
-// margin instead of the page.
-
-const MARGIN = { x: 16, y: 16 };
-const start = { slow: null, velocity: { x: 0, y: 0 }, previous: null, pan: { x: 0, y: 0 } };
-
-test('the first frame sets the baseline and pans nothing', () => {
-  const s = stabiliseStep(start, { x: 100, y: 200 }, 16, MARGIN);
-  assert.deepEqual(s.slow, { x: 100, y: 200 });
-  assert.deepEqual(s.pan, { x: 0, y: 0 });
-});
-
-// Physiological hand tremor is a few hertz — 4 to 12 — not a flip every frame,
-// and modelling it as the latter tests a signal no hand produces and no
-// follower should chase.
-const tremorAt = (frame, { hz = 8, amplitude = 6, fps = 60 } = {}) =>
-  Math.sin((2 * Math.PI * hz * frame) / fps) * amplitude;
-
-test('tremor is cancelled, and against the page rather than with it', () => {
-  let s = stabiliseStep(start, { x: 100, y: 100 }, 16, MARGIN);
-  let worstResidual = 0;
-  for (let i = 0; i < 120; i++) {
-    const shake = tremorAt(i);
-    s = stabiliseStep(s, { x: 100 + shake, y: 100 }, 16, MARGIN);
-    // What the student is left looking at: the page's own displacement plus the
-    // pan applied to cancel it. Only measured once the filter has settled.
-    if (i > 40) worstResidual = Math.max(worstResidual, Math.abs(shake + s.pan.x));
-  }
-  assert.ok(worstResidual < 6 * 0.7,
-    `6px of tremor still reads as ${worstResidual.toFixed(2)}px on screen`);
-});
-
-test('a deliberate sweep is not fought for long', () => {
-  // A page carried steadily across the frame: a position-only filter lags a
-  // ramp by velocity times its time constant *permanently*, which pinned the
-  // pan at the margin for the whole sweep and left nothing to absorb the
-  // tremor riding on top of it. Tracking velocity is what fixes that.
-  let r = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
-  for (let i = 1; i <= 120; i++) r = stabiliseStep(r, { x: i * 2, y: 0 }, 16, MARGIN);
-  assert.ok(Math.abs(r.pan.x) < MARGIN.x * 0.4,
-    `two seconds into a steady sweep the pan is still leaning ${Math.abs(r.pan.x).toFixed(1)}px`);
-});
-
-test('the pan never exceeds the overscan margin', () => {
-  // A shake bigger than the margin still shows — that is the honest limit of
-  // something this cheap — but it must never pan past the margin and expose
-  // the edge of the frame.
-  let s = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
-  for (let i = 0; i < 60; i++) s = stabiliseStep(s, { x: i % 2 ? 400 : -400, y: 0 }, 16, MARGIN);
-  assert.ok(Math.abs(s.pan.x) <= MARGIN.x + 1e-9,
-    `panned ${s.pan.x.toFixed(1)}px past a ${MARGIN.x}px margin`);
-});
-
-test('losing the page relaxes the pan rather than freezing it', () => {
-  let s = stabiliseStep(start, { x: 0, y: 0 }, 16, MARGIN);
-  for (let i = 0; i < 20; i++) s = stabiliseStep(s, { x: i % 2 ? 40 : -40, y: 0 }, 16, MARGIN);
-  const held = Math.abs(s.pan.x);
-  for (let i = 0; i < 20; i++) s = stabiliseStep(s, null, 16, MARGIN);
-  assert.ok(Math.abs(s.pan.x) < held * 0.05,
-    'the pan stayed leaning after the page went away');
-});
-
-test('the filter reads the same at any frame rate', () => {
-  // The coefficient comes from the real interval, because camera frames do not
-  // arrive on a schedule and a fixed one would make the time constant whatever
-  // the frame rate happened to be.
-  let fast = stabiliseStep(start, { x: 0, y: 0 }, 8, MARGIN);
-  for (let i = 0; i < 60; i++) fast = stabiliseStep(fast, { x: 100, y: 0 }, 8, MARGIN);
-  let slow = stabiliseStep(start, { x: 0, y: 0 }, 32, MARGIN);
-  for (let i = 0; i < 15; i++) slow = stabiliseStep(slow, { x: 100, y: 0 }, 32, MARGIN);
-  assert.ok(Math.abs(fast.slow.x - slow.slow.x) < 2,
-    `the same half-second of motion filtered to ${fast.slow.x.toFixed(1)} at 125fps and ${slow.slow.x.toFixed(1)} at 31fps`);
-});
-
-test('the brackets carry exactly the transform the video carries', () => {
-  // The regression this test exists for: a bracket that was correct before
-  // stabilisation and drifts off the page after it is worse than the tremor.
-  // `translate(pan) scale(zoom)` about the element centre composes as "scale
-  // about the centre, then shift", and the overlay must do the same.
-  const box = { width: 400, height: 800, zoom: 1.08, pan: { x: 12, y: -7 } };
-  // The centre only moves by the pan.
-  assert.deepEqual(stabApply({ x: 200, y: 400 }, box), { x: 212, y: 393 });
-  // A corner scales about that centre, then shifts.
-  assert.deepEqual(stabApply({ x: 0, y: 0 }, box), { x: 200 - 200 * 1.08 + 12, y: 400 - 400 * 1.08 - 7 });
-  // With no zoom and no pan it is the identity, so an un-stabilised build maps
-  // exactly as it always did.
-  assert.deepEqual(
-    stabApply({ x: 37, y: 91 }, { ...box, zoom: 1, pan: { x: 0, y: 0 } }),
-    { x: 37, y: 91 });
 });

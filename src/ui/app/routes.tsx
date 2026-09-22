@@ -9,67 +9,51 @@
    2 · Every overlay is a location. Sheets, modals and the fullscreen review
        are pushed onto history, not held in component state — so the browser
        back button closes them instead of leaving the screen underneath them.
+       The convention is the `?sheet=` search param (see paths.ts); the
+       fullscreen review is a route proper because it is a screen, not a sheet.
 
-   3 · Nothing that is a filter or a tab state gets its own path segment.
+   3 · Nothing that is a filter or a tab state gets its own path segment. Those
+       are search params on the screen they belong to, so a shared link carries
+       the filter and back steps through filter changes the way a user expects.
 
-   Home, the persistent shell and the tiny NotFound safety surface stay eager.
-   Every substantive non-Home screen is a separate chunk so a cold Home visit
-   does not parse Settings, Scan, review, legal pages or QuestionDetail's KaTeX
-   dependency before the student asks for them.
+   ── The Insights empty state ──
+   The prototype has two Insights views: the populated one and an honest
+   "not enough papers yet" state. That is not a second route — it is one route
+   rendering from `student_analytics_readiness`. Giving it a URL would make it
+   linkable, and a link to "you don't have enough data" is not a thing anyone
+   should be able to send.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { lazy, Suspense } from "react";
-import type { ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../shell/Root";
-import Home from "../pages/Home";
 import NotFound from "../pages/NotFound";
-
-const Library = lazy(() => import("../pages/Library"));
-const PaperOverview = lazy(() => import("../pages/PaperOverview"));
-const QuestionDetail = lazy(() => import("../pages/QuestionDetail"));
-const Scan = lazy(() => import("../pages/Scan"));
-const PaperReview = lazy(() => import("../pages/PaperReview"));
-const Insights = lazy(() => import("../pages/Insights"));
-const Settings = lazy(() => import("../pages/Settings"));
-const Privacy = lazy(() => import("../pages/Privacy"));
-const Terms = lazy(() => import("../pages/Terms"));
 
 export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
 
-function RouteFallback() {
-  return (
-    <div className="greet" aria-busy="true" aria-label="Opening screen">
-      <div className="skel" style={{ width: "42%" }} aria-hidden="true" />
-      <div className="skel" style={{ width: "70%", marginTop: 12 }} aria-hidden="true" />
-    </div>
-  );
-}
-
-function deferred(node: ReactNode) {
-  return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
-}
-
 export const router = createBrowserRouter([
-  { path: "/privacy", element: deferred(<Privacy />) },
-  { path: "/terms", element: deferred(<Terms />) },
+  { path: "/privacy", lazy: async () => ({ Component: (await import("../pages/Privacy")).default }) },
+  { path: "/terms", lazy: async () => ({ Component: (await import("../pages/Terms")).default }) },
   {
     path: "/",
     element: <Root />,
     errorElement: <NotFound />,
     children: [
-      { index: true, element: <Home /> },
+      { index: true, lazy: async () => ({ Component: (await import("../pages/Home")).default }) },
 
-      { path: "library", element: deferred(<Library />) },
-      { path: "library/:paperId", element: deferred(<PaperOverview />) },
-      { path: "library/:paperId/:qId", element: deferred(<QuestionDetail />) },
+      { path: "library", lazy: async () => ({ Component: (await import("../pages/Library")).default }) },
+      { path: "library/:paperId", lazy: async () => ({ Component: (await import("../pages/PaperOverview")).default }) },
+      { path: "library/:paperId/:qId", lazy: async () => ({ Component: (await import("../pages/QuestionDetail")).default }) },
 
-      { path: "scan", element: deferred(<Scan />) },
-      { path: "scan/review/:draftId", element: deferred(<PaperReview />) },
+      { path: "scan", lazy: async () => ({ Component: (await import("../pages/Scan")).default }) },
+      /* The fullscreen paper review is a screen, not a sheet: it has its own
+         header, its own scroll and a save action, and it must survive a
+         reload mid-review. It slides in over the shell the way the prototype's
+         .reviewsheet did, but it is a real location. */
+      { path: "scan/review/:draftId", lazy: async () => ({ Component: (await import("../pages/PaperReview")).default }) },
 
-      { path: "insights", element: deferred(<Insights />) },
-      { path: "settings", element: deferred(<Settings />) },
+      { path: "insights", lazy: async () => ({ Component: (await import("../pages/Insights")).default }) },
+      { path: "settings", lazy: async () => ({ Component: (await import("../pages/Settings")).default }) },
 
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],

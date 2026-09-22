@@ -1,34 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SWITCH
 
-   A plain opaque thumb, not the glass lens the previous pass built. That was
-   built from a text description; the actual reference — a screen recording of
-   the stock iOS toggle — shows a solid white capsule with no tint, no
-   refraction, no specular rim. It nearly fills its track, and the only thing
-   remarkable about it is the elastic squash-stretch it does while crossing:
-   the thumb stretches wide in the direction of travel and snaps back round on
-   arrival.
-
-   That motion is not new to this codebase. `TabNav` already derives a
-   squash-stretch `transform: scale()` from a spring's velocity for the tab
-   pill's travel; this is the same technique on a second control, not a new
-   kind of motion. Only `transform` and `background` animate, which is what
-   the design system's motion rules allow.
+   Elongated Apple-like switch: a low, wide track with a rounded-rectangle
+   white thumb, saturated active green, no state glyphs, and immediate
+   pointer-down feedback. The visual state is optimistic so the control never
+   waits for a parent/network round trip before moving.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useId, useRef } from "react";
-import { spring, seed, releaseSpring } from "../lib/spring";
+import { useEffect, useRef, useState } from "react";
 import { hapticTick } from "../lib/haptics";
 
-/* Track and thumb sizes match the reference's proportions (iOS's own
-   51x31 / 27x27 with 2px inset) rather than the wider, shorter geometry the
-   glass version invented. */
-const TRACK_W = 51;
-const THUMB_W = 27;
+const TRACK_W = 58;
+const TRACK_H = 26;
+const THUMB_W = 32;
+const THUMB_H = 22;
 const INSET = 2;
 const TRAVEL = TRACK_W - THUMB_W - INSET * 2;
 
-export const SWITCH_METRICS = { TRACK_W, THUMB_W, INSET, TRAVEL };
+/* Bright, saturated system-style green for the enabled state. */
+const SWITCH_ON = "#34C759";
+const MOTION_MS = 120;
+const MOTION_CURVE = "cubic-bezier(0.1, 0.9, 0.2, 1)";
+
+export const SWITCH_METRICS = {
+  TRACK_W,
+  TRACK_H,
+  THUMB_W,
+  THUMB_H,
+  INSET,
+  TRAVEL,
+};
 
 export default function Switch({
   on,
@@ -45,58 +46,93 @@ export default function Switch({
   /** In flight — the ledger has not answered yet. */
   busy?: boolean;
 }) {
-  const key = "sw" + useId().replace(/:/g, "");
-  const thumb = useRef<HTMLSpanElement>(null);
-  const first = useRef(true);
+  /*
+   * Do not drive the thumb directly from the controlled `on` prop. Some switch
+   * owners persist their value before feeding it back, which made a tap feel
+   * delayed. `visualOn` flips immediately, then reconciles with the canonical
+   * value when it arrives.
+   */
+  const [visualOn, setVisualOn] = useState(on);
+  const [pressed, setPressed] = useState(false);
+  const pointerActivated = useRef(false);
+  const wasBusy = useRef(Boolean(busy));
 
   useEffect(() => {
-    const place = (p: number, v: number) => {
-      if (!thumb.current) return;
-      const x = p * TRAVEL;
-      // Squash-stretch along the axis of travel, exactly as TabNav derives it
-      // for the tab pill: proportional to velocity, clamped, and gone the
-      // instant the spring settles because v is then 0.
-      const s = Math.abs(Math.max(-.16, Math.min(.16, v * .1)));
-      thumb.current.style.transform =
-        `translateX(${x.toFixed(2)}px) scale(${(1 + s).toFixed(3)}, ${(1 - s).toFixed(3)})`;
-    };
+    setVisualOn(on);
+  }, [on]);
 
-    const reduced = document.documentElement.dataset.motion === "reduce"
-      || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* If persistence finishes without changing `on`, treat that as a rejected
+     optimistic update and restore the canonical state. */
+  useEffect(() => {
+    if (wasBusy.current && !busy) setVisualOn(on);
+    wasBusy.current = Boolean(busy);
+  }, [busy, on]);
 
-    if (first.current || reduced) {
-      // Mount in position rather than animating from off, or every switch on
-      // Settings slides on at once when the screen opens.
-      first.current = false;
-      seed(key, on ? 1 : 0);
-      place(on ? 1 : 0, 0);
-      return;
-    }
-    spring(key, { to: on ? 1 : 0, stiffness: 300, damping: 22, onUpdate: place });
-  }, [on, key]);
+  const activate = () => {
+    if (disabled || busy) return;
 
-  useEffect(() => () => releaseSpring(key), [key]);
+    const next = !visualOn;
+    setVisualOn(next);
+    hapticTick();
+    onChange(next);
+  };
 
   return (
     <button
       type="button"
-      className={"sw" + (on ? " on" : "")}
+      className={"sw" + (visualOn ? " on" : "")}
       role="switch"
-      aria-checked={on}
+      aria-checked={visualOn}
       aria-label={label}
       aria-busy={busy || undefined}
       disabled={disabled}
+      style={{ width: TRACK_W, height: TRACK_H }}
+      onPointerDown={(event) => {
+        if (disabled || busy || event.button !== 0) return;
+
+        /* Pointer-down, not click: movement begins on the same interaction
+           frame instead of waiting for pointer-up + a controlled state round
+           trip. The following click is suppressed so one tap toggles once. */
+        pointerActivated.current = true;
+        setPressed(true);
+        activate();
+      }}
+      onPointerUp={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
       onClick={() => {
-        if (disabled) return;
-        hapticTick();
-        onChange(!on);
+        if (pointerActivated.current) {
+          pointerActivated.current = false;
+          return;
+        }
+
+        /* Keyboard activation still follows the button's native click path. */
+        activate();
       }}
     >
-      <span className="tr" aria-hidden="true" />
-      <span className="th" ref={thumb} aria-hidden="true">
-        <span className="gI" />
-      </span>
-      <span className="gO" aria-hidden="true" />
+      <span
+        className="tr"
+        aria-hidden="true"
+        style={{
+          borderRadius: TRACK_H / 2,
+          background: visualOn ? SWITCH_ON : "var(--track-off)",
+          transition: `background ${MOTION_MS}ms ${MOTION_CURVE}`,
+        }}
+      />
+      <span
+        className="th"
+        aria-hidden="true"
+        style={{
+          top: INSET,
+          left: INSET,
+          width: THUMB_W,
+          height: THUMB_H,
+          borderRadius: THUMB_H / 2,
+          transform: `translateX(${visualOn ? TRAVEL : 0}px) scale(${pressed ? .97 : 1})`,
+          transition: `transform ${MOTION_MS}ms ${MOTION_CURVE}`,
+          willChange: "transform",
+        }}
+      />
     </button>
   );
 }

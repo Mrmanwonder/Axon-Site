@@ -33,7 +33,7 @@ const RHO_STEP = 1;
 // to inside the window, in pixels, to count as an edge rather than as noise
 // agreeing with itself. A corner sitting in the middle of its window puts about
 // half of each edge in frame, so this sits well under a half.
-const MIN_SUPPORT = 0.22;
+const MIN_SUPPORT = 0.27;
 // `gradients()` computes blur over [1, n-2] and Sobel over the same range, so
 // the outermost two rows and columns of `mag` are either unwritten or read a
 // blur value that was never filled — a step against nothing, which reads as the
@@ -203,7 +203,9 @@ export function intersectLines(a, b) {
  * keeping this function ignorant of where the window sits in the frame is what
  * lets it be tested against a synthetic corner at a known place.
  */
-export function findCorner(roi, { edgeA, edgeB, tolerance = ANGLE_TOLERANCE } = {}) {
+export function findCorner(roi, {
+  edgeA, edgeB, tolerance = ANGLE_TOLERANCE, expectedX = null, expectedY = null,
+} = {}) {
   if (!roi || !roi.width || !roi.height) return null;
   if (!Number.isFinite(edgeA) || !Number.isFinite(edgeB)) return null;
 
@@ -226,16 +228,19 @@ export function findCorner(roi, { edgeA, edgeB, tolerance = ANGLE_TOLERANCE } = 
   // The intersection has to land in or near the window. Two edges found at
   // opposite ends of the ROI cross somewhere off in the distance, and that
   // point is not this corner.
-  const margin = Math.max(roi.width, roi.height) * 0.35;
+  const margin = Math.max(roi.width, roi.height) * 0.12;
   if (point.x < -margin || point.y < -margin ||
       point.x > roi.width + margin || point.y > roi.height + margin) return null;
 
-  // How close to the centre the corner landed. The window was cut around the
-  // *predicted* position, so a corner near the middle is a corner the
-  // prediction got right, which is itself evidence (§19).
-  const cx = roi.width / 2, cy = roi.height / 2;
-  const offCentre = Math.hypot(point.x - cx, point.y - cy) / Math.max(cx, cy);
-  const centrality = Math.max(0, 1 - offCentre);
+  // Score against the actual predicted point, not the tile centre. A window is
+  // clamped at frame edges, so the prediction is often intentionally off-centre.
+  // More importantly, a strong pair of unrelated lines elsewhere in the tile
+  // must not be allowed to teleport a page corner onto a random object.
+  const ex = Number.isFinite(expectedX) ? expectedX : roi.width / 2;
+  const ey = Number.isFinite(expectedY) ? expectedY : roi.height / 2;
+  const offExpected = Math.hypot(point.x - ex, point.y - ey) / Math.max(roi.width, roi.height);
+  if (offExpected > 0.32) return null;
+  const centrality = Math.max(0, 1 - offExpected / 0.32);
 
   const support = Math.min(1, (lineA.support + lineB.support) / 2);
   // Two edges that meet squarely are a corner; two that meet at a glancing

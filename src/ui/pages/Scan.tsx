@@ -1,20 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SCAN
 
-   The viewfinder, the tray and the progress panel. Capture flow, so it gets
-   zero decorative motion — nothing here animates that is not reporting a real
-   change of state.
-
-   Two things the surface is careful about:
-
-   · **There are no fixed corner brackets.** There used to be, inset at 9% and
-     12%, and they looked exactly like the detector's output while tracking
-     nothing at all — so a viewfinder that had not started yet read as one whose
-     page detection was wildly wrong. The only brackets drawn are the ones on a
-     page actually found, and the detector draws those into the overlay canvas.
-
-   · **Progress names the step, never a bar.** Nobody knows how long a paper
-     takes, and a bar over work of unknown length is a confident lie about it.
+   The live camera surface is deliberately kept clear. Page thumbnails and the
+   submit action live below it, not over the paper a student is trying to align.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect } from "react";
@@ -22,37 +10,33 @@ import { useScan } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
+import { DraftAlert, DraftsButton } from "../components/ScanDrafts";
+import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import "../styles/scanner.css";
 
 export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
+    drafts, resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
     pendingCaptureCount,
   } = useScan();
   const { addPaper, addLink } = useIngestion();
   const { student } = useApp();
+  const { openSheet } = useSheetControls();
 
-  // Entry and exit both matter: leaving the screen must stop the camera, or it
-  // keeps the device's light on behind a screen that is no longer showing it.
   useEffect(() => {
+    document.documentElement.classList.add("scanner-active");
     onScreenVisible(true);
-    return () => onScreenVisible(false);
+    return () => {
+      document.documentElement.classList.remove("scanner-active");
+      onScreenVisible(false);
+    };
   }, [onScreenVisible]);
 
-  // `touch-action: none` on .scanhero stops the browser treating a drag over
-  // the viewfinder as a scroll or a pan, but it does not stop iOS Safari's
-  // pinch-to-zoom — Safari zooms the page from its own `gesture*` events, which
-  // fire ahead of any touch-action decision. Refusing those closes the gap.
-  //
-  // Bound while this screen is mounted and removed with it, so pinch-zoom keeps
-  // working everywhere else in the app. That is the whole reason this is here
-  // rather than `user-scalable=no` in the viewport meta: taking zoom away from
-  // the entire app to fix one screen is an accessibility regression, not a fix.
+  // iOS Safari handles pinch through gesture events outside touch-action.
   useEffect(() => {
     const stop = (e: Event) => e.preventDefault();
-    // Not in the DOM lib — `gesture*` is Safari's own, and this is the browser
-    // it exists for. Passive listeners cannot preventDefault, so say so.
     const listen = document.addEventListener.bind(document) as
       (t: string, l: EventListener, o?: AddEventListenerOptions) => void;
     const unlisten = document.removeEventListener.bind(document) as
@@ -62,8 +46,30 @@ export default function Scan() {
     return () => { for (const kind of kinds) unlisten(kind, stop); };
   }, []);
 
-  const committedPages = tray.filter((p) => !p.pending);
-  const badPages = committedPages.filter((p) => p.quality && p.quality.verdict !== "ok").length;
+  const pendingPages = tray.filter((p) => p.pending).length;
+  const unresolvedPages = tray.filter((p) =>
+    p.retakeRequested || (p.quality?.verdict === "fail" && !p.quality.accepted));
+  const warningPages = tray.filter((p) =>
+    !p.pending && p.quality?.verdict === "warn").length;
+  const firstRetake = unresolvedPages[0]?.page_number;
+  const cannotSubmit = pendingCaptureCount > 0 || pendingPages > 0 || unresolvedPages.length > 0;
+  const openDrafts = () => {
+    hapticTick();
+    openSheet({
+      title: "Saved drafts",
+      body: drafts.length
+        ? "These unfinished scans are stored on this device until you resume and send them."
+        : "No saved scans yet. Pages you capture will be stored on this device until you send them.",
+      choices: drafts.length
+        ? drafts.map((draft) => ({
+            label: `${draft.title} · ${draft.pages} page${draft.pages === 1 ? "" : "s"}`,
+            value: draft.id,
+          }))
+        : undefined,
+      primary: "Done",
+      onChoice: (id) => draftsHandlers.onResume?.(id),
+    });
+  };
 
   return (
     <>
@@ -72,23 +78,24 @@ export default function Scan() {
         data-camera={camera.on ? "on" : "off"}
         data-phase={camera.on ? undefined : camera.phase}
       >
-        {/* The ids are load-bearing, not legacy: system.css addresses the video
-            and the overlay by id to size them to the hero and to hide both while
-            the camera is off. Without them the video renders at its natural
-            size in the corner of a full-bleed viewfinder. */}
-        <video id="scanVideo" ref={videoRef} playsInline muted />
+        <video id="scanVideo" ref={videoRef} autoPlay playsInline muted disablePictureInPicture />
         <canvas id="scanOverlay" ref={overlayRef} />
-
         <div className="feed"><div className="feedgrid" /></div>
 
-        <div className="scanhint" role="status" aria-live="polite"
-             data-blocking={hint.blocking ?? undefined}>
+        <div
+          className="scanhint"
+          role="status"
+          aria-live="polite"
+          data-blocking={hint.blocking ?? undefined}
+        >
           {hint.hint}
         </div>
 
-        {/* Auto-capture assists; it never blocks. The shutter always fires. */}
+        <DraftsButton count={drafts.length} onOpen={openDrafts} />
+
         <PressBox
-          as="button" type="button"
+          as="button"
+          type="button"
           className={"autotoggle" + (auto ? " on" : "")}
           aria-pressed={auto}
           onClick={() => setAutoCapture(!auto)}
@@ -120,50 +127,29 @@ export default function Scan() {
           </PressBox>
         </div>
 
-        {/* An interrupted booklet is offered back rather than silently kept. */}
-        {resumable && (
-          <div className="drafttoast" style={{ transform: "translateY(0)" }}>
-            <div className="dh" />
-            <div className="row2">
-              <div className="ic">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 7v5l3.5 2" /><circle cx="12" cy="12" r="9" />
-                </svg>
-              </div>
-              <div className="b">
-                <div className="t1">Resume draft</div>
-                <div className="t2">
-                  {resumable.pages} page{resumable.pages === 1 ? "" : "s"} added · not sent yet
-                </div>
-              </div>
-              <PressBox as="button" type="button" className="go"
-                        onClick={() => draftsHandlers.onResume?.(resumable.id)}>
-                Resume
-              </PressBox>
-            </div>
-          </div>
+        {resumable && draftsHandlers.onResume && (
+          <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
         )}
       </div>
 
-      {/* Pages accumulate here, reorderable and individually retakeable. A page
-          that failed its quality gate is flagged now, while the paper is still
-          in front of the student — the same flag at review usually means the
-          page is simply lost. */}
       {tray.length > 0 && (
-        <div className="tray">
+        <section className="tray" aria-label="Scanned pages">
           <div className="trayscroll">
             {tray.map((p) => (
               <PressBox
-                as="button" type="button"
+                as="button"
+                type="button"
                 key={p.page_number}
                 className="traypage"
                 data-quality={p.quality?.verdict ?? "ok"}
-                aria-label={`Page ${p.page_number}`}
+                data-retake={p.retakeRequested ? "true" : undefined}
+                aria-label={`Page ${p.page_number}${p.retakeRequested ? ", retake requested" : ""}`}
                 onClick={() => { hapticTick(); trayHandlers.onPage?.(p.page_number); }}
               >
                 {p.thumb && <img src={p.thumb} alt="" />}
                 <span className="n">{p.page_number}</span>
                 {p.pending && <span className="pending">Preparing…</span>}
+                {p.retakeRequested && <span className="retakebadge">Retake</span>}
                 <span className="flag">
                   <svg viewBox="0 0 12 12" aria-hidden="true">
                     <path d="M6 2.5v4" /><path d="M6 9h.01" />
@@ -174,16 +160,26 @@ export default function Scan() {
           </div>
           <div className="traybar">
             <span className="cnt">
-              {committedPages.length} page{committedPages.length === 1 ? "" : "s"}
-              {badPages ? ` · ${badPages} worth retaking` : ""}
+              {tray.length} page{tray.length === 1 ? "" : "s"}
+              {pendingPages > 0
+                ? ` · ${pendingPages} preparing`
+                : unresolvedPages.length > 0
+                  ? ` · ${unresolvedPages.length} needs retake`
+                  : warningPages > 0
+                    ? ` · ${warningPages} quality note${warningPages === 1 ? "" : "s"}`
+                    : ""}
             </span>
-            <PressBox as="button" type="button" className="btn primary"
-                      disabled={pendingCaptureCount > 0}
-                      onClick={() => { hapticFirm(); trayHandlers.onDone?.(); }}>
-              Read this paper
+            <PressBox
+              as="button"
+              type="button"
+              className="btn primary"
+              disabled={cannotSubmit}
+              onClick={() => { hapticFirm(); trayHandlers.onDone?.(); }}
+            >
+              {firstRetake ? `Retake page ${firstRetake} first` : "Read this paper"}
             </PressBox>
           </div>
-        </div>
+        </section>
       )}
 
       {progress && (

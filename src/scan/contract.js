@@ -12,6 +12,16 @@
 
 export const PIPELINE_VERSION = '1.0.0';
 
+export const UPLOAD_EXTENSIONS = Object.freeze({
+  'image/webp': 'webp',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'application/pdf': 'pdf',
+});
+
+
 // ── the one red ────────────────────────────────────────────────────────────
 // Red means the teacher's pen. That is a pipeline fact — stage 2 separates the
 // layers by hue — and it is also the design rule that keeps red out of the
@@ -22,7 +32,8 @@ export const TEACHER_INK = 'red';
 // ── stage 0 · capture ──────────────────────────────────────────────────────
 
 export const CAPTURE = {
-  ACCEPTED_TYPES: ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'application/pdf'],
+  ACCEPTED_TYPES: Object.freeze(Object.keys(UPLOAD_EXTENSIONS)),
+  UPLOAD_EXTENSIONS,
   MAX_PAGES: 25,
   // Where a page actually came from, recorded rather than assumed. `source_kind`
   // was hardcoded to 'upload' on every page ever submitted, camera captures

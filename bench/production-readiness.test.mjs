@@ -13,30 +13,39 @@ test('public legal and not-found routes are intentional', () => {
   assert.match(read('src/ui/pages/Terms.tsx'), /OWNER\/LEGAL TO CONFIRM/);
 });
 
-test('crawler files expose only canonical public routes', () => {
+test('crawler files index public routes without advertising private routes', () => {
   const robots = read('public/robots.txt');
   const sitemap = read('public/sitemap.xml');
-  assert.match(robots, /Disallow: \//);
+  const html = read('index.html');
+  assert.match(robots, /User-agent: \*/);
+  assert.match(robots, /Allow: \/\s/);
   assert.match(robots, /Sitemap: https:\/\//);
+  assert.match(html, /name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"/);
   assert.match(sitemap, /\/privacy<\/loc>/);
   assert.match(sitemap, /\/terms<\/loc>/);
   assert.doesNotMatch(sitemap, /library|scan|settings|insights/);
 });
 
-test('text-based social, icon and manifest assets are wired and present', () => {
+test('social preview, logo and manifest assets are wired and present', () => {
   const html = read('index.html');
-  for (const marker of ['og:image', 'twitter:card', 'favicon.svg', 'site.webmanifest']) {
+  for (const marker of ['og:image', 'og:image:type', 'twitter:card', 'axon-logo.png', 'site.webmanifest']) {
     assert.ok(html.includes(marker), `missing ${marker}`);
   }
-  for (const asset of ['public/og-image.svg', 'public/favicon.svg', 'public/site.webmanifest']) {
+  assert.match(html, /https:\/\/axonstudy\.online\/axon-lockup-v2\.png/);
+  for (const asset of ['public/axon-lockup-v2.png', 'public/axon-logo.png', 'public/site.webmanifest']) {
     assert.ok(existsSync(asset), `missing ${asset}`);
   }
 });
 
 test('production host configuration carries transport protections', () => {
   const netlify = read('netlify.toml');
+  const wrangler = read('wrangler.jsonc');
+  const cloudflareHeaders = read('public/_headers');
   assert.match(netlify, /Strict-Transport-Security/);
   assert.match(netlify, /Content-Security-Policy/);
   assert.match(netlify, /camera=\(self\)/);
+  assert.equal(JSON.parse(wrangler).assets.not_found_handling, 'single-page-application');
+  assert.match(cloudflareHeaders, /Permissions-Policy: camera=\(self\)/);
+  assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });

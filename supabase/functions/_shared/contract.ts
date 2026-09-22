@@ -8,6 +8,23 @@
 
 export const PIPELINE_VERSION = '1.0.0';
 
+export const UPLOAD_EXTENSIONS = {
+  'image/webp': 'webp',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'application/pdf': 'pdf',
+} as const;
+
+export const CAPTURE = {
+  MAX_PAGES: 25,
+  UPLOAD_EXTENSIONS,
+} as const;
+
+export const SAFE_OBJECT_NAME = /^[A-Za-z0-9_-]{1,64}$/;
+
+
 export const TEACHER_INK = 'red';
 
 // Mirror of the QUALITY thresholds in src/scan/contract.js's `QUALITY` — the

@@ -16,37 +16,12 @@ import { IngestionProvider } from "../data/useIngestion";
 import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 import PressBox from "../components/PressBox";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
    and its notice text onto a critical path it has no business being on. */
 const Onboarding = lazy(() => import("../onboarding/Onboarding"));
-
-/**
- * A truthful first frame while Supabase restores identity.
- *
- * The old gate returned null. That made a fast document/React boot look like a
- * slow site because the browser had nothing useful to paint until account I/O
- * completed. This shell contains no account-derived claims and uses the final
- * page geometry, so it can appear immediately without a layout jump.
- */
-function BootShell() {
-  return (
-    <div className="app" aria-busy="true" aria-label="Loading Axon">
-      <div className="view on">
-        <div className="greet">
-          <div className="d">Axon</div>
-          <h1>Opening your workspace</h1>
-        </div>
-        <div className="card nextstep" aria-hidden="true">
-          <div className="skel" style={{ width: "38%" }} />
-          <div className="skel" style={{ width: "82%", marginTop: 12 }} />
-          <div className="skel" style={{ width: "62%", marginTop: 8 }} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* The recovery screen. Deliberately not the onboarding flow, and deliberately
    not a blank page. */
@@ -78,10 +53,12 @@ function BootError() {
 function Gate() {
   const { gate } = useApp();
 
-  if (gate === "loading") return <BootShell />;
+  // Use an app-shaped skeleton instead of an unexplained blank frame. CSS delays
+  // its reveal slightly so normal fast boots still avoid loader flash.
+  if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" />;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
-    return <Suspense fallback={<BootShell />}><Onboarding /></Suspense>;
+    return <Suspense fallback={<SkeletonLoader label="Loading setup" />}><Onboarding /></Suspense>;
   }
   return <AppShell />;
 }

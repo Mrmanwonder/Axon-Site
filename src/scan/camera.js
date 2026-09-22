@@ -1,44 +1,35 @@
 // Asking for the camera, and nothing else.
 //
-// This module exists to be small. The permission sheet has to come up the
-// instant the Scan tab does, and the rest of the scanner is sixteen ES modules
-// that take real time to fetch on a phone — the first build asked for the camera
-// only after all of them had loaded and initialised, which put about ten seconds
-// between the tap and the prompt. From the student's side that is an app that
-// does not work.
+// This module intentionally stays tiny. The permission sheet has to appear the
+// instant the Scan tab opens, while the rest of the scanner loads behind it.
 //
-// So the request lives here, on its own, with no imports. app.js can hold it on
-// the critical path for the cost of one small file and fire it the moment the
-// tab opens, while the pipeline loads behind it.
+// The scanner uses two resolutions:
+//   1. a light 1280x720 live stream for preview/tracking on browsers that can
+//      take a separate sensor-resolution still through ImageCapture;
+//   2. a high-resolution live stream only on browsers (notably iOS Safari)
+//      where the video frame itself is the best still the web platform exposes.
 
-/**
- * Ask for as much sensor as the browser will give.
- *
- * A page fills perhaps two thirds of the frame's short axis, so a 1920x1440
- * request put roughly 1400 pixels across the page — nowhere near the 300 DPI
- * conditioning targets, and the reason every capture used to come back flagged.
- * The frames cost more to condition, which is the right trade: the pixels are
- * the handwriting.
- *
- * 4032x3024 matches a modern phone sensor's own output rather than the older
- * 3264x2448 figure — `ideal`, not `min`/`exact`, because a request the hardware
- * cannot meet must down-negotiate rather than fail the whole stream.
- */
+export const TRACKING_WIDTH = 1280;
+export const TRACKING_HEIGHT = 720;
+// Practical 12MP ceiling from the architecture. Some phones advertise far
+// larger binned sensor modes; asking a web video track for 48MP is a memory trap,
+// not a quality win for document OCR.
+export const FALLBACK_CAPTURE_WIDTH = 4032;
+export const FALLBACK_CAPTURE_HEIGHT = 3024;
+
+/** Fast live stream. ImageCapture-capable browsers take the real photograph
+    separately at the sensor's maximum supported still resolution. */
 export const CAMERA_CONSTRAINTS = {
   video: {
     facingMode: { ideal: 'environment' },
-    width: { ideal: 4032 },
-    height: { ideal: 3024 },
+    width: { ideal: TRACKING_WIDTH },
+    height: { ideal: TRACKING_HEIGHT },
+    frameRate: { ideal: 30, max: 30 },
   },
   audio: false,
 };
 
-/**
- * Ask the track to keep focusing continuously, where the platform exposes the
- * control at all. Best-effort: most iOS and many desktop browsers have no
- * `focusMode` capability, and a track that cannot do this should keep
- * streaming rather than throw.
- */
+/** Best-effort continuous focus. Unsupported controls never stop the stream. */
 export async function requestContinuousFocus(track) {
   try {
     const caps = track?.getCapabilities?.();
@@ -50,17 +41,39 @@ export async function requestContinuousFocus(track) {
   }
 }
 
+/**
+ * Safari/iOS does not expose ImageCapture.takePhoto(). In that case the video
+ * frame is the capture source, so promote the stream after feature probing.
+ * Use the device-reported maximum when lower than the practical 12MP ceiling.
+ */
+export async function requestFallbackCaptureResolution(track) {
+  if (!track?.applyConstraints) return false;
+  try {
+    const caps = track.getCapabilities?.();
+    const width = Math.max(
+      TRACKING_WIDTH,
+      Math.min(FALLBACK_CAPTURE_WIDTH, Number(caps?.width?.max ?? FALLBACK_CAPTURE_WIDTH)),
+    );
+    const height = Math.max(
+      TRACKING_HEIGHT,
+      Math.min(FALLBACK_CAPTURE_HEIGHT, Number(caps?.height?.max ?? FALLBACK_CAPTURE_HEIGHT)),
+    );
+    await track.applyConstraints({
+      width: { ideal: width },
+      height: { ideal: height },
+      frameRate: { ideal: 30, max: 30 },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const cameraSupported = () => !!navigator.mediaDevices?.getUserMedia;
 
-/**
- * Start the camera, and hand back the same promise to everyone who asks.
- *
- * Deliberately a promise rather than a stream: the caller that fires this is not
- * the caller that uses it, and the gap between them is the whole point. A second
- * request while the first is still pending would put two permission sheets up.
- */
 let pending = null;
 
+/** Start the camera and hand the same promise to every caller. */
 export function requestCamera() {
   if (!cameraSupported()) {
     return Promise.reject(Object.assign(new Error('no camera on this device'), { name: 'NotFoundError' }));

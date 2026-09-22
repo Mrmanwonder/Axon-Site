@@ -8,6 +8,7 @@
 
 import { CORS, clientFor, failure, json, readJson, serviceClient } from '../_shared/http.ts';
 import { BUCKET_FOR, type ObjectKind, objectKey, presignPut, PUT_TTL_SECONDS } from '../_shared/r2.ts';
+import { SAFE_OBJECT_NAME, UPLOAD_EXTENSIONS } from '../_shared/contract.ts';
 
 interface RequestedObject {
   kind: ObjectKind;
@@ -26,14 +27,6 @@ interface Body {
 /** A page at 2400px long edge encodes to ~200KB; a source PDF can be larger. */
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_OBJECTS = 60;
-
-const ALLOWED: Record<string, string[]> = {
-  'image/webp': ['webp'],
-  'image/jpeg': ['jpg'],
-  'image/png': ['png'],
-  'image/heic': ['heic'],
-  'application/pdf': ['pdf'],
-};
 
 function validDeclaredSize(value: unknown): value is number {
   return typeof value === 'number'
@@ -70,8 +63,8 @@ Deno.serve(async (req) => {
   }[] = [];
 
   for (const object of body.objects) {
-    const extensions = ALLOWED[object.content_type];
-    if (!extensions) return failure(`We cannot take a ${object.content_type} file.`);
+    const extension = UPLOAD_EXTENSIONS[object.content_type as keyof typeof UPLOAD_EXTENSIONS];
+    if (!extension) return failure(`We cannot take a ${object.content_type} file.`);
     // This used to be `if (object.bytes && ...)`, which let an authenticated
     // caller omit/zero the field and receive an unconstrained presigned PUT.
     // The completion endpoint independently checks the real R2 size too.
@@ -80,18 +73,23 @@ Deno.serve(async (req) => {
     }
     if (!BUCKET_FOR[object.kind]) return failure('Unknown file kind.');
 
+    const objectName = typeof object.name === 'number' ? String(object.name) : object.name;
+    if (typeof objectName !== 'string' || !SAFE_OBJECT_NAME.test(objectName)) {
+      return failure('One of those files has an invalid upload name.');
+    }
+
     const bucket = BUCKET_FOR[object.kind];
     const key = objectKey({
       studentId: body.student_id,
       paperId: body.paper_id,
       kind: object.kind,
-      name: object.name,
-      extension: extensions[0],
+      name: objectName,
+      extension,
     });
 
     const entry = {
       kind: object.kind,
-      name: object.name,
+      name: objectName,
       bucket,
       key,
       url: await presignPut(bucket, key, object.content_type),

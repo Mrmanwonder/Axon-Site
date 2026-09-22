@@ -1,0 +1,309 @@
+/* Scanner-only layout and motion overrides.
+   The camera is an alignment tool: nothing except guidance and capture controls
+   is allowed to cover the document while pages already taken live in the tray. */
+
+:root {
+  --scan-snap: cubic-bezier(.2, .8, .2, 1);
+  --scan-tray-h: 196px;
+  --scan-nav-clearance: calc(56px + var(--dock-pad));
+}
+
+/* Keep the shared phone navigation visible and give it a real strip below the
+   camera. Controls remain camera-relative instead of floating over the dock. */
+html.scanner-active .scanhero {
+  bottom: var(--scan-nav-clearance);
+}
+
+html.scanner-active:has(.tray) .scanhero {
+  bottom: calc(var(--scan-nav-clearance) + var(--scan-tray-h));
+}
+
+.scanhero {
+  transition: bottom .2s var(--scan-snap);
+}
+
+.scanhero .scanhint {
+  left: 50%;
+  right: auto;
+  width: max-content;
+  max-width: min(86vw, 520px);
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: rgba(255,255,255,.96);
+  background: rgba(8,8,10,.68);
+  border: 1px solid rgba(255,255,255,.14);
+  box-shadow: 0 2px 14px rgba(0,0,0,.22);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  line-height: 1.25;
+  z-index: 8;
+  opacity: 1;
+  transition: opacity .12s var(--scan-snap), background .16s var(--scan-snap),
+              border-color .16s var(--scan-snap);
+}
+
+.scanhero .scanhint[data-blocking] {
+  background: rgba(26,20,10,.78);
+  border-color: rgba(255,190,70,.3);
+}
+
+/* A consequence/quality sheet is the single source of guidance while open.
+   Do not let the still diagnosis and the next live frame talk over each other. */
+html.scanner-active:has(.scrim.on) .scanhero .scanhint {
+  opacity: 0;
+}
+
+.scanhero::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 132px;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(to bottom, transparent, rgba(0,0,0,.5));
+}
+
+.scanhero .scanctrls {
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 8;
+  gap: 30px;
+}
+
+.scanhero .autotoggle,
+.scanhero .draftsicon {
+  z-index: 8;
+  background: rgba(8,8,10,.62);
+  border: 1px solid rgba(255,255,255,.12);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.scanhero .draftsicon {
+  padding: 0;
+  color: #fff;
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.scanhero .shutter,
+.scanhero .sidebtn,
+.scanhero .autotoggle,
+.scanhero .draftsicon {
+  transition: transform .12s var(--scan-snap), opacity .12s var(--scan-snap),
+              background .18s var(--scan-snap);
+}
+
+.scanhero .shutter:active:not(:disabled),
+.scanhero .sidebtn:active,
+.scanhero .autotoggle:active,
+.scanhero .draftsicon:active {
+  transform: scale(.96);
+}
+
+.scanhero .shutter:disabled {
+  opacity: .46;
+}
+
+/* Reserve a real strip between camera and navigation for captured pages rather
+   than floating thumbnails over the paper or underneath the tab bar. */
+html.scanner-active .tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--scan-nav-clearance);
+  z-index: 12;
+  height: var(--scan-tray-h);
+  box-sizing: border-box;
+  padding: 12px var(--gutter);
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  background: var(--bg, #f6f6f4);
+  border-top: 1px solid rgba(127,127,127,.16);
+  box-shadow: 0 -10px 28px rgba(0,0,0,.08);
+}
+
+html.scanner-active .tray .trayscroll {
+  min-height: 0;
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 1px 1px 3px;
+}
+
+html.scanner-active .tray .trayscroll::-webkit-scrollbar {
+  display: none;
+}
+
+html.scanner-active .tray .traypage {
+  position: relative;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 82px;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: transform .14s var(--scan-snap), box-shadow .18s var(--scan-snap),
+              opacity .18s var(--scan-snap);
+}
+
+html.scanner-active .tray .traypage[data-retake="true"] {
+  box-shadow: 0 0 0 2px rgba(225,145,30,.9), 0 4px 14px rgba(0,0,0,.12);
+}
+
+html.scanner-active .tray .traypage .retakebadge,
+html.scanner-active .tray .traypage .pending {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  padding: 3px 4px;
+  border-radius: 5px;
+  background: rgba(10,10,12,.76);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.1;
+}
+
+html.scanner-active .tray .traybar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+html.scanner-active .tray .cnt {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+html.scanner-active .tray .btn.primary {
+  min-width: 142px;
+  min-height: 40px;
+  white-space: nowrap;
+  transition: transform .12s var(--scan-snap), opacity .14s var(--scan-snap);
+}
+
+html.scanner-active .tray .btn.primary:disabled {
+  opacity: .48;
+}
+
+html.scanner-active .sheet .sh-choice.primary {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 650;
+  box-shadow: 0 8px 20px rgba(58,134,255,.2);
+}
+
+html.scanner-active .sheet .sh-choice.secondary {
+  background: var(--surface-sunk);
+  color: var(--label);
+  font-weight: 500;
+}
+
+html.scanner-active .sheet .sh-choice {
+  transition: transform .12s var(--scan-snap), background .16s var(--scan-snap),
+              box-shadow .16s var(--scan-snap);
+}
+
+html.scanner-active .scanhero .drafttoast {
+  top: auto;
+  bottom: 96px;
+  opacity: var(--draft-alert-opacity, 1);
+  transform: translateY(var(--draft-alert-drag, 0));
+  transition: transform .14s var(--scan-snap), opacity .12s linear;
+  cursor: grab;
+}
+
+html.scanner-active .scanhero .drafttoast.is-dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+html.scanner-active .scanhero .drafttoast.is-dismissing {
+  opacity: 0;
+  transform: translateY(calc(100% + 110px));
+  pointer-events: none;
+}
+
+html.scanner-active .scanhero .drafttoast .dh {
+  display: block;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+html.scanner-active .scanhero .drafttoast .dh:focus-visible {
+  outline: 2px solid rgba(255,255,255,.9);
+  outline-offset: 3px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .scanhero[data-camera="on"] .draftsicon {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(30,30,34,.68);
+  }
+}
+
+/* system.css turns the desktop scanner back into a contained, in-flow panel at
+   768px. Match that breakpoint: do not apply a mobile `bottom` offset to a
+   position:relative camera, and keep the tray in document flow under it. */
+@media (min-width: 768px) {
+  :root { --scan-tray-h: 176px; }
+
+  html.scanner-active .scanhero,
+  html.scanner-active:has(.tray) .scanhero {
+    bottom: auto;
+  }
+
+  html.scanner-active .tray {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: auto;
+    height: auto;
+    min-height: 154px;
+    margin: 12px var(--gutter) 0;
+    padding: 12px 14px;
+    grid-template-rows: auto auto;
+    border: .5px solid var(--hairline);
+    border-radius: var(--r-card);
+    box-shadow: none;
+  }
+
+  html.scanner-active .tray .traypage {
+    flex-basis: 72px;
+    width: 72px;
+    height: 92px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanhero,
+  .scanhero .scanhint,
+  .scanhero .shutter,
+  .scanhero .sidebtn,
+  .scanhero .autotoggle,
+  .scanhero .draftsicon,
+  html.scanner-active .scanhero .drafttoast,
+  html.scanner-active .tray .traypage,
+  html.scanner-active .tray .btn.primary,
+  html.scanner-active .sheet .sh-choice {
+    transition: none !important;
+  }
+}

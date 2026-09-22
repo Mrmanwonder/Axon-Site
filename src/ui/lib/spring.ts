@@ -9,9 +9,25 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 type SpringState = { pos: number; vel: number };
-type SpringLoop = { raf: number; state: SpringState };
+type SpringLoop = { raf: number; state: SpringState; finish?: () => void };
 
 const loops = new Map<string, SpringLoop>();
+const reduced = () => document.documentElement.dataset.motion === "reduce"
+  || matchMedia("(prefers-reduced-motion: reduce)").matches;
+let observing = false;
+
+function observeMotion() {
+  if (observing) return;
+  observing = true;
+  const finish = () => {
+    if (reduced()) for (const loop of loops.values()) loop.finish?.();
+  };
+  new MutationObserver(finish).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-motion"],
+  });
+  matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", finish);
+}
 
 export type SpringOptions = {
   to: number;
@@ -32,14 +48,31 @@ export function spring(
     onUpdate,
   }: SpringOptions,
 ): void {
+  observeMotion();
   const prev = loops.get(key);
   if (prev && prev.raf) cancelAnimationFrame(prev.raf);
 
   const s: SpringState = prev ? prev.state : { pos: to, vel: 0 };
+  const finish = () => {
+    const loop = loops.get(key);
+    if (loop?.raf) cancelAnimationFrame(loop.raf);
+    s.pos = to;
+    s.vel = 0;
+    loops.set(key, { raf: 0, state: s });
+    onUpdate(to, 0);
+  };
+  if (reduced()) {
+    finish();
+    return;
+  }
   const dt = 1 / 60;
   const startedAt = performance.now();
 
   const step = (now: number) => {
+    if (reduced()) {
+      finish();
+      return;
+    }
     s.vel += (-stiffness * (s.pos - to) - damping * s.vel) * dt;
     s.pos += s.vel * dt;
     onUpdate(s.pos, s.vel);
@@ -47,20 +80,19 @@ export function spring(
     const stillMoving = Math.abs(s.vel) > .015 || Math.abs(s.pos - to) > .015;
     const insideBudget = now - startedAt < maxDurationMs;
     if (stillMoving && insideBudget) {
-      loops.set(key, { raf: requestAnimationFrame(step), state: s });
+      loops.set(key, { raf: requestAnimationFrame(step), state: s, finish });
     } else {
-      s.pos = to;
-      s.vel = 0;
-      onUpdate(to, 0);
-      loops.set(key, { raf: 0, state: s });
+      finish();
     }
   };
 
-  loops.set(key, { raf: requestAnimationFrame(step), state: s });
+  loops.set(key, { raf: requestAnimationFrame(step), state: s, finish });
 }
 
 /** Place a spring at a position without animating to it. */
 export function seed(key: string, pos: number): void {
+  const previous = loops.get(key);
+  if (previous?.raf) cancelAnimationFrame(previous.raf);
   loops.set(key, { raf: 0, state: { pos, vel: 0 } });
 }
 

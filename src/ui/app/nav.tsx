@@ -12,11 +12,12 @@
    the lens, the springs — not to information architecture. Nav order is IA,
    so CLAUDE.md governs. Flagged in the port report.
 
-   Icons are the prototype's paths, unchanged. `solid` marks the glyph that
-   fills rather than strokes when active, which is Home only.
+   `solid` marks the glyph that fills rather than strokes when active, which
+   is Home only. Library draws its live count in TabNav from the paper list.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import type { ReactNode } from "react";
+import { InsightsNavGlyph } from "../components/NavGlyphs";
 import { paths } from "./paths";
 
 export type Destination = {
@@ -44,12 +45,7 @@ export const destinations: Destination[] = [
     path: paths.library,
     label: "Library",
     matchPrefix: "/library",
-    icon: (
-      <>
-        <path d="M5 4.5h14v15H5z" />
-        <path d="M9 9h6M9 13h6M9 17h3" />
-      </>
-    ),
+    icon: null, // TabNav renders the document with the current paper count.
   },
   {
     path: paths.scan,
@@ -66,12 +62,7 @@ export const destinations: Destination[] = [
   {
     path: paths.insights,
     label: "Insights",
-    icon: (
-      <>
-        <path d="M4 19.5h16" />
-        <path d="M6.5 16V9.5M11 16V5M15.5 16v-4M20 16v-8" />
-      </>
-    ),
+    icon: <InsightsNavGlyph />,
   },
   {
     path: paths.settings,

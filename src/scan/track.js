@@ -261,8 +261,10 @@ export function observe(track, observations, now, { width, height } = {}) {
     const corner = track.corners[id];
     if (!corner) continue;
     const seen = observations ? observations[id] : undefined;
+    const reliable = seen && Number.isFinite(seen.x) && Number.isFinite(seen.y)
+      && (seen.confidence ?? 0) >= 0.42;
 
-    if (seen && Number.isFinite(seen.x) && Number.isFinite(seen.y)) {
+    if (reliable) {
       const moved = { x: seen.x - corner.position.x, y: seen.y - corner.position.y };
       // How far this corner's motion departs from what the others agreed on.
       const departure = shared
@@ -457,7 +459,10 @@ export function searchWindows(track, now, { width, height, minSize = 32, maxSize
     // window would instead quietly change what the search is measuring.
     const sx = Math.round(Math.max(0, Math.min((width ?? size) - size, centre.x - size / 2)));
     const sy = Math.round(Math.max(0, Math.min((height ?? size) - size, centre.y - size / 2)));
-    windows.push({ id, sx, sy, size, edgeA: a, edgeB: b });
+    windows.push({
+      id, sx, sy, size, edgeA: a, edgeB: b,
+      expectedX: centre.x - sx, expectedY: centre.y - sy,
+    });
   }
   return windows;
 }
@@ -584,16 +589,16 @@ export function advanceState(track, { width, height } = {}) {
  * apart, and — rarely — as a slow background re-check that a healthy track has
  * not quietly drifted onto the wrong rectangle.
  */
-export function needsGlobal(track, now, { idleMs = 900, refreshMs = 4000 } = {}) {
+export function needsGlobal(track, now, { idleMs = 500, refreshMs = 1500 } = {}) {
   // Never detected anything yet, so the answer is yes and there is no interval
   // to measure. Falling through would subtract null and compare a NaN, which
   // is false for every operator and would leave a fresh scanner never once
   // looking for a page.
   if (track.lastGlobalDetection == null) return true;
-  if (track.state === 'searching') return now - track.lastGlobalDetection >= idleMs;
-  if (track.state === 'recovering') return now - track.lastGlobalDetection >= idleMs;
-  // A tracking page is re-checked occasionally and cheaply, so a track that has
-  // slid onto a notebook edge cannot stay there indefinitely.
+  if (['searching', 'locking', 'reacquiring', 'recovering'].includes(track.state))
+    return now - track.lastGlobalDetection >= idleMs;
+  // A healthy track is still revalidated frequently enough that a slow drift
+  // onto a notebook/desk edge cannot survive for several seconds.
   return now - track.lastGlobalDetection >= refreshMs;
 }
 

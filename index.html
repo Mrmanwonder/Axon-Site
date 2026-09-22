@@ -1,26 +1,48 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#000000" id="themeColor">
 <meta name="description" content="Axon — see exactly where your marks go.">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Axon">
 <meta property="og:title" content="Axon — understand where your marks go">
 <meta property="og:description" content="Scan marked papers, review every reading against its source, and understand your learning patterns.">
-<meta property="og:type" content="website">
 <meta property="og:url" content="https://axonstudy.online/">
-<meta property="og:image" content="https://axonstudy.online/og-image.svg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image" content="https://axonstudy.online/axon-lockup-v2.png">
+<meta property="og:image:secure_url" content="https://axonstudy.online/axon-lockup-v2.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1520">
+<meta property="og:image:height" content="800">
+<meta property="og:image:alt" content="Axon">
+
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Axon — understand where your marks go">
 <meta name="twitter:description" content="Scan marked papers, review every reading against its source, and understand your learning patterns.">
-<meta name="twitter:image" content="https://axonstudy.online/og-image.svg">
+<meta name="twitter:image" content="https://axonstudy.online/axon-lockup-v2.png">
+<meta name="twitter:image:alt" content="Axon">
+
 <link rel="canonical" href="https://axonstudy.online/">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="sitemap" type="application/xml" href="https://axonstudy.online/sitemap.xml">
+<link rel="icon" href="https://axonstudy.online/axon-logo.png" type="image/x-icon">
 <link rel="manifest" href="/site.webmanifest">
+
 <title>Axon — understand where your marks go</title>
+
+<style>
+  /* Slow phones should never stare at an unexplained black page while the app
+     bundle and account session initialise. The mark appears only after 350ms,
+     so a normal fast boot still has no loading flash. React replaces it. */
+  .bootmark{position:fixed;inset:0;display:grid;place-items:center;color:#f5f5f7;
+    background:#000;font:650 20px/1 system-ui,sans-serif;letter-spacing:-.03em;
+    opacity:0;animation:bootmark-reveal 0s linear .35s forwards}
+  [data-theme="light"] .bootmark{color:#1d1d1f;background:#f4f4f7}
+  @keyframes bootmark-reveal{to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.bootmark{animation:none;opacity:1}}
+</style>
 
 <!-- The face is font-display: block, so it must arrive early or the first paint
      is blank text. Before the port it was a data URI inside this document and
@@ -55,7 +77,7 @@
 </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div class="bootmark" role="status" aria-label="Loading Axon">Axon</div></div>
   <script type="module" src="/src/ui/main.tsx"></script>
 </body>
 </html>

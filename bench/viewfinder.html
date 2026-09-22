@@ -113,7 +113,8 @@ const capture = createCapture({
     result.shots++;
     result.firstShotMs ??= Math.round(performance.now() - started);
     result.lastShot = { auto: shot.auto, hasQuad: !!shot.quad,
-                        size: `${shot.bitmap.width}x${shot.bitmap.height}` };
+                        size: `${shot.bitmap.width}x${shot.bitmap.height}`,
+                        overlayPhase: capture.overlayPhase };
     shot.bitmap.close?.();
   },
 });

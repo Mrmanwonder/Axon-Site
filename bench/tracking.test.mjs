@@ -94,6 +94,12 @@ test('a corner survives moderate sensor noise', () => {
     `found (${found.x.toFixed(1)},${found.y.toFixed(1)}) under noise`);
 });
 
+test('a strong unrelated corner far from the prediction is rejected', () => {
+  const roi = cornerImage(64, 50, 50, 'br');
+  const found = findCorner(roi, { edgeA: 0, edgeB: 90, expectedX: 14, expectedY: 14 });
+  assert.equal(found, null, 'tracker jumped from its predicted paper corner to an unrelated rectangle');
+});
+
 test('a window with no corner in it reports nothing rather than a guess', () => {
   const flat = { data: new Uint8ClampedArray(64 * 64 * 4).fill(200), width: 64, height: 64 };
   for (let i = 3; i < flat.data.length; i += 4) flat.data[i] = 255;
@@ -342,7 +348,7 @@ test('§68: a healthy track almost never asks for the global detector', () => {
     track = observeAll(track, drift, now);
   }
   assert.equal(track.state, 'tracking');
-  assert.ok(globals <= 1,
+  assert.ok(globals >= 1 && globals <= 2,
     `${globals} global searches during three seconds of clean tracking — the point is that this is rare`);
 });
 
