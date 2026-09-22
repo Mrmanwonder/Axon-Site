@@ -122,7 +122,7 @@ const PLAN_NOTE: Record<string, string> = {
 
 export default function Settings() {
   const {
-    guardian, student, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
+    guardian, student, profiles, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
     setAvatar, updateStudentProfile, signOutNow,
 
   } = useApp();
@@ -258,7 +258,7 @@ export default function Settings() {
     <>
       <div className="greet"><h1>Settings</h1></div>
 
-      <ProfileChooser />
+      {profiles.length > 1 && <ProfileChooser />}
       <div className="card sprofile">
         <div
           className="pic"
