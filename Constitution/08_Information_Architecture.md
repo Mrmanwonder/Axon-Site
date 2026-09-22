@@ -108,16 +108,6 @@ Owner: Academic Digital Twin
 
 ------------------------------------------------------------------------
 
-## Mentor
-
-Purpose: Provide explainable guidance.
-
-Primary Question: "What should I understand?"
-
-Owner: Academic Digital Twin
-
-------------------------------------------------------------------------
-
 ## Resources
 
 Purpose: Access notes, past papers, documents, and learning material.
