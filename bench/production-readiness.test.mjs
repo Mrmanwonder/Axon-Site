@@ -31,11 +31,11 @@ test('crawler files index public routes without advertising private routes', () 
 
 test('social preview, logo and manifest assets are wired and present', () => {
   const html = read('index.html');
-  for (const marker of ['og:image', 'og:image:type', 'twitter:card', 'axon-logo.png', 'site.webmanifest']) {
+  for (const marker of ['og:image', 'og:image:type', 'twitter:card', 'favicon.png', 'site.webmanifest']) {
     assert.ok(html.includes(marker), `missing ${marker}`);
   }
   assert.match(html, /https:\/\/axonstudy\.online\/axon-lockup-v2\.png/);
-  for (const asset of ['public/axon-lockup-v2.png', 'public/axon-logo.png', 'public/site.webmanifest']) {
+  for (const asset of ['public/axon-lockup-v2.png', 'public/favicon.png', 'public/site.webmanifest']) {
     assert.ok(existsSync(asset), `missing ${asset}`);
   }
 });
