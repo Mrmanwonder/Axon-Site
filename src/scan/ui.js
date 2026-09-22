@@ -17,6 +17,9 @@ import { releaseCrops } from './crops.js';
 import { PAPER_TYPES } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
+const MAX_PENDING_CAPTURES = 2;
+let captureTail = Promise.resolve();
+
 const S = {
   epoch: 0,
   ctx: null,
@@ -30,6 +33,7 @@ const S = {
   regions: null,
   review: null,
   busy: false,
+  pendingCaptures: 0,
   submitting: false,
   explanationsStarted: false,
   retaking: null,
@@ -67,7 +71,8 @@ export function resetScan() {
   refreshTimer = null;
   detachSurface();
   S.ctx = null; S.draft = null; S.run = null; S.runId = null; S.review = null; S.regions = null;
-  S.busy = false; S.submitting = false; S.saving = false; S.retaking = null; S.explanationsStarted = false;
+  S.busy = false; S.pendingCaptures = 0; S.submitting = false; S.saving = false; S.retaking = null; S.explanationsStarted = false;
+  captureTail = Promise.resolve();
   S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); S.placeholders.clear();
   releaseCrops();
 }
@@ -162,15 +167,68 @@ function stopCamera() {
 
 // ── capture transaction ────────────────────────────────────────────────────
 
+function updateCapturePressure() {
+  const pending = S.pendingCaptures;
+  // One page may condition while the camera stays alive. At two outstanding
+  // captures we apply backpressure so a phone cannot accumulate multiple
+  // full-resolution ImageBitmaps and run itself out of memory.
+  S.capture?.setProcessing?.(pending >= MAX_PENDING_CAPTURES);
+  host.scannerState({
+    phase: pending ? 'processing' : 'live-guiding',
+    pendingCaptureCount: pending,
+  });
+}
+
+function reservePageSlot(replacing = null) {
+  if (replacing !== null) return replacing;
+  const used = new Set((S.draft?.pages ?? []).map((p) => p.page_number));
+  for (const pageNumber of S.placeholders.keys()) used.add(pageNumber);
+  let pageNumber = 1;
+  while (used.has(pageNumber)) pageNumber++;
+  return pageNumber;
+}
+
+function rekeyPlaceholder(from, to) {
+  if (from === to || !S.placeholders.has(from)) return;
+  const thumb = S.placeholders.get(from);
+  S.placeholders.delete(from);
+  S.placeholders.set(to, thumb);
+}
+
 async function takePage(shot, replacing = null) {
-  if (S.busy || S.submitting) { shot.bitmap?.close?.(); return false; }
+  if (S.submitting || S.pendingCaptures >= MAX_PENDING_CAPTURES) {
+    shot.bitmap?.close?.();
+    if (!S.submitting) toast('One page is still being prepared. Hold this page for a moment.');
+    return false;
+  }
 
   const epoch = S.epoch;
+  const reservedSlot = reservePageSlot(replacing);
+  S.pendingCaptures++;
+  paintPlaceholder(shot.bitmap, reservedSlot);
+  updateCapturePressure();
+
+  // Conditioning remains serial because each task mutates the same durable
+  // draft, but capture no longer waits for it. The next page can be framed and
+  // photographed while this worker is warping/encoding the previous one.
+  const task = captureTail
+    .catch(() => {})
+    .then(() => processCapturedPage(shot, replacing, reservedSlot, epoch));
+  captureTail = task.catch(() => {});
+
+  return task.finally(() => {
+    shot.bitmap?.close?.();
+    if (epoch !== S.epoch) return;
+    S.pendingCaptures = Math.max(0, S.pendingCaptures - 1);
+    updateCapturePressure();
+  });
+}
+
+async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
+  if (epoch !== S.epoch) return false;
   S.busy = true;
-  S.capture?.setProcessing?.(true);
-  host.scannerState({ phase: 'processing', pendingCaptureCount: 1 });
   const tOnShot = performance.now();
-  const slot = replacing ?? (S.draft?.pages.length ?? 0) + 1;
+  let slot = reservedSlot;
 
   try {
     if (!S.draft) {
@@ -183,7 +241,12 @@ async function takePage(shot, replacing = null) {
       S.draft = draft;
     }
 
-    paintPlaceholder(shot.bitmap, replacing ?? S.draft.pages.length + 1);
+    // If an earlier queued capture was refused, the next successful new page
+    // closes that numbering gap instead of leaving a phantom placeholder.
+    const actualSlot = replacing ?? S.draft.pages.length + 1;
+    rekeyPlaceholder(slot, actualSlot);
+    slot = actualSlot;
+    renderTrayRows();
 
     const { page } = await acceptPage({
       draft: S.draft,
@@ -224,47 +287,52 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
-    // A rescued page is told about. It was under the resolution floor, it has
-    // been brought up to it, and the student is the one who can tell whether
-    // that worked — so they are told plainly and pointed at the one thing to
-    // check. Never phrased as an apology and never as a question.
     if (page.meta?.enhance?.applied) toast('Page sharpened for readability — check its marks during review.');
     return true;
   } catch (error) {
-    // A refusal is advice, not a breakage: the page cannot be used and the
-    // message already says what to do instead. Shown the same way a fail
-    // verdict is, while the paper is still on the desk.
     if (epoch !== S.epoch) return false;
     S.placeholders.delete(slot);
     await paintTray();
     toast(error?.refused ? error.message : publicScanMessage(error), 'warn');
     return false;
-
   } finally {
-    if (epoch === S.epoch) {
-      S.busy = false;
-      S.capture?.setProcessing?.(false);
-      host.scannerState({ phase: 'live-guiding', pendingCaptureCount: 0 });
-    }
-    shot.bitmap?.close?.();
+    if (epoch === S.epoch) S.busy = false;
   }
+}
+
+function renderTrayRows() {
+  const pages = S.draft?.pages ?? [];
+  const rows = pages.map((p) => ({
+    ...p,
+    thumb: S.thumbs.get(p.page_number),
+    retakeRequested: S.retaking === p.page_number,
+  }));
+
+  for (const [pageNumber, thumb] of S.placeholders) {
+    const pending = {
+      page_number: pageNumber,
+      thumb,
+      pending: true,
+      retakeRequested: S.retaking === pageNumber,
+    };
+    const index = rows.findIndex((row) => row.page_number === pageNumber);
+    if (index >= 0) rows[index] = { ...rows[index], ...pending };
+    else rows.push(pending);
+  }
+
+  rows.sort((a, b) => a.page_number - b.page_number);
+  host.renderTray(rows, { onPage: openPageActions, onDone: sendPaper });
 }
 
 async function paintTray() {
   const pages = S.draft?.pages ?? [];
   for (const page of pages) {
-    if (S.thumbs.has(page.page_number)) continue;
-    S.thumbs.set(page.page_number, URL.createObjectURL(page.proxy ?? page.blob));
+    if (!S.thumbs.has(page.page_number)) {
+      S.thumbs.set(page.page_number, URL.createObjectURL(page.proxy ?? page.blob));
+    }
     S.placeholders.delete(page.page_number);
   }
-  host.renderTray(
-    pages.map((p) => ({
-      ...p,
-      thumb: S.thumbs.get(p.page_number),
-      retakeRequested: S.retaking === p.page_number,
-    })),
-    { onPage: openPageActions, onDone: sendPaper },
-  );
+  renderTrayRows();
 }
 
 function paintPlaceholder(bitmap, pageNumber) {
@@ -277,23 +345,7 @@ function paintPlaceholder(bitmap, pageNumber) {
     canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
     S.placeholders.set(pageNumber, canvas.toDataURL('image/jpeg', 0.6));
 
-    const pages = S.draft?.pages ?? [];
-    const rows = pages.map((p) => ({
-      ...p,
-      thumb: S.thumbs.get(p.page_number),
-      retakeRequested: S.retaking === p.page_number,
-    }));
-    const idx = rows.findIndex((r) => r.page_number === pageNumber);
-    const placeholderRow = {
-      page_number: pageNumber,
-      thumb: S.placeholders.get(pageNumber),
-      pending: true,
-      retakeRequested: S.retaking === pageNumber,
-    };
-    if (idx >= 0) rows[idx] = { ...rows[idx], ...placeholderRow };
-    else rows.push(placeholderRow);
-
-    host.renderTray(rows, { onPage: openPageActions, onDone: sendPaper });
+    renderTrayRows();
   } catch {
     // Cosmetic only. paintTray() will replace it with the durable thumbnail.
   }

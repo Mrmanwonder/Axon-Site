@@ -100,12 +100,13 @@ function normalizeIllumination(img) {
   return new ImageData(out, width, height);
 }
 
-function handleSearch(id, bitmap) {
+function handleSearch(id, bitmap, minFill = null) {
   const frame = imageDataFrom(bitmap);
   bitmap.close?.();
 
   const tDetectStart = performance.now();
-  let found = detectQuad(frame);
+  const detectOptions = Number.isFinite(minFill) ? { minFill } : undefined;
+  let found = detectQuad(frame, detectOptions);
   let shadowFallback = false;
   let normalizeMs = 0;
 
@@ -116,7 +117,7 @@ function handleSearch(id, bitmap) {
       const normalizeStart = performance.now();
       const normalized = normalizeIllumination(frame);
       normalizeMs = performance.now() - normalizeStart;
-      found = detectQuad(normalized);
+      found = detectQuad(normalized, detectOptions);
       shadowFallback = !!found;
     }
   } else {
@@ -214,9 +215,9 @@ function handleFocus(id, bitmap) {
 }
 
 self.onmessage = (event) => {
-  const { id, kind, bitmap, windows, quad } = event.data;
+  const { id, kind, bitmap, windows, quad, minFill } = event.data;
   try {
-    if (kind === 'search') { handleSearch(id, bitmap); return; }
+    if (kind === 'search') { handleSearch(id, bitmap, minFill); return; }
     if (kind === 'measure') { handleMeasure(id, bitmap, quad); return; }
     if (kind === 'track') { handleTrack(id, bitmap, windows); return; }
     if (kind === 'focus') { handleFocus(id, bitmap); return; }

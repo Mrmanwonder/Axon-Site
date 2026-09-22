@@ -13,10 +13,10 @@ import {
   CAPTURE_CONFIRM_TIMING,
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
   PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
-  captureConfirmFrame, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
+  captureConfirmFrame, coverCropRect, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
   settledGuidance, settledPaperEvidence, settledScannerGuidance, shouldAutoCapture,
 } from '../src/scan/capture.js';
-import { easeQuad } from '../src/scan/edges.js';
+import { easeQuad, isPageShaped } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
 
 const W = 240, H = 320;
@@ -42,6 +42,25 @@ const page = (px = 0) => [
   { x: 40 + px, y: 60 + px }, { x: 200 - px, y: 62 + px },
   { x: 198 - px, y: 280 - px }, { x: 42 + px, y: 278 - px },
 ];
+
+
+test('portrait object-fit cover searches the same source crop the student sees', () => {
+  const crop = coverCropRect(1280, 720, 390, 844);
+  assert.ok(crop.x > 400, `expected landscape side margins to be cropped, got x=${crop.x}`);
+  assert.equal(crop.y, 0);
+  assert.ok(crop.width < 400);
+  assert.equal(crop.height, 720);
+  assert.ok(Math.abs(crop.width / crop.height - 390 / 844) < 0.001);
+});
+
+test('still-frame detection can use a lower fill floor without weakening the live default', () => {
+  const quad = [
+    { x: 34, y: 34 }, { x: 66, y: 34 },
+    { x: 66, y: 66 }, { x: 34, y: 66 },
+  ];
+  assert.equal(isPageShaped(quad, 100, 100), false);
+  assert.equal(isPageShaped(quad, 100, 100, 0.07), true);
+});
 
 // ── the shutter decision ───────────────────────────────────────────────────
 

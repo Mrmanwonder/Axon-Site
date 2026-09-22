@@ -30,6 +30,10 @@ const STILL_ANALYSIS_LONG_EDGE = 720;
 const AUTO_RETRY_COOLDOWN_MS = 550;
 const TRACK_CONFIDENCE_FLOOR = 0.64;
 const FOCUS_BREATHING_AREA_DELTA = 0.05;
+const NATIVE_PHOTO_TIMEOUT_MS = 1200;
+const VIDEO_FRAME_TIMEOUT_MS = 220;
+const STILL_MIN_FILL = 0.07;
+const DETECT_TIMEOUT_LIMIT = 2;
 
 export const CAPTURE_CONFIRM_TIMING = Object.freeze({
   freezeEnd: 40,
@@ -51,6 +55,28 @@ function viewportScale() {
 
 function viewportScaled() {
   return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+}
+
+/**
+ * Source rectangle visible through an object-fit: cover preview.
+ *
+ * Global detection must search what the student can actually see. On a portrait
+ * phone a 16:9 camera stream can be horizontally cropped by more than half; the
+ * old detector searched those invisible sensor margins and then rejected the
+ * visible sheet for occupying too little of the full source frame.
+ */
+export function coverCropRect(sourceWidth, sourceHeight, viewWidth, viewHeight) {
+  if (!(sourceWidth > 0 && sourceHeight > 0 && viewWidth > 0 && viewHeight > 0)) {
+    return { x: 0, y: 0, width: Math.max(1, sourceWidth || 1), height: Math.max(1, sourceHeight || 1) };
+  }
+  const sourceAspect = sourceWidth / sourceHeight;
+  const viewAspect = viewWidth / viewHeight;
+  if (sourceAspect > viewAspect) {
+    const width = sourceHeight * viewAspect;
+    return { x: (sourceWidth - width) / 2, y: 0, width, height: sourceHeight };
+  }
+  const height = sourceWidth / viewAspect;
+  return { x: 0, y: (sourceHeight - height) / 2, width: sourceWidth, height };
 }
 
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -233,6 +259,7 @@ export function settledGuidance(showing, verdict, now) {
 // ── worker bridge ──────────────────────────────────────────────────────────
 let detectWorker = null;
 let nextDetectId = 1;
+let detectTimeouts = 0;
 const detectPending = new Map();
 
 function ensureDetectWorker() {
@@ -244,6 +271,7 @@ function ensureDetectWorker() {
       const resolve = detectPending.get(id);
       if (!resolve) return;
       detectPending.delete(id);
+      detectTimeouts = 0;
       resolve(rest);
     };
     detectWorker.onerror = (event) => {
@@ -251,6 +279,7 @@ function ensureDetectWorker() {
         message: event?.message, filename: event?.filename, lineno: event?.lineno,
       });
       detectWorker = false;
+      detectTimeouts = 0;
     };
   } catch {
     detectWorker = false;
@@ -264,14 +293,27 @@ function runDetectWorker(kind, bitmap, extra = null) {
   const id = nextDetectId++;
   return new Promise((resolve) => {
     let done = false;
+    let timeout = 0;
     const finish = (value) => {
       if (done) return;
       done = true;
+      clearTimeout(timeout);
       detectPending.delete(id);
       resolve(value);
     };
     detectPending.set(id, finish);
-    setTimeout(() => finish(null), DETECT_TIMEOUT_MS);
+    timeout = setTimeout(() => {
+      detectTimeouts++;
+      finish(null);
+      // A worker that repeatedly misses its deadline is not a worker path at
+      // all. Falling back to the 360px main-thread detector is preferable to a
+      // scanner that can search forever without ever publishing a page.
+      if (detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
+        w.terminate?.();
+        detectWorker = false;
+        detectTimeouts = 0;
+      }
+    }, DETECT_TIMEOUT_MS);
     w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
   });
 }
@@ -352,13 +394,24 @@ export function createCapture({ video, overlay, onState, onShot }) {
   // Worker startup is paid while camera permission / the first frame is arriving.
   ensureDetectWorker();
 
-  function focusInPageOnMainThread(source, quadInProxy, pw, ph, sw, sh, pageLongEdge) {
-    const inFrame = quadInProxy.map((p) => ({ x: p.x * (sw / pw), y: p.y * (sh / ph) }));
-    const rect = focusWindowRect(inFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
+  function focusInFrameOnMainThread(source, quadInFrame, sw, sh, pageLongEdge) {
+    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return null;
     focusCtx.drawImage(source, rect.sx, rect.sy, rect.size, rect.size, 0, 0, rect.target, rect.target);
     const read = sharpness(focusCtx.getImageData(0, 0, rect.target, rect.target), { scale: 1 });
     return read.blank ? null : read.score;
+  }
+
+  function visibleSourceCrop(vw = video.videoWidth, vh = video.videoHeight) {
+    const rect = video.getBoundingClientRect();
+    return coverCropRect(vw, vh, rect.width, rect.height);
+  }
+
+  function cropQuadToVideo(quadInCrop, crop, pw, ph) {
+    return quadInCrop.map((p) => ({
+      x: crop.x + p.x * (crop.width / pw),
+      y: crop.y + p.y * (crop.height / ph),
+    }));
   }
 
   function blankState() {
@@ -491,8 +544,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // A tentative rectangle gets another independent whole-frame search
       // immediately. Local corner tracking alone must not promote a face or a
       // background rectangle into user-visible paper guidance.
-      if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS || needsGlobal(track, started)) await step();
-      else await measureStep(video.videoWidth, video.videoHeight);
+      const workerAvailable = !!ensureDetectWorker();
+      if (!workerAvailable
+          || globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS
+          || needsGlobal(track, started)) {
+        await step();
+      } else {
+        await measureStep(video.videoWidth, video.videoHeight);
+      }
     } catch { /* one bad frame costs one cycle */ }
     const cost = performance.now() - started;
     const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
@@ -502,13 +561,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function step() {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
-    const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    const crop = visibleSourceCrop(vw, vh);
+    const pw = PROXY_WIDTH;
+    const ph = Math.max(1, Math.round(PROXY_WIDTH * crop.height / crop.width));
     const workerUsed = !!ensureDetectWorker();
     const result = workerUsed
-      ? await searchOnWorker(pw, ph, vw, vh)
-      : searchOnMainThread(pw, ph, vw, vh);
+      ? await searchOnWorker(pw, ph, vw, vh, crop)
+      : searchOnMainThread(pw, ph, vw, vh, crop);
     track.lastGlobalDetection = performance.now();
-    finishStep(result, workerUsed, pw, ph, vw, vh);
+    finishStep(result, workerUsed, vw, vh);
   }
 
   async function trackStep() {
@@ -536,18 +597,23 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }
   }
 
-  async function searchOnWorker(pw, ph, vw, vh) {
-    const proxyBitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+  async function searchOnWorker(pw, ph, vw, vh, crop) {
+    const proxyBitmap = await createImageBitmap(
+      video,
+      crop.x, crop.y, crop.width, crop.height,
+      { resizeWidth: pw, resizeHeight: ph },
+    );
     const search = await runDetectWorker('search', proxyBitmap);
     if (!search?.found) {
       return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
     }
-    const size = quadSize(search.found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const found = cropQuadToVideo(search.found, crop, pw, ph);
+    const size = quadSize(found);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, search.found, pw, ph, vw, vh, pageLongEdge);
+      await focusOnWorker(video, found, vw, vh, pageLongEdge);
     return {
-      found: search.found,
+      found,
       exposure: search.exposure,
       skew: search.skew,
       pageLongEdge,
@@ -558,9 +624,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     };
   }
 
-  async function focusOnWorker(source, quadInProxy, pw, ph, sw, sh, pageLongEdge) {
-    const inFrame = quadInProxy.map((p) => ({ x: p.x * (sw / pw), y: p.y * (sh / ph) }));
-    const rect = focusWindowRect(inFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
+  async function focusOnWorker(source, quadInFrame, sw, sh, pageLongEdge) {
+    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return { sharpness: null, focusMs: 0 };
     const focusBitmap = await createImageBitmap(
       source,
@@ -576,13 +641,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!tracked || !trackSize || !ensureDetectWorker()) return;
     const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
     const inProxy = scaleQuad(tracked, trackSize, { width: pw, height: ph });
-    const size = quadSize(inProxy);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const inVideo = scaleQuad(tracked, trackSize, { width: vw, height: vh });
+    const size = quadSize(inVideo);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const bitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
     const read = await runDetectWorker('measure', bitmap, { quad: inProxy });
     if (!running || !read?.exposure) return;
     const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, inProxy, pw, ph, vw, vh, pageLongEdge);
+      await focusOnWorker(video, inVideo, vw, vh, pageLongEdge);
     if (!running) return;
     measured = {
       glare: read.exposure.glare,
@@ -596,27 +662,28 @@ export function createCapture({ video, overlay, onState, onShot }) {
     recordStepTiming({ detectMs: 0, measureMs: read.measureMs ?? 0, focusMs, workerUsed: true });
   }
 
-  function searchOnMainThread(pw, ph, vw, vh) {
+  function searchOnMainThread(pw, ph, vw, vh, crop) {
     if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
-    proxyCtx.drawImage(video, 0, 0, pw, ph);
+    proxyCtx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, pw, ph);
     const frame = proxyCtx.getImageData(0, 0, pw, ph);
     const tDetectStart = performance.now();
-    const found = detectQuad(frame);
+    const inCrop = detectQuad(frame);
     const detectMs = performance.now() - tDetectStart;
-    if (!found) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
+    if (!inCrop) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
     const tMeasureStart = performance.now();
-    const exposure = measureQuad(frame, found);
-    const skew = skewDegrees(found);
+    const exposure = measureQuad(frame, inCrop);
+    const skew = skewDegrees(inCrop);
     const measureMs = performance.now() - tMeasureStart;
+    const found = cropQuadToVideo(inCrop, crop, pw, ph);
     const size = quadSize(found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const tFocusStart = performance.now();
-    const sharpnessScore = focusInPageOnMainThread(video, found, pw, ph, vw, vh, pageLongEdge);
+    const sharpnessScore = focusInFrameOnMainThread(video, found, vw, vh, pageLongEdge);
     const focusMs = performance.now() - tFocusStart;
     return { found, exposure, skew, pageLongEdge, sharpness: sharpnessScore, detectMs, measureMs, focusMs };
   }
 
-  function finishStep(result, workerUsed, pw, ph, vw, vh) {
+  function finishStep(result, workerUsed, vw, vh) {
     if (!running) return;
     const next = blankState();
     next.timing = {
@@ -662,7 +729,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return;
     }
 
-    const found = scaleQuad(result.found, { width: pw, height: ph }, trackSize);
+    const found = scaleQuad(result.found, { width: vw, height: vh }, trackSize);
     const now = performance.now();
     const sameDetectedDocument = isSameDocument(track, found, trackSize.width, trackSize.height);
     globalConfirmations = sameDetectedDocument ? Math.min(3, globalConfirmations + 1) : 1;
@@ -969,27 +1036,48 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function waitForNextVideoFrame() {
     if (!running) return;
     if (typeof video.requestVideoFrameCallback === 'function') {
-      await new Promise((resolve) => video.requestVideoFrameCallback(() => resolve()));
+      await new Promise((resolve) => {
+        let settled = false;
+        const id = video.requestVideoFrameCallback(() => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve();
+        });
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          video.cancelVideoFrameCallback?.(id);
+          resolve();
+        }, VIDEO_FRAME_TIMEOUT_MS);
+      });
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(CAPTURE.SETTLE_MS, 100)));
+    await new Promise((resolve) => setTimeout(resolve, Math.min(CAPTURE.SETTLE_MS, VIDEO_FRAME_TIMEOUT_MS)));
+  }
+
+  async function takePhotoAttempt(settings) {
+    if (!imageCapture) return { blob: null, timedOut: false };
+    const timeoutToken = Symbol('photo-timeout');
+    const result = await Promise.race([
+      imageCapture.takePhoto(settings).catch(() => null),
+      new Promise((resolve) => setTimeout(() => resolve(timeoutToken), NATIVE_PHOTO_TIMEOUT_MS)),
+    ]);
+    return result === timeoutToken
+      ? { blob: null, timedOut: true }
+      : { blob: result, timedOut: false };
   }
 
   async function takeNativePhoto() {
     if (!imageCapture) return null;
     if (Object.keys(photoSettings ?? {}).length) {
-      try {
-        return await imageCapture.takePhoto(photoSettings);
-      } catch {
-        // Some camera stacks advertise dimensions they reject at capture time.
-        // Retry with browser-chosen settings before abandoning the native still.
-      }
+      const first = await takePhotoAttempt(photoSettings);
+      if (first.blob) return first.blob;
+      if (first.timedOut) return null;
+      // Some camera stacks advertise dimensions they reject at capture time.
+      // Retry with browser-chosen settings before abandoning the native still.
     }
-    try {
-      return await imageCapture.takePhoto();
-    } catch {
-      return null;
-    }
+    return (await takePhotoAttempt(undefined)).blob;
   }
 
   async function grabStill() {
@@ -1026,12 +1114,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (workerUsed) {
       const stillProxy = await createImageBitmap(bitmap, { resizeWidth: pw, resizeHeight: ph });
-      result = await runDetectWorker('search', stillProxy);
+      result = await runDetectWorker('search', stillProxy, { minFill: STILL_MIN_FILL });
     } else {
       if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
       proxyCtx.drawImage(bitmap, 0, 0, pw, ph);
       const frame = proxyCtx.getImageData(0, 0, pw, ph);
-      const found = detectQuad(frame);
+      const found = detectQuad(frame, { minFill: STILL_MIN_FILL });
       if (found) result = { found, exposure: measureQuad(frame, found), skew: skewDegrees(found) };
     }
 
@@ -1049,21 +1137,25 @@ export function createCapture({ video, overlay, onState, onShot }) {
       };
     }
 
-    const size = quadSize(result.found);
-    const sx = bitmap.width / pw, sy = bitmap.height / ph;
-    const pageLongEdge = Math.round(Math.max(size.width * sx, size.height * sy));
+    const quadInBitmap = scaleQuad(
+      result.found,
+      { width: pw, height: ph },
+      { width: bitmap.width, height: bitmap.height },
+    );
+    const size = quadSize(quadInBitmap);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     let sharpnessScore = null;
     let focusMs = 0;
     if (workerUsed) {
       const focusRead = await focusOnWorker(
-        bitmap, result.found, pw, ph, bitmap.width, bitmap.height, pageLongEdge,
+        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
       );
       sharpnessScore = focusRead.sharpness;
       focusMs = focusRead.focusMs;
     } else {
       const started = performance.now();
-      sharpnessScore = focusInPageOnMainThread(
-        bitmap, result.found, pw, ph, bitmap.width, bitmap.height, pageLongEdge,
+      sharpnessScore = focusInFrameOnMainThread(
+        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
       );
       focusMs = performance.now() - started;
     }
@@ -1095,11 +1187,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.hint = verdict.hint;
 
     return {
-      quad: scaleQuad(
-        result.found,
-        { width: pw, height: ph },
-        { width: bitmap.width, height: bitmap.height },
-      ),
+      quad: quadInBitmap,
       gate: next,
     };
   }
@@ -1134,6 +1222,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
         bitmap.close?.();
         return null;
       }
+
+      // Manual capture gets immediate feedback from the live lock. Native
+      // takePhoto can briefly stall the camera texture; showing the captured
+      // outline before still analysis starts prevents that hardware pause from
+      // reading as an app freeze.
+      if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
 
       const tAnalyseStart = performance.now();
       const analysed = await analyseStill(bitmap);
@@ -1186,7 +1280,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
             { width: video.videoWidth, height: video.videoHeight },
           )
         : null);
-      beginCaptureConfirmation(confirmationQuad);
+      if (auto || !liveQuadAtShutter) beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
       armed = false;
       return shot;
