@@ -48,7 +48,7 @@
    most of all the one state that would otherwise be silent, a failed payment.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
@@ -62,6 +62,7 @@ import {
   BOARD_LABEL, CLASS_LEVELS, classLabel, subjectsForClass, syllabusCode,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import { ANALYTICS_CONSENT_EVENT, getAnalyticsConsent, setAnalyticsConsent } from "../lib/analytics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
@@ -135,7 +136,14 @@ export default function Settings() {
   const [profileName, setProfileName] = useState(student?.first_name ?? "");
   const [profileClass, setProfileClass] = useState(student?.class_level ?? 11);
   const [profileSubjects, setProfileSubjects] = useState<string[]>(student?.subjects ?? []);
+  const [analyticsAllowed, setAnalyticsAllowed] = useState(() => getAnalyticsConsent() === "granted");
   const name = student?.first_name ?? guardian?.name ?? "";
+
+  useEffect(() => {
+    const syncAnalyticsChoice = () => setAnalyticsAllowed(getAnalyticsConsent() === "granted");
+    window.addEventListener(ANALYTICS_CONSENT_EVENT, syncAnalyticsChoice);
+    return () => window.removeEventListener(ANALYTICS_CONSENT_EVENT, syncAnalyticsChoice);
+  }, []);
   const initial = initialFor(name);
 
   /* The same call the nav swatch makes, from the same module. Two surfaces draw
@@ -544,6 +552,23 @@ export default function Settings() {
 
       <div className="sectitle">Privacy &amp; data</div>
       <div className="list">
+        <div className="srow noicon">
+          <div className="lbl">
+            Product analytics
+            <small>Optional PostHog analytics and masked session replay</small>
+          </div>
+          <Switch
+            label="Product analytics"
+            on={analyticsAllowed}
+            onChange={(next) => {
+              hapticTick();
+              setAnalyticsConsent(next);
+              setAnalyticsAllowed(next);
+              toast(next ? "Analytics allowed." : "Analytics turned off.");
+            }}
+          />
+        </div>
+
         <PressBox
           as="button" type="button" className="srow noicon" data-interactive=""
           disabled={!guardian}
@@ -640,7 +665,11 @@ export default function Settings() {
           <Chevron />
         </Link>
         <Link className="srow noicon" to={paths.terms}>
-          <div className="lbl">Terms of Service<small>Account and upload terms</small></div>
+          <div className="lbl">Terms and Conditions<small>Accounts, uploads, AI output and subscriptions</small></div>
+          <Chevron />
+        </Link>
+        <Link className="srow noicon" to={paths.cookies}>
+          <div className="lbl">Cookie Policy<small>Necessary storage and optional analytics</small></div>
           <Chevron />
         </Link>
       </div>
