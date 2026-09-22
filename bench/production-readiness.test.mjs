@@ -49,3 +49,15 @@ test('production host configuration carries transport protections', () => {
   assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
+
+
+test('optional PostHog analytics is consent gated', () => {
+  const main = read('src/ui/main.tsx');
+  const analytics = read('src/ui/lib/analytics.ts');
+  const banner = read('src/ui/components/CookieConsent.tsx');
+  assert.match(main, /getAnalyticsConsent\(\) === "granted"/);
+  assert.match(analytics, /getAnalyticsConsent\(\) !== "granted"/);
+  assert.match(analytics, /opt_out_capturing/);
+  assert.match(banner, /Necessary only/);
+  assert.match(banner, /Allow analytics/);
+});
