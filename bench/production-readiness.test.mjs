@@ -47,10 +47,13 @@ test('production host configuration carries transport protections', () => {
   assert.match(netlify, /Strict-Transport-Security/);
   assert.match(netlify, /Content-Security-Policy/);
   assert.match(netlify, /camera=\(self\)/);
+  assert.match(netlify, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
+  assert.match(netlify, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.equal(JSON.parse(wrangler).assets.not_found_handling, 'single-page-application');
   assert.match(cloudflareHeaders, /Permissions-Policy: camera=\(self\)/);
-  assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/us-assets\.i\.posthog\.com/);
-  assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/us\.i\.posthog\.com/);
+  assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
+  assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
+  assert.match(cloudflareHeaders, /worker-src 'self' blob: data:/);
   assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
@@ -65,6 +68,12 @@ test('optional PostHog analytics is consent gated', () => {
   assert.match(analytics, /opt_out_capturing/);
   assert.match(analytics, /state = "idle"/);
   assert.match(analytics, /state = "ready"/);
+  assert.match(analytics, /opt_out_capturing_by_default: true/);
+  assert.match(analytics, /installPostHogStub/);
+  assert.ok(
+    analytics.indexOf("posthog.init(key") < analytics.indexOf('document.createElement("script")'),
+    "PostHog init must be queued before array.js is loaded",
+  );
   assert.match(banner, /Necessary only/);
   assert.match(banner, /Allow analytics/);
   assert.match(settings, /Product analytics/);
