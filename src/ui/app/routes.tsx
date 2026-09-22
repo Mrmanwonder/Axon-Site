@@ -55,8 +55,6 @@ export const router = createBrowserRouter([
       { path: "insights", lazy: async () => ({ Component: (await import("../pages/Insights")).default }) },
       { path: "settings", lazy: async () => ({ Component: (await import("../pages/Settings")).default }) },
 
-      /* The prototype's tab indices are not addresses. Anyone who bookmarked
-         one gets sent home rather than a 404. */
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],
   },

@@ -127,17 +127,15 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    FONT
 
-   Onest, the latin variable subset, self-hosted. In the prototype this was a
-   data URI inside the document so the real face painted on the first frame
-   with no network at all. As a real asset it is a separate request, so it is
-   preloaded from the document head and given an immutable cache header — see
-   index.html and netlify.toml.
+   Onest, the latin variable subset, self-hosted. It is preloaded from the
+   document head and cached immutably. `swap` is intentional: first text paint
+   must never be held hostage by a font request on a cold or degraded network.
    ═══════════════════════════════════════════════════════════════════════════ */
 @font-face {
   font-family: "Onest";
   font-style: normal;
   font-weight: 400 700;
-  font-display: block;
+  font-display: swap;
   src: url("/fonts/onest-latin-var.woff2") format("woff2");
 }
 

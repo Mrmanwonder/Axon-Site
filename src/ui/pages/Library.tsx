@@ -59,7 +59,7 @@ function marksLost(paper: Record<string, unknown>): number | null {
 }
 
 export default function Library() {
-  const { papers, papersStale, papersError, progress } = useApp();
+  const { papers, papersLoaded, papersStale, papersError, progress } = useApp();
   const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
@@ -172,7 +172,9 @@ export default function Library() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
-          {filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}{papersStale ? " · offline copy" : ""}
+          {papersLoaded
+            ? <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}{papersStale ? " · offline copy" : ""}</>
+            : "Loading your papers…"}
         </span>
         <AppDropdown
           ariaLabel="Sort library"
@@ -184,8 +186,19 @@ export default function Library() {
         />
       </div>
 
-      <div className="list">
-        {!papers.length && papersError && (
+      <div className="list" aria-busy={!papersLoaded || undefined}>
+        {!papersLoaded && (
+          <div className="srow noicon" aria-hidden="true">
+            <div className="lbl" style={{ width: "100%" }}>
+              <div className="skel" style={{ width: "54%" }} />
+              <div className="skel" style={{ width: "34%", marginTop: 8 }} />
+            </div>
+          </div>
+        )}
+
+        {/* An empty library and a library we could not read are different
+            states; never turn a failed read into a confident empty result. */}
+        {papersLoaded && !papers.length && papersError && (
           <div className="srow noicon">
             <div className="lbl">
               We couldn&rsquo;t load your papers
@@ -194,7 +207,7 @@ export default function Library() {
           </div>
         )}
 
-        {!papers.length && !papersError && (
+        {papersLoaded && !papers.length && !papersError && (
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet
