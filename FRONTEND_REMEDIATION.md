@@ -1,9 +1,13 @@
 # Frontend remediation validation
 
 Validated locally on 2026-09-22 after reconciling the remediation with upstream
-`510d17d`. The current scanner transaction controls, lazy routes, profile editor,
+`086ea86`. The current scanner transaction controls, lazy routes, profile editor,
 filters, security changes, metadata, and analytics bootstrap are preserved.
 Deployment identity is recorded separately once publication succeeds.
+The cache-first startup behavior now uses the same resource generation guards
+as live reads. The single-student bootstrap RPC is intentionally not used for
+active-profile selection: the guardian-owned profile list and offline fallback
+must remain authoritative for multi-student accounts.
 
 ## Implementation
 
@@ -33,10 +37,10 @@ Deployment identity is recorded separately once publication succeeds.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | 212 passed |
+| `npm test` | 213 passed |
 | `npm run typecheck` | Passed |
 | `npm run build` | Passed; existing large-chunk warning remains |
-| `npm run test:ui` | 26 passed |
+| `npm run test:ui` | 28 passed |
 | `npm run test:db` | 1 transaction suite passed |
 | `npm run test:e2e` | 57 passed, 1 intentional skip |
 | `npm run test:a11y` | 10 passed |

@@ -34,6 +34,7 @@ import {
   listPapers, paperProgress, watchLibrary,
 } from "./modules";
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
+import { getCached } from "../../cache.js";
 
 
 /** What the boot sequence concluded about who this is.
@@ -79,6 +80,10 @@ type AppValue = {
   progressResource: Loadable<Map<string, ProgressRow>>;
   consentResource: Loadable<ConsentState>;
   papers: Paper[];
+  /** False only until we have either a cached/network answer or a named read
+      failure. It prevents the first frame of a returning account from saying
+      "No papers yet" while its library is still being read. */
+  papersLoaded: boolean;
   papersStale: boolean;
   /** Set when the library read itself failed — not when it came back empty.
       An empty library and an unreadable one look identical on screen unless
@@ -160,14 +165,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [student, setStudent] = useState<Student | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
   const [dataRevision, setDataRevision] = useState(0);
-  const { resource: papersResource, reload: reloadPapers } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id));
+  const { resource: papersResource, reload: reloadPapers } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id), () => getCached(`papers:${student!.id}`));
   const { resource: progressResource, reload: reloadProgress } = useResource<Map<string, ProgressRow>>(student ? `${student.id}:${dataRevision}` : null, async () => ({ data: await paperProgress(student!.id) }));
   const { resource: consentResource, reload: refreshConsent } = useResource<ConsentState>(guardian ? `${guardian.id}:${student?.id ?? ""}` : null, async () => ({ data: await readConsentState(guardian!.id, student?.id ?? null) }));
+  const papersLoaded = papersResource.state !== "loading" || papersResource.data !== null;
   const papers = papersResource.data ?? [];
   const progress = progressResource.data ?? new Map<string, ProgressRow>();
   const consent = consentResource.data ?? {};
   const papersStale = isStale(papersResource);
   const papersError = papersResource.state === "failed" ? papersResource.error.message : null;
+
   const [online, setOnline] = useState(() => navigator.onLine);
 
   useEffect(() => {
@@ -242,6 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshLibrary = useCallback(async () => {
     await Promise.all([reloadPapers(), reloadProgress()]);
   }, [reloadPapers, reloadProgress]);
+
 
   const avatarQueue = useRef<Promise<unknown>>(Promise.resolve());
   const avatarRevision = useRef(0);
@@ -322,6 +330,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSession(s);
       if (!s) return setGate("onboarding");
 
+      // Profile selection needs every owned student, not the bootstrap RPC's
+      // oldest single student. Retain offline-safe guardian/profile reads.
       const g = await currentGuardian();
       if (cancelled) return;
       setGuardian(g);
@@ -334,6 +344,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!profilesResult.data.length) return setGate("onboarding");
       const st = selectedProfile(g.id, profilesResult.data);
       if (!st) return setGate("choose_profile");
+
       setStudent(st);
       setGate("ready");
     })().catch((e) => {
@@ -421,13 +432,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent,
-    papers, papersStale, papersError, progress, refreshLibrary, setAvatar, updateStudentProfile,
+    papers, papersLoaded, papersStale, papersError, progress, refreshLibrary,
+    setAvatar, updateStudentProfile,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
     setAvatar, updateStudentProfile, online, finishOnboarding, takePendingPaperType, signOutNow,
+
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

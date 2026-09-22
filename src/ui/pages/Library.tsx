@@ -60,6 +60,7 @@ function marksLost(paper: Record<string, unknown>): number | null {
 
 export default function Library() {
   const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
+
   const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
@@ -173,6 +174,7 @@ export default function Library() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
           {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}{papersStale ? " · offline copy" : ""}
+
         </span>
         <AppDropdown
           ariaLabel="Sort library"
@@ -189,6 +191,7 @@ export default function Library() {
       {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
       <div className="list">
         {!papers.length && papersError && (
+
           <div className="srow noicon">
             <div className="lbl">
               We couldn&rsquo;t load your papers
@@ -198,6 +201,7 @@ export default function Library() {
         )}
 
         {!papers.length && papersResource.state === "ready" && (
+
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet

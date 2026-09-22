@@ -15,6 +15,7 @@ export const paths = {
   home: "/",
   privacy: "/privacy",
   terms: "/terms",
+  cookies: "/cookies",
   library: "/library",
   paper: (paperId: string) => `/library/${paperId}`,
   question: (paperId: string, qId: string) => `/library/${paperId}/${qId}`,
@@ -30,18 +31,11 @@ export const paths = {
    is no unmount, no scroll loss and no refetch — and Back closes the sheet
    rather than leaving the screen. Sheets that carry a subject take
    `?sheet=<name>&for=<id>`.
-
-   Named here rather than as string literals at each call site, so the set of
-   overlays in the app is enumerable. */
+*/
 export const SHEET = {
-  /* Destructive actions state what will happen. They never ask "are you
-     sure?" — the consequence sheet is the alternative to that question. */
   consequence: "consequence",
-  /* Transcription wrong: the alternatives picker is the landing state. */
   fixTranscription: "fix",
-  /* Cause tag wrong. Accepted immediately, never called "disagree". */
   notWhyILostIt: "cause",
-  /* Marks disputed: we do not adjudicate, we point back to the teacher. */
   marksQuery: "marks",
   textSize: "text-size",
 } as const;

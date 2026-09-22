@@ -52,3 +52,28 @@ test("reversed completion cannot replace a newer resource and changing student h
   await act(async () => second.resolve({ data: "newer" })); await act(async () => first.resolve({ data: "older" })); expect(screen.queryByText("older")).toBeNull(); expect(screen.getByText("newer")).toBeTruthy();
   view.rerender(<Probe id="two" />); expect(screen.queryByText("newer")).toBeNull(); expect(screen.getByText("loading")).toBeTruthy();
 });
+
+test("cached papers paint during refresh without claiming live success", async () => {
+  const network = deferred<any>();
+  function Probe() {
+    const { resource } = useResource("student", () => network.promise, async () => "cached paper");
+    return <span>{resource.state}:{resource.data}</span>;
+  }
+  render(<Probe />);
+  expect(await screen.findByText("loading:cached paper")).toBeTruthy();
+  await act(async () => network.resolve({ data: "live paper" }));
+  expect(screen.getByText("ready:live paper")).toBeTruthy();
+});
+
+test("slow cache completion cannot replace the live result", async () => {
+  const cache = deferred<string>();
+  function Probe() {
+    const { resource } = useResource("student", async () => ({ data: "live paper" }), () => cache.promise);
+    return <span>{resource.state}:{resource.data}</span>;
+  }
+  render(<Probe />);
+  await screen.findByText("ready:live paper");
+  await act(async () => cache.resolve("older paper"));
+  expect(screen.getByText("ready:live paper")).toBeTruthy();
+  expect(screen.queryByText(/older paper/)).toBeNull();
+});

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 const DEFAULT_ORIGIN = "https://axonstudy.online";
-const SOCIAL_IMAGE = "/og-image.svg";
+const SOCIAL_IMAGE = "/axon-lockup-v2.png";
 
 type Props = {
   title: string;
@@ -36,12 +36,17 @@ export default function DocumentMeta({ title, description, path, noIndex = false
     setMeta('meta[property="og:type"]', "property", "og:type", "website");
     setMeta('meta[property="og:url"]', "property", "og:url", canonical);
     setMeta('meta[property="og:image"]', "property", "og:image", image);
-    setMeta('meta[property="og:image:width"]', "property", "og:image:width", "1200");
-    setMeta('meta[property="og:image:height"]', "property", "og:image:height", "630");
+    setMeta('meta[property="og:image:url"]', "property", "og:image:url", image);
+    setMeta('meta[property="og:image:secure_url"]', "property", "og:image:secure_url", image);
+    setMeta('meta[property="og:image:type"]', "property", "og:image:type", "image/png");
+    setMeta('meta[property="og:image:width"]', "property", "og:image:width", "1520");
+    setMeta('meta[property="og:image:height"]', "property", "og:image:height", "800");
+    setMeta('meta[property="og:image:alt"]', "property", "og:image:alt", "Axon logo and wordmark");
     setMeta('meta[name="twitter:card"]', "name", "twitter:card", "summary_large_image");
     setMeta('meta[name="twitter:title"]', "name", "twitter:title", title);
     setMeta('meta[name="twitter:description"]', "name", "twitter:description", description);
     setMeta('meta[name="twitter:image"]', "name", "twitter:image", image);
+    setMeta('meta[name="twitter:image:alt"]', "name", "twitter:image:alt", "Axon logo and wordmark");
 
     let link = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!link) {

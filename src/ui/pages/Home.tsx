@@ -34,20 +34,48 @@ import Chevron from "../components/Chevron";
 import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
 
+function HomeLoading({ name, subjects }: { name: string; subjects: string[] }) {
+  return (
+    <>
+      <div className="greet"><h1>{name}</h1></div>
+      <div className="subjectchips" aria-label="Your subjects">
+        {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
+      </div>
+      <div className="card nextstep" aria-busy="true">
+        <div className="eyebrow">Next step</div>
+        <div className="line" role="status">Loading papers…</div>
+        <div className="skel" style={{ width: "78%", marginTop: 12 }} aria-hidden="true" />
+      </div>
+      <div className="sectitle">Recent scans</div>
+      <div className="list" aria-hidden="true">
+        <div className="row">
+          <div className="b" style={{ width: "100%" }}>
+            <div className="skel" style={{ width: "58%" }} />
+            <div className="skel" style={{ width: "36%", marginTop: 8 }} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function Home() {
   const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
   const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
+
 
   const { addPaper } = useIngestion();
   const navigate = useNavigate();
 
   const name = student?.first_name ?? guardian?.name ?? "there";
   const day = new Date().toLocaleDateString(undefined, { weekday: "long" });
+  const subjects = student?.subjects ?? [];
 
-  // Loading is not empty. Rendering the "no papers yet" state while the read is
-  // still in flight tells a student they have nothing a moment before their
-  // library appears.
-  if (papersResource.state === "loading" && papersResource.data === null) return <div role="status">Loading papers…</div>;
+  // The old implementation returned null here and made a fast HTML/React boot
+  // look slow. Loading is neither empty nor an error, so render the identity and
+  // geometry we already know while the library paints from cache/network.
+  if (papersResource.state === "loading" && papersResource.data === null) return <HomeLoading name={name} subjects={subjects} />;
+
 
   // A library we could not read is not an empty one. Offering "Add your first
   // paper" to someone who already has papers, because the read failed, is the
@@ -89,20 +117,23 @@ export default function Home() {
   }
 
   const recent = papers.slice(0, 3);
-  const subjects = student?.subjects ?? [];
-  const unreadableCount = unreadable?.length ?? 0;
+  const analyticsReady = state === "ready" && progressResource.state === "ready";
+  const unreadableCount = analyticsReady ? (unreadable?.length ?? 0) : null;
   const waiting = [...progress.values()].filter((p) => {
     const key = statusKeyForRun(p.status);
     return key === "needs_review" || key === "ready";
   }).length;
-  const attentionCount = (needsCheck?.count ?? 0) + unreadableCount + waiting;
-  const nextCopy = state !== "ready" || progressResource.state !== "ready"
-    ? "Checking what needs your attention…"
+  const attentionCount = analyticsReady
+    ? (needsCheck?.count ?? 0) + (unreadableCount ?? 0) + waiting
+    : null;
+  const nextCopy = attentionCount == null
+    ? "Checking your latest evidence…"
     : attentionCount
-    ? `${attentionCount} ${attentionCount === 1 ? "thing needs" : "things need"} your eyes before the analysis can move on.`
-    : readiness?.has_enough_data
-      ? "Nothing needs you right now. Your latest evidence is ready in Insights."
-      : "Nothing needs you right now. Scan your next marked paper when you get it back.";
+      ? `${attentionCount} ${attentionCount === 1 ? "thing needs" : "things need"} your eyes before the analysis can move on.`
+      : readiness?.has_enough_data
+        ? "Nothing needs you right now. Your latest evidence is ready in Insights."
+        : "Nothing needs you right now. Scan your next marked paper when you get it back.";
+
 
   return (
     <>
@@ -119,7 +150,7 @@ export default function Home() {
       <div className="card nextstep">
         <div className="eyebrow">Next step</div>
         <div className="line">{nextCopy}</div>
-        {attentionCount > 0 && (
+        {attentionCount != null && attentionCount > 0 && (
           <PressBox as={Link} to={paths.library} className="textaction">Review now <Chevron /></PressBox>
         )}
       </div>
@@ -127,7 +158,7 @@ export default function Home() {
 
       {/* Shown only when there is something to check. The count and the paper
           count are both real; the surface states its own sample size. */}
-      {attentionCount > 0 && (
+      {attentionCount != null && attentionCount > 0 && (
         <PressBox
           as="button"
           type="button"
@@ -146,7 +177,7 @@ export default function Home() {
               Needs your eyes
             </div>
             <div className="t2">
-              {needsCheck?.count ?? 0} to confirm · {unreadableCount} unreadable · {waiting} ready to review
+              {needsCheck?.count ?? 0} to confirm · {unreadableCount ?? 0} unreadable · {waiting} ready to review
             </div>
           </div>
           <Chevron />

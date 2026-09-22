@@ -30,12 +30,16 @@
     # third-party script cannot reach it.
     Permissions-Policy = "camera=(self), microphone=(), geolocation=()"
 
-# The document must not be cached hard, or a redeploy won't reach anyone who has
-# already visited.
+# Browsers revalidate the HTML so a deploy reaches them immediately. The CDN is
+# allowed to hold the generic SPA document briefly and serve stale while it
+# refreshes in the background; no student/account data is present in this file.
 [[headers]]
   for = "/index.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+    CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=86400"
+    Cloudflare-CDN-Cache-Control = "public, max-age=300, stale-while-revalidate=86400"
+    Link = "</fonts/onest-latin-var.woff2>; rel=preload; as=font; type=font/woff2; crossorigin"
 
 # Vite fingerprints these, so they can be cached forever.
 [[headers]]

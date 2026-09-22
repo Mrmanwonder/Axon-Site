@@ -1,0 +1,74 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERFORMANCE MOTION POLICY
+
+   Axon acknowledges input immediately and every finite decorative transition
+   settles inside 280ms. This file intentionally loads last: system.css is kept
+   close to the visual prototype, while this layer is the shipping performance
+   contract. Continuous loading shimmer is disabled rather than sped up into a
+   distracting 300ms loop.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --spring: cubic-bezier(.2, .8, .2, 1);
+  --d-state: 110ms;
+  --d-disclose: 180ms;
+  --d-recompute: 260ms;
+  --d-tint: 120ms;
+  --d-glyph: 150ms;
+  --d-label: 170ms;
+  --d-icon: 180ms;
+  --d-plate: 180ms;
+  --d-scrim: 200ms;
+  --d-panel: 240ms;
+  --d-theme: 180ms;
+  --d-review: 260ms;
+}
+
+/* Explicit legacy durations that do not read the tokens above. */
+.tabbar {
+  transition-duration: 180ms, 180ms;
+  transition-timing-function: var(--spring), var(--spring);
+}
+
+.disclose .toggle .car,
+.sw .tr {
+  transition-duration: 180ms;
+  transition-timing-function: var(--spring);
+}
+
+.disclose .panel,
+#appToast {
+  transition-duration: 220ms;
+  transition-timing-function: var(--spring);
+}
+
+.reviewsheet {
+  transition-duration: 260ms;
+  transition-timing-function: var(--spring);
+}
+
+.qt .track i {
+  transition-duration: 240ms;
+  transition-timing-function: var(--spring);
+}
+
+/* Onboarding used 260ms plus up to 170ms of stagger. Keep the staggered feel,
+   but make the final child visible well inside the 280ms interaction budget. */
+.obview > * {
+  animation-duration: 180ms;
+  animation-timing-function: var(--spring);
+}
+.obview > :nth-child(1) { animation-delay: 0ms; }
+.obview > :nth-child(2) { animation-delay: 15ms; }
+.obview > :nth-child(3) { animation-delay: 30ms; }
+.obview > :nth-child(4) { animation-delay: 45ms; }
+.obview > :nth-child(n+5) { animation-delay: 60ms; }
+.obprog .segs i.now span { animation-duration: 220ms; }
+
+/* A 1.5s infinite shimmer violates the product's finite-motion philosophy and
+   burns paint work while the app is already busy. Static skeleton geometry is
+   enough to communicate loading. */
+.skel { animation: none; }
+
+/* The reduced-motion rules in app.css/system.css remain authoritative and are
+   intentionally not weakened here. */

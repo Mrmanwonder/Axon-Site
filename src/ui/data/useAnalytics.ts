@@ -11,9 +11,9 @@
    marks are zero. Both are lies with a confident face, which is the specific
    failure hard rule 4 exists to prevent.
 
-   On failure this reports "failed" and holds whatever it had. It never
-   substitutes a default, and callers must not treat a failed read as an empty
-   one.
+   Cached evidence is allowed to paint immediately because past papers are an
+   explicit offline feature. The network refresh starts at the same time and
+   replaces that snapshot when it lands. Consent does not use this path.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useResource, isStale } from "./useResource";
@@ -21,6 +21,7 @@ import {
   lossByCause, needsCheck, unreadablePages, analyticsReadiness,
 } from "./modules";
 import { useApp } from "./AppProvider";
+import { getCached } from "../../cache.js";
 
 export type Readiness = {
   papers_counted: number;
@@ -49,10 +50,21 @@ export function useAnalytics(): Analytics {
     ]);
     return { data: { readiness: r.data, loss: l.data, needsCheck: c.data, unreadable: u.data },
       stale: r.stale || l.stale || c.stale || u.stale };
+  }, async () => {
+    const [readiness, loss, check, unreadable] = await Promise.all([
+      getCached(`readiness:${student!.id}`), getCached(`loss:${student!.id}`),
+      getCached(`needscheck:${student!.id}`), getCached(`unreadable:${student!.id}`),
+    ]);
+    // Only a complete cached aggregate can stand in for this resource. Missing
+    // evidence remains unknown while the concurrent live request resolves.
+    if ([readiness, loss, check, unreadable].some(value => value === null)) return null;
+    return { readiness: readiness as Readiness, loss: loss as Record<string, number>,
+      needsCheck: check as NonNullable<Analytics["needsCheck"]>, unreadable: unreadable as NonNullable<Analytics["unreadable"]> };
   });
   return {
     state: resource.state, readiness: resource.data?.readiness ?? null,
     loss: resource.data?.loss ?? null, needsCheck: resource.data?.needsCheck ?? null,
     unreadable: resource.data?.unreadable ?? null, stale: isStale(resource), reload,
   };
+
 }
