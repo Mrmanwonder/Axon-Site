@@ -29,7 +29,7 @@ import Crop from "../components/Crop";
 import AnswerBlockView from "../components/AnswerBlock";
 import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
-import DelayedLoading from "../components/DelayedLoading";
+import PageSkeleton from "../components/PageSkeleton";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
 
@@ -93,7 +93,7 @@ export default function QuestionDetail() {
     );
   }
 
-  if (!paper) return <DelayedLoading label="Loading question…" />;
+  if (!paper) return <PageSkeleton variant="question" label="Loading question…" />;
 
   if (!attempt) {
     return (
