@@ -88,7 +88,16 @@ test('production AI runtime is Cloudflare-only', () => {
 
   assert.match(deploy, /axon-backend/);
   assert.match(deploy, /Cloudflare Workers/);
-  assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=|w-triage|queue-tick/);
+  assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=/);
+
+  const bashBlocks = [...deploy.matchAll(/```bash\\n([\\s\\S]*?)```/g)].map((match) => match[1]);
+  const deployCommand = bashBlocks.find((block) => block.includes('supabase functions deploy')) ?? '';
+  assert.ok(deployCommand, 'Supabase billing deploy command is documented');
+  assert.match(deployCommand, /billing-checkout/);
+  assert.match(deployCommand, /billing-portal/);
+  assert.match(deployCommand, /stripe-webhook/);
+  assert.doesNotMatch(deployCommand, /w-triage|queue-tick|paper-submit|upload-intent|w-explain/);
+
   assert.match(edgeReadme, /billing-checkout/);
   assert.match(edgeReadme, /billing-portal/);
   assert.match(edgeReadme, /stripe-webhook/);
