@@ -27,17 +27,19 @@ confirm upstream Supabase auth rate-limit settings.
 
 Storage is classified as strictly necessary (session continuity, preferences, offline
 cache and scan drafts) or as the existing itemised guardian consent ledger for study
-processing. Axon has no advertising/marketing tracker and no separate product analytics
-tracker, so a cookie banner would be a fake choice and is intentionally not shown.
-Settings remains the place to revisit guardian consent, and the Privacy Policy explains
-necessary local storage. Any future non-essential analytics must be consent-gated before
-initialisation and requires a versioned policy update.
+processing. Axon now includes optional PostHog product analytics. PostHog is consent-gated
+before initialisation: a browser with no recorded choice sees an equal "Necessary only" /
+"Allow analytics" control, and Settings exposes the same analytics preference later.
+Session replay is configured to mask all text and inputs. Axon still has no advertising
+tracker and student academic content must never be deliberately included in custom
+analytics events. The Privacy Policy and Cookie & Similar Technologies Policy document
+the distinction between necessary storage and optional analytics.
 
 ## Search and metadata
 
-Only `/privacy` and `/terms` are intentionally indexed. Auth, onboarding, dashboard,
-library, scanner, review, settings and invalid routes are `noindex`; they are excluded
-from the sitemap. `robots.txt` is crawler guidance, not access control. Canonical and
+`/privacy`, `/terms` and `/cookies` are intentionally indexed. Auth, onboarding,
+dashboard, library, scanner, review, settings and invalid routes are `noindex`; they are
+excluded from the sitemap. `robots.txt` is crawler guidance, not access control. Canonical and
 social URLs use `https://axonstudy.online`, matching the deployed site origin configured
 for the Worker. Change that origin together in Wrangler, `VITE_SITE_URL`, robots and the
 sitemap if the canonical domain changes.
@@ -68,15 +70,19 @@ the agreed mobile profile, not guarantees for every device or network.
 
 ## Owner and legal follow-up
 
-All unresolved statements are visibly marked in the pages. Owners/legal counsel must
-confirm: the contracting entity and contact details; the processor list/notices; data,
-backup, log and billing retention; supported countries and ages; guardian-verification
-wording; international-transfer mechanism; warranty/liability language; governing law,
-venue and dispute process. These placeholders must be resolved before public launch.
+The public pages now identify the operator as Axon and use support@axonstudy.online for
+support and privacy contact. No registered postal address is published because none was
+provided. The policies document the current Cambridge/CAIE Class 9–12 scope, under-18
+student profile model, Supabase/Cloudflare/OpenRouter/Stripe/Google/Apple/PostHog provider
+categories, India governing-law clause subject to mandatory local rights, AI-output
+limitations and a liability cap subject to non-waivable law. Remaining operational legal
+work is implementation rather than placeholder copy: complete real guardian verification
+before claiming verified parental consent, keep processor/transfer arrangements current,
+and adopt/enforce provider, backup, security-log and billing retention controls.
 
 ## Manual release QA
 
-At 320, 360, 375, 390, 414, 768 and desktop widths, test direct navigation to both
+At 320, 360, 375, 390, 414, 768 and desktop widths, test direct navigation to all three
 legal routes and an invalid route, keyboard focus/order, footer links, theme contrast,
 and absence of horizontal overflow. With a real phone on an HTTPS deploy, separately
 exercise permission, preview, capture, preview image, canvas conditioning, upload,
