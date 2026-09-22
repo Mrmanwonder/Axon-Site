@@ -1,170 +1,70 @@
 # AXON Engineering Specification
 
-# Volume IV --- AI Specification
+# Volume IV — AI Specification
 
-**Document ID:** AES-VOL-IV **Version:** 1.0.0 **Status:** Draft for
-Implementation **Depends On:** Constitution Chapters 0--9, Volumes
-I--III
+## Purpose
 
-------------------------------------------------------------------------
+Axon's AI layer reads marked-paper evidence and produces structured,
+auditable outputs for the paper-processing and explanation pipeline.
 
-# Purpose
+The production implementation lives in `Mrmanwonder/axon-backend` on
+Cloudflare Workers.
 
-This volume specifies the complete artificial intelligence architecture
-of AXON.
+## Stages
 
-It defines how intelligence is modeled, how context is assembled, how
-decisions are produced, how recommendations are explained, and how
-safety and privacy are enforced.
+1. Triage — determine whether submitted pages are usable/appropriate.
+2. Structure — locate question regions and page relationships.
+3. Content — read question/answer/mark fields with provenance.
+4. Reconcile — deterministic consistency checks.
+5. Adjudicate — inspect conflicts without silently overriding evidence.
+6. Explain — explain confirmed lost marks and produce a useful next step.
 
-The AI layer SHALL be deterministic wherever possible and
-evidence-driven in every recommendation.
+Crop and sweep/recovery are supporting runtime stages.
 
-------------------------------------------------------------------------
+## Model runtime
 
-# Objectives
+- Gemini is called from the shared Cloudflare backend client.
+- Model selection/routing remains explicit and observable.
+- Structured outputs are validated by code.
+- A schema match is not treated as proof of semantic correctness.
+- Retries are bounded.
 
--   Build an explainable Academic Digital Twin.
--   Generate personalized missions.
--   Adapt long-term study plans.
--   Minimize hallucinations.
--   Preserve user trust.
--   Support future model upgrades without changing application behavior.
+## Live web grounding
 
-------------------------------------------------------------------------
+Tavily is available only from the Cloudflare backend.
 
-# AI Subsystems
+For the current product it is enabled for explanation calls. The model may
+decide whether web evidence is needed, but it cannot author the outbound search
+query. Server code constructs the query from public academic context such as
+subject and question text.
 
-## 1. Academic Digital Twin
+Never include student answers, teacher remarks, names, emails, IDs, auth data,
+or signed URLs in Tavily search context. URL extraction is restricted to public
+URLs returned by the same search.
 
-Owns: - Knowledge model - Behaviour model - Context model - Strategy
-model - Confidence estimates
+## Grounding and provenance
 
-## 2. Context Assembly Engine
+High-trust claims must be supported by one or more of:
+- source page/region provenance,
+- deterministic arithmetic/consistency checks,
+- student confirmation,
+- explicitly recorded public web sources.
 
-Responsible for: - Collecting relevant memory - Calendar context -
-Planner context - Recent study history - Active mission - User
-preferences - Resource metadata
+If grounding is insufficient, the system should withhold or mark the output
+uncertain.
 
-## 3. Prompt Orchestrator
+## Evaluation
 
-Responsible for:
+Track at minimum:
+- extraction accuracy,
+- mark/question attribution accuracy,
+- false-confident error rate,
+- review/correction rate,
+- explanation grounding rate,
+- hallucination/withheld rate,
+- latency,
+- model/tool failures,
+- cost.
 
--   Prompt templates
--   Tool selection
--   Context injection
--   Model routing
--   Prompt versioning
--   Token budgeting
-
-## 4. Mission Generator
-
-Responsible for:
-
--   Daily mission generation
--   Mission refinement
--   Recovery missions
--   Prioritization
--   Explainability
-
-## 5. Planner Optimizer
-
-Responsible for:
-
--   Schedule optimization
--   Workload balancing
--   Time estimation
--   Conflict resolution
-
-------------------------------------------------------------------------
-
-# Memory Architecture
-
-Memory SHALL be divided into:
-
--   Session Memory
--   Short-Term Memory
--   Long-Term Academic Memory
--   Preference Memory
--   Procedural Memory
--   Retrieval Cache
-
-Each memory type MUST define: - ownership, - retention policy, - update
-triggers, - deletion policy, - privacy classification.
-
-------------------------------------------------------------------------
-
-# Context Pipeline
-
-The canonical AI request flow SHALL be:
-
-User Event → Context Assembly → Memory Retrieval → Planner Context →
-Digital Twin Snapshot → Prompt Construction → Model Execution →
-Validation → Explainability → Response
-
-------------------------------------------------------------------------
-
-# Explainability Requirements
-
-Every recommendation SHOULD answer:
-
--   Why?
--   Why now?
--   Which evidence?
--   What alternatives were considered?
-
-Recommendations without supporting evidence SHOULD NOT be presented as
-facts.
-
-------------------------------------------------------------------------
-
-# Safety Requirements
-
-The AI layer SHALL:
-
--   preserve user privacy,
--   avoid fabricated evidence,
--   distinguish confidence from certainty,
--   log decision metadata,
--   support auditability,
--   gracefully degrade if context is unavailable.
-
-------------------------------------------------------------------------
-
-# Evaluation Framework
-
-The AI system SHALL be evaluated on:
-
--   Recommendation quality
--   Mission completion rate
--   Planning accuracy
--   Hallucination rate
--   User satisfaction
--   Recovery effectiveness
--   Latency
--   Explainability score
-
-------------------------------------------------------------------------
-
-# Future Specifications
-
-This volume SHALL expand into dedicated specifications for:
-
--   Digital Twin Schema
--   Memory Model
--   Prompt Architecture
--   Retrieval System
--   Planner Algorithms
--   Mission Algorithms
--   Evaluation Benchmarks
--   Model Routing
--   Safety & Guardrails
--   AI Observability
-
-------------------------------------------------------------------------
-
-# Acceptance Criteria
-
-This volume is complete only when every AI subsystem has an independent
-engineering specification, defined interfaces, evaluation metrics, and
-documented ownership boundaries.
+The primary optimization target is not model eloquence. It is trustworthy,
+useful academic feedback.

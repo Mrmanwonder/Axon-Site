@@ -79,3 +79,23 @@ test('optional PostHog analytics is consent gated', () => {
   assert.match(settings, /Product analytics/);
 });
 
+
+
+test('production AI runtime is Cloudflare-only', () => {
+  const deploy = read('supabase/DEPLOY.md');
+  const edgeReadme = read('supabase/functions/README.md');
+  const envExample = read('.env.example');
+
+  assert.match(deploy, /axon-backend/);
+  assert.match(deploy, /Cloudflare Workers/);
+  assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=|w-triage|queue-tick/);
+  assert.match(edgeReadme, /billing-checkout/);
+  assert.match(edgeReadme, /billing-portal/);
+  assert.match(edgeReadme, /stripe-webhook/);
+  assert.doesNotMatch(envExample, /VITE_TAVILY|TAVILY_API_KEY/);
+
+  assert.equal(existsSync('supabase/functions/_shared/openrouter.ts'), false);
+  assert.equal(existsSync('supabase/functions/_shared/tavily.ts'), false);
+  assert.equal(existsSync('supabase/functions/w-triage/index.ts'), false);
+  assert.equal(existsSync('supabase/functions/w-explain/index.ts'), false);
+});

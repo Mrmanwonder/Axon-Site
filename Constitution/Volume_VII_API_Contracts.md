@@ -1,172 +1,71 @@
 # AXON Engineering Specification
 
-# Volume VII --- API Contracts
+# Volume VII — API Contracts
 
-**Document ID:** AES-VOL-VII **Version:** 1.0.0 **Status:** Draft for
-Implementation **Depends On:** Constitution Chapters 0--9, Volumes I--VI
+## Runtime owner
 
-------------------------------------------------------------------------
+Production paper APIs are implemented by `Mrmanwonder/axon-backend` on
+Cloudflare Workers. Axon-Site must not create a parallel Supabase paper API.
 
-# Purpose
+## Student-facing paper API
 
-This volume defines the canonical API contract for every interface
-exposed by AXON.
+The Cloudflare API owns the browser-facing operations required to:
+- create/submit a paper workflow,
+- obtain upload intents,
+- confirm uploaded objects,
+- retrieve signed paper/review assets,
+- complete review and begin explanation,
+- perform deletion operations that require R2/runtime coordination.
 
-API contracts are the formal agreement between clients, backend
-services, AI orchestration, and external integrations. They define the
-shape of requests and responses independently of implementation details.
+All endpoints must enforce authenticated ownership server-side.
 
-------------------------------------------------------------------------
+## Queue contracts
 
-# Objectives
+Internal Cloudflare Queue messages carry identifiers needed by:
+- triage,
+- structure,
+- crop,
+- content,
+- reconcile,
+- adjudicate,
+- explain,
+- sweep/recovery.
 
--   Establish stable, versioned interfaces.
--   Ensure interoperability across services.
--   Support deterministic client development.
--   Prevent breaking changes through explicit versioning.
+Messages must be safe under at-least-once delivery. A queue acknowledgement
+means durable completion, durable replacement/retry, or confirmed terminal
+state.
 
-------------------------------------------------------------------------
+## Model contract
 
-# API Design Principles
+All Gemini calls go through the shared backend model client.
 
--   Resource-oriented endpoints.
--   Explicit versioning.
--   Idempotent operations where applicable.
--   Consistent error model.
--   Pagination for collections.
--   Cursor-based pagination preferred.
--   Backward compatibility across minor versions.
+Inputs define:
+- stage,
+- system/instruction content,
+- optional images,
+- structured output schema,
+- post-parse validator,
+- run/paper/region/student metadata,
+- bounded retry/timeout behavior,
+- optional live-web policy.
 
-------------------------------------------------------------------------
+## Tavily contract
 
-# API Categories
+Live-web grounding exists only in `axon-backend`.
 
-## Authentication APIs
+For explanation calls:
+- the model may request search/extraction,
+- the outbound search query is server-controlled public academic context,
+- student answers, teacher remarks, identifiers, auth data, and signed URLs are
+  excluded,
+- extraction is limited to public URLs returned by the same search,
+- consulted URLs are surfaced as source metadata.
 
--   Sign In
--   Sign Up
--   Refresh Token
--   Logout
--   Password Recovery
--   Session Validation
+## Supabase Edge Functions
 
-## User APIs
+Axon-Site deploys only billing functions:
+- `billing-checkout`
+- `billing-portal`
+- `stripe-webhook`
 
--   Profile
--   Preferences
--   Settings
--   Integrations
-
-## Mission APIs
-
--   Current Mission
--   Mission History
--   Mission Completion
--   Mission Recovery
-
-## Planner APIs
-
--   Schedule
--   Calendar Sync
--   Availability
--   Study Blocks
-
-## Academic APIs
-
--   Knowledge State
--   Progress
--   Analytics
--   Review
-
-## AI APIs
-
--   Explainability
--   Recommendations
--   Mission Generation
-
-## Resource APIs
-
--   Notes
--   Files
--   Past Papers
--   Search
-
-------------------------------------------------------------------------
-
-# Canonical Endpoint Template
-
-Every endpoint specification SHALL include:
-
-1.  Endpoint Identifier
-2.  HTTP Method
-3.  Route
-4.  Purpose
-5.  Authentication Requirements
-6.  Authorization Rules
-7.  Request Schema
-8.  Response Schema
-9.  Validation Rules
-10. Error Codes
-11. Idempotency Behaviour
-12. Rate Limits
-13. Caching Policy
-14. Version History
-15. Acceptance Tests
-
-------------------------------------------------------------------------
-
-# Error Model
-
-Every API SHALL return a structured error object containing:
-
--   Error Code
--   Human-readable Message
--   Machine-readable Identifier
--   Correlation ID
--   Timestamp
--   Retry Guidance (if applicable)
-
-------------------------------------------------------------------------
-
-# Versioning Policy
-
--   Major versions MAY introduce breaking changes.
--   Minor versions SHALL remain backward compatible.
--   Deprecated endpoints MUST include a documented migration path.
-
-------------------------------------------------------------------------
-
-# Security Requirements
-
-Every API SHALL define:
-
--   Authentication mechanism
--   Authorization model
--   Input validation
--   Rate limiting
--   Audit logging
--   Sensitive data classification
-
-------------------------------------------------------------------------
-
-# Future Specifications
-
-This volume SHALL expand into:
-
--   REST Endpoint Catalog
--   Internal Service APIs
--   Event APIs
--   WebSocket Contracts
--   Webhook Contracts
--   GraphQL (if adopted)
--   Authentication Flows
--   Error Catalog
--   API Style Guide
-
-------------------------------------------------------------------------
-
-# Acceptance Criteria
-
-This volume is complete only when every public and internal interface
-has a standalone specification with schemas, lifecycle policies,
-versioning, and security requirements.
+These are not part of the paper/model runtime.
