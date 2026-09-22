@@ -33,30 +33,10 @@ import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
+import PageSkeleton from "../components/PageSkeleton";
 
-function HomeLoading({ name, subjects }: { name: string; subjects: string[] }) {
-  return (
-    <>
-      <div className="greet"><h1>{name}</h1></div>
-      <div className="subjectchips" aria-label="Your subjects">
-        {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
-      </div>
-      <div className="card nextstep" aria-busy="true">
-        <div className="eyebrow">Next step</div>
-        <div className="line" role="status">Loading papers…</div>
-        <div className="skel" style={{ width: "78%", marginTop: 12 }} aria-hidden="true" />
-      </div>
-      <div className="sectitle">Recent scans</div>
-      <div className="list" aria-hidden="true">
-        <div className="row">
-          <div className="b" style={{ width: "100%" }}>
-            <div className="skel" style={{ width: "58%" }} />
-            <div className="skel" style={{ width: "36%", marginTop: 8 }} />
-          </div>
-        </div>
-      </div>
-    </>
-  );
+function HomeLoading() {
+  return <PageSkeleton variant="home" label="Loading papers…" />;
 }
 
 export default function Home() {
@@ -74,7 +54,7 @@ export default function Home() {
   // The old implementation returned null here and made a fast HTML/React boot
   // look slow. Loading is neither empty nor an error, so render the identity and
   // geometry we already know while the library paints from cache/network.
-  if (papersResource.state === "loading" && papersResource.data === null) return <HomeLoading name={name} subjects={subjects} />;
+  if (papersResource.state === "loading" && papersResource.data === null) return <HomeLoading />;
 
 
   // A library we could not read is not an empty one. Offering "Add your first
