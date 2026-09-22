@@ -84,7 +84,6 @@ Every screen specification SHALL include:
 -   Session Review
 -   Planner
 -   Analytics
--   Mentor
 -   Resources
 -   Search
 -   Notifications
@@ -115,8 +114,6 @@ Planner - Owner: Mission Engine - Primary Goal: Organize future work.
 Analytics - Owner: Academic Digital Twin - Primary Goal: Explain
 progress.
 
-Mentor - Owner: Academic Digital Twin - Primary Goal: Provide contextual
-guidance.
 
 Resources - Owner: Content Services - Primary Goal: Access learning
 material.
