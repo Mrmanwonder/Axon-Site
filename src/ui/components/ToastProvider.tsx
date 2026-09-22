@@ -25,7 +25,7 @@ export function useToast(): ToastValue {
   return v;
 }
 
-const DWELL = 4200;
+const DWELL = 3200;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [msg, setMsg] = useState<{ text: string; tone: Tone } | null>(null);

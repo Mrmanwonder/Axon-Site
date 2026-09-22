@@ -22,9 +22,8 @@ function rememberDismissed(id: string) {
 }
 
 export function DraftsButton({ count, onOpen }: { count: number; onOpen: () => void }) {
-  const label = count === 0
-    ? "Open saved drafts"
-    : `Open ${count} saved draft${count === 1 ? "" : "s"}`;
+  if (count === 0) return null;
+  const label = `Open ${count} saved draft${count === 1 ? "" : "s"}`;
 
   return (
     <PressBox

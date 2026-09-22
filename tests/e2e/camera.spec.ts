@@ -87,7 +87,7 @@ test("camera startup stays renderable until iPhone playback becomes live", async
   });
 });
 
-test("mobile Scan keeps the navbar visible without stretching the resume draft", async ({ page }) => {
+test("mobile Scan owns the viewport without stretching the resume draft", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/tests/browser/index.html");
 
@@ -137,12 +137,12 @@ test("mobile Scan keeps the navbar visible without stretching the resume draft",
     const toast = document.querySelector<HTMLElement>(".drafttoast")!;
     const controls = document.querySelector<HTMLElement>(".scanctrls")!;
     const dock = document.querySelector<HTMLElement>(".tabdock")!;
-    const navTop = dock.getBoundingClientRect().top;
     const withoutTray = {
-      dockDisplay: getComputedStyle(dock).display,
+      dockVisibility: getComputedStyle(dock).visibility,
+      dockPointerEvents: getComputedStyle(dock).pointerEvents,
       heroBottom: hero.getBoundingClientRect().bottom,
       controlsBottom: controls.getBoundingClientRect().bottom,
-      navTop,
+      viewportHeight: window.innerHeight,
       toastHeight: toast.getBoundingClientRect().height,
       toastBottomGap: hero.getBoundingClientRect().bottom - toast.getBoundingClientRect().bottom,
     };
@@ -159,18 +159,19 @@ test("mobile Scan keeps the navbar visible without stretching the resume draft",
         heroBottom: hero.getBoundingClientRect().bottom,
         trayTop: tray.getBoundingClientRect().top,
         trayBottom: tray.getBoundingClientRect().bottom,
-        navTop: dock.getBoundingClientRect().top,
+        viewportHeight: window.innerHeight,
       },
     };
   });
 
-  expect(layout.withoutTray.dockDisplay).not.toBe("none");
+  expect(layout.withoutTray.dockVisibility).toBe("hidden");
+  expect(layout.withoutTray.dockPointerEvents).toBe("none");
   expect(layout.withoutTray.toastHeight).toBeLessThan(120);
   expect(layout.withoutTray.toastBottomGap).toBeCloseTo(96, 0);
-  expect(layout.withoutTray.heroBottom).toBeLessThanOrEqual(layout.withoutTray.navTop + 1);
-  expect(layout.withoutTray.controlsBottom).toBeLessThanOrEqual(layout.withoutTray.navTop + 1);
+  expect(layout.withoutTray.heroBottom).toBeCloseTo(layout.withoutTray.viewportHeight, 0);
+  expect(layout.withoutTray.controlsBottom).toBeLessThanOrEqual(layout.withoutTray.heroBottom + 1);
   expect(layout.withTray.heroBottom).toBeLessThanOrEqual(layout.withTray.trayTop + 1);
-  expect(layout.withTray.trayBottom).toBeLessThanOrEqual(layout.withTray.navTop + 1);
+  expect(layout.withTray.trayBottom).toBeCloseTo(layout.withTray.viewportHeight, 0);
 });
 
 test("a draft alert slides away while its saved pages remain available", async ({ page }) => {

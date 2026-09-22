@@ -308,14 +308,6 @@
      recomposite the camera texture underneath several translucent controls
      for every frame. The same contrast is cheaper as a slightly denser flat
      material; desktop glass and the navigation lens remain unchanged. */
-  @media (hover:none) and (pointer:coarse){
-    .scanhero[data-camera="on"] .sidebtn,
-    .scanhero[data-camera="on"] .autotoggle,
-    .scanhero[data-camera="on"] .drafttoast{
-      backdrop-filter:none;-webkit-backdrop-filter:none;
-      background:rgba(30,30,34,.68);
-    }
-  }
 
   /* ── the page tray ──
      A booklet is 15-20 pages. The tray is where they accumulate, reorder and get
@@ -431,7 +423,7 @@
   .cause .sw{width:9px;height:9px;border-radius:5px;background:var(--c);}
 
   /* ── fullscreen paper review ── */
-  .reviewsheet{position:absolute;inset:0;z-index:55;background:var(--bg);transform:translateX(100%);will-change:transform;display:flex;flex-direction:column;transition:transform .42s cubic-bezier(.32,.72,0,1);}
+  .reviewsheet{position:absolute;inset:0;z-index:55;background:var(--bg);transform:translateX(100%);will-change:transform;display:flex;flex-direction:column;transition:transform var(--d-review) var(--spring);}
   .reviewsheet.open{transform:translateX(0);}
   .rvhead{padding-top:calc(var(--top-inset) + 10px);height:calc(var(--top-inset) + 48px);display:flex;align-items:center;justify-content:space-between;padding-left:14px;padding-right:16px;flex-shrink:0;border-bottom:.5px solid var(--hairline);}
   .rvback{width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;background:var(--surface-sunk);cursor:pointer;will-change:transform;}
@@ -470,9 +462,9 @@
   .insight .line em{font-style:normal;color:var(--blue);}
   .disclose{margin-top:14px;border-top:.5px solid var(--hairline);}
   .disclose .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0;cursor:pointer;font-size:14px;font-weight:500;color:var(--label-2);}
-  .disclose .toggle .car{width:11px;height:11px;transition:transform .32s var(--spring);opacity:.5;}
+  .disclose .toggle .car{width:11px;height:11px;transition:transform var(--d-disclose) var(--spring);opacity:.5;}
   .disclose.open .toggle .car{transform:rotate(90deg);}
-  .disclose .panel{overflow:hidden;height:0;transition:height .38s var(--spring);}
+  .disclose .panel{overflow:hidden;height:0;transition:height var(--d-panel) var(--spring);}
   .disclose .inner{padding-bottom:16px;}
   .dgroup{margin-bottom:13px;}
   .dgroup:last-child{margin-bottom:0;}
@@ -631,11 +623,11 @@
      Only the glow was reading its origin off a different box. */
   .tabbar{--nav-pad:5px;position:relative;padding:var(--nav-pad);border-radius:32px;overflow:hidden;background:var(--nav-bg);
     backdrop-filter:blur(30px) saturate(2);-webkit-backdrop-filter:blur(30px) saturate(2);
-    box-shadow:var(--nav-shadow);transition:background .4s ease,box-shadow .4s ease;}
+    box-shadow:var(--nav-shadow);transition:background var(--d-theme) ease,box-shadow var(--d-theme) ease;}
   .tabbar .rim{position:absolute;inset:0;border-radius:32px;pointer-events:none;z-index:5;
     border:.5px solid var(--nav-border);box-shadow:inset 0 1px 0 var(--nav-rim),inset 0 -1px 0 rgba(255,255,255,.08);}
   .refractlayer{position:relative;display:flex;align-items:center;}
-  .pill{position:absolute;top:0;left:0;height:46px;border-radius:26px;background:var(--nav-pill);will-change:transform;transition:background .4s ease;}
+  .pill{position:absolute;top:0;left:0;height:46px;border-radius:26px;background:var(--nav-pill);will-change:transform;transition:background var(--d-theme) ease;}
   .tab{flex:1;position:relative;z-index:1;height:46px;display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
   .tab .lbl{display:none;}
   .isec{min-width:0;}
@@ -666,7 +658,7 @@
     width:34px;height:34px;border-radius:17px;display:flex;align-items:center;justify-content:center;
     background:var(--nav-bg);backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);
     border:.5px solid var(--nav-border);color:var(--label-2);cursor:pointer;
-    transition:color .25s ease,background .4s ease;}
+    transition:color var(--d-icon) ease,background var(--d-theme) ease;}
   .themebtn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
   [data-theme="dark"] .themebtn .ic-moon{display:none;}
   [data-theme="light"] .themebtn .ic-sun{display:none;}
@@ -791,7 +783,7 @@
   #appToast{position:absolute;left:10px;right:10px;top:calc(var(--top-inset) + 8px);z-index:60;
     background:rgba(30,30,34,.82);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
     border:.5px solid rgba(255,255,255,.16);border-radius:18px;padding:12px 15px;
-    transform:translateY(-160%);transition:transform .38s var(--spring);pointer-events:none;}
+    transform:translateY(-160%);transition:transform var(--d-panel) var(--spring);pointer-events:none;}
   #appToast.show{transform:translateY(0);}
   #appToast .t1{font-size:14px;font-weight:500;color:#fff;letter-spacing:-.01em;line-height:1.4;}
   #appToast[data-tone="warn"]{border-color:rgba(255,159,10,.42);}
@@ -966,7 +958,7 @@
      than during it — 320ms, the recompute budget, spent once. */
   .obseal{width:46px;height:46px;border-radius:16px;margin-bottom:16px;
     background:rgba(48,209,88,.16);display:flex;align-items:center;justify-content:center;
-    animation:obseal .32s var(--spring) both;}
+    animation:obseal var(--d-recompute) var(--spring) both;}
   .obseal svg{width:23px;height:23px;fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
   @keyframes obseal{from{opacity:0;transform:scale(.72)}to{opacity:1;transform:none}}
 

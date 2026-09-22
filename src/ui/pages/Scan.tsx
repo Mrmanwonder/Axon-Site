@@ -6,6 +6,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
@@ -13,6 +14,7 @@ import PressBox from "../components/PressBox";
 import { DraftAlert, DraftsButton } from "../components/ScanDrafts";
 import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import { paths } from "../app/paths";
 import "../styles/scanner.css";
 
 export default function Scan() {
@@ -24,6 +26,7 @@ export default function Scan() {
   const { addPaper, addLink } = useIngestion();
   const { student } = useApp();
   const { openSheet } = useSheetControls();
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
@@ -103,6 +106,18 @@ export default function Scan() {
 
         {camera.phase === "failed" && <button onClick={() => onScreenVisible(true)}>Retry scanner</button>}
         <DraftsButton count={drafts.length} onOpen={openDrafts} />
+
+        <PressBox
+          as="button"
+          type="button"
+          className="scanexit"
+          aria-label="Exit scanner"
+          onClick={() => navigate(paths.home)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </PressBox>
 
         <PressBox
           as="button"
@@ -220,15 +235,17 @@ export default function Scan() {
         </div>
       )}
 
-      {drafts.length > 0 && <section className="scanbelow" aria-label="Unfinished papers">
-        <div className="sectitle">Unfinished papers</div>
-        <p className="subnote">Draft images are kept on this device for 30 days after their last change.</p>
-        {drafts.map(draft => <div className="srow noicon" key={draft.id}>
-          <span>{draft.title} · {draft.pages} pages</span>
-          <button disabled={submitting} onClick={() => draftsHandlers.onResume?.(draft.id)}>Resume</button>
-          <button disabled={submitting} onClick={() => draftsHandlers.onDiscard?.(draft.id)}>Discard</button>
-        </div>)}
-      </section>}
+      {drafts.length > 0 && camera.phase === "failed" && tray.length === 0 && (
+        <section className="scanbelow" aria-label="Unfinished papers">
+          <div className="sectitle">Unfinished papers</div>
+          <p className="subnote">Draft images are kept on this device for 30 days after their last change.</p>
+          {drafts.map(draft => <div className="srow noicon" key={draft.id}>
+            <span>{draft.title} · {draft.pages} page{draft.pages === 1 ? "" : "s"}</span>
+            <button disabled={submitting} onClick={() => draftsHandlers.onResume?.(draft.id)}>Resume</button>
+            <button disabled={submitting} onClick={() => draftsHandlers.onDiscard?.(draft.id)}>Discard</button>
+          </div>)}
+        </section>
+      )}
 
       {!student && (
         <div className="subnote">Create a student profile before scanning.</div>
