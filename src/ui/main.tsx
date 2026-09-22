@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/routes";
 import CookieConsent from "./components/CookieConsent";
+import SkeletonLoader from "./components/SkeletonLoader";
+import { skeletonVariantForPath } from "./components/PageSkeleton";
 import { getAnalyticsConsent, initAnalytics } from "./lib/analytics";
 import "./styles/app.css";
 import "./styles/system.css";
@@ -14,7 +16,7 @@ if (getAnalyticsConsent() === "granted") initAnalytics();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <RouterProvider router={router} fallbackElement={<SkeletonLoader label="Loading Axon" variant={skeletonVariantForPath(window.location.pathname)} />} />
     <CookieConsent />
   </StrictMode>,
 );
