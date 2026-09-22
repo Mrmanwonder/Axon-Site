@@ -618,7 +618,7 @@ export function reconcileWithInk(quality, teacherMarkCount) {
     ...quality,
     verdict: 'warn',
     reasons: quality.reasons.map((r) => (r === GLARE_FAIL_REASON
-      ? 'Bright lighting on this page, but the marking still came through — worth a second look if anything looks faint.'
+      ? 'Bright lighting detected. Check this page if any marking looks faint.'
       : r)),
   };
 }
