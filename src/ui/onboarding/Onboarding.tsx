@@ -138,7 +138,7 @@ export default function Onboarding() {
   const s = session as SessionUser | null;
 
   /* A live session with no guardian row means the emailed link was clicked, or
-     Google/Apple sent us back signed in; pick the flow up at the only thing
+     Google sent us back signed in; pick the flow up at the only thing
      still missing. A refused provider round trip opens on the account step —
      landing would make the tap look like it did nothing. */
   const [step, setStep] = useState<Step>(
@@ -402,7 +402,7 @@ export default function Onboarding() {
       <Shell {...shellProps} title="Create your account">
         <Err message={error} />
         {/* "Continue with" rather than "Sign in with": a parent arriving here
-            does not have an account yet, and Apple's guidelines allow it. */}
+            does not have an account yet, so this describes the action accurately. */}
         <div className="obalt">
           {OAUTH_PROVIDERS.map((p) => (
             <PressBox as="button" type="button" key={p} className="btn"
