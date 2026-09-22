@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import Root from "../shell/Root";
+import AppRouteErrorBoundary from "../pages/AppRouteErrorBoundary";
+
 import NotFound from "../pages/NotFound";
 
 export { paths, SHEET } from "./paths";
@@ -12,7 +14,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <Root />,
-    errorElement: <NotFound />,
+    errorElement: <AppRouteErrorBoundary />,
     children: [
       { index: true, lazy: async () => ({ Component: (await import("../pages/Home")).default }) },
       { path: "library", lazy: async () => ({ Component: (await import("../pages/Library")).default }) },

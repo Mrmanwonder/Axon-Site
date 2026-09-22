@@ -111,7 +111,7 @@ function SegmentView({
       type="button"
       className={cls.join(" ")}
       aria-pressed={picked}
-      aria-label="Show this part in your handwriting"
+      aria-description="Show this part in your handwriting"
       onClick={() => onPick(seg)}
     >
       {body}

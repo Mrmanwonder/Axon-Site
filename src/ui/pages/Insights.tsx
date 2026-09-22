@@ -75,8 +75,8 @@ export default function Insights() {
     { value: "tier_2", label: "Scheme match" },
   ];
 
-  if (state === "loading" || !readiness) return null;
-  if (state === "failed") return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
+  if (state === "loading" && !readiness) return <div role="status">Loading analysis…</div>;
+  if (!readiness) return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
   return <>
     <div className="greet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work, never predicted marks.</div></div>
@@ -109,6 +109,6 @@ export default function Insights() {
       <section className="isection"><div className="sectitle">Quick wins</div><EvidenceGap title="No defensible ranking yet">Axon can count marks, but cannot yet measure the effort a fix takes. It won&rsquo;t make a precise-looking list from a guess.</EvidenceGap></section>
       <section className="isection"><div className="sectitle">Pacing check</div><EvidenceGap title="Pacing isn&rsquo;t captured yet">Blank or rushed final questions need to repeat across papers before this can be called out. That signal is not recorded yet.</EvidenceGap></section>
     </div>}
-    {stale && <div className="subnote">Showing saved analysis. New evidence needs a connection.</div>}
+    {(stale || state === "failed") && <div role="status">Last available analysis.</div>}
   </>;
 }

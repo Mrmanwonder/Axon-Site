@@ -46,7 +46,7 @@ type Rect = { x: number; y: number; w: number; h: number };
 export default function TabNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const current = Math.max(0, activeIndex(pathname));
+  const current = activeIndex(pathname);
 
   /* The Settings tab wears the student's face rather than an icon. It used to
      wear a hardcoded capital "M" — not the student's initial, not their
@@ -142,7 +142,10 @@ export default function TabNav() {
   // Route change: spring the pill to the new destination.
   useLayoutEffect(() => {
     if (settled.current === current) return;
+    const previous = settled.current;
     settled.current = current;
+    if (current < 0) { releaseSpring("tab"); return; }
+    if (previous < 0) seed("tab", current);
 
     measureTabs();
     const target = offsets.current[current];
@@ -212,10 +215,10 @@ export default function TabNav() {
   };
 
   return (
-    <div className="tabdock">
+    <nav className="tabdock" aria-label="Primary">
       <div className="tabbar">
-        <div className="refractlayer" ref={layerRef} role="tablist" aria-label="Sections">
-          <div className="pill" ref={pillRef} aria-hidden="true" />
+        <div className="refractlayer" ref={layerRef} >
+          <div className="pill" ref={pillRef} aria-hidden="true" style={{ visibility: current < 0 ? "hidden" : undefined }} />
 
           {destinations.map((d, i) => (
             <PressBox
@@ -223,9 +226,7 @@ export default function TabNav() {
               as="button"
               type="button"
               className={"tab" + (i === current ? " on" : "")}
-              role="tab"
-              tabIndex={i === current ? 0 : -1}
-              aria-selected={i === current}
+
               aria-current={i === current ? "page" : undefined}
               aria-label={d.path === paths.library && papers.length
                 ? `Library, ${papers.length} paper${papers.length === 1 ? "" : "s"}`
@@ -257,7 +258,7 @@ export default function TabNav() {
           ))}
         </div>
 
-        <div className="lensglow" ref={glowRef} aria-hidden="true" />
+        <div className="lensglow" ref={glowRef} aria-hidden="true" style={{ visibility: current < 0 ? "hidden" : undefined }} />
         <div className="rim" aria-hidden="true" />
       </div>
 
@@ -284,6 +285,6 @@ export default function TabNav() {
           </filter>
         </defs>
       </svg>
-    </div>
+    </nav>
   );
 }

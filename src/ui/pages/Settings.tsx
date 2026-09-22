@@ -48,7 +48,10 @@
    most of all the one state that would otherwise be silent, a failed payment.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import ProfileChooser from "../components/ProfileChooser";
+import { LocalDataService } from "../../local-data.js";
 import { useEffect, useState } from "react";
+
 import { Link } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useEntitlements } from "../data/useEntitlements";
@@ -119,8 +122,9 @@ const PLAN_NOTE: Record<string, string> = {
 
 export default function Settings() {
   const {
-    guardian, student, prefs, setPref, consent, refreshConsent, setConsent,
+    guardian, student, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
     setAvatar, updateStudentProfile, signOutNow,
+
   } = useApp();
   const { state: billingRead, entitlements } = useEntitlements();
   const toast = useToast();
@@ -225,7 +229,7 @@ export default function Settings() {
     } catch (e) { toast((e as Error).message || "Billing could not be opened.", "warn"); }
   });
 
-  const pref = (key: keyof Prefs) => (next: boolean) => { void setPref({ [key]: next } as Partial<Prefs>); };
+  const pref = (key: keyof Prefs) => (next: boolean) => { void setPref({ [key]: next } as Partial<Prefs>).catch(() => toast("That setting could not be saved. Changes need a connection.", "warn")); };
 
   /** A consent switch. Optimism is deliberately absent: the thumb moves only
       after the ledger has confirmed, and reverts on failure. */
@@ -254,6 +258,7 @@ export default function Settings() {
     <>
       <div className="greet"><h1>Settings</h1></div>
 
+      <ProfileChooser />
       <div className="card sprofile">
         <div
           className="pic"
@@ -287,21 +292,17 @@ export default function Settings() {
         <>
           <div className="sectitle">Picture</div>
           <div className="card lookcard">
-            <div className="lookrow" role="radiogroup" aria-label="Your picture">
+            <fieldset className="lookrow" aria-label="Your picture">
               {AVATAR_PRESETS.map((p) => {
                 const on = chosen && student.avatar_seed === p.key;
                 return (
-                  <PressBox
-                    as="button"
-                    type="button"
+                  <label
                     key={p.key}
                     className={"look" + (on ? " on" : "")}
-                    role="radio"
-                    aria-checked={on}
-                    aria-label={p.title}
                     title={p.title}
-                    onClick={() => { void pickAvatar(p.key); }}
                   >
+                    <input type="radio" name="avatar" value={p.key} checked={!!on}
+                      aria-label={p.title} onChange={() => { void pickAvatar(p.key); }} />
                     <span
                       className="disc"
                       aria-hidden="true"
@@ -309,10 +310,10 @@ export default function Settings() {
                     >
                       {initial}
                     </span>
-                  </PressBox>
+                  </label>
                 );
               })}
-            </div>
+            </fieldset>
           </div>
           <div className="note">
             {chosen
@@ -397,7 +398,7 @@ export default function Settings() {
           </div>
         </div>
       )}
-      <div className="note">Removing a subject archives its analysis rather than deleting it.</div>
+
 
       {/* ── Billing ──
           Four states, and the read itself is a fifth. "Loading" is not "free"
@@ -461,21 +462,23 @@ export default function Settings() {
       </div>
 
 
+      {consentResource.state === "failed" && <button onClick={() => void refreshConsent()}>Retry consent</button>}
       <div className="sectitle">Notifications</div>
       <div className="list">
         <div className="srow noicon">
           <div className="lbl">Paper ready<small>Extraction finished and ready to review</small></div>
-          <Switch label="Paper ready" on={prefs.notify_paper_ready} onChange={pref("notify_paper_ready")} />
+          <span className="locked">Not available yet</span>
         </div>
         <div className="srow noicon">
           <div className="lbl">Correction needed<small>An item came back Unsure</small></div>
-          <Switch label="Correction needed" on={prefs.notify_correction} onChange={pref("notify_correction")} />
+          <span className="locked">Not available yet</span>
         </div>
         <div className="srow noicon">
           <div className="lbl">
             Weekly digest to the parent
             <small>Consent — turning this off is recorded as a withdrawal</small>
           </div>
+          {consentResource.state === "ready" && typeof consent.weekly_parent_digest === "boolean" ? (
           <Switch
             label="Weekly digest to the parent"
             on={consent.weekly_parent_digest === true}
@@ -483,9 +486,10 @@ export default function Settings() {
             disabled={!guardian || busy === "weekly_parent_digest"}
             onChange={(n) => void consentSwitch("weekly_parent_digest")(n)}
           />
+          ) : <span role="status">Consent {consentResource.state === "loading" ? "loading…" : "unavailable"}</span>}
         </div>
       </div>
-      <div className="note">Notifications report state. There are no streak reminders or return nudges.</div>
+      <div className="note">Paper notifications are not available yet.</div>
 
       <div className="sectitle">AI transparency</div>
       <div className="list">
@@ -498,6 +502,7 @@ export default function Settings() {
             Help improve extraction
             <small>Consent — uses anonymised corrections. Off unless you turn it on.</small>
           </div>
+          {consentResource.state === "ready" && typeof consent.improve_extraction === "boolean" ? (
           <Switch
             label="Help improve extraction"
             on={consent.improve_extraction === true}
@@ -505,6 +510,7 @@ export default function Settings() {
             disabled={!guardian || busy === "improve_extraction"}
             onChange={(n) => void consentSwitch("improve_extraction")(n)}
           />
+          ) : <span role="status">Consent {consentResource.state === "loading" ? "loading…" : "unavailable"}</span>}
         </div>
         <div className="srow noicon">
           <div className="lbl">Confidence indicators<small>Confirmed, Likely and Unsure labels</small></div>
@@ -519,7 +525,7 @@ export default function Settings() {
           <Seg
             label="Appearance"
             value={prefs.theme}
-            onPick={(theme) => void setPref({ theme })}
+            onPick={(theme) => void setPref({ theme }).catch(() => toast("That setting could not be saved. Changes need a connection.", "warn"))}
             options={[
               { value: "light", label: "Light" },
               { value: "dark", label: "Dark" },
@@ -532,7 +538,7 @@ export default function Settings() {
           <Seg
             label="Text size"
             value={prefs.text_size}
-            onPick={(text_size) => void setPref({ text_size })}
+            onPick={(text_size) => void setPref({ text_size }).catch(() => toast("That setting could not be saved. Changes need a connection.", "warn"))}
             options={[
               { value: "s", label: "S" },
               { value: "m", label: "M" },
@@ -585,7 +591,7 @@ export default function Settings() {
             } catch (e) { toast((e as Error).message || "Export failed.", "warn"); }
           })}
         >
-          <div className="lbl">Download your data<small>Everything we hold, as one file</small></div>
+          <div className="lbl">Download your data<small>Profiles, saved results, preferences and consent records</small></div>
           <Chevron />
         </PressBox>
 
@@ -606,7 +612,9 @@ export default function Settings() {
                 try {
                   const { error } = await sb.from("paper").delete().eq("student_id", student.id);
                   if (error) throw error;
-                  toast("Papers and analysis deleted.");
+                  try { await LocalDataService.clearStudent(student.id); }
+                  catch { throw new Error("Server papers were deleted, but some local copies could not be cleared. Close other Axon tabs and retry cleanup."); }
+                  toast("Papers, analysis and local drafts deleted.");
                 } catch (e) {
                   toast(isParentModeRequired(e)
                     ? "That took long enough for the confirmation to expire. Try once more."

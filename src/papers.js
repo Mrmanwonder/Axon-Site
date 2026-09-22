@@ -49,11 +49,12 @@ function requireOnline(action) {
 }
 
 /** Create the paper row. Tier follows the type, and the DB re-checks it. */
-export async function createPaper({ studentId, type, dateTaken }) {
+export async function createPaper({ studentId, type, dateTaken, requestId = null }) {
   requireOnline('Adding a paper');
   const { data, error } = await sb
   .from('paper')
   .insert({
+    ...(requestId ? { id: requestId } : {}),
     student_id: studentId,
     type,
     tier: tierForType(type),
@@ -61,6 +62,11 @@ export async function createPaper({ studentId, type, dateTaken }) {
   })
   .select()
   .single();
+  if (error?.code === '23505' && requestId) {
+    const existing = await sb.from('paper').select().eq('id', requestId).eq('student_id', studentId).single();
+    if (existing.error) throw existing.error;
+    return existing.data;
+  }
   if (error) throw error;
   return data;
 }

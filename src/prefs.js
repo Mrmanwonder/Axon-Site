@@ -39,7 +39,7 @@ function writeLocal(prefs) {
 }
 
 /** Pull the server copy and reconcile local. */
-export async function loadPrefs(guardianId) {
+async function readServerPrefs(guardianId) {
   if (!guardianId) return readLocal();
   const { data, error } = await sb
     .from('app_preference')
@@ -52,7 +52,7 @@ export async function loadPrefs(guardianId) {
     // First run for this guardian: seed the server from whatever the device
     // already had, so choices made before sign-in are not lost.
     const local = readLocal();
-    await savePrefs(guardianId, local);
+    await writeServerPrefs(guardianId, local);
     return local;
   }
   const merged = { ...DEFAULTS, ...data };
@@ -60,11 +60,10 @@ export async function loadPrefs(guardianId) {
   return merged;
 }
 
-/** Write through: local first so the UI is instant, then the server. */
-export async function savePrefs(guardianId, patch) {
+/** Write through: persist to the server before advancing the local snapshot. */
+async function writeServerPrefs(guardianId, patch) {
   const next = { ...readLocal(), ...patch };
-  writeLocal(next);
-  if (!guardianId) return next;
+  if (!guardianId) { writeLocal(next); return next; }
 
   const { error } = await sb.from('app_preference').upsert(
     {
@@ -79,8 +78,21 @@ export async function savePrefs(guardianId, patch) {
     },
     { onConflict: 'guardian_id' },
   );
-  // Offline is not an error here: local already holds the change and the next
-  // successful save reconciles it.
-  if (error && navigator.onLine) throw error;
+  // Keep localStorage aligned with the server. The React layer may display an
+  // optimistic value, but a failed request must not make that value durable.
+  if (error) throw error;
+  writeLocal(next);
   return next;
 }
+
+// Reads and patches share one queue: even boot cannot overwrite a newer edit.
+/** @type {Promise<unknown>} */
+let queue = Promise.resolve();
+/** @template T @param {() => Promise<T>} operation @returns {Promise<T>} */
+function serialized(operation) {
+  const pending = queue.then(operation);
+  queue = pending.catch(() => {});
+  return pending;
+}
+export const loadPrefs = guardianId => serialized(() => readServerPrefs(guardianId));
+export const savePrefs = (guardianId, patch) => serialized(() => writeServerPrefs(guardianId, patch));

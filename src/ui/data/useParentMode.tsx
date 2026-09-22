@@ -34,7 +34,7 @@ export function useParentMode() {
   const guard = useCallback((action: () => void | Promise<void>) => {
     const contact = guardian?.contact ?? "";
 
-    const run = () => { void action(); };
+    const run = () => action();
 
     const askForCode = () => {
       sendParentCode(contact)
@@ -42,7 +42,7 @@ export function useParentMode() {
           openSheet({
             title: "Check your messages",
             body: `We've sent a code to ${contact}. Enter it to continue.`,
-            input: { id: "parent-mode-code", placeholder: "Code" },
+            input: { label: "Verification code", id: "parent-mode-code", placeholder: "Code" },
             primary: "Continue",
             onConfirm: async (value) => {
               const r = await unlockWithCode(contact, value);

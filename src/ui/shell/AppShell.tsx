@@ -10,6 +10,7 @@
    than inheriting the previous screen's scroll offset.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { useApp } from "../data/AppProvider";
 import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import TabNav from "./TabNav";
@@ -20,12 +21,17 @@ import ReviewSheet from "../scan/ReviewSheet";
 import DocumentMeta from "../components/DocumentMeta";
 
 export default function AppShell() {
+  const { profileStale } = useApp();
   const { pathname } = useLocation();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
   const [stuck, setStuck] = useState(false);
 
   const i = activeIndex(pathname);
   const title = i >= 0 ? destinations[i].label : "";
+
+  useEffect(() => {
+    scrollRef.current?.focus();
+  }, [pathname, title]);
 
   // The header plate fades in once the screen's own heading has scrolled past.
   useEffect(() => {
@@ -39,7 +45,9 @@ export default function AppShell() {
 
   return (
     <div className="app">
-      <DocumentMeta title={title ? `${title} | Axon` : "Axon"} description="Your private Axon study workspace." path={pathname} noIndex />
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <DocumentMeta title={`${pathname.startsWith("/scan/review/") ? "Review paper" : title || "Axon"} · Axon`} description="Your private Axon study workspace." path={pathname} noIndex />
+
       <ThemeToggle />
       <Header title={title} stuck={stuck} />
 
@@ -48,14 +56,16 @@ export default function AppShell() {
           The router does that job now, so exactly one view exists at a time and
           it is always the visible one — but the class still has to be there or
           the screen renders into a display:none box. */}
-      <div
+      <main
+        id="main-content" tabIndex={-1}
         className="view on"
         data-screen={i >= 0 ? destinations[i].label.toLowerCase() : undefined}
         ref={scrollRef}
         key={pathname}
       >
+        {profileStale && <p role="status" className="subnote">Offline profile. Last available data.</p>}
         <Outlet />
-      </div>
+      </main>
 
       {/* Stage 9 lives above the shell: it is a screen, not a sheet, and it has
           to survive the tab bar being tapped underneath it. */}

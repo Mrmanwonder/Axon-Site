@@ -26,8 +26,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useAnalytics } from "../data/useAnalytics";
+import { paperPresentation } from "../data/paperPresentation";
 import { paths } from "../app/paths";
-import { PAPER_STATUS, paperTypeLabel, statusKeyForRun } from "../data/modules";
+import { paperTypeLabel, statusKeyForRun } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { useIngestion } from "../data/useIngestion";
@@ -42,7 +43,7 @@ function HomeLoading({ name, subjects }: { name: string; subjects: string[] }) {
       </div>
       <div className="card nextstep" aria-busy="true">
         <div className="eyebrow">Next step</div>
-        <div className="line">Loading your latest papers…</div>
+        <div className="line" role="status">Loading papers…</div>
         <div className="skel" style={{ width: "78%", marginTop: 12 }} aria-hidden="true" />
       </div>
       <div className="sectitle">Recent scans</div>
@@ -59,10 +60,10 @@ function HomeLoading({ name, subjects }: { name: string; subjects: string[] }) {
 }
 
 export default function Home() {
-  const {
-    student, guardian, papers, papersLoaded, progress, papersStale, papersError,
-  } = useApp();
-  const { state, needsCheck, unreadable, readiness } = useAnalytics();
+  const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
+  const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
+
+
   const { addPaper } = useIngestion();
   const navigate = useNavigate();
 
@@ -73,7 +74,8 @@ export default function Home() {
   // The old implementation returned null here and made a fast HTML/React boot
   // look slow. Loading is neither empty nor an error, so render the identity and
   // geometry we already know while the library paints from cache/network.
-  if (!papersLoaded) return <HomeLoading name={name} subjects={subjects} />;
+  if (papersResource.state === "loading" && papersResource.data === null) return <HomeLoading name={name} subjects={subjects} />;
+
 
   // A library we could not read is not an empty one. Offering "Add your first
   // paper" to someone who already has papers, because the read failed, is the
@@ -115,7 +117,7 @@ export default function Home() {
   }
 
   const recent = papers.slice(0, 3);
-  const analyticsReady = state === "ready";
+  const analyticsReady = state === "ready" && progressResource.state === "ready";
   const unreadableCount = analyticsReady ? (unreadable?.length ?? 0) : null;
   const waiting = [...progress.values()].filter((p) => {
     const key = statusKeyForRun(p.status);
@@ -132,6 +134,7 @@ export default function Home() {
         ? "Nothing needs you right now. Your latest evidence is ready in Insights."
         : "Nothing needs you right now. Scan your next marked paper when you get it back.";
 
+
   return (
     <>
       <div className="greet">
@@ -139,6 +142,7 @@ export default function Home() {
         <h1>{name}</h1>
       </div>
 
+      {(stale || state === "failed") && <div role="status">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
         {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
       </div>
@@ -150,6 +154,7 @@ export default function Home() {
           <PressBox as={Link} to={paths.library} className="textaction">Review now <Chevron /></PressBox>
         )}
       </div>
+
 
       {/* Shown only when there is something to check. The count and the paper
           count are both real; the surface states its own sample size. */}
@@ -181,22 +186,21 @@ export default function Home() {
 
       <div className="sectitle">Recent scans</div>
       <div className="list">
-        {recent.map((p) => (
+        {recent.map((p) => { const presentation = paperPresentation(p, progressResource); return (
           <PressBox
             as={Link}
             key={p.id}
-            to={paths.paper(p.id)}
+            to={presentation.destination}
+            aria-disabled={!presentation.canOpen}
+            onClick={event => { if (!presentation.canOpen) event.preventDefault(); }}
             className="row"
             data-interactive=""
           >
             <div className="b">
               <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type)}</div>
+              <div className="t2">{presentation.statusLabel}{presentation.stale ? " · last-known status" : ""}</div>
+
               <div className="t2">
-                {(() => {
-                  const live = progress.get(p.id);
-                  const key = live ? statusKeyForRun(live.status) : null;
-                  return key ? <span className={`paperstate ${PAPER_STATUS[key].tone}`}>{PAPER_STATUS[key].label}</span> : null;
-                })()}
                 <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
                   {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
                 </span>
@@ -212,7 +216,7 @@ export default function Home() {
             )}
             <Chevron />
           </PressBox>
-        ))}
+        ); })}
       </div>
 
       {papersStale && (

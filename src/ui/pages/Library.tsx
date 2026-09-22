@@ -10,8 +10,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, PAPER_STATUS, statusKeyForRun } from "../data/modules";
-import { paths } from "../app/paths";
+import { paperTypeLabel } from "../data/modules";
+import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
@@ -59,7 +59,8 @@ function marksLost(paper: Record<string, unknown>): number | null {
 }
 
 export default function Library() {
-  const { papers, papersLoaded, papersStale, papersError, progress } = useApp();
+  const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
+
   const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
@@ -172,9 +173,8 @@ export default function Library() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
-          {papersLoaded
-            ? <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}{papersStale ? " · offline copy" : ""}</>
-            : "Loading your papers…"}
+          {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}{papersStale ? " · offline copy" : ""}
+
         </span>
         <AppDropdown
           ariaLabel="Sort library"
@@ -186,19 +186,12 @@ export default function Library() {
         />
       </div>
 
-      <div className="list" aria-busy={!papersLoaded || undefined}>
-        {!papersLoaded && (
-          <div className="srow noicon" aria-hidden="true">
-            <div className="lbl" style={{ width: "100%" }}>
-              <div className="skel" style={{ width: "54%" }} />
-              <div className="skel" style={{ width: "34%", marginTop: 8 }} />
-            </div>
-          </div>
-        )}
+      {papersResource.state === "loading" && <div role="status">Loading papers…</div>}
+      {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
+      {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
+      <div className="list">
+        {!papers.length && papersError && (
 
-        {/* An empty library and a library we could not read are different
-            states; never turn a failed read into a confident empty result. */}
-        {papersLoaded && !papers.length && papersError && (
           <div className="srow noicon">
             <div className="lbl">
               We couldn&rsquo;t load your papers
@@ -207,7 +200,8 @@ export default function Library() {
           </div>
         )}
 
-        {papersLoaded && !papers.length && !papersError && (
+        {!papers.length && papersResource.state === "ready" && (
+
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet
@@ -228,9 +222,8 @@ export default function Library() {
         {filteredPapers.map((p) => {
           const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
           const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
-          const run = progress.get(p.id);
-          const statusKey = run ? statusKeyForRun(run.status) : null;
-          const status = statusKey ? PAPER_STATUS[statusKey] : null;
+          const presentation = paperPresentation(p, progressResource);
+          const status = { label: presentation.statusLabel, tone: presentation.tone };
           const lost = marksLost(p as Record<string, unknown>);
           const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
@@ -252,6 +245,7 @@ export default function Library() {
                     ? <span className={"tier " + (status.tone === "wait" ? "t1" : "uns")}>{status.label}</span>
                     : (!questions && <span className="tier uns">Not read yet</span>)}
                 </div>
+                {presentation.reason && <div className="t2">{presentation.reason}</div>}
               </div>
               <div className="lost" aria-label={lost === null ? "Marks lost unavailable" : `${lost} marks lost`}>
                 {lost === null ? "—" : Number.isInteger(lost) ? lost : lost.toFixed(1)}
@@ -268,7 +262,8 @@ export default function Library() {
                 type="button"
                 className="row"
                 data-interactive=""
-                onClick={() => navigate(paths.scan)}
+                disabled={!presentation.canOpen}
+                onClick={() => navigate(presentation.destination)}
               >
                 {meta}
                 <Chevron />
@@ -280,7 +275,7 @@ export default function Library() {
             <PressBox
               as={Link}
               key={p.id}
-              to={paths.paper(p.id)}
+              to={presentation.destination}
               className="row"
               data-interactive=""
             >

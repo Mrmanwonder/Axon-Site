@@ -25,8 +25,12 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - run: npm run test:ui
+      - run: npm run test:db
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
+      - run: npm run test:a11y
+
 
       # INV-01: a production build must not be able to select a development
       # adapter. `npm run build` runs this too, but Netlify is the only thing

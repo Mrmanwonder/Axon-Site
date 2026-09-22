@@ -10,10 +10,12 @@
    what a person tapping a toggle means by it.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { useToast } from "../components/ToastProvider";
 import { useApp } from "../data/AppProvider";
 import { hapticTick } from "../lib/haptics";
 
 export default function ThemeToggle() {
+  const toast = useToast();
   const { prefs, setPref } = useApp();
 
   const resolved = prefs.theme === "system"
@@ -22,7 +24,7 @@ export default function ThemeToggle() {
 
   const flip = () => {
     hapticTick();
-    void setPref({ theme: resolved === "dark" ? "light" : "dark" });
+    void setPref({ theme: resolved === "dark" ? "light" : "dark" }).catch(() => toast("Appearance could not be saved. Changes need a connection.", "warn"));
   };
 
   return (

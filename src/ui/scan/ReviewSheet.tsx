@@ -23,7 +23,7 @@
    · **Nothing is locked because we were confident.**
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
@@ -103,15 +103,11 @@ function Question({
           <div className="qfield"><div className="k">Which number did your teacher write?</div></div>
           <div className="qalts" role="radiogroup" aria-label="Which number did your teacher write?">
             {q.alternatives.map((a) => (
-              <PressBox
-                as="button" type="button" key={a}
-                className={"qalt" + (a === q.marksAwarded ? " on" : "")}
-                role="radio"
-                aria-checked={a === q.marksAwarded}
-                onClick={() => { hapticTick(); onMark(q.id, a); }}
-              >
+              <label key={a} className={"qalt" + (a === q.marksAwarded ? " on" : "")}>
+                <input type="radio" name={`mark-${q.id}`} value={a} checked={a === q.marksAwarded}
+                  onChange={() => { hapticTick(); onMark(q.id, a); }} />
                 {num(a)}
-              </PressBox>
+              </label>
             ))}
           </div>
         </>
@@ -174,22 +170,13 @@ function Question({
 export default function ReviewSheet() {
   const { review, reviewHandlers, reviewOpen, closeReview } = useScan();
 
-  /* Back closes the review rather than leaving the app. It is a full-screen
-     surface over the shell, so the hardware back gesture has to mean what it
-     looks like it means. */
-  useEffect(() => {
-    if (!reviewOpen) return;
-    history.pushState({ review: true }, "");
-    const onPop = () => closeReview();
-    addEventListener("popstate", onPop);
-    return () => removeEventListener("popstate", onPop);
-  }, [reviewOpen, closeReview]);
-
-  if (!review || !reviewHandlers) return null;
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (reviewOpen) root.current?.focus(); }, [reviewOpen]);
+  if (!reviewOpen || !review || !reviewHandlers) return null;
 
   return (
     <div className={"reviewsheet" + (reviewOpen ? " open" : "")}
-         role="dialog" aria-modal="true" aria-label={review.title}>
+         ref={root} tabIndex={-1} role="region" aria-label={review.title}>
       <div className="rvhead">
         <PressBox as="button" type="button" className="rvback" aria-label="Back"
                   onClick={closeReview}>

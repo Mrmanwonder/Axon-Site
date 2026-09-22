@@ -8,6 +8,8 @@
    different facts.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import ProfileChooser from "../components/ProfileChooser";
+
 import { lazy, Suspense } from "react";
 import { AppProvider, useApp } from "../data/AppProvider";
 import { ToastProvider } from "../components/ToastProvider";
@@ -52,13 +54,18 @@ function BootError() {
 
 function Gate() {
   const { gate } = useApp();
+  const cleanupError = sessionStorage.getItem("axon.cleanup-error");
+  if (cleanupError) return <main><h1>Local cleanup needs attention</h1><p>{cleanupError}</p><button onClick={async () => { try { const { LocalDataService } = await import("../../local-data.js"); await LocalDataService.clearAll(); sessionStorage.removeItem("axon.cleanup-error"); location.reload(); } catch { /* Keep the recovery message visible. */ } }}>Retry local cleanup</button></main>;
 
-  // Use an app-shaped skeleton instead of an unexplained blank frame. CSS delays
-  // its reveal slightly so normal fast boots still avoid loader flash.
+  // Nothing, not a spinner: the document is already painted in the right theme
+  // by the inline script in index.html, and a spinner that appears for 80ms and
+  // vanishes is worse than a still frame.
   if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" />;
+  if (gate === "choose_profile") return <main><ProfileChooser /></main>;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
     return <Suspense fallback={<SkeletonLoader label="Loading setup" />}><Onboarding /></Suspense>;
+
   }
   return <AppShell />;
 }

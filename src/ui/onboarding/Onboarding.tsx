@@ -56,7 +56,9 @@
    have meant knowingly porting a bug.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { loadProfiles, selectedProfile } from "../data/profiles";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
@@ -131,6 +133,7 @@ type SessionUser = {
 };
 
 export default function Onboarding() {
+  const navigate = useNavigate();
   const { session, providerError, finishOnboarding } = useApp();
   const s = session as SessionUser | null;
 
@@ -180,6 +183,9 @@ export default function Onboarding() {
   const [studentFirst, setStudentFirst] = useState("");
   const [studentClass, setStudentClass] = useState(11);
   const [subjects, setSubjects] = useState<string[]>([]);
+  const profileFlight = useRef(false);
+  const profileRequest = useRef(crypto.randomUUID());
+  const [profileBusy, setProfileBusy] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
 
   const go = useCallback((next: Step) => { setError(null); setStep(next); }, []);
@@ -192,22 +198,11 @@ export default function Onboarding() {
      creates a duplicate profile every time they sign back in, while the flow
      looks like a login that never finishes. That was the "can't log in" bug. */
   const continueAsGuardian = useCallback(async (g: Guardian) => {
-    const { data: existing, error: e1 } = await sb
-      .from("student").select("*")
-      .eq("guardian_id", g.id)
-      .order("created_at", { ascending: true })
-      .limit(1);
-    if (e1) throw e1;
-
-    if (existing?.length) {
-      const st = existing[0];
-      const { data: subjectRows } = await sb
-        .from("student_subject").select("subject").eq("student_id", st.id);
-      const finish = () => void finishOnboarding({
-        guardian: g,
-        student: { ...st, subjects: (subjectRows ?? []).map((r: { subject: string }) => r.subject) },
-      });
-      finish();
+    const { data: existing } = await loadProfiles(g.id);
+    if (existing.length) {
+      const st = selectedProfile(g.id, existing);
+      if (!st) { location.reload(); return; }
+      await finishOnboarding({ guardian: g, student: st });
       return;
     }
     go("consent");
@@ -230,7 +225,7 @@ export default function Onboarding() {
 
     params.delete("billing");
     const rest = params.toString();
-    history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : "") + location.hash);
+    navigate(location.pathname + (rest ? `?${rest}` : "") + location.hash, { replace: true });
 
     setBillingReturn(outcome);
     if (!s) return; // signed out mid-round-trip; the landing screen is honest.
@@ -669,30 +664,19 @@ export default function Onboarding() {
     const stage = stageForClass(studentClass);
 
     const create = async () => {
+      if (profileFlight.current) return;
       if (!studentFirst.trim()) return setError("What should we call the student?");
       if (!subjects.length) return setError("Pick at least one subject.");
+      profileFlight.current = true;
+      setProfileBusy(true);
       hapticFirm();
       try {
-        const { data, error: e } = await sb.from("student").insert({
-          guardian_id: guardian!.id,
-          first_name: studentFirst.trim(),
-          board: BOARD,
-          class_level: studentClass,
-          /* Every account here is a guardian holding a profile for a student
-             under 18 — that IS the account model. The gate that used to ask
-             offered an "18 or older" branch whose own screen said the path was
-             not built, so it was a question with one working answer. */
-          age_band: "under_18",
-        }).select().single();
+        const { data, error: e } = await sb.rpc("create_student_profile", {
+          p_request_id: profileRequest.current, p_first_name: studentFirst.trim(),
+          p_board: BOARD, p_class_level: studentClass,
+          p_subjects: subjects.map(subject => ({ subject, syllabus_code: syllabusCode(subject, studentClass) })),
+        });
         if (e) throw e;
-        /* Each subject carries its Cambridge syllabus code. "Physics" is 0625 at
-           IGCSE and 9702 at A Level — different syllabuses, different papers,
-           different mark schemes — so the name alone cannot match a past paper. */
-        await sb.from("student_subject").insert(subjects.map((subject) => ({
-          student_id: data.id,
-          subject,
-          syllabus_code: syllabusCode(subject, studentClass),
-        })));
         setStudent({ ...data, subjects });
         go("firstRun");
       } catch (e) {
@@ -700,7 +684,7 @@ export default function Onboarding() {
         setError((e as { code?: string }).code === "42501"
           ? "We can't create the profile until consent is recorded. Go back a step."
           : (e as Error).message || "The profile could not be created.");
-      }
+      } finally { profileFlight.current = false; setProfileBusy(false); }
     };
 
     return (
@@ -772,7 +756,7 @@ export default function Onboarding() {
           no address, no photograph.
         </div>
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" onClick={() => void create()}>
+          <PressBox as="button" type="button" className="btn primary" disabled={profileBusy} aria-busy={profileBusy} onClick={() => void create()}>
             Create profile
           </PressBox>
         </div>

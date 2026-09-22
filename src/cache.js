@@ -8,25 +8,9 @@
 //
 // Consent deliberately does not come through here — it is always read live.
 
-const DB_NAME = 'axon.cache.v1';
+import { openCacheDatabase, closeLocalDatabase, LocalDataService, localDataEpoch } from './local-data.js';
 const STORE = 'reads';
-
-let dbPromise = null;
-
-function open() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    if (!('indexedDB' in window)) return resolve(null);
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'key' });
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null); // a missing cache degrades, it does not break
-  });
-  return dbPromise;
-}
+const open = () => openCacheDatabase().catch(() => null);
 
 async function tx(mode, fn) {
   const db = await open();
@@ -38,11 +22,12 @@ async function tx(mode, fn) {
     try {
       out = fn(store);
     } catch {
+      closeLocalDatabase(db);
       return resolve(null);
     }
-    t.oncomplete = () => resolve(out && 'result' in out ? out.result : out);
-    t.onerror = () => resolve(null);
-    t.onabort = () => resolve(null);
+    t.oncomplete = () => { closeLocalDatabase(db); resolve(out && 'result' in out ? out.result : out); };
+    t.onerror = () => { closeLocalDatabase(db); resolve(null); };
+    t.onabort = () => { closeLocalDatabase(db); resolve(null); };
   });
 }
 
@@ -67,11 +52,19 @@ export async function clearCache() {
  * @returns {Promise<{data:any, stale:boolean, offline:boolean}>}
  */
 export async function readThrough(key, fetcher) {
+  const epoch = localDataEpoch();
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    const cached = await getCached(key);
+    if (cached !== null) return { data: cached, stale: true, offline: true };
+    throw new Error('This information is not available offline yet.');
+  }
   try {
     const data = await fetcher();
+    if (epoch !== localDataEpoch()) throw new Error("Local data changed while loading.");
     await putCached(key, data);
     return { data, stale: false, offline: false };
   } catch (err) {
+    if (epoch !== localDataEpoch()) throw err;
     const cached = await getCached(key);
     if (cached !== null) return { data: cached, stale: true, offline: !navigator.onLine };
     throw err;
@@ -91,20 +84,4 @@ export async function readThrough(key, fetcher) {
  * open — being unable to clear the cache is not a reason to keep someone
  * signed in — so failures are swallowed here and only here.
  */
-export async function clearLocalData() {
-  try { await clearCache(); } catch { /* best effort */ }
-
-  // The scan drafts live in their own database (src/scan), so deleting it
-  // wholesale is both simpler and more thorough than walking its stores.
-  try {
-    await new Promise((resolve) => {
-      if (!('indexedDB' in window)) return resolve(null);
-      const req = indexedDB.deleteDatabase('axon-scan');
-      req.onsuccess = () => resolve(null);
-      req.onerror = () => resolve(null);
-      // A delete blocked by another open tab must not hang sign-out.
-      req.onblocked = () => resolve(null);
-      setTimeout(() => resolve(null), 1500);
-    });
-  } catch { /* best effort */ }
-}
+export async function clearLocalData() { await LocalDataService.clearAll(); }

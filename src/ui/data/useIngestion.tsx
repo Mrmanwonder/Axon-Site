@@ -35,13 +35,14 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useApp } from "./AppProvider";
 import { useScan } from "../scan/ScanProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import {
-  createPaper, addLinkPage, parsePaperLink, PAPER_TYPES,
+  sb, parsePaperLink, PAPER_TYPES,
 } from "./modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
@@ -62,9 +63,11 @@ export function useIngestion(): IngestionValue {
 
 export function IngestionProvider({ children }: { children: ReactNode }) {
   const app = useApp();
+  const navigate = useNavigate();
   const toast = useToast();
   const { openSheet } = useSheetControls();
   const { ensureScan } = useScan();
+  const linkFlight = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const ingestFiles = useCallback(async (files: File[]) => {
@@ -76,9 +79,10 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     const scan = await ensureScan();
     const t = app.takePendingPaperType();
     if (t) scan.setPendingPaperType(t);
-    await scan.acceptUploads(files);
-    toast(`${files.length} page(s) added. Check the order, then read the paper.`);
-  }, [app, ensureScan, toast]);
+    const result = await scan.acceptUploads(files);
+    if (result.accepted.length) navigate("/scan");
+    toast(`${result.accepted.length} page(s) added.${result.rejected.length ? ` ${result.rejected.length} file(s) could not be used.` : " Check the order, then read the paper."}`);
+  }, [app, ensureScan, toast, navigate]);
 
   const askPaperType = useCallback((then: (v: string) => void) => {
     openSheet({
@@ -91,22 +95,22 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
 
   const ingestLink = useCallback(async (url: string) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
+    const requestId = crypto.randomUUID();
     const run = async (type: string) => {
+      if (linkFlight.current) return;
+      linkFlight.current = true;
       try {
-        const paper = await createPaper({
-          studentId: app.student!.id,
-          type,
-          dateTaken: new Date().toISOString().slice(0, 10),
+        const { error } = await sb.rpc("create_link_paper", {
+          p_request_id: requestId, p_student_id: app.student!.id,
+          p_type: type, p_date: new Date().toISOString().slice(0, 10), p_url: url,
         });
-        await addLinkPage({
-          studentId: app.student!.id, paperId: paper.id, url, pageNumber: 1,
-        });
+        if (error) throw error;
         hapticFirm();
         toast("Link saved. We'll fetch it and tell you when it's readable.");
         await app.refreshLibrary();
       } catch (e) {
         toast((e as Error).message || "That link could not be added.", "warn");
-      }
+      } finally { linkFlight.current = false; }
     };
     const t = app.takePendingPaperType();
     if (t) void run(t); else askPaperType(run);
@@ -122,7 +126,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     openSheet({
       title: "Add a link",
       body: "Paste a link to a school-shared PDF or drive file. We fetch it on our side — a browser can't hand us the file directly.",
-      input: { id: "linkUrl", placeholder: "https://…" },
+      input: { label: "Paper link", id: "linkUrl", placeholder: "https://…" },
       primary: "Add this link",
       onConfirm: async (raw) => {
         if (!raw.trim()) return toast("Paste a link first.", "warn");
@@ -166,7 +170,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
         ref={inputRef}
         type="file"
         multiple
-        accept="image/*,application/pdf"
+        accept="image/*"
         hidden
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];

@@ -18,6 +18,7 @@ import { PAPER_TYPES } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
 const S = {
+  epoch: 0,
   ctx: null,
   capture: null,
   surface: null,
@@ -29,15 +30,19 @@ const S = {
   regions: null,
   review: null,
   busy: false,
-  saving: false,
+  submitting: false,
   explanationsStarted: false,
   retaking: null,
+  saving: false,        // true while save() is waiting on explanations before commit
+
 };
 
 let host = {
   toast() {}, tick() {}, firm() {},
   scanSurface: () => null,
-  renderHint() {}, cameraLive() {}, scannerState() {},
+  renderHint() {}, cameraLive() {}, submissionBusy() {}, scannerState() {},
+  navigationIntent: () => null,
+
   renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {},
   openSheet() {}, openReview() {}, renderReview() {}, closeReview() {},
   goto() {}, refreshLibrary: async () => {},
@@ -51,12 +56,23 @@ export async function initScanUI(ctx, surfaces = {}) {
   setScanContext(ctx);
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
+
   await restoreDraft();
   await paintDrafts();
 }
 
+export function resetScan() {
+  ++S.epoch;
+  clearTimeout(refreshTimer);
+  refreshTimer = null;
+  detachSurface();
+  S.ctx = null; S.draft = null; S.run = null; S.runId = null; S.review = null; S.regions = null;
+  S.busy = false; S.submitting = false; S.saving = false; S.retaking = null; S.explanationsStarted = false;
+  S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); S.placeholders.clear();
+  releaseCrops();
+}
 export function setScanContext(ctx) {
-  if (S.ctx?.student?.id !== ctx?.student?.id) detachSurface();
+  if (S.ctx?.student?.id !== ctx?.student?.id) resetScan();
   S.ctx = ctx;
 }
 
@@ -99,10 +115,20 @@ export function setScanVisible(visible, camera = null) {
   return visible ? startCamera(camera) : stopCamera();
 }
 
+// ── the camera ─────────────────────────────────────────────────────────────
+
+/**
+ * @param {Promise<MediaStream>|MediaStream|Error|null} [camera]
+ *   The request app.js fired when the tab opened, if there was one. Adopting it
+ *   is what keeps the permission sheet from waiting on this module's own load.
+ */
 let cameraGeneration = 0;
 async function startCamera(camera = null) {
   const activation = ++cameraGeneration;
   if (!S.capture?.supported && !camera) {
+    // No camera, or a browser that will not give one up. Upload is a
+    // first-class path, so this is a different route rather than a failure.
+
     host.cameraLive(false, 'unavailable');
     host.renderHint({
       hint: 'No camera here — add pages from your files instead', blocking: null,
@@ -137,14 +163,9 @@ function stopCamera() {
 // ── capture transaction ────────────────────────────────────────────────────
 
 async function takePage(shot, replacing = null) {
-  // capture.setProcessing() should make this unreachable for automatic shots,
-  // but keep the guard for double taps / browser re-entry. Crucially, it does
-  // not consume S.retaking.
-  if (S.busy) {
-    shot.bitmap?.close?.();
-    return;
-  }
+  if (S.busy || S.submitting) { shot.bitmap?.close?.(); return false; }
 
+  const epoch = S.epoch;
   S.busy = true;
   S.capture?.setProcessing?.(true);
   host.scannerState({ phase: 'processing', pendingCaptureCount: 1 });
@@ -153,11 +174,13 @@ async function takePage(shot, replacing = null) {
 
   try {
     if (!S.draft) {
-      S.draft = await createDraft({
+      const draft = await createDraft({
         id: crypto.randomUUID(),
         studentId: S.ctx.student.id,
         paperType: null,
       });
+      if (epoch !== S.epoch) return false;
+      S.draft = draft;
     }
 
     paintPlaceholder(shot.bitmap, replacing ?? S.draft.pages.length + 1);
@@ -172,6 +195,7 @@ async function takePage(shot, replacing = null) {
       sourceKind: shot.sourceKind ?? 'camera',
       original: shot.original ?? null,
     });
+    if (epoch !== S.epoch) return false;
     const tAccepted = performance.now();
 
     // Only a successful durable replacement completes the retake transaction.
@@ -184,6 +208,7 @@ async function takePage(shot, replacing = null) {
 
     await paintTray();
     refreshDrafts();
+
     console.debug('[scan:tray-timing]', {
       transactionId: shot.transactionId ?? null,
       acceptMs: +(tAccepted - tOnShot).toFixed(1),
@@ -199,27 +224,28 @@ async function takePage(shot, replacing = null) {
     if (page.layer_fallback === 'non_red_marking') {
       toast('This page looks marked in something other than red — we will read it more carefully.');
     }
-    if (page.meta?.enhance?.applied) {
-      toast('Page sharpened for readability — check its marks during review.');
-    }
+    // A rescued page is told about. It was under the resolution floor, it has
+    // been brought up to it, and the student is the one who can tell whether
+    // that worked — so they are told plainly and pointed at the one thing to
+    // check. Never phrased as an apology and never as a question.
+    if (page.meta?.enhance?.applied) toast('Page sharpened for readability — check its marks during review.');
+    return true;
   } catch (error) {
-    // A failed retake remains a retake. The old page stays in the booklet and
-    // the next successful shutter still targets the same slot.
+    // A refusal is advice, not a breakage: the page cannot be used and the
+    // message already says what to do instead. Shown the same way a fail
+    // verdict is, while the paper is still on the desk.
+    if (epoch !== S.epoch) return false;
     S.placeholders.delete(slot);
     await paintTray();
-    if (error?.refused) toast(error.message, 'warn');
-    else {
-      console.error('[scan] page processing failed', {
-        transactionId: shot.transactionId ?? null,
-        code: error?.code,
-        error,
-      });
-      toast(publicScanMessage(error), 'warn');
-    }
+    toast(error?.refused ? error.message : publicScanMessage(error), 'warn');
+    return false;
+
   } finally {
-    S.busy = false;
-    S.capture?.setProcessing?.(false);
-    host.scannerState({ phase: 'live-guiding', pendingCaptureCount: 0 });
+    if (epoch === S.epoch) {
+      S.busy = false;
+      S.capture?.setProcessing?.(false);
+      host.scannerState({ phase: 'live-guiding', pendingCaptureCount: 0 });
+    }
     shot.bitmap?.close?.();
   }
 }
@@ -334,6 +360,7 @@ function openPageActions(pageNumber) {
       { label: 'Remove this page', value: 'remove' },
     ],
     onChoice: async (choice) => {
+      if (S.submitting || S.busy) return;
       if (choice === 'retake') {
         setRetake(pageNumber);
         return;
@@ -360,7 +387,9 @@ function openPageActions(pageNumber) {
 // ── drafts ─────────────────────────────────────────────────────────────────
 
 async function restoreDraft() {
+  const epoch = S.epoch;
   const drafts = await listDrafts(S.ctx.student.id);
+  if (epoch !== S.epoch) return;
   const latest = drafts[0];
   if (!latest) return;
   host.draftToast(
@@ -370,7 +399,10 @@ async function restoreDraft() {
 }
 
 async function paintDrafts() {
+  const epoch = S.epoch;
+  if (!S.ctx?.student) return;
   const drafts = await listDrafts(S.ctx.student.id);
+  if (epoch !== S.epoch) return;
   host.renderDrafts(
     drafts.map((d) => ({
       id: d.id,
@@ -380,20 +412,32 @@ async function paintDrafts() {
       pages: d.pages.length,
       thumb: null,
     })),
-    { onResume: resumeDraft },
+    { onResume: resumeDraft, onDiscard: discardDraft },
   );
 }
 
 function refreshDrafts() {
-  // The page transaction is already durable. A secondary list refresh must
-  // neither delay the shutter nor turn a saved capture into a reported failure.
-  void paintDrafts().catch((error) => console.warn('[scan] draft list refresh failed', error));
+  void paintDrafts().catch(error => console.warn('[scan] draft list refresh failed', error));
+}
+
+async function discardDraft(id) {
+  if (S.submitting || S.busy) return;
+  const draft = await readDraft(id);
+  if (!draft || draft.student_id !== S.ctx?.student?.id) return;
+  await deleteDraft(id);
+  if (S.draft?.id === id) { S.draft = null; S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); await paintTray(); }
+  host.draftToast(null, { onResume: resumeDraft });
+  await paintDrafts();
+
 }
 
 async function resumeDraft(id) {
   host.draftToast(null, { onResume: resumeDraft });
-  S.draft = await readDraft(id);
+  const draft = await readDraft(id);
+  if (!draft || draft.student_id !== S.ctx?.student?.id || S.submitting) return;
+  S.draft = draft;
   S.retaking = null;
+
   S.thumbs.forEach((url) => URL.revokeObjectURL(url));
   S.thumbs.clear();
   await paintTray();
@@ -438,6 +482,12 @@ function sendPaper() {
 }
 
 async function run(paperType) {
+  if (S.submitting || S.busy) return;
+  S.submitting = true;
+  host.submissionBusy(true);
+  const epoch = S.epoch;
+  const intent = host.navigationIntent();
+  let recoverCamera = true;
   stopCamera();
   const steps = [
     { key: 'upload', label: 'Sending the pages' },
@@ -470,6 +520,7 @@ async function run(paperType) {
       onProgress: ({ stage, message }) => { current = stage; paint(message); },
     });
 
+    if (epoch !== S.epoch) return;
     if (result.refused) {
       host.renderProgress({
         heading: 'This one we did not read',
@@ -483,7 +534,15 @@ async function run(paperType) {
     S.run = result;
     S.regions = result.regions;
     firm();
-    await openReview(result.runId);
+    // Explanations start only once review is done (save()), never here — the
+    // student has confirmed nothing at this point, and starting them now is
+    // guaranteed to 409 against reviewComplete's outstanding-review gate, every
+    // time. See AXON_FIX_BRIEF.md §4.A1.
+    recoverCamera = false;
+    await host.refreshLibrary();
+    if (epoch !== S.epoch) return;
+    await openReview(result.runId, intent);
+
   } catch (error) {
     host.renderProgress({
       heading: 'That did not finish',
@@ -491,6 +550,11 @@ async function run(paperType) {
       steps: [],
       note: 'Your pages are still here. Try again when you have a connection.',
     });
+  } finally {
+    if (epoch !== S.epoch) return;
+    S.submitting = false;
+    host.submissionBusy(false);
+    if (recoverCamera && S.visible && host.navigationIntent() === intent) await startCamera();
   }
 }
 
@@ -498,27 +562,39 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 
 // ── review ─────────────────────────────────────────────────────────────────
 
-async function openReview(runId) {
+async function openReview(runId, intent = null) {
   if (S.runId !== runId) S.explanationsStarted = false;
+  const epoch = S.epoch;
+
   S.runId = runId;
   await refreshReview();
-  host.openReview();
+  if (epoch !== S.epoch || S.runId !== runId) return;
+  host.openReview(S.review?.paper?.id, intent);
 }
 
 export async function resumeDraftReview(draftId) {
-  const draft = await readDraft(draftId);
-  if (!draft?.paper_id) return { state: 'gone' };
+  const epoch = S.epoch;
+  const studentId = S.ctx?.student?.id;
+  if (!studentId) return { state: 'gone' };
+  let draft = await readDraft(draftId);
+  if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
+  const paperId = draft?.paper_id ?? draftId;
+  draft ??= (await listDrafts(studentId)).find(item => item.paper_id === paperId) ?? null;
+  if (epoch !== S.epoch) return { state: 'gone' };
+  const run = await currentRunForPaper(paperId);
+  if (epoch !== S.epoch || !run) return { state: 'gone' };
 
-  const run = await currentRunForPaper(draft.paper_id);
-  if (!run) return { state: 'gone' };
-  if (run.status === 'committed') return { state: 'committed', paperId: draft.paper_id };
+  if (run.status === 'committed') return { state: 'committed', paperId };
+
   if (run.status === 'failed' || run.status === 'rejected') {
     return { state: 'stopped', reason: run.status_reason ?? null };
   }
   if (!['needs_review', 'explaining', 'ready'].includes(run.status)) return { state: 'processing' };
 
+  const regions = await regionsForRun(run.id);
+  if (epoch !== S.epoch) return { state: 'gone' };
   S.draft = draft;
-  S.regions = await regionsForRun(run.id);
+  S.regions = regions;
   await openReview(run.id);
   // The SQL gate is idempotent too, but do not make a duplicate request when a
   // resumed run has already crossed into explanation generation.
@@ -529,12 +605,24 @@ export async function resumeDraftReview(draftId) {
 let refreshTimer = null;
 function scheduleReviewRefresh() {
   if (refreshTimer) return;
-  refreshTimer = setTimeout(() => { refreshTimer = null; refreshReview(); }, 400);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    refreshReview().catch(() => toast('Review could not refresh. Try again.', 'warn'));
+  }, 400);
 }
 
 async function refreshReview() {
   if (!S.runId) return;
-  S.review = await loadReview(S.runId);
+  const epoch = S.epoch;
+  const runId = S.runId;
+  const review = await loadReview(runId);
+  if (epoch !== S.epoch || runId !== S.runId) return;
+  S.review = review;
+  paintReview();
+}
+
+function paintReview() {
+  if (!S.review) return;
   const paper = S.review.paper;
 
   host.renderReview({
@@ -603,7 +691,7 @@ function handleReviewAction(id, action) {
       title: 'Fix this',
       body: 'Type what your answer actually says. We take your word for it — you have the paper.',
       items: [],
-      input: { id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
+      input: { label: "Your answer", id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
       onConfirm: async (value) => {
         try { await correctAnswer(id, value ?? ''); await refreshReview(); }
@@ -613,6 +701,7 @@ function handleReviewAction(id, action) {
     return;
   }
   if (action === 'rescan') {
+    if (!S.draft) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,
       body: 'You retake one page, and we read the paper again with it.',
@@ -640,28 +729,49 @@ async function save() {
   }
 
   S.saving = true;
-  await refreshReview();
-
+  const epoch = S.epoch;
+  const runId = S.runId;
+  const current = () => epoch === S.epoch && runId === S.runId;
+  paintReview();
   try {
+    await refreshReview();
+    if (!current()) return;
     try {
       if (!S.explanationsStarted) {
-        await startExplanations(S.runId);
+        await startExplanations(runId);
+        if (!current()) return;
         S.explanationsStarted = true;
       }
+
       await watchExplanations({
-        runId: S.runId,
+        runId,
         regions: S.regions ?? [],
-        onQuestion: () => scheduleReviewRefresh(),
+        onQuestion: () => { if (current()) scheduleReviewRefresh(); },
       });
     } catch (error) {
+      if (!current()) return;
+      // Explanations are a layer on top of the marks, not a precondition for
+      // saving them. Log it, tell the student plainly, and still commit —
+      // the marks are real and confirmed either way.
+
       console.error('explanations', error);
       toast('We could not work out why marks were lost this time. Your marks are still saved.', 'warn');
     }
 
-    const result = await commitRun(S.runId);
+    if (!current()) return;
+    const result = await commitRun(runId);
+    if (!current()) return;
     firm();
     toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
-    host.closeReview();
+    host.closeReview(S.review?.paper?.id);
+    // The paper is read, reviewed and saved: the progress panel is describing
+    // work that finished. Left standing it kept "Reading this paper" under the
+    // viewfinder for the rest of the session, so the next paper started against
+    // the last one's steps and Scan never returned to its idle state. This is
+    // the terminal path, and clearing it here is what makes the screen idle
+    // again. The refused and failed paths deliberately do NOT clear it — those
+    // panels are the only place the student is told what went wrong.
+
     host.renderProgress(null);
     releaseCrops();
     S.runId = null;
@@ -671,49 +781,53 @@ async function save() {
 
     if (S.draft) {
       await deleteDraft(S.draft.id);
+      if (epoch !== S.epoch) return;
       S.draft = null;
       S.thumbs.forEach((url) => URL.revokeObjectURL(url));
       S.thumbs.clear();
       await paintTray();
+      if (epoch !== S.epoch) return;
       await paintDrafts();
+      if (epoch !== S.epoch) return;
+      // The offer to resume outlived the thing it offered: the draft row is
+      // gone above, but the toast is only ever raised at boot, so it stayed on
+      // the viewfinder pointing at a deleted draft for the rest of the session.
+
       host.draftToast(null, { onResume: resumeDraft });
     }
     await host.refreshLibrary();
   } catch (error) {
-    toast(error.message || 'That could not be saved.', 'warn');
+    if (epoch === S.epoch) toast(error.message || 'That could not be saved.', 'warn');
   } finally {
-    S.saving = false;
-    if (S.runId) await refreshReview();
+    if (epoch === S.epoch) {
+      S.saving = false;
+      // Busy state belongs to this operation, not to the next network read.
+      // Restore the action even when refreshing the retained review also fails.
+      paintReview();
+      if (S.runId) await refreshReview().catch(() => { toast("Review could not refresh. Try saving again.", "warn"); });
+    }
   }
 }
 
 /** Uploaded photos enter the same transaction path as camera captures. */
 export async function acceptUploads(files) {
-  if (!S.ctx?.student) return;
-  const images = files.filter((f) => /^image\//.test(f.type));
-  const rest = files.filter((f) => !/^image\//.test(f.type));
-
-  if (rest.length) {
-    toast(`${rest.length} file(s) are not images. We can't read PDFs yet — photos of the pages work.`, 'warn');
-  }
-  if (!images.length) return;
-
-  for (const file of images) {
+  const result = { accepted: [], rejected: [] };
+  for (const file of files) {
+    if (!S.ctx?.student || S.submitting || !/^image\//.test(file.type)) {
+      result.rejected.push({ name: file.name, reason: S.submitting ? 'A paper is being submitted.' : 'Only images can be added.' });
+      continue;
+    }
     try {
       const bitmap = await createImageBitmap(file);
-      const replacing = S.retaking;
-      await takePage({
-        bitmap,
-        quad: null,
-        auto: false,
-        sourceKind: 'upload',
-        original: file,
-        transactionId: `upload:${crypto.randomUUID()}`,
-      }, replacing);
+      const accepted = await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file, transactionId: `upload:${crypto.randomUUID()}` }, S.retaking);
+      if (accepted) result.accepted.push({ name: file.name });
+      else result.rejected.push({ name: file.name, reason: 'This page could not be prepared.' });
+
     } catch {
-      toast(`${file.name} could not be opened.`, 'warn');
+      result.rejected.push({ name: file.name, reason: 'This file could not be opened.' });
     }
   }
+  return result;
 }
 
 export { openReview };

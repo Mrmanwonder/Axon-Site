@@ -14,6 +14,7 @@ export default defineConfig({
     entries: ["index.html", "tests/browser/index.html"],
   },
   build: {
+    manifest: true,
     // The performance floor is 60fps on mid-tier Android, which starts with
     // not shipping more than is needed to paint the first screen.
     target: "es2022",

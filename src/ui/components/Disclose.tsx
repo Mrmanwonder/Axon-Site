@@ -5,6 +5,7 @@
    transitioned. Collapsed is the resting state — see the note at the call
    site in QuestionDetail for why that matters there. */
 
+import { useApp } from "../data/AppProvider";
 import { useEffect, useRef, useState } from "react";
 
 export default function Disclose({
@@ -14,7 +15,8 @@ export default function Disclose({
   children: React.ReactNode;
   onOpen?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { prefs } = useApp();
+  const [open, setOpen] = useState(prefs.always_show_reasoning);
   const panel = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
 
@@ -36,7 +38,7 @@ export default function Disclose({
         <svg className="car" viewBox="0 0 7 12" stroke="currentColor" strokeWidth="2" fill="none"
              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 1l5 5-5 5" /></svg>
       </button>
-      <div className="panel" ref={panel} aria-hidden={!open}>
+      <div className="panel" ref={panel} aria-hidden={!open} inert={!open}>
         <div className="inner" ref={inner}>{children}</div>
       </div>
     </div>
