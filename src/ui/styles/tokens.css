@@ -331,7 +331,7 @@
   --spring: cubic-bezier(.32, .72, 0, 1);
   --d-state: 120ms;      /* chips, toggles */
   --d-disclose: 200ms;   /* disclosure, transitions */
-  --d-recompute: 320ms;  /* the signature moment, after a correction */
+  --d-recompute: 280ms;  /* the signature moment, after a correction */
   /* supporting cross-fades, measured from the prototype */
   --d-tint: .15s;
   --d-glyph: .18s;
@@ -339,9 +339,9 @@
   --d-icon: .25s;
   --d-plate: .26s;
   --d-scrim: .3s;
-  --d-panel: .38s;
-  --d-theme: .4s;
-  --d-review: .42s;
+  --d-panel: 280ms;
+  --d-theme: 240ms;
+  --d-review: 300ms;
 
   /* spring physics — these are numbers the rAF engine reads, not CSS */
   --spring-press-stiffness: 320;
