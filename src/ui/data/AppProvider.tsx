@@ -25,6 +25,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
   sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
@@ -45,7 +46,11 @@ import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, Prog
     That is hard rule 4 at the level of the whole app: an infrastructure failure
     became a different fact rather than an admitted gap. A failed read is never
     an answer about who someone is. */
-export type Gate = "loading" | "onboarding" | "ready" | "boot_error";
+import { useResource, isStale } from "./useResource";
+import { loadProfiles, selectedProfile } from "./profiles";
+import type { Loadable } from "./useResource";
+
+export type Gate = "loading" | "onboarding" | "ready" | "boot_error" | "choose_profile";
 
 type AppValue = {
   gate: Gate;
@@ -58,6 +63,9 @@ type AppValue = {
   session: unknown;
   guardian: Guardian | null;
   student: Student | null;
+  profiles: Student[];
+  profileStale: boolean;
+  selectStudent: (id: string) => Promise<void>;
 
   prefs: Prefs;
   setPref: (patch: Partial<Prefs>) => Promise<void>;
@@ -67,6 +75,9 @@ type AppValue = {
   refreshConsent: () => Promise<void>;
   setConsent: (purpose: string, granted: boolean) => Promise<void>;
 
+  papersResource: Loadable<Paper[]>;
+  progressResource: Loadable<Map<string, ProgressRow>>;
+  consentResource: Loadable<ConsentState>;
   papers: Paper[];
   papersStale: boolean;
   /** Set when the library read itself failed — not when it came back empty.
@@ -122,6 +133,9 @@ function applyPrefs(prefs: Prefs) {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const [gate, setGate] = useState<Gate>("loading");
   const [bootError, setBootError] = useState<string | null>(null);
   const [bootAttempt, setBootAttempt] = useState(0);
@@ -133,14 +147,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [providerError, setProviderError] = useState<ProviderError | null>(null);
   const [session, setSession] = useState<unknown>(null);
   const [guardian, setGuardian] = useState<Guardian | null>(null);
+  const [profiles, setProfiles] = useState<Student[]>([]);
+  const [profileStale, setProfileStale] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
-  const [consent, setConsentState] = useState<ConsentState>({});
-  const [papers, setPapers] = useState<Paper[]>([]);
-  const [papersStale, setPapersStale] = useState(false);
-  const [papersError, setPapersError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<Map<string, ProgressRow>>(new Map());
+  const [dataRevision, setDataRevision] = useState(0);
+  const { resource: papersResource, reload: reloadPapers } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id));
+  const { resource: progressResource, reload: reloadProgress } = useResource<Map<string, ProgressRow>>(student ? `${student.id}:${dataRevision}` : null, async () => ({ data: await paperProgress(student!.id) }));
+  const { resource: consentResource, reload: refreshConsent } = useResource<ConsentState>(guardian ? `${guardian.id}:${student?.id ?? ""}` : null, async () => ({ data: await readConsentState(guardian!.id, student?.id ?? null) }));
+  const papers = papersResource.data ?? [];
+  const progress = progressResource.data ?? new Map<string, ProgressRow>();
+  const consent = consentResource.data ?? {};
+  const papersStale = isStale(papersResource);
+  const papersError = papersResource.state === "failed" ? papersResource.error.message : null;
   const [online, setOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const invalidate = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail.action === "purge") {
+        setDataRevision(value => value + 1);
+        if (detail.studentId === null) { setStudent(null); setProfiles([]); setGuardian(null); setGate("loading"); }
+      }
+      if (detail.action === "complete" && detail.studentId === student?.id) void refreshLibrary();
+    };
+    addEventListener("axon:local-data", invalidate);
+    return () => removeEventListener("axon:local-data", invalidate);
+  });
 
   const pendingPaperType = useRef<string | null>(null);
   const takePendingPaperType = useCallback(() => {
@@ -173,19 +206,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const prefRevision = useRef(0);
+  const pendingPrefs = useRef(new Map<number, Partial<Prefs>>());
+  const confirmedPrefs = useRef(prefs);
+  const prefQueue = useRef<Promise<unknown>>(Promise.resolve());
   const setPref = useCallback(async (patch: Partial<Prefs>) => {
-    // Local first so the UI is instant; savePrefs treats offline as non-fatal
-    // because the local mirror already holds the change.
-    const next = await savePrefs(guardian?.id, patch);
-    setPrefs(next);
-  }, [guardian]);
-
-  const refreshConsent = useCallback(async () => {
-    if (!guardian) return;
-    // Always the server. An unreachable ledger leaves the previous map in place
-    // rather than substituting a guess; a missing key reads as unknown.
-    setConsentState(await readConsentState(guardian.id, student?.id ?? null));
-  }, [guardian, student]);
+    const request = ++prefRevision.current;
+    pendingPrefs.current.set(request, patch);
+    const repaint = () => setPrefs(Object.assign({}, confirmedPrefs.current, ...pendingPrefs.current.values()));
+    repaint();
+    const operation = prefQueue.current.then(() => savePrefs(guardian?.id, patch));
+    prefQueue.current = operation.catch(() => {});
+    try { confirmedPrefs.current = await operation; }
+    finally { pendingPrefs.current.delete(request); repaint(); }
+  }, [guardian?.id]);
 
   const setConsent = useCallback(async (purpose: string, granted: boolean) => {
     if (!guardian) return;
@@ -194,51 +228,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else await withdrawConsent({ ...args, purpose });
     // Re-read rather than trusting what we just wrote. If this throws, the
     // caller reverts the switch — the ledger decides, not the interface.
-    setConsentState(await readConsentState(guardian.id, student?.id ?? null));
-  }, [guardian, student]);
+    await refreshConsent(true);
+  }, [guardian, student, refreshConsent]);
 
   const refreshLibrary = useCallback(async () => {
-    if (!student) return;
-    try {
-      const { data, stale } = await listPapers(student.id);
-      setPapers(data ?? []);
-      setPapersStale(!!stale);
-      setPapersError(null);
-    } catch (e) {
-      // NOT swallowed. This catch used to be empty, with a comment saying the
-      // cached view stays on screen — true when there is a cached view, and a
-      // silent, total blackout when there is not. `readThrough` only reaches
-      // here when the network read failed AND the cache had nothing, so by
-      // definition there is nothing on screen to keep.
-      console.error("library read failed", e);
-      setPapersError((e as Error)?.message || "We could not read your library.");
-    }
-    try {
-      setProgress(await paperProgress(student.id));
-    } catch {
-      /* not stale-tolerant the way papers is, but a live status you can't
-         reach right now is not a reason to blank out one you already had */
-    }
-  }, [student]);
+    await Promise.all([reloadPapers(), reloadProgress()]);
+  }, [reloadPapers, reloadProgress]);
 
+  const avatarQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const avatarRevision = useRef(0);
   const setAvatar = useCallback(async (presetKey: string) => {
     if (!student) return;
-    const previous = student.avatar_seed ?? null;
-    setStudent({ ...student, avatar_seed: presetKey });
-    const { error } = await sb
-      .from("student").update({ avatar_seed: presetKey }).eq("id", student.id);
-    if (error) {
-      setStudent((s) => (s ? { ...s, avatar_seed: previous } : s));
+    const request = ++avatarRevision.current;
+    const id = student.id;
+    setStudent(current => current?.id === id ? { ...current, avatar_seed: presetKey } : current);
+    const operation = avatarQueue.current.then(async () => {
+      const { error } = await sb.from("student").update({ avatar_seed: presetKey }).eq("id", id);
+      if (error) throw error;
+    });
+    avatarQueue.current = operation.catch(() => {});
+    try { await operation; }
+    catch (error) {
+      if (request === avatarRevision.current) {
+        const result = await sb.from("student").select("avatar_seed").eq("id", id).single();
+        if (!result.error) setStudent(current => current?.id === id ? { ...current, avatar_seed: result.data.avatar_seed } : current);
+      }
       throw error;
     }
   }, [student]);
+
+  const selectStudent = useCallback(async (id: string) => {
+    const profile = profiles.find(item => item.id === id);
+    if (!profile || !guardian) throw new Error("That profile is unavailable.");
+    try { localStorage.setItem(`axon.active_student_id:${guardian.id}`, id); } catch { /* This session still switches. */ }
+    setStudent(profile); setGate("ready");
+  }, [profiles, guardian]);
 
   const finishOnboarding = useCallback(async (r: {
     guardian?: Guardian; student?: Student; firstPaperType?: string | null;
   }) => {
     pendingPaperType.current = r.firstPaperType ?? null;
     if (r.guardian) setGuardian(r.guardian);
-    if (r.student) setStudent(r.student);
+    if (r.student) { setStudent(r.student); setProfiles(previous => [...previous.filter(profile => profile.id !== r.student!.id), r.student!]); }
     setGate("ready");
   }, []);
 
@@ -256,7 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // the URL either way, so a refused provider attempt cannot linger in the
       // address bar and reappear on the next reload.
       const err = takeProviderError();
-      if (err && !cancelled) setProviderError(err);
+      if (err && !cancelled) { setProviderError(err); if (err.cleanedPath) navigateRef.current(err.cleanedPath, { replace: true }); }
 
       const s = await currentSession();
       if (cancelled) return;
@@ -268,26 +299,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGuardian(g);
       if (!g) return setGate("onboarding");
 
-      // ORDER BY, not `.limit(1)` alone. SQL makes no promise about which row
-      // an unordered limit returns, so "the student" was an implementation
-      // accident encoded as identity — and on a two-child account it could
-      // change between loads. Oldest-first is at least stable and meaningful
-      // until an explicit active-profile choice exists.
-      const { data: students, error: studentError } = await sb
-        .from("student").select("*").order("created_at", { ascending: true }).limit(1);
+      const profilesResult = await loadProfiles(g.id);
       if (cancelled) return;
-      // A failed read is not "no students". This is the exact substitution the
-      // boot_error state exists to prevent.
-      if (studentError) throw studentError;
-      const st = students?.[0] ?? null;
-      if (!st) return setGate("onboarding");
-
-      const { data: subjectRows, error: subjectError } = await sb
-        .from("student_subject").select("subject").eq("student_id", st.id);
-      if (cancelled) return;
-      if (subjectError) throw subjectError;
-      st.subjects = (subjectRows ?? []).map((r: { subject: string }) => r.subject);
-
+      setProfiles(profilesResult.data);
+      setProfileStale(profilesResult.stale);
+      if (!profilesResult.data.length) return setGate("onboarding");
+      const st = selectedProfile(g.id, profilesResult.data);
+      if (!st) return setGate("choose_profile");
       setStudent(st);
       setGate("ready");
     })().catch((e) => {
@@ -307,11 +325,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Server-side prefs and consent land once we know who this is.
   useEffect(() => {
     if (!guardian) return;
-    loadPrefs(guardian.id).then((p: Prefs) => setPrefs(p)).catch(() => { /* local stands */ });
+    const revision = prefRevision.current;
+    let active = true;
+    loadPrefs(guardian.id).then((p: Prefs) => { if (active && revision === prefRevision.current) { confirmedPrefs.current = p; setPrefs(p); } }).catch(() => { /* local stands */ });
+    return () => { active = false; };
   }, [guardian]);
 
-  useEffect(() => { void refreshConsent(); }, [refreshConsent]);
-  useEffect(() => { void refreshLibrary(); }, [refreshLibrary]);
+
 
   // ── the library, kept live ──────────────────────────────────────────────
   //
@@ -369,13 +389,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AppValue>(() => ({
-    gate, bootError, retryBoot, providerError, session, guardian, student,
+    gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent,
     prefs, setPref,
+    papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent,
     papers, papersStale, papersError, progress, refreshLibrary, setAvatar,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
-    gate, bootError, retryBoot, providerError, session, guardian, student, prefs, setPref,
+    gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
+    papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
     setAvatar, online, finishOnboarding, takePendingPaperType, signOutNow,
   ]);

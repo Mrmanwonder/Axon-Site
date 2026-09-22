@@ -73,6 +73,7 @@ export type Cached<T> = { data: T; stale: boolean; offline: boolean };
 
 /** A refused Google or Apple round trip, already cleared out of the URL. */
 export type ProviderError = {
+  cleanedPath?: string;
   provider: string | null;
   code: string;
   description: string;

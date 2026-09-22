@@ -25,8 +25,8 @@
 
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, PAPER_STATUS, statusKeyForRun } from "../data/modules";
-import { paths } from "../app/paths";
+import { paperTypeLabel } from "../data/modules";
+import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 
@@ -46,7 +46,7 @@ function Thumb() {
 type CountRow = { count: number }[] | undefined;
 
 export default function Library() {
-  const { papers, papersStale, papersError, progress } = useApp();
+  const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
   const navigate = useNavigate();
 
   return (
@@ -54,11 +54,14 @@ export default function Library() {
       <div className="greet">
         <h1>Library</h1>
         <div className="sub">
-          {papers.length} paper{papers.length === 1 ? "" : "s"}
+          {papersResource.state === "ready" || papersResource.data !== null ? <>{papers.length} paper{papers.length === 1 ? "" : "s"}</> : ""}
           {papersStale ? " · offline copy" : ""}
         </div>
       </div>
 
+      {papersResource.state === "loading" && <div role="status">Loading papers…</div>}
+      {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
+      {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
       <div className="list">
         {/* Two different states that used to render identically. A library
             that is empty and a library we could not read are not the same
@@ -76,7 +79,7 @@ export default function Library() {
           </div>
         )}
 
-        {!papers.length && !papersError && (
+        {!papers.length && papersResource.state === "ready" && (
           <div className="srow noicon">
             <div className="lbl">
               Nothing here yet
@@ -87,10 +90,9 @@ export default function Library() {
 
         {papers.map((p) => {
           const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
-          const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
-          const run = progress.get(p.id);
-          const statusKey = run ? statusKeyForRun(run.status) : null;
-          const status = statusKey ? PAPER_STATUS[statusKey] : null;
+
+          const presentation = paperPresentation(p, progressResource);
+          const status = { label: presentation.statusLabel, tone: presentation.tone };
 
           const meta = (
             <>
@@ -121,8 +123,9 @@ export default function Library() {
                     )
                     // Not a zero. "We haven't read this" and "nothing was
                     // lost" are different claims and must not look the same.
-                    : (!questions && <span className="tier uns">Not read yet</span>)}
+                    : null}
                 </div>
+                {presentation.reason && <div className="t2">{presentation.reason}</div>}
               </div>
             </>
           );
@@ -140,7 +143,8 @@ export default function Library() {
                 type="button"
                 className="row"
                 data-interactive=""
-                onClick={() => navigate(paths.scan)}
+                disabled={!presentation.canOpen}
+                onClick={() => navigate(presentation.destination)}
               >
                 {meta}
                 <Chevron />
@@ -152,7 +156,7 @@ export default function Library() {
             <PressBox
               as={Link}
               key={p.id}
-              to={paths.paper(p.id)}
+              to={presentation.destination}
               className="row"
               data-interactive=""
             >

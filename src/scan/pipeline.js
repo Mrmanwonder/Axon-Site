@@ -221,7 +221,7 @@ let paperId = draft.paper_id;
   const taken = dateTaken ?? new Date().toISOString().slice(0, 10);
 
 if (!paperId) {
-  const paper = await createPaper({ studentId, type, dateTaken: taken });
+  const paper = await createPaper({ studentId, type, dateTaken: taken, requestId: draft.id });
   paperId = paper.id;
   draft.paper_id = paperId;
   draft.paper_type = paper.type;
@@ -232,7 +232,7 @@ if (!paperId) {
 // way, or the server sees a second booklet rather than the rest of the
 // first one. One id, made once, kept for the life of the draft.
 if (!draft.idempotency_key) {
-  draft.idempotency_key = crypto.randomUUID();
+  draft.idempotency_key = draft.id;
   await saveDraft(draft);
 }
 

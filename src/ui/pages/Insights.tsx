@@ -40,17 +40,18 @@ type Cause = keyof typeof CAUSE;
 const THRESHOLD = 4;
 
 export default function Insights() {
-  const { state, readiness, loss } = useAnalytics();
+  const { state, stale, readiness, loss } = useAnalytics();
   const { addPaper } = useIngestion();
 
   // Loading is not "not enough data". Showing the insufficient-data state while
   // the read is in flight tells a student their papers don't count.
-  if (state === "loading" || !readiness) return null;
+  if (state === "loading" && !readiness) return <div role="status">Loading analysis…</div>;
 
-  if (state === "failed") {
+  if (!readiness) {
     return (
       <>
         <div className="greet"><h1>Insights</h1></div>
+        {(stale || state === "failed") && <div role="status">Last available analysis.</div>}
         <div className="estate">
           <h4>Can&rsquo;t reach your analysis</h4>
           <p>
@@ -67,6 +68,7 @@ export default function Insights() {
     return (
       <>
         <div className="greet"><h1>Insights</h1></div>
+        {(stale || state === "failed") && <div role="status">Last available analysis.</div>}
         <div className="estate">
           <NotEnoughDataArt />
           <h4>Not enough papers yet</h4>
@@ -106,6 +108,7 @@ export default function Insights() {
         </div>
       </div>
 
+      {(stale || state === "failed") && <div role="status">Last available analysis.</div>}
       <div className="sectitle">Marks lost by cause</div>
 
       {!total ? (

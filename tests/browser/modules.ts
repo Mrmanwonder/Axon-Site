@@ -1,0 +1,26 @@
+const scenario = new URLSearchParams(location.search).get("scenario");
+const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
+export const sb = { from: (table: string) => ({ select: () => ({ eq: () => table === "student" ? { order: async () => ({ data: [{ id: "student", first_name: "Sam" }] }) } : Promise.resolve({ data: [{ subject: "physics" }] }) }) }) };
+export async function currentSession() { if (scenario === "auth-error") throw new Error("Auth unavailable"); return {}; }
+export const currentGuardian = async () => ({ id: "guardian" });
+export const takeProviderError = () => null;
+export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
+export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
+export const loadPrefs = async () => readLocal();
+export const savePrefs = async () => readLocal();
+export async function readConsentState() { if (scenario === "consent-error") throw new Error("Ledger unavailable"); return {}; }
+export const recordConsent = async () => {};
+export const withdrawConsent = async () => {};
+export const signOut = async () => {};
+export async function listPapers() { await wait(); return { data: [], stale: false }; }
+export const paperProgress = async () => new Map();
+export const watchLibrary = () => () => {};
+export const analyticsReadiness = async () => ({ data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" });
+export const lossByCause = async () => ({ data: {} });
+export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
+export const unreadablePages = async () => ({ data: [] });
+export const paperTypeLabel = () => "Test paper";
+export const statusKeyForRun = () => null;
+export const PAPER_STATUS = {};
+export const avatarStyleFor = () => ({ preset: "default", background: "#ddd", color: "#111" });
+export const initialFor = (name?: string) => name?.trim().charAt(0).toUpperCase() || "?";

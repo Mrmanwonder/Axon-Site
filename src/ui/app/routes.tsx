@@ -34,6 +34,7 @@ import Scan from "../pages/Scan";
 import PaperReview from "../pages/PaperReview";
 import Insights from "../pages/Insights";
 import Settings from "../pages/Settings";
+import AppRouteErrorBoundary from "../pages/AppRouteErrorBoundary";
 import NotFound from "../pages/NotFound";
 
 export { paths, SHEET } from "./paths";
@@ -43,7 +44,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <Root />,
-    errorElement: <NotFound />,
+    errorElement: <AppRouteErrorBoundary />,
     children: [
       { index: true, element: <Home /> },
 

@@ -20,13 +20,11 @@
    expects.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import {
-  createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState,
-} from "react";
+import { createContext, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { spring, seed, releaseSpring } from "../lib/spring";
+import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-import PressBox from "./PressBox";
+import Dialog from "./Dialog";
 
 export type SheetChoice = { label: string; value: string };
 
@@ -36,7 +34,7 @@ export type SheetConfig = {
   /** [lead, rest] — the lead is emphasised, the rest explains it. */
   items?: [string, string][];
   choices?: SheetChoice[];
-  input?: { id: string; placeholder?: string };
+  input?: { id: string; label: string; placeholder?: string };
   primary?: string;
   onConfirm?: (value: string) => void | Promise<void>;
   onChoice?: (value: string) => void | Promise<void>;
@@ -52,177 +50,69 @@ export function useSheetControls(): SheetValue {
   return v;
 }
 
-const SHEET_STATE = "axon.sheet";
-
 export function SheetProvider({ children }: { children: ReactNode }) {
-  const [cfg, setCfg] = useState<SheetConfig | null>(null);
-  const [inputValue, setInputValue] = useState("");
-  const sheetRef = useRef<HTMLDivElement>(null);
-  const key = "sheet" + useId();
-  const pushed = useRef(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const place = useCallback((p: number) => {
-    if (sheetRef.current) sheetRef.current.style.transform = `translateY(${(p * 115).toFixed(2)}%)`;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const locationRef = useRef(location);
+  locationRef.current = location;
+  const entries = useRef(new Map<string, { cfg: SheetConfig; base: string; trigger: HTMLElement | null }>());
+  const pointerTrigger = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const capture = (event: PointerEvent) => { pointerTrigger.current = (event.target as HTMLElement).closest("button, a, input, [tabindex]"); };
+    document.addEventListener("pointerdown", capture, true);
+    return () => document.removeEventListener("pointerdown", capture, true);
   }, []);
-
-  const openSheet = useCallback((next: SheetConfig) => {
-    setCfg(next);
-    setInputValue("");
-    seed(key, 1);
-    place(1);
-    if (!pushed.current) {
-      history.pushState({ [SHEET_STATE]: true }, "");
-      pushed.current = true;
-    }
-    requestAnimationFrame(() => {
-      spring(key, { to: 0, stiffness: 230, damping: 26, onUpdate: place });
-    });
-  }, [key, place]);
-
-  /** Animate out, then drop the config. Popping history is the caller's job so
-      a back-button dismissal doesn't pop twice. */
-  const dismiss = useCallback(() => {
-    spring(key, {
-      to: 1,
-      stiffness: 230,
-      damping: 26,
-      onUpdate: (p) => {
-        place(p);
-        if (p > .98) setCfg(null);
-      },
-    });
-  }, [key, place]);
-
-  const closeSheet = useCallback(() => {
-    if (pushed.current) {
-      pushed.current = false;
-      history.back();      // fires popstate, which calls dismiss
-    } else {
-      dismiss();
-    }
-  }, [dismiss]);
-
+  const [inputValue, setInputValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const flight = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<string | null>(null);
+  const token = new URLSearchParams(location.search).get("sheet");
+  const entry = token ? entries.current.get(token) : undefined;
+  const openSheet = useCallback((cfg: SheetConfig) => {
+    const current = locationRef.current;
+    const params = new URLSearchParams(current.search);
+    const replacing = params.has("sheet");
+    params.delete("sheet");
+    const base = current.pathname + (params.size ? `?${params}` : "") + current.hash;
+    const id = crypto.randomUUID();
+    const focused = document.activeElement as HTMLElement | null;
+    entries.current.set(id, { cfg, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
+    params.set("sheet", id);
+    setInputValue(""); setError(null); setCompleted(null);
+    navigate({ pathname: current.pathname, search: `?${params}`, hash: current.hash }, { replace: replacing });
+  }, [navigate]);
+  const closeSheet = useCallback(() => { if (!flight.current) navigate(-1); }, [navigate]);
   useEffect(() => {
-    const onPop = () => {
-      pushed.current = false;
-      dismiss();
-    };
-    addEventListener("popstate", onPop);
-    return () => {
-      removeEventListener("popstate", onPop);
-      releaseSpring(key);
-    };
-  }, [dismiss, key]);
-
-  // Escape closes it, and focus moves into the sheet when it opens so a keyboard
-  // user is not left tabbing through the screen behind the scrim.
-  useEffect(() => {
-    if (!cfg) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeSheet(); };
-    addEventListener("keydown", onKey);
-    (cfg.input ? inputRef.current : sheetRef.current)?.focus();
-    return () => removeEventListener("keydown", onKey);
-  }, [cfg, closeSheet]);
-
+    if (completed && token === completed && entry) navigate(entry.base, { replace: true });
+  }, [completed, token, entry, navigate]);
   const value = useMemo(() => ({ openSheet, closeSheet }), [openSheet, closeSheet]);
-
-  const confirm = () => {
-    // A destructive primary is consequential, so it gets the firmer pulse. A
-    // sheet offering choices has no primary at all.
-    hapticFirm();
-    const fn = cfg?.onConfirm;
-    const v = inputValue;
-    closeSheet();
-    void fn?.(v);
+  const act = async (choice?: string) => {
+    if (!entry || !token || flight.current) return;
+    flight.current = true; setBusy(true); setError(null);
+    choice === undefined ? hapticFirm() : hapticTick();
+    try {
+      if (choice === undefined) await entry.cfg.onConfirm?.(inputValue);
+      else await entry.cfg.onChoice?.(choice);
+      // Router navigation is a transition. Commit dismissal at the same
+      // priority so it cannot race ahead and replace the destination.
+      startTransition(() => setCompleted(token));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "This could not be completed. Try again.");
+    } finally { flight.current = false; setBusy(false); }
   };
-
-  const choose = (v: string) => {
-    hapticTick();
-    const fn = cfg?.onChoice;
-    closeSheet();
-    void fn?.(v);
-  };
-
-  return (
-    <Ctx.Provider value={value}>
-      {children}
-
-      <div
-        className={"scrim" + (cfg ? " on" : "")}
-        onClick={closeSheet}
-        aria-hidden="true"
-      />
-
-      {cfg && (
-        <div
-          className="sheet"
-          ref={sheetRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={cfg.title}
-          tabIndex={-1}
-        >
-          <h4>{cfg.title}</h4>
-          {cfg.body && <div className="body">{cfg.body}</div>}
-
-          {!!cfg.items?.length && (
-            <ul>
-              {cfg.items.map(([lead, rest], i) => (
-                <li key={i}>
-                  <span className="d" aria-hidden="true" />
-                  <span><b>{lead}</b> {rest}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {cfg.input && (
-            <div className="sh-input">
-              <input
-                ref={inputRef}
-                id={cfg.input.id}
-                placeholder={cfg.input.placeholder}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") confirm(); }}
-              />
-            </div>
-          )}
-
-          {cfg.choices && (
-            <div className="sh-choices">
-              {cfg.choices.map((c) => (
-                <PressBox
-                  as="button"
-                  type="button"
-                  key={c.value}
-                  className="sh-choice"
-                  onClick={() => choose(c.value)}
-                >
-                  {c.label}
-                </PressBox>
-              ))}
-            </div>
-          )}
-
-          <div className="acts">
-            {/* Choices are the action; a primary button beside them would be a
-                second way to do the same thing. */}
-            {!cfg.choices && (
-              <>
-                <PressBox as="button" type="button" className="btn primary" onClick={confirm}>
-                  {cfg.primary ?? "Confirm"}
-                </PressBox>
-                <button type="button" className="btn plain" onClick={closeSheet}>Cancel</button>
-              </>
-            )}
-            {cfg.choices && (
-              <button type="button" className="btn plain" onClick={closeSheet}>Cancel</button>
-            )}
-          </div>
-        </div>
-      )}
-    </Ctx.Provider>
-  );
+  const cfg = entry?.cfg;
+  return <Ctx.Provider value={value}>
+    {children}
+    {cfg && <Dialog key={token} title={cfg.title} description={cfg.body} busy={busy} onClose={closeSheet} restoreFocus={entry.trigger}>
+      {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
+      {cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
+      {error && <p role="alert">{error}</p>}
+      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className="sh-choice" key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
+      <div className="acts">
+        {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
+        <button type="button" className="btn plain" disabled={busy} onClick={closeSheet}>Cancel</button>
+      </div>
+    </Dialog>}
+  </Ctx.Provider>;
 }

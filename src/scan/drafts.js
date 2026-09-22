@@ -11,30 +11,25 @@
 // picks up at the first page that has not — per page, with no re-capture and no
 // re-upload of what already landed.
 
-const DB_NAME = 'axon-scan';
-const DB_VERSION = 1;
+import { openDraftDatabase, closeLocalDatabase, localDataEpoch } from '../local-data.js';
 const STORE = 'drafts';
-
-function open() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'id' }).createIndex('student', 'student_id');
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
+export const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const open = openDraftDatabase;
+const stamp = draft => { if (draft) Object.defineProperty(draft, '_epoch', { value: localDataEpoch(), configurable: true }); return draft; };
 
 function tx(db, mode, fn) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE, mode);
-    const result = fn(transaction.objectStore(STORE));
-    transaction.oncomplete = () => resolve(result.result ?? result);
-    transaction.onerror = () => reject(transaction.error);
+    let result;
+    try {
+      result = fn(transaction.objectStore(STORE));
+    } catch (error) {
+      closeLocalDatabase(db);
+      reject(error);
+      return;
+    }
+    transaction.oncomplete = () => { closeLocalDatabase(db); resolve(result.result ?? result); };
+    transaction.onerror = transaction.onabort = () => { closeLocalDatabase(db); reject(transaction.error); };
   });
 }
 
@@ -51,27 +46,32 @@ export async function createDraft({ id, studentId, paperType }) {
     pages: [],
   };
   await tx(db, 'readwrite', (store) => store.put(draft));
-  return draft;
+  return stamp(draft);
 }
 
 export async function readDraft(id) {
   const db = await open();
-  return tx(db, 'readonly', (store) => store.get(id));
+  const draft = await tx(db, 'readonly', (store) => store.get(id));
+  if (draft && Date.now() - draft.updated_at > DRAFT_RETENTION_MS) { await deleteDraft(id); return null; }
+  return stamp(draft);
 }
 
 export async function listDrafts(studentId) {
   const db = await open();
   const all = await tx(db, 'readonly', (store) => store.getAll());
+  for (const draft of all ?? []) if (Date.now() - draft.updated_at > DRAFT_RETENTION_MS) await deleteDraft(draft.id);
   return (all ?? [])
+  .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
   .filter((d) => d.student_id === studentId && d.pages.length)
-  .sort((a, b) => b.updated_at - a.updated_at);
+  .sort((a, b) => b.updated_at - a.updated_at).map(stamp);
 }
 
 export async function saveDraft(draft) {
+  if (draft._epoch !== localDataEpoch()) throw new Error("This draft was cleared. Start a new scan.");
   const db = await open();
   draft.updated_at = Date.now();
   await tx(db, 'readwrite', (store) => store.put(draft));
-  return draft;
+  return stamp(draft);
 }
 
 export async function deleteDraft(id) {

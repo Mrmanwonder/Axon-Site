@@ -17,7 +17,7 @@ function literalsIn(fnName) {
   const start = src.indexOf(`export function ${fnName}`);
   if (start < 0) throw new Error(`${fnName} not found`);
   const after = src.slice(start);
-  const end = after.indexOf('\n}\n');
+  const end = after.search(/\r?\n}\r?\n/);
   const body = after.slice(0, end < 0 ? undefined : end);
   return [...body.matchAll(/`([^`]*)`|"([^"]*)"/g)]
     .map((m) => m[1] ?? m[2])

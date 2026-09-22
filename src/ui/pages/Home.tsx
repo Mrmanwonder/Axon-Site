@@ -26,6 +26,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useAnalytics } from "../data/useAnalytics";
+import { paperPresentation } from "../data/paperPresentation";
 import { paths } from "../app/paths";
 import { paperTypeLabel } from "../data/modules";
 import PressBox from "../components/PressBox";
@@ -34,8 +35,8 @@ import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
 
 export default function Home() {
-  const { student, guardian, papers, papersStale, papersError } = useApp();
-  const { state, needsCheck } = useAnalytics();
+  const { student, guardian, papers, papersStale, papersError, papersResource, progressResource } = useApp();
+  const { state, stale, needsCheck } = useAnalytics();
   const { addPaper } = useIngestion();
   const navigate = useNavigate();
 
@@ -45,7 +46,7 @@ export default function Home() {
   // Loading is not empty. Rendering the "no papers yet" state while the read is
   // still in flight tells a student they have nothing a moment before their
   // library appears.
-  if (state === "loading") return null;
+  if (papersResource.state === "loading" && papersResource.data === null) return <div role="status">Loading papers…</div>;
 
   // A library we could not read is not an empty one. Offering "Add your first
   // paper" to someone who already has papers, because the read failed, is the
@@ -95,6 +96,7 @@ export default function Home() {
         <h1>{name}</h1>
       </div>
 
+      {(stale || state === "failed") && <div role="status">Last available analysis. Live analysis is unavailable.</div>}
       {/* Shown only when there is something to check. The count and the paper
           count are both real; the surface states its own sample size. */}
       {needsCheck && needsCheck.count > 0 && (
@@ -127,16 +129,19 @@ export default function Home() {
 
       <div className="sectitle">Recent scans</div>
       <div className="list">
-        {recent.map((p) => (
+        {recent.map((p) => { const presentation = paperPresentation(p, progressResource); return (
           <PressBox
             as={Link}
             key={p.id}
-            to={paths.paper(p.id)}
+            to={presentation.destination}
+            aria-disabled={!presentation.canOpen}
+            onClick={event => { if (!presentation.canOpen) event.preventDefault(); }}
             className="row"
             data-interactive=""
           >
             <div className="b">
               <div className="t1">{paperTypeLabel(p.type)}</div>
+              <div className="t2">{presentation.statusLabel}{presentation.stale ? " · last-known status" : ""}</div>
               <div className="t2">
                 <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
                   {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
@@ -150,7 +155,7 @@ export default function Home() {
             </div>
             <Chevron />
           </PressBox>
-        ))}
+        ); })}
       </div>
 
       {papersStale && (

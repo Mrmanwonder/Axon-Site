@@ -27,7 +27,7 @@ import { hapticTick, hapticFirm } from "../lib/haptics";
 export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto,
+    resumable, drafts, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto, submitting,
   } = useScan();
   const { addPaper, addLink } = useIngestion();
   const { student } = useApp();
@@ -52,9 +52,11 @@ export default function Scan() {
     const stop = (e: Event) => e.preventDefault();
     // Not in the DOM lib — `gesture*` is Safari's own, and this is the browser
     // it exists for. Passive listeners cannot preventDefault, so say so.
-    const listen = document.addEventListener.bind(document) as
+    const surface = videoRef.current?.parentElement;
+    if (!surface) return;
+    const listen = surface.addEventListener.bind(surface) as
       (t: string, l: EventListener, o?: AddEventListenerOptions) => void;
-    const unlisten = document.removeEventListener.bind(document) as
+    const unlisten = surface.removeEventListener.bind(surface) as
       (t: string, l: EventListener) => void;
     const kinds = ["gesturestart", "gesturechange", "gestureend"];
     for (const kind of kinds) listen(kind, stop, { passive: false });
@@ -71,10 +73,10 @@ export default function Scan() {
         data-phase={camera.on ? undefined : camera.phase}
       >
         {/* The ids are load-bearing, not legacy: system.css addresses the video
-            and the overlay by id to size them to the hero and to hide both while
-            the camera is off. Without them the video renders at its natural
-            size in the corner of a full-bleed viewfinder. */}
-        <video id="scanVideo" ref={videoRef} playsInline muted />
+            and overlay by id to size them to the hero and control their camera
+            lifecycle states. Without them the video renders at its natural size
+            in the corner of a full-bleed viewfinder. */}
+        <video id="scanVideo" ref={videoRef} autoPlay playsInline muted />
         <canvas id="scanOverlay" ref={overlayRef} />
 
         <div className="feed"><div className="feedgrid" /></div>
@@ -84,6 +86,7 @@ export default function Scan() {
           {hint.hint}
         </div>
 
+        {camera.phase === "failed" && <button onClick={() => onScreenVisible(true)}>Retry scanner</button>}
         {/* Auto-capture assists; it never blocks. The shutter always fires. */}
         <PressBox
           as="button" type="button"
@@ -104,7 +107,7 @@ export default function Scan() {
           </PressBox>
 
           <PressBox as="button" type="button" className="shutter" aria-label="Take this page"
-                    disabled={!camera.on}
+                    disabled={!camera.on || submitting}
                     onClick={() => { hapticTick(); shoot(); }}>
             <div className="ring" />
           </PressBox>
@@ -155,6 +158,7 @@ export default function Scan() {
                 as="button" type="button"
                 key={p.page_number}
                 className="traypage"
+                disabled={submitting}
                 data-quality={p.quality?.verdict ?? "ok"}
                 aria-label={`Page ${p.page_number}`}
                 onClick={() => { hapticTick(); trayHandlers.onPage?.(p.page_number); }}
@@ -175,6 +179,7 @@ export default function Scan() {
               {badPages ? ` · ${badPages} worth retaking` : ""}
             </span>
             <PressBox as="button" type="button" className="btn primary"
+                      disabled={submitting} aria-busy={submitting}
                       onClick={() => { hapticFirm(); trayHandlers.onDone?.(); }}>
               Read this paper
             </PressBox>
@@ -209,6 +214,16 @@ export default function Scan() {
           {progress.note && <div className="subnote">{progress.note}</div>}
         </div>
       )}
+
+      {drafts.length > 0 && <section className="scanbelow" aria-label="Unfinished papers">
+        <div className="sectitle">Unfinished papers</div>
+        <p className="subnote">Draft images are kept on this device for 30 days after their last change.</p>
+        {drafts.map(draft => <div className="srow noicon" key={draft.id}>
+          <span>{draft.title} · {draft.pages} pages</span>
+          <button disabled={submitting} onClick={() => draftsHandlers.onResume?.(draft.id)}>Resume</button>
+          <button disabled={submitting} onClick={() => draftsHandlers.onDiscard?.(draft.id)}>Discard</button>
+        </div>)}
+      </section>}
 
       {!student && (
         <div className="subnote">Create a student profile before scanning.</div>

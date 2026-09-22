@@ -10,7 +10,7 @@
 // Google or Apple can assert on a parent's behalf.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
-import { clearLocalData } from './cache.js';
+import { clearLocalData, readThrough } from './cache.js';
 
 // Imported rather than read off `window` from a vendored UMD script. The intent
 // is unchanged — the client is bundled into our own output, so there is still no
@@ -139,7 +139,7 @@ export function takeProviderError() {
   }
   const rest = frag.toString();
   url.hash = rest ? `#${rest}` : '';
-  history.replaceState(null, '', url.toString());
+
 
   const name = PROVIDER_LABEL[provider] ?? 'That provider';
   let message;
@@ -151,7 +151,7 @@ export function takeProviderError() {
   } else {
     message = description || `${name} sign-in didn't complete.`;
   }
-  return { provider, code, description, message };
+  return { provider, code, description, message, cleanedPath: url.pathname + url.search + url.hash };
 }
 
 /**
@@ -230,7 +230,8 @@ export async function verifyOtp(contact, input) {
 }
 
 export async function currentSession() {
-  const { data } = await sb.auth.getSession();
+  const { data, error } = await sb.auth.getSession();
+  if (error) throw error;
   return data.session ?? null;
 }
 
@@ -239,8 +240,9 @@ export async function signOut() {
   // same browser profile must not inherit the previous student's cached papers
   // or scan drafts, and clearing after the session is gone is a race: the app
   // reloads on sign-out, and a reload can beat an unawaited cleanup.
-  await clearLocalData();
-  await sb.auth.signOut();
+  try { await clearLocalData(); } catch (error) { console.error("Local cleanup failed during sign-out", error); sessionStorage.setItem("axon.cleanup-error", "Some local schoolwork could not be cleared. Close other Axon tabs and clear this device before sharing it."); }
+  const { error } = await sb.auth.signOut();
+  if (error) throw error;
 }
 
 export function onAuthChange(fn) {
@@ -251,6 +253,7 @@ export function onAuthChange(fn) {
 export async function currentGuardian() {
   const session = await currentSession();
   if (!session) return null;
+  const result = await readThrough(`guardian:${session.user.id}`, async () => {
   const { data, error } = await sb
     .from('guardian')
     .select('*')
@@ -258,4 +261,6 @@ export async function currentGuardian() {
     .maybeSingle();
   if (error) throw error;
   return data;
+  });
+  return result.data;
 }

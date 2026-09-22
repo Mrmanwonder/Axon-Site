@@ -31,6 +31,7 @@ export default function PaperReview() {
     (async () => {
       try {
         const scan = await ensureScan();
+        if (cancelled) return;
         const r = await scan.resumeDraftReview(draftId);
         if (!cancelled) setResult(r);
       } catch (e) {
@@ -55,7 +56,7 @@ export default function PaperReview() {
     );
   }
 
-  if (!result) return null; // resolving — nothing dishonest to show yet
+  if (!result) return <div role="status">Loading review…</div>; // resolving — nothing dishonest to show yet
 
   if (result.state === "committed") {
     return (
