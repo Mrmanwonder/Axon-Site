@@ -23,6 +23,7 @@ import { IngestionProvider } from "../data/useIngestion";
 import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 import PressBox from "../components/PressBox";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
@@ -69,13 +70,12 @@ function BootError() {
 function Gate() {
   const { gate } = useApp();
 
-  // Nothing, not a spinner: the document is already painted in the right theme
-  // by the inline script in index.html, and a spinner that appears for 80ms and
-  // vanishes is worse than a still frame.
-  if (gate === "loading") return null;
+  // Use an app-shaped skeleton instead of an unexplained blank frame. CSS delays
+  // its reveal slightly so normal fast boots still avoid loader flash.
+  if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" />;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
-    return <Suspense fallback={null}><Onboarding /></Suspense>;
+    return <Suspense fallback={<SkeletonLoader label="Loading setup" />}><Onboarding /></Suspense>;
   }
   return <AppShell />;
 }
