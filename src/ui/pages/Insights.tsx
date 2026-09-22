@@ -6,6 +6,7 @@ import PressBox from "../components/PressBox";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import { useIngestion } from "../data/useIngestion";
+import PageSkeleton from "../components/PageSkeleton";
 
 const CAUSE = {
   conceptual_gap: { hue: "var(--cause-conceptual-gap)", label: "Concept gap" },
@@ -75,7 +76,7 @@ export default function Insights() {
     { value: "tier_2", label: "Scheme match" },
   ];
 
-  if (state === "loading" && !readiness) return <div role="status">Loading analysis…</div>;
+  if (state === "loading" && !readiness) return <PageSkeleton variant="insights" label="Loading analysis…" />;
   if (!readiness) return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
   return <>
