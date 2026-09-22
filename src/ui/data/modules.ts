@@ -75,7 +75,7 @@ export type Paper = {
     `undefined` and renders a confident zero. */
 export type Cached<T> = { data: T; stale: boolean; offline: boolean };
 
-/** A refused Google or Apple round trip, already cleared out of the URL. */
+/** A refused Google round trip, already cleared out of the URL. */
 export type ProviderError = {
   cleanedPath?: string;
   provider: string | null;
