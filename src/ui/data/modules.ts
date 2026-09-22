@@ -118,7 +118,7 @@ export const sendOtp = supabaseMod.sendOtp as (
 export const verifyOtp = supabaseMod.verifyOtp as (contact: string, input: string) => Promise<unknown>;
 export const signInWithProvider = supabaseMod.signInWithProvider as (p: string) => Promise<void>;
 export const isProviderNotEnabled = supabaseMod.isProviderNotEnabled as (e: unknown) => boolean;
-export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as ("google" | "apple")[];
+export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as "google"[];
 export const PROVIDER_LABEL = supabaseMod.PROVIDER_LABEL as Record<string, string>;
 
 // ── guardian verification ──────────────────────────────────────────────────
