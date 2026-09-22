@@ -11,6 +11,7 @@
 import ProfileChooser from "../components/ProfileChooser";
 
 import { lazy, Suspense } from "react";
+import { useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "../data/AppProvider";
 import { ToastProvider } from "../components/ToastProvider";
 import { SheetProvider } from "../components/SheetProvider";
@@ -19,6 +20,7 @@ import { ScanProvider } from "../scan/ScanProvider";
 import AppShell from "./AppShell";
 import PressBox from "../components/PressBox";
 import SkeletonLoader from "../components/SkeletonLoader";
+import type { PageSkeletonVariant } from "../components/PageSkeleton";
 
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
@@ -52,19 +54,34 @@ function BootError() {
   );
 }
 
+function skeletonVariantFor(pathname: string): PageSkeletonVariant {
+  if (pathname.startsWith("/scan/review/")) return "review";
+  if (pathname === "/scan" || pathname.startsWith("/scan/")) return "scan";
+  if (pathname === "/insights") return "insights";
+  if (pathname === "/settings") return "settings";
+  if (pathname.startsWith("/library/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    return parts.length >= 3 ? "question" : "paper";
+  }
+  if (pathname === "/library") return "library";
+  return "home";
+}
+
 function Gate() {
   const { gate } = useApp();
+  const { pathname } = useLocation();
+  const skeletonVariant = skeletonVariantFor(pathname);
   const cleanupError = sessionStorage.getItem("axon.cleanup-error");
   if (cleanupError) return <main><h1>Local cleanup needs attention</h1><p>{cleanupError}</p><button onClick={async () => { try { const { LocalDataService } = await import("../../local-data.js"); await LocalDataService.clearAll(); sessionStorage.removeItem("axon.cleanup-error"); location.reload(); } catch { /* Keep the recovery message visible. */ } }}>Retry local cleanup</button></main>;
 
   // Nothing, not a spinner: the document is already painted in the right theme
   // by the inline script in index.html, and a spinner that appears for 80ms and
   // vanishes is worse than a still frame.
-  if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" />;
+  if (gate === "loading") return <SkeletonLoader label="Loading your Axon workspace" variant={skeletonVariant} />;
   if (gate === "choose_profile") return <main><ProfileChooser /></main>;
   if (gate === "boot_error") return <BootError />;
   if (gate === "onboarding") {
-    return <Suspense fallback={<SkeletonLoader label="Loading setup" />}><Onboarding /></Suspense>;
+    return <Suspense fallback={<SkeletonLoader label="Loading setup" variant="onboarding" />}><Onboarding /></Suspense>;
 
   }
   return <AppShell />;
