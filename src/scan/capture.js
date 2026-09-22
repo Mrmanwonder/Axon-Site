@@ -790,11 +790,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
   function updateAutoTiming(current, width, height, now, {
     blocking = null, geometryReady = false, qualityReady = false,
   } = {}) {
-    const qualityBlock = blocking === 'glare' || blocking === 'focus';
-    const framingBlock = !!blocking && !qualityBlock;
-    if (!geometryReady || !qualityReady || framingBlock) {
+    // Patience bypasses hand-held motion only. A genuine framing or quality
+    // failure still needs the student to fix the shot before Auto may fire.
+    if (!geometryReady || !qualityReady || blocking) {
       resetAutoTiming();
-      return { stableForMs: 0, candidateForMs: 0, patienceOverride: false };
+      return { stableForMs: 0, candidateForMs: 0 };
     }
 
     if (!autoCandidateSince) autoCandidateSince = now;
@@ -806,12 +806,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
       autoStableSince = now;
     }
 
-    const stableForMs = Math.max(0, now - autoStableSince);
-    const candidateForMs = Math.max(0, now - autoCandidateSince);
     return {
-      stableForMs,
-      candidateForMs,
-      patienceOverride: qualityBlock && candidateForMs >= CAPTURE.PATIENCE_MS,
+      stableForMs: Math.max(0, now - autoStableSince),
+      candidateForMs: Math.max(0, now - autoCandidateSince),
     };
   }
 
@@ -909,13 +906,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     publish(next);
 
     const autoTiming = updateAutoTiming(tracked, tw, th, now, next);
-    const effectiveBlock = autoTiming.patienceOverride ? null : next.blocking;
 
     if (performance.now() < autoRetryAfter) return;
     if (shouldAutoCapture({
       autoCapture,
       armed,
-      blocking: effectiveBlock,
+      blocking: next.blocking,
       consecutiveFinds,
       globalConfirmations,
       trackState: track.state,
@@ -925,9 +921,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
       candidateForMs: autoTiming.candidateForMs,
     })) {
       armed = false;
-      void shoot(true, { allowQualityBlock: autoTiming.patienceOverride });
+      void shoot(true);
     }
-    if (next.blocking && !autoTiming.patienceOverride) armed = true;
+    if (next.blocking) armed = true;
   }
 
   function publish(next) {
@@ -1263,7 +1259,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }, AUTO_RETRY_COOLDOWN_MS);
   }
 
-  async function shoot(auto = false, { allowQualityBlock = false } = {}) {
+  async function shoot(auto = false) {
     if (!running || !video.videoWidth || shootInFlight) return null;
     if (auto && (processingHold || performance.now() < autoRetryAfter)) return null;
     shootInFlight = true;
@@ -1301,9 +1297,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
       // Automatic capture is allowed to assist, not knowingly store a frame its
       // own captured-pixel gate rejects. Manual shutter remains sovereign.
-      const qualityOnlyBlock = analysed.gate.blocking === 'glare'
-        || analysed.gate.blocking === 'focus';
-      if (auto && analysed.gate.blocking && !(allowQualityBlock && qualityOnlyBlock)) {
+      if (auto && analysed.gate.blocking) {
         publish({ ...analysed.gate, autoRejected: true });
         bitmap.close?.();
         scheduleAutoRetry();
