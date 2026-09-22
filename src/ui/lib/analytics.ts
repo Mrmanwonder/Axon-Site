@@ -17,7 +17,7 @@ const DEFAULT_ASSET_HOST = "https://us-assets.i.posthog.com";
 const CONSENT_KEY = "axon.analytics-consent.v1";
 export const ANALYTICS_CONSENT_EVENT = "axon:analytics-consent";
 
-let started = false;
+let state: "idle" | "loading" | "ready" = "idle";
 
 export function getAnalyticsConsent(): AnalyticsConsent {
   if (typeof window === "undefined") return null;
@@ -35,7 +35,7 @@ export function setAnalyticsConsent(granted: boolean): void {
   try { localStorage.setItem(CONSENT_KEY, value); } catch { /* preference still applies for this page */ }
 
   if (granted) {
-    if (started) window.posthog?.opt_in_capturing?.();
+    if (state === "ready") window.posthog?.opt_in_capturing?.();
     else initAnalytics();
   } else {
     window.posthog?.opt_out_capturing?.();
@@ -54,39 +54,64 @@ export function setAnalyticsConsent(granted: boolean): void {
  * to custom analytics events.
  */
 export function initAnalytics() {
-  if (started || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
-  started = true;
+  if (state !== "idle" || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
 
   const key = import.meta.env.VITE_POSTHOG_KEY || DEFAULT_KEY;
   const apiHost = import.meta.env.VITE_POSTHOG_HOST || DEFAULT_HOST;
   const assetHost = import.meta.env.VITE_POSTHOG_ASSET_HOST || DEFAULT_ASSET_HOST;
   if (!key) return;
 
+  state = "loading";
+  document.documentElement.dataset.analytics = "loading";
+
   const script = document.createElement("script");
   script.async = true;
+  script.dataset.axonPosthog = "true";
   script.src = assetHost + "/static/array.js";
   script.onload = () => {
     // The choice may have been withdrawn while the script was in flight.
-    if (getAnalyticsConsent() !== "granted") return;
-    window.posthog?.init(key, {
-      api_host: apiHost,
-      ui_host: "https://us.posthog.com",
-      autocapture: true,
-      capture_pageview: "history_change",
-      capture_pageleave: true,
-      capture_exceptions: true,
-      session_recording: {
-        maskAllInputs: true,
-        maskAllText: true,
-      },
-      persistence: "localStorage+cookie",
-      loaded: () => {
-        document.documentElement.dataset.analytics = "ready";
-      },
-    });
+    if (getAnalyticsConsent() !== "granted") {
+      state = "idle";
+      script.remove();
+      delete document.documentElement.dataset.analytics;
+      return;
+    }
+
+    if (!window.posthog?.init) {
+      state = "idle";
+      document.documentElement.dataset.analytics = "unavailable";
+      script.remove();
+      return;
+    }
+
+    try {
+      window.posthog.init(key, {
+        api_host: apiHost,
+        ui_host: "https://us.posthog.com",
+        autocapture: true,
+        capture_pageview: "history_change",
+        capture_pageleave: true,
+        capture_exceptions: true,
+        session_recording: {
+          maskAllInputs: true,
+          maskAllText: true,
+        },
+        persistence: "localStorage+cookie",
+        loaded: () => {
+          state = "ready";
+          document.documentElement.dataset.analytics = "ready";
+        },
+      });
+    } catch {
+      state = "idle";
+      document.documentElement.dataset.analytics = "unavailable";
+      script.remove();
+    }
   };
   script.onerror = () => {
+    state = "idle";
     document.documentElement.dataset.analytics = "unavailable";
+    script.remove();
   };
   document.head.appendChild(script);
 }
