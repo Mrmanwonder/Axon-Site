@@ -3,13 +3,14 @@
    is allowed to cover the document while pages already taken live in the tray. */
 
 :root {
-  --scan-snap: cubic-bezier(.2, .8, .2, 1);
-  --scan-tray-h: 196px;
-  --scan-nav-clearance: calc(56px + var(--dock-pad));
+  --scan-snap: cubic-bezier(.1, .9, .2, 1);
+  --scan-tray-h: calc(150px + max(10px, var(--bot-inset)));
+  --scan-nav-clearance: 0px;
 }
 
-/* Keep the shared phone navigation visible and give it a real strip below the
-   camera. Controls remain camera-relative instead of floating over the dock. */
+/* Capture is a focused mode on phones. Persistent app chrome adds accidental
+   exits and steals vertical room from the page, so the scanner owns the whole
+   viewport and supplies one explicit close control instead. */
 html.scanner-active .scanhero {
   bottom: var(--scan-nav-clearance);
 }
@@ -25,10 +26,11 @@ html.scanner-active:has(.tray) .scanhero {
 .scanhero .scanhint {
   left: 50%;
   right: auto;
+  top: max(62px, calc(var(--top-inset) + 58px));
   width: max-content;
-  max-width: min(86vw, 520px);
+  max-width: min(78vw, 440px);
   transform: translateX(-50%);
-  padding: 8px 12px;
+  padding: 7px 11px;
   border-radius: 999px;
   color: rgba(255,255,255,.96);
   background: rgba(8,8,10,.68);
@@ -61,7 +63,7 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 132px;
+  height: 110px;
   pointer-events: none;
   z-index: 5;
   background: linear-gradient(to bottom, transparent, rgba(0,0,0,.5));
@@ -74,7 +76,8 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
 }
 
 .scanhero .autotoggle,
-.scanhero .draftsicon {
+.scanhero .draftsicon,
+.scanhero .scanexit {
   z-index: 8;
   background: rgba(8,8,10,.62);
   border: 1px solid rgba(255,255,255,.12);
@@ -90,10 +93,42 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   appearance: none;
 }
 
+.scanhero .scanexit {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #fff;
+  background: rgba(8,8,10,.62);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.scanhero .scanexit svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+.scanhero:not(:has(.draftsicon)) .autotoggle {
+  left: 16px;
+}
+
 .scanhero .shutter,
 .scanhero .sidebtn,
 .scanhero .autotoggle,
-.scanhero .draftsicon {
+.scanhero .draftsicon,
+.scanhero .scanexit {
   transition: transform .12s var(--scan-snap), opacity .12s var(--scan-snap),
               background .18s var(--scan-snap);
 }
@@ -101,8 +136,9 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
 .scanhero .shutter:active:not(:disabled),
 .scanhero .sidebtn:active,
 .scanhero .autotoggle:active,
-.scanhero .draftsicon:active {
-  transform: scale(.96);
+.scanhero .draftsicon:active,
+.scanhero .scanexit:active {
+  transform: scale(.94);
 }
 
 .scanhero .shutter:disabled {
@@ -119,7 +155,7 @@ html.scanner-active .tray {
   z-index: 12;
   height: var(--scan-tray-h);
   box-sizing: border-box;
-  padding: 12px var(--gutter);
+  padding: 10px var(--gutter) max(10px, var(--bot-inset));
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
@@ -145,9 +181,9 @@ html.scanner-active .tray .trayscroll::-webkit-scrollbar {
 
 html.scanner-active .tray .traypage {
   position: relative;
-  flex: 0 0 64px;
-  width: 64px;
-  height: 82px;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 72px;
   border-radius: 10px;
   overflow: hidden;
   transition: transform .14s var(--scan-snap), box-shadow .18s var(--scan-snap),
@@ -179,7 +215,7 @@ html.scanner-active .tray .traybar {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
+  min-height: 38px;
 }
 
 html.scanner-active .tray .cnt {
@@ -189,8 +225,8 @@ html.scanner-active .tray .cnt {
 }
 
 html.scanner-active .tray .btn.primary {
-  min-width: 142px;
-  min-height: 40px;
+  min-width: 126px;
+  min-height: 38px;
   white-space: nowrap;
   transition: transform .12s var(--scan-snap), opacity .14s var(--scan-snap);
 }
@@ -249,6 +285,17 @@ html.scanner-active .scanhero .drafttoast .dh {
 html.scanner-active .scanhero .drafttoast .dh:focus-visible {
   outline: 2px solid rgba(255,255,255,.9);
   outline-offset: 3px;
+}
+
+
+@media (max-width: 767px) {
+  html.scanner-active .tabdock,
+  html.scanner-active .themebtn,
+  html.scanner-active .header {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 @media (hover: none) and (pointer: coarse) {
