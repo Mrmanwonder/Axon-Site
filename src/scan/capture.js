@@ -555,13 +555,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function step() {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
-    const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
+    const crop = visibleSourceCrop(vw, vh);
+    const pw = PROXY_WIDTH;
+    const ph = Math.max(1, Math.round(PROXY_WIDTH * crop.height / crop.width));
     const workerUsed = !!ensureDetectWorker();
     const result = workerUsed
-      ? await searchOnWorker(pw, ph, vw, vh)
-      : searchOnMainThread(pw, ph, vw, vh);
+      ? await searchOnWorker(pw, ph, vw, vh, crop)
+      : searchOnMainThread(pw, ph, vw, vh, crop);
     track.lastGlobalDetection = performance.now();
-    finishStep(result, workerUsed, pw, ph, vw, vh);
+    finishStep(result, workerUsed, vw, vh);
   }
 
   async function trackStep() {
@@ -589,18 +591,23 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }
   }
 
-  async function searchOnWorker(pw, ph, vw, vh) {
-    const proxyBitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+  async function searchOnWorker(pw, ph, vw, vh, crop) {
+    const proxyBitmap = await createImageBitmap(
+      video,
+      crop.x, crop.y, crop.width, crop.height,
+      { resizeWidth: pw, resizeHeight: ph },
+    );
     const search = await runDetectWorker('search', proxyBitmap);
     if (!search?.found) {
       return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
     }
-    const size = quadSize(search.found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const found = cropQuadToVideo(search.found, crop, pw, ph);
+    const size = quadSize(found);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, search.found, pw, ph, vw, vh, pageLongEdge);
+      await focusOnWorker(video, found, vw, vh, pageLongEdge);
     return {
-      found: search.found,
+      found,
       exposure: search.exposure,
       skew: search.skew,
       pageLongEdge,
@@ -611,9 +618,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     };
   }
 
-  async function focusOnWorker(source, quadInProxy, pw, ph, sw, sh, pageLongEdge) {
-    const inFrame = quadInProxy.map((p) => ({ x: p.x * (sw / pw), y: p.y * (sh / ph) }));
-    const rect = focusWindowRect(inFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
+  async function focusOnWorker(source, quadInFrame, sw, sh, pageLongEdge) {
+    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
     if (!rect) return { sharpness: null, focusMs: 0 };
     const focusBitmap = await createImageBitmap(
       source,
@@ -629,13 +635,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!tracked || !trackSize || !ensureDetectWorker()) return;
     const pw = PROXY_WIDTH, ph = Math.round(PROXY_WIDTH * vh / vw);
     const inProxy = scaleQuad(tracked, trackSize, { width: pw, height: ph });
-    const size = quadSize(inProxy);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const inVideo = scaleQuad(tracked, trackSize, { width: vw, height: vh });
+    const size = quadSize(inVideo);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const bitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
     const read = await runDetectWorker('measure', bitmap, { quad: inProxy });
     if (!running || !read?.exposure) return;
     const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, inProxy, pw, ph, vw, vh, pageLongEdge);
+      await focusOnWorker(video, inVideo, vw, vh, pageLongEdge);
     if (!running) return;
     measured = {
       glare: read.exposure.glare,
@@ -649,27 +656,28 @@ export function createCapture({ video, overlay, onState, onShot }) {
     recordStepTiming({ detectMs: 0, measureMs: read.measureMs ?? 0, focusMs, workerUsed: true });
   }
 
-  function searchOnMainThread(pw, ph, vw, vh) {
+  function searchOnMainThread(pw, ph, vw, vh, crop) {
     if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
-    proxyCtx.drawImage(video, 0, 0, pw, ph);
+    proxyCtx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, pw, ph);
     const frame = proxyCtx.getImageData(0, 0, pw, ph);
     const tDetectStart = performance.now();
-    const found = detectQuad(frame);
+    const inCrop = detectQuad(frame);
     const detectMs = performance.now() - tDetectStart;
-    if (!found) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
+    if (!inCrop) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
     const tMeasureStart = performance.now();
-    const exposure = measureQuad(frame, found);
-    const skew = skewDegrees(found);
+    const exposure = measureQuad(frame, inCrop);
+    const skew = skewDegrees(inCrop);
     const measureMs = performance.now() - tMeasureStart;
+    const found = cropQuadToVideo(inCrop, crop, pw, ph);
     const size = quadSize(found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / pw));
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const tFocusStart = performance.now();
-    const sharpnessScore = focusInPageOnMainThread(video, found, pw, ph, vw, vh, pageLongEdge);
+    const sharpnessScore = focusInFrameOnMainThread(video, found, vw, vh, pageLongEdge);
     const focusMs = performance.now() - tFocusStart;
     return { found, exposure, skew, pageLongEdge, sharpness: sharpnessScore, detectMs, measureMs, focusMs };
   }
 
-  function finishStep(result, workerUsed, pw, ph, vw, vh) {
+  function finishStep(result, workerUsed, vw, vh) {
     if (!running) return;
     const next = blankState();
     next.timing = {
@@ -715,7 +723,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return;
     }
 
-    const found = scaleQuad(result.found, { width: pw, height: ph }, trackSize);
+    const found = scaleQuad(result.found, { width: vw, height: vh }, trackSize);
     const now = performance.now();
     const sameDetectedDocument = isSameDocument(track, found, trackSize.width, trackSize.height);
     globalConfirmations = sameDetectedDocument ? Math.min(3, globalConfirmations + 1) : 1;
