@@ -1,193 +1,50 @@
 # AXON Production Constitution
 
-# Chapter 8 --- Information Architecture
+# Chapter 8 — Information Architecture
 
-**Document ID:** AXON-IA-001\
-**Status:** Accepted\
-**Version:** 1.0.0\
-**Classification:** Immutable Architecture
+## Home
 
-------------------------------------------------------------------------
+Purpose: orient the signed-in student and surface the clearest next action.
 
-# 1. Purpose
+## Library
 
-This chapter defines the canonical structure of the AXON Study Operating
-System.
+Purpose: show processed papers and make past work searchable.
 
-Information Architecture (IA) defines where information belongs, how
-users navigate between spaces, and which system owns each
-responsibility.
+Primary questions:
+- Which paper was this?
+- Which subject does it belong to?
+- What was the result?
+- Which questions need attention?
 
-No screen, workflow, or feature may violate this architecture without a
-constitutional amendment.
+## Scan
 
-------------------------------------------------------------------------
+Purpose: capture or import a marked paper with high enough quality for reliable
+processing.
 
-# 2. Architectural Principle
+The scanner must make quality/retake states explicit and must never silently
+submit an unusable capture.
 
-AXON is organized around **workflows**, not tools.
+## Paper review
 
-Students should never think:
+Purpose: resolve uncertainty before derived insights are trusted.
 
-> "Which feature should I open?"
+Students can inspect extracted questions, answers, marks, and flagged regions.
 
-They should think:
+## Question detail
 
-> "What am I trying to accomplish?"
+Purpose: explain one question, the marks lost, and the most useful correction or
+next action.
 
-Navigation must therefore mirror the student's academic journey.
+## Insights
 
-------------------------------------------------------------------------
-
-# 3. Canonical User Journey
-
-Every authenticated session follows this high-level flow:
-
-1.  Dashboard
-2.  Today's Mission
-3.  Focus Session
-4.  Session Review
-5.  Planner (if required)
-6.  Exit
-
-Supporting modules remain accessible but are never the primary flow.
-
-------------------------------------------------------------------------
-
-# 4. Primary Workspaces
-
-The operating system consists of the following first-class workspaces.
-
-## Dashboard
-
-Purpose: Orient the student.
-
-Primary Question: "What should I do today?"
-
-Owner: Mission Engine
-
-------------------------------------------------------------------------
-
-## Focus
-
-Purpose: Execute work.
-
-Primary Question: "What am I doing right now?"
-
-Owner: Mission Engine
-
-------------------------------------------------------------------------
-
-## Review
-
-Purpose: Reflect and update learning state.
-
-Primary Question: "What changed?"
-
-Owner: Academic Digital Twin
-
-------------------------------------------------------------------------
-
-## Planner
-
-Purpose: Manage future workload.
-
-Primary Question: "How should future study be organized?"
-
-Owner: Mission Engine
-
-------------------------------------------------------------------------
-
-## Analytics
-
-Purpose: Explain progress.
-
-Primary Question: "Why am I improving?"
-
-Owner: Academic Digital Twin
-
-------------------------------------------------------------------------
-
-## Resources
-
-Purpose: Access notes, past papers, documents, and learning material.
-
-Primary Question: "What do I need?"
-
-Owner: Content Services
-
-------------------------------------------------------------------------
+Purpose: summarize patterns from trusted/confirmed paper history. Uncertain
+unreviewed data must not silently affect conclusions.
 
 ## Settings
 
-Purpose: Configure preferences, integrations, privacy, and account.
+Purpose: account, profiles, privacy, analytics consent, appearance, and billing.
 
-Primary Question: "How should AXON work for me?"
+## Public/legal
 
-Owner: Platform Services
-
-------------------------------------------------------------------------
-
-# 5. Navigation Rules
-
-AXON-IA-001
-
-Every workspace MUST have exactly one primary objective.
-
-AXON-IA-002
-
-Users MUST always know where they are.
-
-AXON-IA-003
-
-Navigation MUST preserve context whenever possible.
-
-AXON-IA-004
-
-The primary study workflow MUST never require opening more than one
-workspace simultaneously.
-
-------------------------------------------------------------------------
-
-# 6. Ownership Boundaries
-
-Each workspace owns its own responsibility.
-
-Example:
-
-Planner owns scheduling.
-
-Analytics owns explanation.
-
-Focus owns execution.
-
-No workspace may duplicate another workspace's primary responsibility.
-
-------------------------------------------------------------------------
-
-# 7. Cross-Workspace Communication
-
-Information SHALL flow through system engines rather than direct feature
-coupling.
-
-Example:
-
-Focus Session → Academic Digital Twin → Mission Engine → Planner
-
-NOT
-
-Focus Session → Planner directly
-
-This preserves architectural consistency.
-
-------------------------------------------------------------------------
-
-# 8. Acceptance Criteria
-
-This chapter is complete only if:
-
--   Every workspace has a unique purpose.
--   Navigation reflects student workflows.
--   Ownership boundaries are defined.
--   Cross-workspace communication follows system engines.
--   Feature duplication is prohibited.
+`/privacy`, `/terms`, and `/cookies` are public and indexable. Authenticated
+student data routes are not sitemap targets.

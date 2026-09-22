@@ -79,3 +79,33 @@ test('optional PostHog analytics is consent gated', () => {
   assert.match(settings, /Product analytics/);
 });
 
+
+
+test('production AI runtime is Cloudflare-only', () => {
+  const deploy = read('supabase/DEPLOY.md');
+  const edgeReadme = read('supabase/functions/README.md');
+  const envExample = read('.env.example');
+
+  assert.match(deploy, /axon-backend/);
+  assert.match(deploy, /Cloudflare\s+Queues/);
+  assert.match(deploy, /deployed with Wrangler/);
+  assert.doesNotMatch(deploy, /OPENROUTER_API_KEY|TAVILY_API_KEY=/);
+
+  const bashBlocks = [...deploy.matchAll(/```bash\n([\s\S]*?)```/g)].map((match) => match[1]);
+  const deployCommand = bashBlocks.find((block) => block.includes('supabase functions deploy')) ?? '';
+  assert.ok(deployCommand, 'Supabase billing deploy command is documented');
+  assert.match(deployCommand, /billing-checkout/);
+  assert.match(deployCommand, /billing-portal/);
+  assert.match(deployCommand, /stripe-webhook/);
+  assert.doesNotMatch(deployCommand, /w-triage|queue-tick|paper-submit|upload-intent|w-explain/);
+
+  assert.match(edgeReadme, /billing-checkout/);
+  assert.match(edgeReadme, /billing-portal/);
+  assert.match(edgeReadme, /stripe-webhook/);
+  assert.doesNotMatch(envExample, /VITE_TAVILY|TAVILY_API_KEY/);
+
+  assert.equal(existsSync('supabase/functions/_shared/openrouter.ts'), false);
+  assert.equal(existsSync('supabase/functions/_shared/tavily.ts'), false);
+  assert.equal(existsSync('supabase/functions/w-triage/index.ts'), false);
+  assert.equal(existsSync('supabase/functions/w-explain/index.ts'), false);
+});

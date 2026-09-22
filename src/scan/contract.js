@@ -6,9 +6,9 @@
 // counts as glare. That agreement lives here, in one dependency-free module, so a
 // threshold cannot be tuned on the device and left stale on the server.
 //
-// The server mirror is supabase/functions/_shared/contract.ts. It is a copy on
-// purpose: the browser is served from dist/ and the edge functions from Deno, and
-// there is no build step that could bridge them. Change both, or neither.
+// The authoritative server counterpart is axon-backend/shared/src/contract.ts.
+// CI compares the browser contract with that repository on every PR, so a
+// scanner change cannot silently drift from the Cloudflare runtime.
 
 export const PIPELINE_VERSION = '1.0.0';
 

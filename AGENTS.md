@@ -253,32 +253,32 @@ break by accident.
 
 ### Where the pieces are
 
-| Function | Job |
+| Cloudflare Worker | Job |
 | --- | --- |
-| `paper-submit` | Idempotent create, then one message on `axon_triage` |
-| `upload-intent` / `upload-complete` | Presigned PUTs out, server-side HEAD back |
-| `queue-tick` | Dispatch, and the two sweeps that make a stall visible |
-| `w-triage` → `w-structure` → `w-content` → `w-reconcile` → `w-adjudicate` | Stages 3–7 |
-| `review-complete` → `w-explain` | Stage 8, and only after the student confirms |
-| `w-r2-delete` | Makes a deletion real |
-| `eval-run` | The golden set through the same queues, with a route override |
+| `mastery-api` | Authenticated paper/upload/review API and signed asset access |
+| `mastery-triage` | Paper/page triage |
+| `mastery-structure` | Question-region structure |
+| `mastery-crop` | Server-side crop generation |
+| `mastery-content` | Evidence extraction |
+| `mastery-reconcile` | Deterministic consistency checks |
+| `mastery-adjudicate` | Conflict inspection / review escalation |
+| `mastery-explain` | Confirmed-question explanations; optional privacy-safe Tavily grounding |
+| `mastery-sweep` | Stuck-run recovery and retention cleanup |
 
 ### Rules a new worker gets wrong
 
-- **Use `serveWorker()`.** It has the only three endings a worker may have: ack,
-  ack-a-permanent-failure, or leave the message for the visibility timeout. There is
-  no ending where the message is acked and nothing was recorded — that is a paper
-  that quietly loses a question.
-- **A permanent failure marks its unit and lets the paper proceed.** An unreadable
-  question is a gap with a crop beside it. Nineteen good readings blocked on the
-  twentieth is the worse failure, and the invisible one.
-- **Completion checks belong in SQL, not in the worker.** Twenty content calls go out
-  together and the last two land microseconds apart; `advance_after_*` takes an
-  advisory lock so the paper advances once.
-- **`run_advance()` is the only writer of run status.** It refuses to move a terminal
-  run, so a worker still in flight when the sweep failed its paper cannot resurrect it.
-- **A route override lives on the run, not on the message.** One that reached only the
-  first stage would have the eval measuring the default model for everything after it.
+- **Use the shared `consumeQueue()` harness.** Queue acknowledgement must follow
+  durable completion, a durable replacement message, or a confirmed terminal
+  state. Never acknowledge work merely because an error handler ran.
+- **Unknown errors are retryable by default.** A bounded redundant attempt is
+  preferable to silently stranding a student's paper.
+- **A permanent failure must be recorded before acknowledgement.**
+- **Completion/advance transitions that can race belong behind checked database
+  operations/locks.**
+- **A route override lives on the run, not on one queue message.**
+- **Extraction workers do not receive web tools.** Tavily is currently enabled
+  only for explanation and its outbound query is built from public academic
+  context by server code.
 
 ## Storage
 
@@ -317,3 +317,11 @@ What none of that covers is the design system. Layout, the lens, the haptics and
 the viewfinder still have to be checked in a real browser at phone,
 landscape-phone, 768px and 1024px+ widths — the lens alignment and the sheet's
 height cap are the things that break silently.
+
+
+### Runtime ownership
+
+Do not implement scanner workers, Gemini clients, Tavily, R2 server access, or
+Cloudflare Queue consumers in Axon-Site. Those belong in
+`Mrmanwonder/axon-backend`. Supabase Edge Functions in this repository are
+billing-only.

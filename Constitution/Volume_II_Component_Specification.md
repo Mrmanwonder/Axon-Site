@@ -1,151 +1,68 @@
 # AXON Engineering Specification
 
-# Volume II --- Component Specification
+# Volume II — Component Specification
 
-**Document ID:** AES-VOL-II\
-**Version:** 1.0.0\
-**Status:** Draft for Implementation\
-**Depends On:** Constitution Chapters 0--9, Volume I
+## Navigation and shell
 
-------------------------------------------------------------------------
+- App shell
+- Tab/navigation controls
+- Theme toggle
+- Route loading boundary
+- Route error boundary
 
-# Purpose
+## Paper library
 
-This volume defines every reusable UI component within AXON. It is the
-canonical implementation reference for designers, frontend engineers,
-and AI coding agents.
+- Paper card/list row
+- Subject/status metadata
+- Search/filter controls
+- Empty/error/loading states
 
-Components are the smallest independently testable UI building blocks.
-Screens MUST compose components rather than redefining their behavior.
+## Scanner
 
-------------------------------------------------------------------------
+- Camera viewport
+- Capture control
+- Capture guidance
+- Page tray
+- Preparing/failed/retake page state
+- Quality/review sheet
+- Submit state
 
-# Objectives
+## Review
 
--   Create a reusable component library.
--   Eliminate duplicated UI logic.
--   Standardize interaction patterns.
--   Guarantee accessibility and consistency.
+- Question row/card
+- Confidence/review indicator
+- Answer block
+- Teacher-mark evidence
+- Confirmation/correction controls
 
-------------------------------------------------------------------------
+## Question detail
 
-# Component Taxonomy
+- Question/answer evidence
+- Marks awarded / available
+- Explanation block
+- Corrected-working grounding state
+- Source/evidence affordances where applicable
 
-## Foundation
+## Insights
 
--   Button
--   Icon
--   Typography
--   Divider
--   Avatar
--   Badge
--   Chip
--   Tooltip
+- Trusted aggregate metric
+- Trend/pattern presentation
+- Empty/insufficient-evidence state
 
-## Form Controls
+## Account/settings
 
--   Text Input
--   Search Field
--   Text Area
--   Select
--   Combobox
--   Checkbox
--   Radio
--   Toggle
--   Slider
--   Date Picker
+- Profile chooser/editor
+- Privacy and analytics controls
+- Billing controls
+- Appearance controls
+- Dialog/sheet primitives
 
-## Navigation
+## Shared interaction requirements
 
--   Sidebar
--   Top Bar
--   Breadcrumb
--   Tabs
--   Navigation Rail
--   Command Palette
-
-## Data Display
-
--   Card
--   Table
--   Timeline
--   Chart
--   Progress Ring
--   Metric Tile
--   Calendar Grid
-
-## Study Components
-
--   Mission Card
--   Focus Timer
--   Session Tracker
--   Knowledge Indicator
--   Revision Queue
--   Planner Block
--   Resource Card
-
-## Feedback
-
--   Toast
--   Dialog
--   Modal
--   Banner
--   Skeleton Loader
--   Empty State
--   Error State
-
-------------------------------------------------------------------------
-
-# Canonical Component Template
-
-Every component specification SHALL define:
-
-1.  Purpose
-2.  Responsibilities
-3.  Public API (Props)
-4.  Events
-5.  Internal State
-6.  Variants
-7.  Visual States
-8.  Keyboard Interaction
-9.  Accessibility
-10. Motion
-11. Performance Budget
-12. Analytics Events
-13. Acceptance Tests
-
-------------------------------------------------------------------------
-
-# State Taxonomy
-
-Every interactive component SHALL support only applicable states:
-
--   Default
--   Hover
--   Focus
--   Active
--   Disabled
--   Loading
--   Empty
--   Error
--   Success
-
-State transitions MUST reference Motion Tokens defined in Volume I.
-
-------------------------------------------------------------------------
-
-# Ownership Rules
-
--   Components own presentation.
--   Screens own composition.
--   Engines own business logic.
--   APIs own data.
--   Components MUST NOT contain application-specific business rules.
-
-------------------------------------------------------------------------
-
-# Acceptance Criteria
-
-This volume is complete only when every reusable UI element has a
-standalone specification that conforms to the canonical template and
-references Volume I design tokens.
+Components must:
+- expose accessible names and keyboard behavior,
+- support dark mode,
+- support reduced motion,
+- avoid blocking content with overlays/docks,
+- use short responsive transitions,
+- never represent an uncertain model output as confirmed data.
