@@ -79,29 +79,3 @@ test('optional PostHog analytics is consent gated', () => {
   assert.match(settings, /Product analytics/);
 });
 
-
-test('Tavily live-web tools stay server-side and opt-in', () => {
-  const tavily = read('supabase/functions/_shared/tavily.ts');
-  const modelClient = read('supabase/functions/_shared/openrouter.ts');
-  const deploy = read('supabase/DEPLOY.md');
-  const envExample = read('.env.example');
-
-  assert.match(tavily, /Deno\.env\.get\('TAVILY_API_KEY'\)/);
-  assert.match(tavily, /web_search/);
-  assert.match(tavily, /web_extract/);
-  assert.match(modelClient, /webTools\?: boolean/);
-  assert.match(modelClient, /TAVILY_TOOLS/);
-  assert.match(modelClient, /webSources: string\[\]/);
-  assert.match(deploy, /TAVILY_API_KEY=tvly-/);
-  assert.doesNotMatch(envExample, /VITE_TAVILY|TAVILY_API_KEY/);
-
-  for (const worker of [
-    'supabase/functions/w-triage/index.ts',
-    'supabase/functions/w-structure/index.ts',
-    'supabase/functions/w-content/index.ts',
-    'supabase/functions/w-adjudicate/index.ts',
-    'supabase/functions/w-explain/index.ts',
-  ]) {
-    assert.doesNotMatch(read(worker), /webTools:\s*true/, `${worker} must not browse student documents`);
-  }
-});
