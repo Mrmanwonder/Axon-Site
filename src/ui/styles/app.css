@@ -179,6 +179,13 @@ body {
   border-radius: var(--r-chip);
 }
 
+/* Route changes move programmatic focus to the main scroll region so screen
+   readers announce the new page. The region itself is not an interactive
+   control, so it must not inherit the global keyboard focus ring. */
+#main-content:focus-visible {
+  outline: none;
+}
+
 /* ── reduce motion ──
    Mirrors the OS setting, and the in-app toggle (Settings -> Reduce motion)
    sets data-motion="reduce" so a student can have stillness in this app

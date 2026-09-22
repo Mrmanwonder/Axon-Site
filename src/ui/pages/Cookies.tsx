@@ -102,7 +102,7 @@ export default function Cookies() {
 
       <section><h2>10. Authentication providers</h2>
         <p>
-          If a user chooses Google, Apple or another supported identity provider, the provider may use
+          If a user chooses Google or another supported identity provider, the provider may use
           its own Cookies and Similar Technologies as part of the sign-in process on its own systems.
           Those technologies may be governed by the provider's own privacy and cookie notices when the
           provider acts independently.

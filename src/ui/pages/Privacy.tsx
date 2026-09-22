@@ -45,7 +45,7 @@ export default function Privacy() {
         <p>
           We may process the account holder's name, email address or phone number, authentication
           provider, account identifiers, sign-in and one-time-code events, consent records, security
-          state, subscription state and account preferences. If Google or Apple sign-in is selected,
+          state, subscription state and account preferences. If Google sign-in is selected,
           we receive the information made available by that provider according to the sign-in flow.
         </p>
 
@@ -249,7 +249,7 @@ export default function Privacy() {
           <li><strong>Cloudflare</strong> for network, delivery, worker and/or object-storage infrastructure;</li>
           <li><strong>OpenRouter and eligible routed model providers</strong> for AI processing;</li>
           <li><strong>Stripe</strong> for hosted payments and subscription management;</li>
-          <li><strong>Google and Apple</strong> when the user chooses those authentication methods; and</li>
+          <li><strong>Google</strong> when the user chooses Google authentication; and</li>
           <li><strong>PostHog</strong> for optional product analytics when analytics is enabled.</li>
         </ul>
         <p>
@@ -452,7 +452,7 @@ export default function Privacy() {
         <h2 id="privacy-third">25. Third-party services and links</h2>
         <p>
           A third-party site or service may have its own privacy practices when it acts independently,
-          including on a separate Google, Apple, Stripe or other provider domain. Axon is not responsible
+          including on a separate Google, Stripe or other provider domain. Axon is not responsible
           for an independent third party's separate processing, but remains responsible for Axon's own
           obligations when it appoints a provider to process information on Axon's behalf.
         </p>

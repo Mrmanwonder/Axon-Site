@@ -73,7 +73,7 @@ the agreed mobile profile, not guarantees for every device or network.
 The public pages now identify the operator as Axon and use support@axonstudy.online for
 support and privacy contact. No registered postal address is published because none was
 provided. The policies document the current Cambridge/CAIE Class 9–12 scope, under-18
-student profile model, Supabase/Cloudflare/OpenRouter/Stripe/Google/Apple/PostHog provider
+student profile model, Supabase/Cloudflare/OpenRouter/Stripe/Google/PostHog provider
 categories, India governing-law clause subject to mandatory local rights, AI-output
 limitations and a liability cap subject to non-waivable law. Remaining operational legal
 work is implementation rather than placeholder copy: complete real guardian verification

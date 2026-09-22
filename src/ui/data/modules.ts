@@ -75,7 +75,7 @@ export type Paper = {
     `undefined` and renders a confident zero. */
 export type Cached<T> = { data: T; stale: boolean; offline: boolean };
 
-/** A refused Google or Apple round trip, already cleared out of the URL. */
+/** A refused Google round trip, already cleared out of the URL. */
 export type ProviderError = {
   cleanedPath?: string;
   provider: string | null;
@@ -118,7 +118,7 @@ export const sendOtp = supabaseMod.sendOtp as (
 export const verifyOtp = supabaseMod.verifyOtp as (contact: string, input: string) => Promise<unknown>;
 export const signInWithProvider = supabaseMod.signInWithProvider as (p: string) => Promise<void>;
 export const isProviderNotEnabled = supabaseMod.isProviderNotEnabled as (e: unknown) => boolean;
-export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as ("google" | "apple")[];
+export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as "google"[];
 export const PROVIDER_LABEL = supabaseMod.PROVIDER_LABEL as Record<string, string>;
 
 // ── guardian verification ──────────────────────────────────────────────────
