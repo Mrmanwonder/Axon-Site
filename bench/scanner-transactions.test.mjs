@@ -83,10 +83,19 @@ test('processing the previous page suppresses automatic capture', () => {
   assert.equal(shouldAutoCapture({ ...readyCapture, processing: false }), true);
 });
 
-test('a fresh quality block still beats an otherwise ready capture', () => {
+test('warning-level softness does not suppress an otherwise ready capture', () => {
   const verdict = liveGateVerdict({
     ...clean,
-    sharpness: QUALITY.BLUR_WARN - 0.01,
+    sharpness: (QUALITY.BLUR_FAIL + QUALITY.BLUR_WARN) / 2,
+  });
+  assert.equal(verdict.blocking, null);
+  assert.equal(shouldAutoCapture({ ...readyCapture, blocking: verdict.blocking }), true);
+});
+
+test('a genuinely failed quality read still beats an otherwise ready capture', () => {
+  const verdict = liveGateVerdict({
+    ...clean,
+    sharpness: QUALITY.BLUR_FAIL - 0.01,
   });
   assert.equal(verdict.blocking, 'focus');
   assert.equal(shouldAutoCapture({ ...readyCapture, blocking: verdict.blocking }), false);
