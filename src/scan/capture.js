@@ -1030,27 +1030,48 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function waitForNextVideoFrame() {
     if (!running) return;
     if (typeof video.requestVideoFrameCallback === 'function') {
-      await new Promise((resolve) => video.requestVideoFrameCallback(() => resolve()));
+      await new Promise((resolve) => {
+        let settled = false;
+        const id = video.requestVideoFrameCallback(() => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve();
+        });
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          video.cancelVideoFrameCallback?.(id);
+          resolve();
+        }, VIDEO_FRAME_TIMEOUT_MS);
+      });
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, Math.min(CAPTURE.SETTLE_MS, 100)));
+    await new Promise((resolve) => setTimeout(resolve, Math.min(CAPTURE.SETTLE_MS, VIDEO_FRAME_TIMEOUT_MS)));
+  }
+
+  async function takePhotoAttempt(settings) {
+    if (!imageCapture) return { blob: null, timedOut: false };
+    const timeoutToken = Symbol('photo-timeout');
+    const result = await Promise.race([
+      imageCapture.takePhoto(settings).catch(() => null),
+      new Promise((resolve) => setTimeout(() => resolve(timeoutToken), NATIVE_PHOTO_TIMEOUT_MS)),
+    ]);
+    return result === timeoutToken
+      ? { blob: null, timedOut: true }
+      : { blob: result, timedOut: false };
   }
 
   async function takeNativePhoto() {
     if (!imageCapture) return null;
     if (Object.keys(photoSettings ?? {}).length) {
-      try {
-        return await imageCapture.takePhoto(photoSettings);
-      } catch {
-        // Some camera stacks advertise dimensions they reject at capture time.
-        // Retry with browser-chosen settings before abandoning the native still.
-      }
+      const first = await takePhotoAttempt(photoSettings);
+      if (first.blob) return first.blob;
+      if (first.timedOut) return null;
+      // Some camera stacks advertise dimensions they reject at capture time.
+      // Retry with browser-chosen settings before abandoning the native still.
     }
-    try {
-      return await imageCapture.takePhoto();
-    } catch {
-      return null;
-    }
+    return (await takePhotoAttempt(undefined)).blob;
   }
 
   async function grabStill() {
@@ -1087,12 +1108,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (workerUsed) {
       const stillProxy = await createImageBitmap(bitmap, { resizeWidth: pw, resizeHeight: ph });
-      result = await runDetectWorker('search', stillProxy);
+      result = await runDetectWorker('search', stillProxy, { minFill: STILL_MIN_FILL });
     } else {
       if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
       proxyCtx.drawImage(bitmap, 0, 0, pw, ph);
       const frame = proxyCtx.getImageData(0, 0, pw, ph);
-      const found = detectQuad(frame);
+      const found = detectQuad(frame, { minFill: STILL_MIN_FILL });
       if (found) result = { found, exposure: measureQuad(frame, found), skew: skewDegrees(found) };
     }
 
@@ -1110,21 +1131,25 @@ export function createCapture({ video, overlay, onState, onShot }) {
       };
     }
 
-    const size = quadSize(result.found);
-    const sx = bitmap.width / pw, sy = bitmap.height / ph;
-    const pageLongEdge = Math.round(Math.max(size.width * sx, size.height * sy));
+    const quadInBitmap = scaleQuad(
+      result.found,
+      { width: pw, height: ph },
+      { width: bitmap.width, height: bitmap.height },
+    );
+    const size = quadSize(quadInBitmap);
+    const pageLongEdge = Math.round(Math.max(size.width, size.height));
     let sharpnessScore = null;
     let focusMs = 0;
     if (workerUsed) {
       const focusRead = await focusOnWorker(
-        bitmap, result.found, pw, ph, bitmap.width, bitmap.height, pageLongEdge,
+        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
       );
       sharpnessScore = focusRead.sharpness;
       focusMs = focusRead.focusMs;
     } else {
       const started = performance.now();
-      sharpnessScore = focusInPageOnMainThread(
-        bitmap, result.found, pw, ph, bitmap.width, bitmap.height, pageLongEdge,
+      sharpnessScore = focusInFrameOnMainThread(
+        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
       );
       focusMs = performance.now() - started;
     }
@@ -1156,11 +1181,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     next.hint = verdict.hint;
 
     return {
-      quad: scaleQuad(
-        result.found,
-        { width: pw, height: ph },
-        { width: bitmap.width, height: bitmap.height },
-      ),
+      quad: quadInBitmap,
       gate: next,
     };
   }
@@ -1195,6 +1216,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
         bitmap.close?.();
         return null;
       }
+
+      // Manual capture gets immediate feedback from the live lock. Native
+      // takePhoto can briefly stall the camera texture; showing the captured
+      // outline before still analysis starts prevents that hardware pause from
+      // reading as an app freeze.
+      if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
 
       const tAnalyseStart = performance.now();
       const analysed = await analyseStill(bitmap);
@@ -1247,7 +1274,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
             { width: video.videoWidth, height: video.videoHeight },
           )
         : null);
-      beginCaptureConfirmation(confirmationQuad);
+      if (auto || !liveQuadAtShutter) beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
       armed = false;
       return shot;
