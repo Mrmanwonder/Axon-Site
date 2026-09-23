@@ -22,21 +22,35 @@ import { MASTERY_API_URL } from './config.js';
 export function tierForType(type) {
   return type === 'pyq' || type === 'sample_paper' ? 'tier_2' : 'tier_1';
 }
-// Cambridge names its own material: a "past paper" is a real Cambridge exam
-// from a previous series, and a "specimen paper" is the board's own published
-// example. The stored enum values are unchanged — pyq and sample_paper are what
-// the schema calls them — because renaming an enum for a label is how a
-// migration ends up being about vocabulary.
-export const PAPER_TYPES = [
+const BASE_PAPER_TYPES = [
   { value: 'unit_test', label: 'Class test' },
   { value: 'mid_term', label: 'Mid-term' },
   { value: 'final_exam', label: 'End-of-year exam' },
-  { value: 'pyq', label: 'Cambridge past paper' },
-  { value: 'sample_paper', label: 'Specimen paper' },
-  ];
+];
 
-export function paperTypeLabel(type) {
-  return PAPER_TYPES.find((t) => t.value === type)?.label ?? type;
+const BOARD_PAPER_LABELS = {
+  cambridge: { pyq: 'Past paper', sample_paper: 'Specimen paper' },
+  cbse: { pyq: 'Board paper', sample_paper: 'Sample Question Paper' },
+  ib: { pyq: 'Examination paper', sample_paper: 'Official sample paper' },
+};
+
+export function paperTypesFor(providerKey = null) {
+  const labels = BOARD_PAPER_LABELS[providerKey] ?? {
+    pyq: 'Official exam paper',
+    sample_paper: 'Official sample paper',
+  };
+  return [
+    ...BASE_PAPER_TYPES,
+    { value: 'pyq', label: labels.pyq },
+    { value: 'sample_paper', label: labels.sample_paper },
+  ];
+}
+
+/** Generic compatibility list for callers that do not yet hold profile identity. */
+export const PAPER_TYPES = paperTypesFor(null);
+
+export function paperTypeLabel(type, providerKey = null) {
+  return paperTypesFor(providerKey).find((t) => t.value === type)?.label ?? type;
 }
 
 function requireOnline(action) {
