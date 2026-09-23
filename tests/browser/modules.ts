@@ -41,6 +41,16 @@ export const lossByCause = async () => ({ data: {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
 export const paperTypeLabel = () => "Test paper";
+export const paperTypesFor = () => [{ value: "unit_test", label: "Class test" }];
+export const PROVIDER_KEYS = ["cambridge", "cbse", "ib"];
+export const providerLabel = (key: string) => ({ cambridge: "Cambridge", cbse: "CBSE", ib: "IB Diploma" } as Record<string, string>)[key] ?? key;
+export const getProgrammes = async () => [];
+export const getStages = async () => [];
+export const getSubjectOfferings = async () => [];
+export const filterSubjectOfferings = (rows: unknown[]) => rows;
+export const defaultLevelFor = () => null;
+export const legacyCurriculumForStudent = () => ({ providerKey: "cambridge", programmeKey: "cambridge_as", stageKey: "cambridge_as" });
+
 export const statusKeyForRun = () => null;
 export const PAPER_STATUS = {};
 export const AVATAR_PRESETS = [{
