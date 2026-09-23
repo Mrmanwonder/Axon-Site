@@ -95,7 +95,7 @@ test('preview stabilizer overscans and opposes small hand tremor', () => {
   assert.ok(Math.abs(second.panY) <= H * 0.035 + 0.01);
 
   const point = applyPreviewStabilizer({ x: W / 2 + 8, y: H / 2 }, second, W, H);
-  assert.ok(point.x < (W / 2 + 8) * second.scale,
+  assert.ok(point.x < W / 2 + 8,
     'overlay transform did not follow the video pan');
 });
 
