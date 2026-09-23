@@ -29,11 +29,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Install PDF text extractor
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils
-
       - name: Compare first-party sources with committed normalized fixtures
         shell: bash
         run: |
