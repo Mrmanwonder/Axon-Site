@@ -90,6 +90,11 @@ function normaliseLegacyLatex(source: string): string {
   // LaTeX untouched and only rewrite the simple legacy forms.
   value = value.replace(/\^\s*\(([^()]*)\)/g, "^{$1}");
   value = value.replace(/\^\s*(-?[A-Za-z0-9.]+)/g, "^{$1}");
+  // Two legacy shapes already exist in stored explanations. Upgrade them to a
+  // real fraction bar so old papers become readable immediately rather than
+  // waiting to be reprocessed by the stricter prompt.
+  value = value.replace(/\(([^()]+)\s*\/\s*([^()]+)\)/g, "\\left(\\frac{$1}{$2}\\right)");
+  value = value.replace(/\\ln\(([^)]+)\)\s*\/\s*(-?\\lambda)/g, "\\frac{\\ln($1)}{$2}");
   return value;
 }
 
