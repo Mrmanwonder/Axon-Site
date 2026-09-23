@@ -1,0 +1,50 @@
+name: Curriculum source drift
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  pull_request:
+    paths:
+      - "scripts/curriculum/**"
+      - "curriculum/**"
+      - ".github/workflows/curriculum-drift.yml"
+      - "package.json"
+
+permissions:
+  contents: read
+
+jobs:
+  official-source-drift:
+    name: Compare official curriculum sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install PDF text extractor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Compare first-party sources with committed normalized fixtures
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run curriculum:check 2>&1 | tee curriculum-drift.txt
+
+      - name: Upload reviewable drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: curriculum-drift-report
+          path: curriculum-drift.txt
+          if-no-files-found: error
+          retention-days: 14
