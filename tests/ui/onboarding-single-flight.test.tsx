@@ -34,12 +34,26 @@ vi.mock("../../src/ui/data/modules", () => ({
   signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
   OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
   listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
-  BOARD: "CAIE", CLASS_LEVELS: [9, 10, 11, 12],
-  classLabel: (level: number) => `Class ${level}`,
-  stageForClass: () => ({ label: "Cambridge International AS & A Level" }),
-  subjectsForClass: () => [{ subject: "Physics", code: "9702" }],
-  syllabusCode: () => "9702",
   PAPER_TYPES: [], startCheckout: vi.fn(),
+  CURRICULUM_PROVIDERS: [{ key: "cambridge", label: "Cambridge" }],
+  CURRICULUM_PROGRAMMES: {
+    cambridge: [{ key: "cambridge_as", label: "Cambridge International AS Level" }],
+  },
+  CURRICULUM_STAGE_OPTIONS: {
+    cambridge_as: [{ key: "cambridge_as", label: "AS Level · Year 12" }],
+  },
+  getSubjectOfferings: vi.fn(async () => [{
+    id: "offering-physics",
+    displayName: "Physics",
+    externalCode: "9702",
+    externalCodeKind: "syllabus_code",
+    levelsSupported: [],
+    languageCode: null,
+    variant: null,
+    aliases: [],
+    group: null,
+  }]),
+  filterSubjectOfferings: (offerings: unknown[]) => offerings,
 }));
 
 import Onboarding from "../../src/ui/onboarding/Onboarding";
@@ -62,15 +76,19 @@ test("ten rapid Create Profile actions issue one atomic profile request", async 
 
   await screen.findByRole("heading", { name: "The student" });
   await userEvent.type(screen.getByLabelText("First name"), "Sam");
-  await userEvent.click(screen.getByRole("button", { name: /Physics/ }));
+  await userEvent.click(screen.getByRole("button", { name: /Add subjects/ }));
+  await userEvent.click(await screen.findByRole("button", { name: /Physics/ }));
   const create = screen.getByRole("button", { name: "Create profile" });
   for (let tap = 0; tap < 10; tap += 1) fireEvent.click(create);
 
   await waitFor(() => expect(fixture.rpc).toHaveBeenCalledTimes(1));
   expect((create as HTMLButtonElement).disabled).toBe(true);
-  expect(fixture.rpc).toHaveBeenCalledWith("create_student_profile", expect.objectContaining({
+  expect(fixture.rpc).toHaveBeenCalledWith("create_student_profile_v2", expect.objectContaining({
     p_first_name: "Sam",
-    p_subjects: [{ subject: "Physics", syllabus_code: "9702" }],
+    p_programme_key: "cambridge_as",
+    p_stage_key: "cambridge_as",
+    p_avatar_key: "dreamBloom",
+    p_subjects: [{ offering_id: "offering-physics", level: null }],
   }));
 
   await act(async () => result.resolve({ data: { id: "student", first_name: "Sam" }, error: null }));
