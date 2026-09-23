@@ -35,8 +35,7 @@ create table if not exists public.curriculum_stage (
   metadata jsonb not null default '{}'::jsonb,
   active boolean not null default true,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(programme_id, label)
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.curriculum_subject (
