@@ -274,7 +274,8 @@ export const addLinkPage = papersMod.addLinkPage as (a: {
 }) => Promise<unknown>;
 export const parsePaperLink = papersMod.parsePaperLink as (raw: string) => string;
 export const PAPER_TYPES = papersMod.PAPER_TYPES as { value: string; label: string }[];
-export const paperTypeLabel = papersMod.paperTypeLabel as (type: string) => string;
+export const paperTypesFor = papersMod.paperTypesFor as (providerKey?: string | null) => { value: string; label: string }[];
+export const paperTypeLabel = papersMod.paperTypeLabel as (type: string, providerKey?: string | null) => string;
 
 /** The five in-flight states AXON_FIX_BRIEF.md §6.5 asks the Library to
     show, keyed by what `paperProgress` reports. A committed paper needs
