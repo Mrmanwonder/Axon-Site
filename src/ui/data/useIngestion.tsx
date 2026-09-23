@@ -42,7 +42,7 @@ import { useScan } from "../scan/ScanProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import {
-  sb, parsePaperLink, PAPER_TYPES,
+  sb, parsePaperLink, paperTypesFor,
 } from "./modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
@@ -88,10 +88,10 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     openSheet({
       title: "What kind of paper is this?",
       body: "This decides whether we can match it to an official marking scheme.",
-      choices: PAPER_TYPES.map((t) => ({ label: t.label, value: t.value })),
+      choices: paperTypesFor(app.student?.provider_key).map((t) => ({ label: t.label, value: t.value })),
       onChoice: (value) => then(value),
     });
-  }, [openSheet]);
+  }, [openSheet, app.student?.provider_key]);
 
   const ingestLink = useCallback(async (url: string) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
