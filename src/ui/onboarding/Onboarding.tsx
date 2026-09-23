@@ -189,7 +189,10 @@ export default function Onboarding() {
   const [student, setStudent] = useState<Student | null>(null);
 
   const go = useCallback((next: Step) => { setError(null); setStep(next); }, []);
-  const fail = (e: unknown, fallback: string) => setError((e as Error)?.message || fallback);
+  // Backend/database messages are developer diagnostics, not interface copy.
+  // Every caller supplies a user-facing fallback specific to the action that
+  // failed, so never surface raw Postgres/PostgREST internals here.
+  const fail = (_e: unknown, fallback: string) => setError(fallback);
 
   /* ── who is this, and what do they still need? ──
      A guardian who already has a student profile has been through verification,
