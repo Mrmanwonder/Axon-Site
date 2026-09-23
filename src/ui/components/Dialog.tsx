@@ -11,9 +11,14 @@ export default function Dialog({ title, description, busy = false, onClose, chil
   useEffect(() => {
     const dialog = ref.current!;
     const trigger = restoreFocus ?? document.activeElement as HTMLElement | null;
-    dialog.showModal();
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
     (dialog.querySelector("input, button, [tabindex='0']") as HTMLElement | null)?.focus();
-    return () => { dialog.close(); if (trigger?.isConnected) trigger.focus(); };
+    return () => {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+      if (trigger?.isConnected) trigger.focus();
+    };
   }, []);
   return <dialog ref={ref} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
     onKeyDown={event => {
