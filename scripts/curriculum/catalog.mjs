@@ -83,13 +83,38 @@ function sortedUnique(rows, keyFn) {
 }
 
 async function fetchBytes(source) {
-  const response = await fetch(source.url, {
-    redirect: "follow",
-    headers: {
-      "user-agent": "Axon curriculum catalog reconciler/1.0 (+https://axonstudy.online/)",
-      "accept": "*/*"
-    }
-  });
+  const browserHeaders = {
+    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36",
+    "accept": source.provider === "ib"
+      ? "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8"
+      : "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+    "accept-language": "en-GB,en;q=0.9",
+    ...(source.provider === "ib"
+      ? { "referer": "https://ibo.org/programmes/diploma-programme/curriculum/" }
+      : {})
+  };
+
+  let response = await fetch(source.url, { redirect: "follow", headers: browserHeaders });
+
+  // The IB CDN sometimes refuses a direct non-browser PDF request. Retry once
+  // after visiting the first-party curriculum page and carry only first-party
+  // cookies into the PDF request. This is ordinary public-site navigation, not
+  // an access-control bypass; a second 403 remains a hard source-unavailable
+  // failure so drift is never reported as clean without checking the PDF.
+  if (response.status === 403 && source.provider === "ib") {
+    const landing = await fetch("https://ibo.org/programmes/diploma-programme/curriculum/", {
+      redirect: "follow",
+      headers: browserHeaders
+    });
+    const cookies = typeof landing.headers.getSetCookie === "function"
+      ? landing.headers.getSetCookie().map(function (value) { return value.split(";")[0]; }).join("; ")
+      : "";
+    response = await fetch(source.url, {
+      redirect: "follow",
+      headers: Object.assign({}, browserHeaders, cookies ? { cookie: cookies } : {})
+    });
+  }
+
   if (!response.ok) throw new Error(source.url + " returned " + response.status);
   const bytes = Buffer.from(await response.arrayBuffer());
   return { bytes: bytes, sha256: sha256(bytes), fetched_at: new Date().toISOString() };
@@ -387,6 +412,12 @@ function identity(provider, row) {
   return row.stage_key + "|" + loose(row.display_name);
 }
 
+function subjectGroup(row) {
+  return row && row.metadata
+    ? (row.metadata.group_key || row.metadata.group || row.metadata.subject_group || null)
+    : null;
+}
+
 function compare(provider, generated, current) {
   const next = new Map(generated.map(function (row) { return [identity(provider, row), row]; }));
   const activeCurrent = current.filter(function (row) { return row.availability === "active"; });
@@ -408,6 +439,9 @@ function compare(provider, generated, current) {
     const delta = fields.filter(function (field) {
       return JSON.stringify(old[field] || null) !== JSON.stringify(row[field] || null);
     });
+    if (provider === "ib" && loose(subjectGroup(old)) !== loose(subjectGroup(row))) {
+      delta.push("subject_group");
+    }
     if (delta.length) changed.push({ key: key, fields: delta });
   }
   return { provider: provider, generated: generated.length, current: current.length, added: added, removed: removed, changed: changed };
@@ -434,7 +468,7 @@ export function validateFixture(provider, data) {
     if (provider === "cambridge" && !/^\d{4}$/.test(row.external_code || "")) errors.push("invalid Cambridge code on " + row.display_name);
     if (provider === "ib") {
       if (!/^\d{6}$/.test(row.external_code || "")) errors.push("invalid IB code on " + row.display_name);
-      if (!(row.metadata && (row.metadata.group_key || row.metadata.group))) errors.push("missing IB group on " + row.display_name);
+      if (!subjectGroup(row)) errors.push("missing IB group on " + row.display_name);
       if (!Array.isArray(row.levels_supported) || !row.levels_supported.length) errors.push("missing IB level on " + row.display_name);
     }
   }
