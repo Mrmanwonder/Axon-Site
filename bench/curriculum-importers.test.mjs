@@ -89,7 +89,7 @@ test("IB parser preserves code, transcript name, group and SL/HL flags", () => {
     "SCIENCES",
     ibHeader(),
     ibRow("100452", "Physics", "Physics", true, true, "Sciences"),
-    ibRow("100453", "Sports exercise health", "Sports, Exercise and Health Science", true, false, "Sciences"),
+    ibRow("100453", "Sports exercise health", "Sports Science", true, false, "Sciences"),
     "DISCONTINUED SUBJECTS",
     ibRow("999999", "Old Subject", "Old Subject", true, true, "Sciences"),
   ].join("\n");
