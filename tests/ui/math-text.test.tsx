@@ -27,3 +27,20 @@ test("unsafe or malformed LaTeX falls back to source text without throwing", () 
   expect(container.querySelector(".katex")).toBeNull();
   expect(container.textContent).toContain("\\href");
 });
+
+
+test("single-dollar LaTeX and unicode superscripts render without exposing source notation", () => {
+  const { container } = render(
+    <MathText text={"Use $x^2 + y^2 = r^2$ and then compare x² >= 4."} />,
+  );
+  expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
+  expect(container.textContent).not.toContain("x²");
+});
+
+test("ordinary dollar prose is not mistaken for maths", () => {
+  const { container } = render(
+    <MathText text={"The tickets were $20 and $30 after the discount."} />,
+  );
+  expect(container.querySelector(".katex")).toBeNull();
+  expect(container.textContent).toContain("$20 and $30");
+});

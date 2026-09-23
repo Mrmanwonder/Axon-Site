@@ -26,7 +26,7 @@ const CONTENT_SECURITY_POLICY = [
   "form-action 'self' https://*.supabase.co",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com",
+  "img-src 'self' data: blob: https://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "font-src 'self'",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "worker-src 'self' blob:",

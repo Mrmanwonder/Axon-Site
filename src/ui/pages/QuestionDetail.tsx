@@ -31,6 +31,7 @@ import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import PageSkeleton from "../components/PageSkeleton";
 import MathText from "../components/MathText";
+import WorkedAnswer from "../components/WorkedAnswer";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
 
@@ -205,7 +206,7 @@ export default function QuestionDetail() {
           && loss.model_answer_source && (
           <div className="qfield">
             <Disclose label="See a worked answer">
-              <div className="worked"><MathText text={loss.model_answer} /></div>
+              <div className="worked"><WorkedAnswer text={loss.model_answer} /></div>
               <div className="wnote">
                 {loss.model_answer_source === "verified_scheme"
                   ? "From the official marking scheme for this paper."
@@ -263,7 +264,7 @@ export default function QuestionDetail() {
                 <div className="k">What this question asked for</div>
                 <div className="cmdword">
                   <span className="w">{loss.command_word}</span>
-                  {loss.command_word_note && <span className="n">{loss.command_word_note}</span>}
+                  {loss.command_word_note && <span className="n"><MathText text={loss.command_word_note} /></span>}
                 </div>
                 <div style={{ height: 14 }} />
               </>
