@@ -405,7 +405,9 @@ export default function Onboarding() {
             does not have an account yet, so this describes the action accurately. */}
         <div className="obalt">
           {OAUTH_PROVIDERS.map((p) => (
-            <PressBox as="button" type="button" key={p} className="btn"
+            <PressBox as="button" type="button" key={p} className="btn googleauth"
+                      aria-busy={busyProvider === p}
+                      data-busy={busyProvider === p ? "" : undefined}
                       onClick={() => void useProvider(p)}>
               {BRAND[p]}
               <span>
