@@ -15,8 +15,7 @@ export async function loadProfiles(guardianId: string): Promise<{ data: Student[
       const [subjectResult, programmeResult, stageResult] = await Promise.all([
         sb.from("student_subject")
           .select("subject,subject_offering_id,selected_level,display_name_snapshot,external_code_snapshot")
-          .eq("student_id", student.id)
-          .order("subject"),
+          .eq("student_id", student.id),
         student.programme_id
           ? sb.from("curriculum_programme").select("key,label,provider_id").eq("id", student.programme_id).single()
           : Promise.resolve({ data: null, error: null }),
@@ -49,7 +48,7 @@ export async function loadProfiles(guardianId: string): Promise<{ data: Student[
         subject: row.display_name_snapshot ?? row.subject,
         external_code: row.external_code_snapshot,
         level: row.selected_level,
-      }));
+      })).sort((a, b) => a.subject.localeCompare(b.subject));
 
       return {
         ...student,
