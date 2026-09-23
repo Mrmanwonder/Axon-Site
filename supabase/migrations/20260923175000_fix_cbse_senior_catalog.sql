@@ -2938,11 +2938,10 @@ update public.student_subject ss
 set subject_offering_id=so.id,
     display_name_snapshot=coalesce(ss.display_name_snapshot,ss.subject),
     external_code_snapshot=coalesce(ss.external_code_snapshot,so.external_code)
-from public.student s
-join public.subject_offering so
-  on so.programme_id=s.programme_id
- and so.stage_id=s.stage_id
- and so.availability='active'
- and lower(so.display_name)=lower(ss.subject)
+from public.student s, public.subject_offering so
 where ss.student_id=s.id
-  and ss.subject_offering_id is null;
+  and ss.subject_offering_id is null
+  and so.programme_id=s.programme_id
+  and so.stage_id=s.stage_id
+  and so.availability='active'
+  and lower(so.display_name)=lower(ss.subject);
