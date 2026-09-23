@@ -28,7 +28,7 @@ after normalising comments and whitespace; the exceptions are called out below.
 The matched pairs were checked too, and the headline is that **none of them
 diverged in schema.** Comparing both sides under identical normalisation
 (strip `--` comments, strip whitespace, lowercase), 20 of 25 hash-match
-exactly. The five that do not — `identity_and_consent`, `academic_model`,
+exactly. The six that do not — `identity_and_consent`, `academic_model`,
 `rls_and_analytics`, `preferences_and_erasure`, `r2_and_runtime`,
 `pipeline_runtime` — differ only inside `comment on ...` string literals:
 reworded prose, and the `mastery` → `axon` rename that reached the repo but not
@@ -51,6 +51,43 @@ recorded in its own header:
   `stripe` schema come from a dashboard-configured wrapper that no migration
   here creates, so unguarded they fail a fresh reset. Where they exist the
   behaviour is unchanged, and production has already run both.
+
+## Parity audit (2026-09-23)
+
+A fresh repo-vs-live audit found six migration names in `main` that were not
+recorded in the live migration ledger:
+
+- `frontend_atomic_mutations`
+- `atomic_student_profile_edit`
+- `parent_mode_requires_interactive_amr`
+- `reassert_consent_parent_mode_policy`
+- `billing_fields_are_server_authored`
+- `extraction_priority_is_server_authored`
+
+This was not just bookkeeping drift. The first migration's table, 62-row
+curriculum catalog, RLS policy, grants and two RPCs were already live, and the
+consent policy was already in its intended form, but other effects were missing
+or stale: `update_student_profile` did not exist, `auth_age()` still accepted
+background AMR entries, the billing guard omitted `subscription_grace_until`,
+and the extraction-priority immutability trigger did not exist.
+
+The audit reconciled the already-live first migration only after checking its
+objects, row count, RLS and grants, then applied the remaining migrations and
+verified their concrete schema effects. Supabase MCP stamps these with their
+application time, so compare by migration **name**, not filename timestamp.
+
+The live ledger also contains `sweep_dead_letters_discovers_queues`, which is
+not a standalone file here. That is intentional: its final queue-discovery
+behavior is folded into
+`20260904110000_honest_sweep_messages_for_real.sql`, the replayable
+consolidated migration produced by the 2026-09-04 reconciliation.
+
+The same audit ran Supabase's security advisor. It found
+`paper_canonical_run` executing with view-owner rights over an RLS-protected
+base table and two private helpers with mutable search paths. The live database
+was hardened first, and
+`20260923120000_supabase_advisor_security_hardening.sql` records the exact
+change for fresh environments.
 
 ## What this directory still is not
 
