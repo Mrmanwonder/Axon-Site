@@ -101,7 +101,7 @@ export function previewStabilizerFrame(previous, points, width, height) {
   }
 
   const { x, y } = pointsCentroid(points);
-  if (!previous?.anchorX || !previous?.anchorY) {
+  if (previous?.anchorX == null || previous?.anchorY == null) {
     return {
       anchorX: x, anchorY: y, lastX: x, lastY: y, panX: 0, panY: 0, scale,
       transform: `translate(0.00px, 0.00px) scale(${scale.toFixed(3)})`,
