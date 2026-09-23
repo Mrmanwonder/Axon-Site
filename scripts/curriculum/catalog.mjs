@@ -128,7 +128,10 @@ function cleanCambridgeName(text, code) {
   return name.replace(/\s+-\s*$/, "").trim();
 }
 
-function cambridgeBase(anchor, source) {
+function cambridgeBase(anchor, source, subjectPathNeedle) {
+  if (!anchor.href) return null;
+  const target = new URL(anchor.href, source.url);
+  if (!target.pathname.toLowerCase().includes(subjectPathNeedle)) return null;
   const code = extractFourDigitCode(anchor.text);
   if (!code) return null;
   const name = cleanCambridgeName(anchor.text, code);
@@ -142,7 +145,7 @@ function cambridgeBase(anchor, source) {
     levels_supported: [],
     variant: /\(9-1\)/i.test(anchor.text) ? "9-1" : null,
     aliases: [],
-    source_url: anchor.href ? new URL(anchor.href, source.url).href : source.url,
+    source_url: target.href,
     source_version: source.version,
     metadata: { new: /\bNew\b/i.test(anchor.text) }
   };
@@ -152,7 +155,7 @@ export function parseCambridgeIgcse(html, source) {
   source = source || SOURCES.cambridge_igcse;
   const byCode = new Map();
   for (const anchor of extractAnchors(html)) {
-    const row = cambridgeBase(anchor, source);
+    const row = cambridgeBase(anchor, source, "/programmes-and-qualifications/cambridge-igcse-");
     if (row) byCode.set(row.external_code, row);
   }
   const out = [];
@@ -167,7 +170,7 @@ export function parseCambridgeAdvanced(html, source) {
   source = source || SOURCES.cambridge_advanced;
   const byCode = new Map();
   for (const anchor of extractAnchors(html)) {
-    const row = cambridgeBase(anchor, source);
+    const row = cambridgeBase(anchor, source, "/programmes-and-qualifications/cambridge-international-as-and-a-level-");
     if (!row) continue;
     row.metadata.only_as = /\(\s*AS(?: Level)? only\s*\)/i.test(anchor.text);
     row.metadata.only_a = /\(\s*A Level only\s*\)/i.test(anchor.text);
@@ -211,7 +214,6 @@ function cbseCategory(text, current) {
 
 function cbseRow(name, stage, category, source, code) {
   const display = name
-    .replace(/\s*\(\d{3}\)\s*$/, "")
     .replace(/^\d{3}\s*-\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -246,7 +248,23 @@ export function parseCbseCurriculum(html, source) {
     if (!stages.length) continue;
     if (/^(Initial Pages|Introduction|Reading Material|Archive|Course [AB]|IX|X|XI|XII)$/i.test(token.text)) continue;
     if (/Employability Skills|Mandatory Skill Subject/i.test(token.text)) continue;
-    for (const stage of stages) rows.push(cbseRow(token.text, stage, category, source, null));
+
+    let name = token.text
+      .replace(/\s+Reading Material(?:\s.*)?$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!name) continue;
+
+    // Class X Urdu is rendered as one list item with two nested course links.
+    // Preserve the two actual selectable routes instead of concatenating all
+    // descendant anchor text into a fake subject name.
+    const names = /^Urdu\s+Course A\s+Course B$/i.test(name)
+      ? ["Urdu Course A", "Urdu Course B"]
+      : [name];
+
+    for (const stage of stages) {
+      for (const subjectName of names) rows.push(cbseRow(subjectName, stage, category, source, null));
+    }
   }
   return sortedUnique(rows, function (row) { return row.stage_key + "|" + loose(row.display_name); });
 }
@@ -264,10 +282,21 @@ export function parseCbseSkill(html, source) {
       continue;
     }
     if (!stages.length || /Employability Skills/i.test(token.text)) continue;
-    const codeMatch = /\((\d{3})\)/.exec(token.text) || /^(\d{3})\s*-/.exec(token.text);
-    const code = codeMatch ? codeMatch[1] : null;
+    const parenthesized = /\((\d{3})\)/.exec(token.text);
+    const prefixed = /^(\d{3})\s*-/.exec(token.text);
+    const code = parenthesized ? parenthesized[1] : prefixed ? prefixed[1] : null;
     if (!code && !/Vocational Education/i.test(token.text)) continue;
-    for (const stage of stages) rows.push(cbseRow(token.text, stage, category, source, code));
+
+    let name = token.text;
+    if (parenthesized) name = token.text.slice(0, parenthesized.index);
+    name = name
+      .replace(/^\d{3}\s*-\s*/, "")
+      .replace(/\s+(?:IX|X|XI|XII)(?:\s*[|&]\s*(?:XI|XII))?(?:\s.*)?$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!name) continue;
+
+    for (const stage of stages) rows.push(cbseRow(name, stage, category, source, code));
   }
   return sortedUnique(rows, function (row) { return row.stage_key + "|" + (row.external_code || loose(row.display_name)); });
 }
@@ -474,8 +503,10 @@ async function generate() {
     ...parseCambridgeAdvanced(fetched.cambridge_advanced.bytes.toString("utf8"))
   ];
   const cbse = sortedUnique([
-    ...parseCbseCurriculum(fetched.cbse_curriculum.bytes.toString("utf8")),
-    ...parseCbseSkill(fetched.cbse_skill.bytes.toString("utf8"))
+    // Put the dedicated skill catalog first so its official subject codes win
+    // over duplicate uncoded names also linked from the general curriculum.
+    ...parseCbseSkill(fetched.cbse_skill.bytes.toString("utf8")),
+    ...parseCbseCurriculum(fetched.cbse_curriculum.bytes.toString("utf8"))
   ], function (row) { return row.stage_key + "|" + loose(row.display_name); });
 
   const generated = { cambridge: cambridge, cbse: cbse };
