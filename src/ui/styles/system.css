@@ -1156,3 +1156,37 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
 .examcard{margin-top:14px;padding:17px 18px}.examcard .t1{font-size:15px;font-weight:600}.examcard .t2{font-size:13px;color:var(--label-3);line-height:1.45;margin-top:4px}
 .insightfilters{top:var(--view-top);padding-top:9px}.isection{min-width:0}.evidencegap{display:flex;align-items:flex-start;gap:13px;padding:17px;border-style:dashed}.unknownmark{width:31px;height:31px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:var(--surface-sunk);color:var(--label-3);font-weight:700}.evidencegap h3,.filterempty h3{font-size:15px;margin:0 0 4px;letter-spacing:-.015em}.evidencegap p,.filterempty p,.coveragecard p{font-size:13px;line-height:1.5;color:var(--label-3);margin:0}.coveragecard{padding:18px}.coveragehead{display:flex;justify-content:space-between;gap:12px;font-size:13px}.coveragehead span{color:var(--label-3)}.covertrack{height:7px;background:var(--surface-sunk);border-radius:4px;overflow:hidden;margin:13px 0}.covertrack i{display:block;height:100%;background:var(--accent);border-radius:4px}.miniadd,.filterempty button{margin-top:13px;color:var(--accent);font-size:13px;font-weight:650}.filterempty{padding:22px}.spark{height:130px;display:flex;align-items:flex-end;gap:8px;border-bottom:.5px solid var(--hairline)}.sparkcol{height:100%;flex:1;display:flex;align-items:flex-end;justify-content:center;position:relative}.sparkcol i{display:block;width:min(30px,68%);background:var(--accent);border-radius:6px 6px 0 0;opacity:.82}.sparkcol span{position:absolute;bottom:-22px;font-size:10px;color:var(--label-3)}.spark+.widgetnote{margin-top:30px}.widgetnote{font-size:11.5px!important;line-height:1.45;color:var(--label-3);margin:14px 0 0}.causecard .widgetnote{padding-top:13px;border-top:.5px solid var(--hairline)}
 @media(min-width:768px){.nextstep{margin-top:18px}.igrid{gap:8px var(--gutter)}.isection .sectitle{margin-top:20px}}
+
+
+/* ── Normalized curriculum/profile picker ─────────────────────────────── */
+.curriculum-provider-grid,.curriculum-stage-grid{display:flex;gap:8px;flex-wrap:wrap}
+.curriculum-choice{min-height:38px;padding:0 14px;border-radius:12px;border:.5px solid var(--hairline);background:var(--surface);color:var(--label-2);font-size:13px;font-weight:650;transition:transform 120ms cubic-bezier(.1,.9,.2,1),background 120ms cubic-bezier(.1,.9,.2,1),border-color 120ms cubic-bezier(.1,.9,.2,1)}
+.curriculum-choice:active{transform:scale(.96)}
+.curriculum-choice.on{background:var(--label);color:var(--bg);border-color:transparent}
+.selected-subjects{display:grid;gap:8px}
+.selected-subject{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px 10px 8px 13px;border:.5px solid var(--hairline);border-radius:14px;background:var(--surface)}
+.selected-subject-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px}
+.selected-subject-copy strong{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selected-subject-copy small{font-size:11px;color:var(--label-3)}
+.seg.compact{flex:0 0 auto;height:30px}
+.seg.compact button{min-width:38px;padding:0 9px;font-size:11px}
+.subject-remove,.sheet-close{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;font-size:20px;color:var(--label-3)}
+.subject-remove:hover,.sheet-close:hover{background:var(--surface-sunk);color:var(--label)}
+.add-subjects{min-height:44px;border:.5px dashed var(--hairline);border-radius:14px;color:var(--accent);font-size:13px;font-weight:650;background:transparent}
+.curriculum-sheet-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.38);backdrop-filter:blur(10px);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.curriculum-sheet{width:min(680px,100%);max-height:min(78vh,720px);display:flex;flex-direction:column;border:.5px solid var(--hairline);border-radius:24px;background:var(--bg-elevated,var(--surface));box-shadow:0 24px 80px rgba(0,0,0,.28);padding:16px}
+.curriculum-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:2px 2px 12px}
+.curriculum-sheet-title{font-size:18px;font-weight:720;letter-spacing:-.025em}
+.curriculum-sheet-sub{font-size:12px;color:var(--label-3);margin-top:3px}
+.curriculum-search{width:100%;height:44px;border:.5px solid var(--hairline);border-radius:13px;background:var(--surface-sunk);color:var(--label);padding:0 13px;font:inherit;outline:none}
+.curriculum-search:focus{border-color:var(--accent)}
+.curriculum-results{overflow:auto;margin-top:10px;display:grid;gap:4px;padding-bottom:4px}
+.curriculum-result{display:flex;align-items:center;justify-content:space-between;text-align:left;gap:12px;padding:11px 12px;border-radius:12px;min-height:52px}
+.curriculum-result:hover:not(:disabled){background:var(--surface-sunk)}
+.curriculum-result span:first-child{display:flex;min-width:0;flex-direction:column;gap:2px}
+.curriculum-result strong{font-size:13.5px}
+.curriculum-result small{font-size:11px;color:var(--label-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.curriculum-result-action{color:var(--accent);font-size:18px;font-weight:600}
+.curriculum-result.selected{opacity:.5}
+.curriculum-empty{padding:28px 12px;text-align:center;color:var(--label-3);font-size:13px}
+@media(min-width:768px){.curriculum-sheet-backdrop{align-items:center}.curriculum-sheet{border-radius:22px}}
