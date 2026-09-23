@@ -593,13 +593,11 @@ export const deleteAccount = accountMod.deleteAccount as (
 export type AvatarPreset = {
   key: string;
   title: string;
-  type: "sphere" | "plane" | "waterPlane";
-  /** Absent means the app may hand this preset out unasked. `false` means it
-      may not — Halo and Mandarin are close enough to the reserved sign-out red
-      that deriving one onto someone would spend red on decoration. Both stay
-      pickable. */
+  kind: "gradient" | "dot-face";
+  type: "sphere" | "plane" | "waterPlane" | "volumetric" | "dot-face";
   auto?: boolean;
-  c: [string, string, string];
+  c: string[];
+  cells?: [number, number][];
 };
 
 export const AVATAR_PRESETS = avatarMod.PRESETS as unknown as AvatarPreset[];
@@ -607,7 +605,7 @@ export const AVATAR_PRESETS = avatarMod.PRESETS as unknown as AvatarPreset[];
 /** The `background` and `color` to paint, plus which preset produced them. */
 export const avatarStyleFor = avatarMod.avatarStyleFor as unknown as (
   student: { id?: string; avatar_seed?: string | null } | null | undefined,
-) => { background: string; color: string; preset: string };
+) => { background: string; color: string; preset: string; kind: "gradient" | "dot-face" };
 
 export const backgroundFor = avatarMod.backgroundFor as unknown as (p: AvatarPreset) => string;
 export const inkFor = avatarMod.inkFor as unknown as (p: AvatarPreset) => string;
