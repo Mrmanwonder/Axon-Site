@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markAlternatives, allocationIsUsable } from '../src/scan/marks.js';
+import { markAlternatives, allocationIsUsable, markValueIsUsable } from '../src/scan/marks.js';
 
 /**
  * The row this file exists for.
@@ -108,4 +108,17 @@ test('a fractional or impossible awarded mark does not poison the grid', () => {
   assert.deepEqual(markAlternatives({ marks_available: 3, marks_awarded: 1.5 }), [0, 1, 2, 3]);
   assert.deepEqual(markAlternatives({ marks_available: 3, marks_awarded: 99 }), [0, 1, 2, 3]);
   assert.deepEqual(markAlternatives({ marks_available: 3, marks_awarded: -2 }), [0, 1, 2, 3]);
+});
+
+
+test('assessment rules, not a global board flag, determine mark granularity', () => {
+  const half = { markStep: 0.5, maxPrecision: 1 };
+  assert.equal(allocationIsUsable({ marks_available: 2.5 }, half), true);
+  assert.deepEqual(markAlternatives({ marks_available: 2.5, marks_awarded: 1.5 }, half), [0, 0.5, 1, 1.5, 2, 2.5]);
+  assert.equal(markValueIsUsable(1.5, 2.5, half), true);
+  assert.equal(markValueIsUsable(1.25, 2.5, half), false);
+
+  // Axon's current provider adapters still resolve to whole marks unless an
+  // official assessment model explicitly proves otherwise.
+  assert.equal(allocationIsUsable({ marks_available: 2.5 }), false);
 });
