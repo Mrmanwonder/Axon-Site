@@ -23,14 +23,22 @@
    · **Nothing is locked because we were confident.**
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
 import Crop from "../components/Crop";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
-import MathText from "../components/MathText";
+const MathText = lazy(() => import("../components/MathText"));
+
+function RichText({ text }: { text: string }) {
+  return (
+    <Suspense fallback={text}>
+      <MathText text={text} />
+    </Suspense>
+  );
+}
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -40,7 +48,7 @@ function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean 
           working is the answer in a notation-dense subject, and reading it
           back as one paragraph is reading someone else's answer. */}
       <div className={"v" + (v ? "" : " empty") + (steps && v ? " steps" : "")}>
-        {v ? <MathText text={v} /> : "Not read"}
+        {v ? <RichText text={v} /> : "Not read"}
       </div>
     </div>
   );
@@ -130,7 +138,7 @@ function Question({
           </div>
           {q.explanation.body && (
             <div className="v" style={{ marginTop: 7, color: "var(--label-2)" }}>
-              <MathText text={q.explanation.body} />
+              <RichText text={q.explanation.body} />
             </div>
           )}
           {/* Rendered only when it clears the bar: specific to this answer, and
@@ -138,7 +146,7 @@ function Question({
               trains students to stop reading. */}
           {q.explanation.doThisNext && (
             <div className="v" style={{ marginTop: 9 }}>
-              <b>Do this next.</b>{" "}<MathText text={q.explanation.doThisNext} />
+              <b>Do this next.</b>{" "}<RichText text={q.explanation.doThisNext} />
             </div>
           )}
         </div>
