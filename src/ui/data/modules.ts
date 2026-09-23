@@ -40,12 +40,29 @@ export type Prefs = {
 };
 
 export type Guardian = { id: string; name: string; contact: string };
+export type SubjectSelection = {
+  offering_id: string;
+  subject: string;
+  external_code?: string | null;
+  level?: "SL" | "HL" | null;
+};
+
 export type Student = {
   id: string;
   first_name: string;
   board: string;
-  class_level: number;
+  class_level: number | null;
+  programme_id?: string | null;
+  stage_id?: string | null;
+  programme_key?: string | null;
+  programme_label?: string | null;
+  provider_key?: string | null;
+  provider_label?: string | null;
+  stage_key?: string | null;
+  stage_label?: string | null;
+  school_year_label?: string | null;
   subjects?: string[];
+  subjectSelections?: SubjectSelection[];
   /** Either the original random hex seed (nothing chosen — the face is derived
       from it) or a preset key the student picked. Never an image: there is no
       avatar bucket and no upload path anywhere in this app. */
@@ -175,6 +192,61 @@ export const syllabusCode = curriculumMod.syllabusCode as (
 export const subjectLabel = curriculumMod.subjectLabel as (
   subject: string, code: string | null,
 ) => string;
+
+export type CurriculumProviderKey = "cambridge" | "cbse" | "ib";
+export type CurriculumOffering = {
+  id: string;
+  displayName: string;
+  externalCode: string | null;
+  externalCodeKind: string | null;
+  levelsSupported: ("SL" | "HL")[];
+  languageCode: string | null;
+  variant: string | null;
+  aliases: string[];
+  group: string | null;
+};
+export const CURRICULUM_PROVIDERS = curriculumMod.PROVIDERS as {
+  key: CurriculumProviderKey; label: string;
+}[];
+export const CURRICULUM_PROGRAMMES = curriculumMod.PROGRAMMES as Record<
+  CurriculumProviderKey, { key: string; label: string }[]
+>;
+export const CURRICULUM_STAGE_OPTIONS = curriculumMod.STAGE_OPTIONS as Record<
+  string, { key: string; label: string }[]
+>;
+export const programmesForProvider = curriculumMod.programmesForProvider as (
+  key: CurriculumProviderKey,
+) => { key: string; label: string }[];
+export const stagesForProgramme = curriculumMod.stagesForProgramme as (
+  key: string,
+) => { key: string; label: string }[];
+export const providerForProgramme = curriculumMod.providerForProgramme as (
+  key: string,
+) => CurriculumProviderKey | null;
+export const programmeForStage = curriculumMod.programmeForStage as (
+  key: string,
+) => string | null;
+export const defaultProgramme = curriculumMod.defaultProgramme as (
+  key: CurriculumProviderKey,
+) => string | null;
+export const defaultStage = curriculumMod.defaultStage as (
+  key: string,
+) => string | null;
+export const getSubjectOfferings = curriculumMod.getSubjectOfferings as (args: {
+  programmeKey: string; stageKey: string; force?: boolean;
+}) => Promise<CurriculumOffering[]>;
+export const filterSubjectOfferings = curriculumMod.filterSubjectOfferings as (
+  offerings: CurriculumOffering[], query: string,
+) => CurriculumOffering[];
+export const formatSubjectIdentity = curriculumMod.formatSubjectIdentity as (
+  offering: CurriculumOffering, level?: "SL" | "HL" | null,
+) => string;
+export const assessmentRulesFor = curriculumMod.assessmentRulesFor as (args?: {
+  providerKey?: string | null;
+}) => { markStep: number; maxPrecision: number; supportsTeacherPenMarks: boolean; providerKey: string | null };
+export const paperLabelsFor = curriculumMod.paperLabelsFor as (
+  providerKey?: string | null,
+) => { pyq: string; sample_paper: string };
 
 // ── prefs ──────────────────────────────────────────────────────────────────
 export const DEFAULTS = prefsMod.DEFAULTS as Prefs;
