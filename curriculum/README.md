@@ -15,6 +15,15 @@ ensure onboarding never scrapes an awarding-body site.
 The IB adapter uses `pdftotext -layout` from Poppler. This preserves the official
 PDF's SL/HL column positions instead of guessing level from subject names.
 
+IBO currently returns HTTP 403 to GitHub-hosted automation for the canonical PDF.
+Axon respects that response: CI validates the committed IB fixture and parser but
+never bypasses the provider's access controls. For an authorized admin drift check,
+download the official PDF normally from the source URL and run:
+
+`AXON_IB_CATALOG_PDF=/path/to/all-dp-subjects-list-en.pdf npm run curriculum:check`
+
+The supplied bytes are hashed and compared through the same normalized adapter.
+
 ## Activation rules
 
 - Never activate a source diff automatically.
