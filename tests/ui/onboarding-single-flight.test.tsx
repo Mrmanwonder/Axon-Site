@@ -100,7 +100,8 @@ test("ten rapid Create Profile actions issue one atomic profile request", async 
   await userEvent.click(screen.getByRole("button", { name: "Cambridge" }));
   await userEvent.click(await screen.findByRole("button", { name: "AS Level" }));
   await userEvent.click(screen.getByRole("button", { name: "+ Add subjects" }));
-  await userEvent.click(await screen.findByRole("listitem", { name: /Physics/ }));
+  const physics = await screen.findByText("Physics");
+  await userEvent.click(physics.closest("button")!);
   await userEvent.click(screen.getByRole("button", { name: "Done" }));
 
   const create = screen.getByRole("button", { name: "Create profile" });
