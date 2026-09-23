@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -389,7 +389,8 @@ function identity(provider, row) {
 
 function compare(provider, generated, current) {
   const next = new Map(generated.map(function (row) { return [identity(provider, row), row]; }));
-  const prev = new Map(current.map(function (row) { return [identity(provider, row), row]; }));
+  const activeCurrent = current.filter(function (row) { return row.availability === "active"; });
+  const prev = new Map(activeCurrent.map(function (row) { return [identity(provider, row), row]; }));
   const added = [...next.keys()].filter(function (key) { return !prev.has(key); }).sort();
   const removed = [...prev.keys()].filter(function (key) { return !next.has(key); }).sort();
   const changed = [];
@@ -403,7 +404,7 @@ function compare(provider, generated, current) {
       ? ["display_name", "levels_supported"]
       : provider === "cambridge"
         ? ["display_name", "variant"]
-        : ["display_name"];
+        : ["display_name", "external_code"];
     const delta = fields.filter(function (field) {
       return JSON.stringify(old[field] || null) !== JSON.stringify(row[field] || null);
     });
@@ -423,6 +424,13 @@ export function validateFixture(provider, data) {
     if (!row.programme_key || !row.stage_key || !row.display_name) errors.push("missing identity field on " + JSON.stringify(row));
     if (!row.source_url || !row.source_url.startsWith("https://")) errors.push("missing source URL on " + row.display_name);
     if (!row.source_version) errors.push("missing source version on " + row.display_name);
+    const host = row.source_url ? new URL(row.source_url).hostname.replace(/^www\./, "") : "";
+    const allowedHost = provider === "cambridge"
+      ? host === "cambridgeinternational.org"
+      : provider === "cbse"
+        ? host === "cbseacademic.nic.in"
+        : host === "ibo.org";
+    if (!allowedHost) errors.push("non-first-party source URL on " + row.display_name + ": " + host);
     if (provider === "cambridge" && !/^\d{4}$/.test(row.external_code || "")) errors.push("invalid Cambridge code on " + row.display_name);
     if (provider === "ib") {
       if (!/^\d{6}$/.test(row.external_code || "")) errors.push("invalid IB code on " + row.display_name);
@@ -431,8 +439,14 @@ export function validateFixture(provider, data) {
     }
   }
 
-  const ids = rows.map(function (row) { return identity(provider, row); });
-  if (new Set(ids).size !== ids.length) errors.push("duplicate offering identity");
+  const active = rows.filter(function (row) { return row.availability === "active"; });
+  const ids = active.map(function (row) {
+    if (provider === "cbse") {
+      return row.stage_key + "|" + (row.external_code || loose(row.display_name));
+    }
+    return identity(provider, row);
+  });
+  if (new Set(ids).size !== ids.length) errors.push("duplicate active offering identity");
   const minimum = { cambridge: 250, cbse: 300, ib: 300 }[provider];
   if (rows.length < minimum) errors.push("count regression: " + rows.length + " < " + minimum);
   return errors;
@@ -503,6 +517,8 @@ async function main() {
   printReport(report);
 
   if (command === "snapshot") {
+    const generatedDir = new URL("../../curriculum/generated/", import.meta.url);
+    mkdirSync(generatedDir, { recursive: true });
     for (const provider of ["cambridge", "cbse", "ib"]) {
       const path = new URL("../../curriculum/generated/" + provider + ".json", import.meta.url);
       writeFileSync(path, JSON.stringify({
