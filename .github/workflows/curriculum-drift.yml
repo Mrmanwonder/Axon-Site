@@ -39,6 +39,7 @@ jobs:
         run: |
           set -o pipefail
           npm run curriculum:check 2>&1 | tee curriculum-drift.txt
+          echo "::warning title=IB catalog needs manual admin reconciliation::IBO blocks GitHub-hosted automation for the official DP catalog PDF. The committed IB fixture/parser are validated, but live IB drift requires AXON_IB_CATALOG_PDF supplied by an authorized admin."
 
       - name: Upload reviewable drift report
         if: always()
