@@ -459,7 +459,7 @@ async function paintDrafts() {
     drafts.map((d) => ({
       id: d.id,
       title: d.paper_type
-        ? PAPER_TYPES.find((t) => t.value === d.paper_type)?.label ?? 'Paper'
+        ? paperTypesFor(S.ctx?.student?.provider_key).find((t) => t.value === d.paper_type)?.label ?? 'Paper'
         : 'Unfinished paper',
       pages: d.pages.length,
       thumb: null,
@@ -679,8 +679,8 @@ function paintReview() {
 
   host.renderReview({
     title: paper?.subject
-      ? `${paper.subject} · ${PAPER_TYPES.find((t) => t.value === paper.type)?.label ?? ''}`.trim()
-      : PAPER_TYPES.find((t) => t.value === paper?.type)?.label ?? 'Review',
+      ? `${paper.subject} · ${paperTypesFor(S.ctx?.student?.provider_key).find((t) => t.value === paper.type)?.label ?? ''}`.trim()
+      : paperTypesFor(S.ctx?.student?.provider_key).find((t) => t.value === paper?.type)?.label ?? 'Review',
     lead: S.review.lead,
     delta: S.review.delta,
     outstanding: S.review.outstanding,
