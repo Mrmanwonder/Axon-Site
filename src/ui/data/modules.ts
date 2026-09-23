@@ -188,7 +188,7 @@ export type SubjectOffering = {
   levels_supported: ("SL" | "HL")[]; language_code: string | null; variant: string | null;
   aliases: string[]; metadata?: Record<string, unknown>;
 };
-export const getProviders = curriculumMod.getProviders as () => Promise<CurriculumProvider[]>;
+export const getProviders = curriculumMod.getProviders as unknown as () => Promise<CurriculumProvider[]>;
 export const getProgrammes = curriculumMod.getProgrammes as (providerKey: string) => Promise<CurriculumProgramme[]>;
 export const getStages = curriculumMod.getStages as (programmeKey: string) => Promise<CurriculumStage[]>;
 export const getSubjectOfferings = curriculumMod.getSubjectOfferings as (a: {
