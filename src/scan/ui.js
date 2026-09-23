@@ -14,10 +14,21 @@ import {
 } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
-import { PAPER_TYPES } from '../papers.js';
+import { paperTypesFor } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
 const MAX_PENDING_CAPTURES = 2;
+
+function providerKeyForStudent(student) {
+  if (student?.provider_key) return student.provider_key;
+  if (student?.board === 'CBSE') return 'cbse';
+  if (student?.board === 'IBDP') return 'ib';
+  return 'cambridge';
+}
+
+function paperTypes() {
+  return paperTypesFor(providerKeyForStudent(S.ctx?.student));
+}
 let captureTail = Promise.resolve();
 
 const S = {
@@ -459,7 +470,7 @@ async function paintDrafts() {
     drafts.map((d) => ({
       id: d.id,
       title: d.paper_type
-        ? PAPER_TYPES.find((t) => t.value === d.paper_type)?.label ?? 'Paper'
+        ? paperTypes().find((t) => t.value === d.paper_type)?.label ?? 'Paper'
         : 'Unfinished paper',
       pages: d.pages.length,
       thumb: null,
@@ -528,7 +539,7 @@ function sendPaper() {
     title: 'What kind of paper is this?',
     body: 'This decides whether we can match it to an official marking scheme.',
     items: [],
-    choices: PAPER_TYPES.map((t) => ({ label: t.label, value: t.value })),
+    choices: paperTypes().map((t) => ({ label: t.label, value: t.value })),
     onChoice: (value) => run(value),
   });
 }
@@ -679,8 +690,8 @@ function paintReview() {
 
   host.renderReview({
     title: paper?.subject
-      ? `${paper.subject} · ${PAPER_TYPES.find((t) => t.value === paper.type)?.label ?? ''}`.trim()
-      : PAPER_TYPES.find((t) => t.value === paper?.type)?.label ?? 'Review',
+      ? `${paper.subject} · ${paperTypes().find((t) => t.value === paper.type)?.label ?? ''}`.trim()
+      : paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review',
     lead: S.review.lead,
     delta: S.review.delta,
     outstanding: S.review.outstanding,
