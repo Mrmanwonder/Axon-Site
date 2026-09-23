@@ -115,10 +115,10 @@ test("consent stays opt-in and is submitted through Parent Mode", async () => {
 
   await screen.findByRole("heading", { name: "What you're agreeing to" });
 
-  expect(screen.getByRole("switch", { name: "Weekly summary to the parent" }))
-    .toHaveAttribute("aria-checked", "false");
-  expect(screen.getByRole("switch", { name: "Improving extraction accuracy from corrections" }))
-    .toHaveAttribute("aria-checked", "false");
+  expect(screen.getByRole("switch", { name: "Weekly summary to the parent" })
+    .getAttribute("aria-checked")).toBe("false");
+  expect(screen.getByRole("switch", { name: "Improving extraction accuracy from corrections" })
+    .getAttribute("aria-checked")).toBe("false");
 
   await userEvent.click(screen.getByRole("button", { name: "Give consent" }));
 
