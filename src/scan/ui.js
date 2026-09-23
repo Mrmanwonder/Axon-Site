@@ -14,7 +14,7 @@ import {
 } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
-import { PAPER_TYPES } from '../papers.js';
+import { paperTypesFor } from '../papers.js';
 import { publicScanMessage } from './errors.js';
 
 const MAX_PENDING_CAPTURES = 2;
@@ -528,7 +528,7 @@ function sendPaper() {
     title: 'What kind of paper is this?',
     body: 'This decides whether we can match it to an official marking scheme.',
     items: [],
-    choices: PAPER_TYPES.map((t) => ({ label: t.label, value: t.value })),
+    choices: paperTypesFor(S.ctx?.student?.provider_key).map((t) => ({ label: t.label, value: t.value })),
     onChoice: (value) => run(value),
   });
 }
