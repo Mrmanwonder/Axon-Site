@@ -76,6 +76,7 @@ import Switch from "../components/Switch";
 import CurriculumProfileFields from "../components/CurriculumProfileFields";
 import type { EditableSubject } from "../components/CurriculumProfileFields";
 import AvatarPicker from "../components/AvatarPicker";
+import { useParentMode } from "../data/useParentMode";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
@@ -157,6 +158,7 @@ export default function Onboarding() {
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
+  const { guard: guardParentMode } = useParentMode(guardian?.contact || contact);
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
 
@@ -533,14 +535,21 @@ export default function Onboarding() {
 
   // ── itemised consent ─────────────────────────────────────────────────────
   if (step === "consent") {
-    const give = async () => {
+    const give = () => {
       hapticFirm();
-      try {
-        // Guardian-scope: the student profile does not exist yet, which is
-        // exactly why consent_event.student_id is nullable.
-        await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
-        go("plan");
-      } catch (e) { fail(e, "Consent could not be recorded."); }
+      setError(null);
+      guardParentMode(async () => {
+        try {
+          await recordConsent({
+            guardianId: guardian!.id,
+            studentId: null,
+            decisions: consent,
+          });
+          go("plan");
+        } catch (e) {
+          fail(e, "Consent could not be recorded.");
+        }
+      });
     };
 
     const row = (p: Purpose) => {
@@ -592,7 +601,7 @@ export default function Onboarding() {
         </div>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" disabled={!purposes}
-                    onClick={() => void give()}>
+                    onClick={give}>
             Give consent
           </PressBox>
         </div>
