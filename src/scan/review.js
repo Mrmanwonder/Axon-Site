@@ -11,7 +11,44 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { markAlternatives, allocationIsUsable, WHOLE_MARKS_ONLY } from './marks.js';
+import { markAlternatives, allocationIsUsable, assessmentRulesFor } from './marks.js';
+
+async function providerKeyForStudent(studentId) {
+  const { data: student, error: studentError } = await sb
+    .from('student')
+    .select('programme_id, board')
+    .eq('id', studentId)
+    .single();
+  if (studentError) throw studentError;
+
+  if (!student.programme_id) {
+    if (student.board === 'CBSE') return 'cbse';
+    if (student.board === 'IBDP') return 'ib';
+    return 'cambridge';
+  }
+
+  const { data: programme, error: programmeError } = await sb
+    .from('curriculum_programme')
+    .select('provider_id')
+    .eq('id', student.programme_id)
+    .single();
+  if (programmeError) throw programmeError;
+
+  const { data: provider, error: providerError } = await sb
+    .from('curriculum_provider')
+    .select('key')
+    .eq('id', programme.provider_id)
+    .single();
+  if (providerError) throw providerError;
+  return provider.key;
+}
+
+function providerMarkLabel(providerKey) {
+  if (providerKey === 'cbse') return 'This CBSE assessment';
+  if (providerKey === 'ib') return 'This IB assessment';
+  return 'This Cambridge assessment';
+}
+
 
 /**
  * Everything the review screen needs for one run.
@@ -26,6 +63,9 @@ export async function loadReview(runId) {
     .eq('id', runId)
     .single();
   if (error) throw error;
+
+  const providerKey = await providerKeyForStudent(run.student_id);
+  const markRules = assessmentRulesFor({ providerKey });
 
   const [{ data: paper }, { data: regions }, { data: pages }, { data: explanations }, { data: unreadable }] =
     await Promise.all([
@@ -70,11 +110,11 @@ export async function loadReview(runId) {
       unreadableReason: r.confidence_tier === 'unreadable'
         ? (r.confidence_signals?.unreadable_reason ?? 'We could not read this question.')
         : null,
-      alternatives: markAlternatives(r),
+      alternatives: markAlternatives(r, markRules),
       // Hard rule 4. A part whose allocation could not be read as a whole
       // number gets no correction grid, and the screen says why rather than
       // rendering an empty space where a row used to be.
-      allocationUnusable: r.marks_available !== null && !allocationIsUsable(r),
+      allocationUnusable: r.marks_available !== null && !allocationIsUsable(r, markRules),
       explanation: explanation && explanation.body
         ? {
             cause: explanation.cause,
@@ -167,19 +207,26 @@ export async function confirmQuestions(regionIds) {
  */
 export async function correctMark(regionId, value) {
   const { data: region, error: readError } = await sb.from('question_region')
-    .select('marks_available, marks_awarded_box, page_spans').eq('id', regionId).single();
+    .select('run_id, marks_available, marks_awarded_box, page_spans').eq('id', regionId).single();
   if (readError) throw readError;
 
   const available = region.marks_available === null ? null : Number(region.marks_available);
   if (available !== null && value > available) {
     throw new Error(`This question is out of ${available}, so ${value} can't be the mark on it.`);
   }
-  // The typed rung of the ladder. The chip row cannot offer a half mark any
-  // more, but this path takes whatever was entered, and a CAIE paper has no
-  // half marks on it to record. Caught here so the student reads a sentence
-  // about their paper rather than a constraint violation from Postgres.
-  if (WHOLE_MARKS_ONLY && Number.isFinite(value) && value !== Math.round(value)) {
-    throw new Error(`Cambridge papers are marked in whole marks, so ${value} isn't a mark your teacher could have written.`);
+  const { data: run, error: runError } = await sb
+    .from('extraction_run')
+    .select('student_id')
+    .eq('id', region.run_id)
+    .single();
+  if (runError) throw runError;
+  const providerKey = await providerKeyForStudent(run.student_id);
+  const markRules = assessmentRulesFor({ providerKey });
+  const markUnits = value / markRules.markStep;
+  if (Number.isFinite(value) && Math.abs(markUnits - Math.round(markUnits)) > 1e-9) {
+    throw new Error(
+      `${providerMarkLabel(providerKey)} records marks in steps of ${markRules.markStep}, so ${value} cannot be stored for this question.`,
+    );
   }
   if (value < 0) {
     throw new Error(`A mark can't be less than zero.`);
