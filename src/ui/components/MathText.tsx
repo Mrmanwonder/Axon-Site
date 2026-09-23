@@ -166,7 +166,8 @@ const LEGACY_PATTERNS = [
   /\b[A-Za-z]\s*(?:>=|<=|=|>|<|≥|≤)\s*(?:ln|log)\s*\([^\n)]*\)\s*\/\s*-?\s*(?:lambda|mu|sigma|theta|rho)\b/gi,
   /\b(?:X|Y|Z)\s*~\s*[A-Za-z]+\s*\([^\n)]*\)/g,
   /\b(?:sqrt|ln|log|sin|cos|tan|exp)\s*\([^\n)]*\)(?:\s*(?:=|>|<|≥|≤)\s*[-+A-Za-z0-9.^()/* ]+)?/gi,
-  /\b[A-Za-z]\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]+(?:\s*(?:=|>|<|≥|≤|\+|-|×|÷|\*|\/)\s*[-+A-Za-z0-9.^()⁰¹²³⁴⁵⁶⁷⁸⁹ ]+)?/g,
+  /\b[A-Za-z]\s*[⁰¹²³⁴⁵⁶⁷⁸⁹]+(?:\s*(?:>=|<=|=|>|<|≥|≤|\+|-|×|÷|\*|\/)\s*[-+A-Za-z0-9.^()=⁰¹²³⁴⁵⁶⁷⁸⁹ ]+)?/g,
+  /\b(?:lambda|mu|sigma|theta|rho)\b/gi,
 ];
 
 function looksLikeWholeMath(text: string): boolean {
