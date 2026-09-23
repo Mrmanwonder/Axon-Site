@@ -74,6 +74,7 @@ import type { Guardian, Student } from "../data/modules";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
+import { useParentMode } from "../data/useParentMode";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
@@ -155,6 +156,7 @@ export default function Onboarding() {
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
+  const { guard: guardParentMode } = useParentMode(guardian?.contact || contact);
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
 
@@ -536,14 +538,25 @@ export default function Onboarding() {
 
   // ── itemised consent ─────────────────────────────────────────────────────
   if (step === "consent") {
-    const give = async () => {
+    const give = () => {
       hapticFirm();
-      try {
-        // Guardian-scope: the student profile does not exist yet, which is
-        // exactly why consent_event.student_id is nullable.
-        await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
-        go("plan");
-      } catch (e) { fail(e, "Consent could not be recorded."); }
+      setError(null);
+
+      /* Consent is protected by the same Parent Mode boundary as consent
+         changes in Settings. A parent can legitimately reach this screen with
+         an older still-valid session (for example, returning to onboarding
+         later), in which case the database correctly rejects the write with
+         42501. Do not turn that security boundary into a dead-end error: ask
+         the account holder to re-authenticate, then perform the exact same
+         guarded write. */
+      guardParentMode(async () => {
+        try {
+          // Guardian-scope: the student profile does not exist yet, which is
+          // exactly why consent_event.student_id is nullable.
+          await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
+          go("plan");
+        } catch (e) { fail(e, "Consent could not be recorded."); }
+      });
     };
 
     const row = (p: Purpose) => {
@@ -595,7 +608,7 @@ export default function Onboarding() {
         </div>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" disabled={!purposes}
-                    onClick={() => void give()}>
+                    onClick={give}>
             Give consent
           </PressBox>
         </div>
