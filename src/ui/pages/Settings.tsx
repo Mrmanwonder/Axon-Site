@@ -61,14 +61,16 @@ import { useParentMode } from "../data/useParentMode";
 import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isParentModeRequired,
-  AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
-  BOARD_LABEL, CLASS_LEVELS, classLabel, subjectsForClass, syllabusCode,
+  getSubjectOfferings, legacyCurriculumForStudent, providerLabel,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { ANALYTICS_CONSENT_EVENT, getAnalyticsConsent, setAnalyticsConsent } from "../lib/analytics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
+import AvatarPicker, { AvatarDisc } from "../components/AvatarPicker";
+import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
+import type { CurriculumSelection } from "../components/CurriculumEditor";
 import type { Prefs } from "../data/modules";
 import { paths } from "../app/paths";
 
@@ -122,7 +124,7 @@ const PLAN_NOTE: Record<string, string> = {
 
 export default function Settings() {
   const {
-    guardian, student, profiles, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
+    guardian, student, profiles, papers, prefs, setPref, consent, consentResource, refreshConsent, setConsent,
     setAvatar, updateStudentProfile, signOutNow,
 
   } = useApp();
@@ -138,8 +140,12 @@ export default function Settings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState(student?.first_name ?? "");
-  const [profileClass, setProfileClass] = useState(student?.class_level ?? 11);
-  const [profileSubjects, setProfileSubjects] = useState<string[]>(student?.subjects ?? []);
+  const [profileCurriculum, setProfileCurriculum] = useState<CurriculumSelection>({
+    providerKey: "",
+    programmeKey: "",
+    stageKey: "",
+    subjects: [],
+  });
   const [analyticsAllowed, setAnalyticsAllowed] = useState(() => getAnalyticsConsent() === "granted");
   const name = student?.first_name ?? guardian?.name ?? "";
 
@@ -148,51 +154,83 @@ export default function Settings() {
     window.addEventListener(ANALYTICS_CONSENT_EVENT, syncAnalyticsChoice);
     return () => window.removeEventListener(ANALYTICS_CONSENT_EVENT, syncAnalyticsChoice);
   }, []);
-  const initial = initialFor(name);
-
-  /* The same call the nav swatch makes, from the same module. Two surfaces draw
-     this student and neither owns the definition. */
-  const avatar = avatarStyleFor(student);
-  const chosen = isChosenAvatar(student);
-
-  const beginProfileEdit = () => {
+  const beginProfileEdit = async () => {
     if (!student) return;
-    hapticTick();
-    setProfileName(student.first_name);
-    setProfileClass(student.class_level);
-    setProfileSubjects(student.subjects ?? []);
-    setEditingProfile(true);
-  };
+    const normalized = student.subject_selections ?? [];
+    if ((student.subjects?.length ?? 0) !== normalized.length) {
+      toast("This profile has a legacy subject that needs to be mapped before curriculum editing.", "warn");
+      return;
+    }
 
-  const pickProfileClass = (next: number) => {
+    const identity = legacyCurriculumForStudent(student);
+    if (!identity.providerKey || !identity.programmeKey || !identity.stageKey) {
+      toast("This profile's curriculum could not be resolved.", "warn");
+      return;
+    }
+
+    setBusy("profile-load");
     hapticTick();
-    const offered = new Set(subjectsForClass(next).map(({ subject }) => subject));
-    setProfileClass(next);
-    // Keep subjects whose names exist at the new stage. Their syllabus codes
-    // are remapped on save; a Physics student should not have to pick Physics
-    // again merely because 0625 became 9702.
-    setProfileSubjects((current) => current.filter((subject) => offered.has(subject)));
+    try {
+      const offerings = await getSubjectOfferings({
+        programmeKey: identity.programmeKey,
+        stageKey: identity.stageKey,
+      });
+      const byId = new Map(offerings.map(offering => [offering.id, offering]));
+      const subjects = normalized.map(selection => ({
+        offering: byId.get(selection.offering_id),
+        level: selection.level,
+      })).filter((item): item is { offering: NonNullable<typeof item.offering>; level: "SL" | "HL" | null } => !!item.offering);
+
+      if (subjects.length !== normalized.length) {
+        toast("One selected subject is no longer active. It was left unchanged.", "warn");
+        return;
+      }
+
+      setProfileName(student.first_name);
+      setProfileCurriculum({
+        providerKey: identity.providerKey as CurriculumSelection["providerKey"],
+        programmeKey: identity.programmeKey,
+        stageKey: identity.stageKey,
+        subjects,
+      });
+      setEditingProfile(true);
+    } catch {
+      toast("The curriculum catalog could not be loaded.", "warn");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const saveProfile = async () => {
     const firstName = profileName.trim();
     if (!firstName) return toast("Enter the student's first name.", "warn");
-    if (!profileSubjects.length) return toast("Pick at least one subject.", "warn");
+    if (!curriculumSelectionIsComplete(profileCurriculum)) {
+      return toast("Choose a curriculum, stage, subjects, and every required SL/HL level.", "warn");
+    }
+    if (papers.length && student?.provider_key && profileCurriculum.providerKey !== student.provider_key) {
+      return toast("Changing curriculum provider needs a paper migration because this profile already has papers.", "warn");
+    }
+
     setBusy("profile");
     hapticFirm();
     try {
       await updateStudentProfile({
         firstName,
-        classLevel: profileClass,
-        subjects: profileSubjects.map((subject) => ({
-          subject,
-          syllabus_code: syllabusCode(subject, profileClass)!,
+        programmeKey: profileCurriculum.programmeKey,
+        stageKey: profileCurriculum.stageKey,
+        avatarKey: student?.avatar_seed ?? "dreamBloom",
+        subjects: profileCurriculum.subjects.map(({ offering, level }) => ({
+          offeringId: offering.id,
+          level,
         })),
       });
       setEditingProfile(false);
       toast("Profile saved.");
-    } catch (e) {
-      toast((e as Error).message || "The profile could not be saved.", "warn");
+    } catch (error) {
+      const message = error instanceof Error && /migration/i.test(error.message)
+        ? "Changing curriculum provider needs a migration because this profile already has papers."
+        : "The profile could not be saved.";
+      toast(message, "warn");
     } finally {
       setBusy(null);
     }
@@ -260,66 +298,22 @@ export default function Settings() {
 
       {profiles.length > 1 && <ProfileChooser />}
       <div className="card sprofile">
-        <div
-          className="pic"
-          aria-hidden="true"
-          data-preset={avatar.preset}
-          style={{ background: avatar.background, color: avatar.color }}
-        >
-          {initial}
-        </div>
+        <AvatarDisc presetKey={student?.avatar_seed} label={name} className="pic" />
         <div>
           <div className="n">{name}</div>
           <div className="e">{guardian?.contact}</div>
         </div>
       </div>
 
-      {/* ── The picture ──
-          No photograph, here or anywhere: there is no avatar bucket, no upload
-          path and no column that could hold an image of a child. What a student
-          picks is a gradient, and what is stored is its name.
-
-          Ten presets, all of them offered. Two of them — Halo and Mandarin —
-          are close enough to the reserved sign-out red that the app will never
-          hand one out unasked, but a student choosing red for themselves is not
-          the interface spending it, so both are here to pick.
-
-          A tap is the whole interaction. No confirm step and no save button:
-          this is reversible decoration, and asking someone to ratify their
-          choice of colour is exactly the "prove yourself to the machine" the
-          copy rules rule out. */}
       {student && (
         <>
           <div className="sectitle">Picture</div>
-          <div className="card lookcard">
-            <fieldset className="lookrow" aria-label="Your picture">
-              {AVATAR_PRESETS.map((p) => {
-                const on = chosen && student.avatar_seed === p.key;
-                return (
-                  <label
-                    key={p.key}
-                    className={"look" + (on ? " on" : "")}
-                    title={p.title}
-                  >
-                    <input type="radio" name="avatar" value={p.key} checked={!!on}
-                      aria-label={p.title} onChange={() => { void pickAvatar(p.key); }} />
-                    <span
-                      className="disc"
-                      aria-hidden="true"
-                      style={{ background: backgroundFor(p), color: inkFor(p) }}
-                    >
-                      {initial}
-                    </span>
-                  </label>
-                );
-              })}
-            </fieldset>
-          </div>
-          <div className="note">
-            {chosen
-              ? "Yours on every device you sign in on."
-              : "Picked for you from your profile. Choose another whenever you like."}
-          </div>
+          <AvatarPicker
+            value={student.avatar_seed ?? "dreamBloom"}
+            label={name}
+            onChange={key => { void pickAvatar(key); }}
+          />
+          <div className="note">Stored as a preset key. No photo is uploaded.</div>
         </>
       )}
 
@@ -336,34 +330,11 @@ export default function Settings() {
             />
           </label>
 
-          <div className="profilelabel">Stage</div>
-          <div className="seg" role="group" aria-label="Class">
-            {CLASS_LEVELS.map((level) => (
-              <button key={level} type="button" className={level === profileClass ? "on" : undefined}
-                      aria-pressed={level === profileClass} onClick={() => pickProfileClass(level)}>
-                {level}
-              </button>
-            ))}
-          </div>
-          <div className="profilehint">{classLabel(profileClass)} · {BOARD_LABEL}</div>
-
-          <div className="profilelabel">Subjects</div>
-          <div className="profilechips" role="group" aria-label="Subjects">
-            {subjectsForClass(profileClass).map(({ subject, code }) => {
-              const selected = profileSubjects.includes(subject);
-              return (
-                <button key={subject} type="button" className={"fchip" + (selected ? " active" : "")}
-                        aria-pressed={selected} onClick={() => {
-                          hapticTick();
-                          setProfileSubjects((current) => selected
-                            ? current.filter((item) => item !== subject)
-                            : [...current, subject]);
-                        }}>
-                  {subject} · {code}
-                </button>
-              );
-            })}
-          </div>
+          <CurriculumEditor
+            value={profileCurriculum}
+            onChange={setProfileCurriculum}
+            disabled={busy === "profile"}
+          />
 
           <div className="profileactions">
             <PressBox as="button" type="button" className="btn primary"
@@ -377,18 +348,18 @@ export default function Settings() {
       ) : (
         <div className="list">
           <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                    disabled={!student} onClick={beginProfileEdit}>
+                    disabled={!student || busy === "profile-load"} onClick={() => { void beginProfileEdit(); }}>
             <div className="lbl">Student<small>{student?.first_name ?? "No profile"}</small></div>
             <div className="aux">Edit</div>
             <Chevron />
           </PressBox>
           <div className="srow noicon">
-            <div className="lbl">Board</div>
-            <div className="aux">{student ? BOARD_LABEL : "—"}</div>
+            <div className="lbl">Curriculum</div>
+            <div className="aux">{student ? (student.provider_label ?? providerLabel(student.provider_key)) : "—"}</div>
           </div>
           <div className="srow noicon">
             <div className="lbl">Stage</div>
-            <div className="aux">{student ? classLabel(student.class_level) : "—"}</div>
+            <div className="aux">{student ? [student.stage_label, student.school_year_label].filter(Boolean).join(" · ") : "—"}</div>
           </div>
           <div className="srow noicon">
             <div className="lbl">Subjects</div>
