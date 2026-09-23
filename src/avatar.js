@@ -1,98 +1,105 @@
-// The student's avatar.
-//
-// Ten ShaderGradient presets, rendered as layered CSS radial gradients rather
-// than as the real thing. ShaderGradient is three.js: a WebGL context, a
-// render loop and a framework, all three of which this project has decided
-// against, and none of which survive the 60fps-on-mid-tier-Android floor for
-// something that is decoration on a settings row. The colour values below are
-// the presets' own, taken verbatim from the library's presets.ts.
-//
-// Static, too. Nothing animates. A face that breathes in the corner of Settings
-// is motion during a task rather than after one, which the design language
-// rules out — and it would run the compositor forever for no information.
-//
-// No image is involved at any point. There is no avatar bucket, no upload path
-// and no column that could hold a photograph of a child — see the comment on
-// `student.avatar_seed`. What is stored is at most a preset name.
+// Student avatars are generated locally from a tiny preset key. No photograph,
+// upload bucket or remotely fetched image is involved.
 
-/**
- * The presets, with their real colours.
- *
- * `type` is ShaderGradient's own geometry name, kept because it is what decides
- * how the three colours are arranged: a sphere reads as a lit orb, a plane as a
- * diagonal sweep, a waterPlane as soft overlapping pools.
- */
-// `auto: false` marks a preset the app will never assign on its own.
-//
-// Red is reserved for signing out, and two of these presets are essentially
-// made of it — Mandarin is three shades of one red-orange, and Halo leads with
-// #ff5005. Derived onto a student who never asked for it, either would put a
-// red disc at the top of Settings a few rows above the red Sign out row, which
-// is the exact confusion the rule exists to prevent.
-//
-// They stay pickable. A student choosing red for themselves is not the
-// interface spending it, and dropping presets the design brief asked for would
-// be a bigger liberty than declining to hand one out unasked.
-export const PRESETS = [
-  { key: 'halo',            title: 'Halo',         type: 'plane',      auto: false, c: ['#ff5005', '#dbba95', '#d0bce1'] },
-  { key: 'pensive',         title: 'Pensive',      type: 'sphere',     c: ['#809bd6', '#910aff', '#af38ff'] },
-  { key: 'mint',            title: 'Mint',         type: 'waterPlane', c: ['#94ffd1', '#6bf5ff', '#ffffff'] },
-  { key: 'interstella',     title: 'Interstella',  type: 'sphere',     c: ['#73bfc4', '#ff810a', '#8da0ce'] },
-  { key: 'nightyNight',     title: 'Nighty night', type: 'waterPlane', c: ['#606080', '#8d7dca', '#212121'] },
-  { key: 'violaOrientalis', title: 'Viola',        type: 'sphere',     c: ['#ffffff', '#ffbb00', '#0700ff'] },
-  { key: 'universe',        title: 'Universe',     type: 'waterPlane', c: ['#5606ff', '#fe8989', '#000000'] },
-  { key: 'sunset',          title: 'Sunset',       type: 'sphere',     c: ['#ff7a33', '#33a0ff', '#ffc53d'] },
-  { key: 'mandarin',        title: 'Mandarin',     type: 'waterPlane', auto: false, c: ['#ff6a1a', '#c73c00', '#FD4912'] },
-  { key: 'cottonCandy',     title: 'Cotton Candy', type: 'waterPlane', c: ['#ebedff', '#f3f2f8', '#dbf8ff'] },
+const GRADIENTS = [
+  { kind: 'gradient', key: 'halo', title: 'Halo', type: 'plane', auto: false, c: ['#ff5005', '#dbba95', '#d0bce1'] },
+  { kind: 'gradient', key: 'pensive', title: 'Pensive', type: 'sphere', c: ['#809bd6', '#910aff', '#af38ff'] },
+  { kind: 'gradient', key: 'mint', title: 'Mint', type: 'waterPlane', c: ['#94ffd1', '#6bf5ff', '#ffffff'] },
+  { kind: 'gradient', key: 'interstella', title: 'Interstella', type: 'sphere', c: ['#73bfc4', '#ff810a', '#8da0ce'] },
+  { kind: 'gradient', key: 'nightyNight', title: 'Nighty night', type: 'waterPlane', c: ['#606080', '#8d7dca', '#212121'] },
+  { kind: 'gradient', key: 'violaOrientalis', title: 'Viola', type: 'sphere', c: ['#ffffff', '#ffbb00', '#0700ff'] },
+  { kind: 'gradient', key: 'universe', title: 'Universe', type: 'waterPlane', c: ['#5606ff', '#fe8989', '#000000'] },
+  { kind: 'gradient', key: 'sunset', title: 'Sunset', type: 'sphere', c: ['#ff7a33', '#33a0ff', '#ffc53d'] },
+  { kind: 'gradient', key: 'mandarin', title: 'Mandarin', type: 'waterPlane', auto: false, c: ['#ff6a1a', '#c73c00', '#FD4912'] },
+  { kind: 'gradient', key: 'cottonCandy', title: 'Cotton Candy', type: 'waterPlane', c: ['#ebedff', '#f3f2f8', '#dbf8ff'] },
+
+  // Seven original soft-volumetric families requested for the expanded picker.
+  { kind: 'gradient', key: 'dreamBloom', title: 'Dream bloom', type: 'volumetric', c: ['#f5e8ff', '#7f67ff', '#2d1c68', '#8ff3df'] },
+  { kind: 'gradient', key: 'aquaViolet', title: 'Aqua violet', type: 'volumetric', c: ['#85f3ec', '#7c69ff', '#24185f', '#d7fbff'] },
+  { kind: 'gradient', key: 'midnightLime', title: 'Midnight lime', type: 'volumetric', c: ['#d8ff72', '#52d89b', '#171a43', '#88a7ff'] },
+  { kind: 'gradient', key: 'emberViolet', title: 'Ember violet', type: 'volumetric', c: ['#ffad7a', '#a453ff', '#351952', '#ffd9bb'] },
+  { kind: 'gradient', key: 'citrusMint', title: 'Citrus mint', type: 'volumetric', c: ['#eaff78', '#76f1c2', '#246b6c', '#fff4b2'] },
+  { kind: 'gradient', key: 'frostCobalt', title: 'Frost cobalt', type: 'volumetric', c: ['#eaf7ff', '#6e9cff', '#173676', '#9fe9ff'] },
+  { kind: 'gradient', key: 'copperRose', title: 'Copper rose', type: 'volumetric', c: ['#ffc6b0', '#bd6e86', '#4c263b', '#ffe4ca'] },
 ];
 
-/** The presets the app may hand out unasked. */
-const AUTO = PRESETS.filter((p) => p.auto !== false);
+function buildDotFace(index) {
+  const points = [];
+  const add = (x, y, tone = 1) => points.push({ x, y, tone });
 
-const BY_KEY = new Map(PRESETS.map((p) => [p.key, p]));
+  // A sparse 20×20 circular head: active cells render as dots, never squares.
+  for (let y = 5; y <= 17; y += 1) {
+    const dy = (y - 11) / 6.5;
+    const radius = Math.floor(5.6 * Math.sqrt(Math.max(0, 1 - dy * dy)));
+    for (let x = 10 - radius; x <= 10 + radius; x += 1) {
+      if ((x + y + index) % 2 === 0) add(x, y, 0);
+    }
+  }
 
-/** FNV-1a. Small, stable across engines, and enough to spread ten ways. */
+  // Eight deliberately different, generic hair silhouettes.
+  const hairModes = [
+    [[5,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7]],
+    [[5,7],[6,5],[7,4],[8,5],[9,4],[10,5],[11,4],[12,5],[13,4],[14,5],[15,7]],
+    [[4,8],[5,6],[6,5],[7,4],[8,4],[9,5],[10,4],[11,4],[12,5],[13,4],[14,5],[15,6],[16,8]],
+    [[5,5],[6,4],[7,4],[8,4],[9,4],[10,4],[11,5],[12,5],[13,6],[14,7],[15,8]],
+    [[5,8],[5,7],[6,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7]],
+    [[5,6],[6,5],[7,5],[8,4],[9,5],[10,4],[11,5],[12,4],[13,5],[14,5],[15,6],[6,8],[14,8]],
+    [[5,7],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7],[7,7],[13,7]],
+    [[4,7],[5,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,4],[14,5],[15,6],[16,7]],
+  ];
+  for (const [x,y] of hairModes[index]) add(x, y, 2);
+
+  // Eyes, brows and expressions vary without any demographic or gender label.
+  add(8, 10, 2); add(12, 10, 2);
+  if (index === 1 || index === 5) {
+    add(7,9,2); add(9,9,2); add(11,9,2); add(13,9,2); // glasses bridge below
+    add(10,10,2);
+  }
+  if (index % 3 === 0) { add(9,14,2); add(10,15,2); add(11,14,2); }
+  else if (index % 3 === 1) { add(9,15,2); add(10,15,2); add(11,15,2); }
+  else { add(9,14,2); add(10,14,2); add(11,14,2); }
+  if (index === 2 || index === 6) { add(7,12,1); add(13,12,1); }
+  return points;
+}
+
+const FACE_BACKGROUNDS = [
+  'dreamBloom', 'aquaViolet', 'midnightLime', 'emberViolet',
+  'citrusMint', 'frostCobalt', 'copperRose', 'pensive',
+];
+
+const DOT_FACES = Array.from({ length: 8 }, (_, index) => ({
+  kind: 'dot-face',
+  key: `dotFace${String(index + 1).padStart(2, '0')}`,
+  title: `Dot face ${index + 1}`,
+  backgroundPreset: FACE_BACKGROUNDS[index],
+  glyph: { size: 20, points: buildDotFace(index) },
+}));
+
+export const PRESETS = [...GRADIENTS, ...DOT_FACES];
+const BY_KEY = new Map(PRESETS.map((preset) => [preset.key, preset]));
+const AUTO = GRADIENTS.filter((preset) => preset.auto !== false);
+
 function hash(str) {
   let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
+  for (let i = 0; i < str.length; i += 1) {
     h ^= str.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
 }
 
-/**
- * Which preset this student wears.
- *
- * `avatar_seed` holds one of two shapes, and which one it is IS the answer to
- * "did they choose this?":
- *
- * · A preset key — they picked it. It wins outright.
- * · A random hex string — nobody has picked anything. It is what the column
- *   was created with, one distinct value per student, and it is what the
- *   derived preset is drawn from. Deriving from the seed rather than from the
- *   row id matters: the id is a real identifier and this value is deliberately
- *   not, so a face derived from it stays a face and not a fingerprint.
- *
- * An unrecognised value falls through to the derived preset rather than
- * rendering nothing — bad data degrades to a default, never to a blank.
- */
 export function presetFor({ id = '', avatar_seed = null } = {}) {
   if (avatar_seed && BY_KEY.has(avatar_seed)) return BY_KEY.get(avatar_seed);
   return AUTO[hash(String(avatar_seed || id)) % AUTO.length];
 }
 
-/** True when this student has actually chosen their look, rather than being
-    handed the one derived from their seed. The picker uses it to decide what
-    to show as selected. */
 export function isChosen(student) {
   return !!student?.avatar_seed && BY_KEY.has(student.avatar_seed);
 }
 
-/** Relative luminance, for deciding whether the initial sits light or dark. */
 function luminance(hex) {
   const h = hex.replace('#', '');
-  const n = parseInt(h.length === 3 ? h.replace(/./g, (c) => c + c) : h, 16);
+  const n = parseInt(h.length === 3 ? h.replace(/./g, (c) => c + c) : h.slice(0, 6), 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
     const s = v / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
@@ -100,53 +107,42 @@ function luminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/**
- * The gradient, as a `background` value.
- *
- * Three colours, arranged by the preset's geometry. Cotton Candy is the reason
- * the arrangement matters: three near-white tones need their stops far apart or
- * the disc reads as flat paint.
- */
 export function backgroundFor(preset) {
-  const [a, b, c] = preset.c;
+  if (!preset) return 'var(--surface-sunk)';
+  if (preset.kind === 'dot-face') return backgroundFor(BY_KEY.get(preset.backgroundPreset));
+  const [a, b, c, d] = preset.c;
   switch (preset.type) {
     case 'sphere':
-      // Lit from upper-left, the way the real orb is.
-      return `radial-gradient(circle at 30% 24%, ${a} 0%, transparent 58%),`
-           + `radial-gradient(circle at 74% 76%, ${c} 0%, transparent 62%),`
-           + `linear-gradient(150deg, ${b} 12%, ${c} 88%)`;
+      return `radial-gradient(circle at 30% 24%, ${a} 0%, transparent 58%),radial-gradient(circle at 74% 76%, ${c} 0%, transparent 62%),linear-gradient(150deg, ${b} 12%, ${c} 88%)`;
     case 'plane':
-      return `radial-gradient(120% 100% at 12% 8%, ${a} 0%, transparent 55%),`
-           + `linear-gradient(140deg, ${b} 0%, ${c} 100%)`;
-    default: // waterPlane — soft overlapping pools
-      return `radial-gradient(70% 60% at 22% 30%, ${a} 0%, transparent 70%),`
-           + `radial-gradient(70% 60% at 78% 68%, ${b} 0%, transparent 70%),`
-           + `linear-gradient(160deg, ${c} 0%, ${b} 100%)`;
+      return `radial-gradient(120% 100% at 12% 8%, ${a} 0%, transparent 55%),linear-gradient(140deg, ${b} 0%, ${c} 100%)`;
+    case 'volumetric':
+      return `radial-gradient(80% 72% at 28% 22%, ${a} 0%, transparent 58%),radial-gradient(78% 70% at 76% 30%, ${b} 0%, transparent 62%),radial-gradient(90% 80% at 68% 86%, ${d} 0%, transparent 58%),radial-gradient(95% 90% at 22% 82%, ${c} 0%, transparent 70%),linear-gradient(145deg, ${c} 0%, ${b} 100%)`;
+    default:
+      return `radial-gradient(70% 60% at 22% 30%, ${a} 0%, transparent 70%),radial-gradient(70% 60% at 78% 68%, ${b} 0%, transparent 70%),linear-gradient(160deg, ${c} 0%, ${b} 100%)`;
   }
 }
 
-/** Light or dark, whichever the initial will actually be legible against. */
 export function inkFor(preset) {
-  const mean = preset.c.reduce((sum, hex) => sum + luminance(hex), 0) / preset.c.length;
+  if (preset?.kind === 'dot-face') return 'rgba(15,16,22,.82)';
+  const mean = preset.c.slice(0, 3).reduce((sum, hex) => sum + luminance(hex), 0) / 3;
   return mean > 0.45 ? 'rgba(12,12,16,.82)' : '#fff';
 }
 
-/**
- * Everything a surface needs to draw this student, as inline style values.
- *
- * Inline rather than a class per preset: ten presets would be ten CSS rules
- * that exist only to hold three hex values each, and the values already live
- * in this file. This is also the single source both the Settings disc and the
- * nav swatch read, which is the point — they drifted before, and the nav one
- * was a hardcoded letter M.
- */
-export function avatarStyleFor(student) {
+export function avatarRenderFor(student) {
   const preset = presetFor(student ?? {});
-  return { background: backgroundFor(preset), color: inkFor(preset), preset: preset.key };
+  return {
+    kind: preset.kind,
+    preset: preset.key,
+    background: backgroundFor(preset),
+    color: inkFor(preset),
+    glyph: preset.kind === 'dot-face' ? preset.glyph : null,
+  };
 }
 
-/** The one character the disc carries. Never more: two initials would be a
-    surname, and the app does not collect one. */
+// Compatibility name used by existing nav/settings call sites.
+export const avatarStyleFor = avatarRenderFor;
+
 export function initialFor(label) {
   return (label ?? '').trim()[0]?.toUpperCase() ?? '?';
 }
