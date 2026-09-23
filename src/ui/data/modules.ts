@@ -575,32 +575,40 @@ export const deleteAccount = accountMod.deleteAccount as (
    which is to say it was not the student's face at all, and two independent
    definitions are what let that happen. */
 
-export type AvatarPreset = {
-  key: string;
-  title: string;
-  type: "sphere" | "plane" | "waterPlane";
-  /** Absent means the app may hand this preset out unasked. `false` means it
-      may not — Halo and Mandarin are close enough to the reserved sign-out red
-      that deriving one onto someone would spend red on decoration. Both stay
-      pickable. */
-  auto?: boolean;
-  c: [string, string, string];
+export type DotFacePoint = { x: number; y: number; tone: number };
+export type AvatarPreset =
+  | {
+      kind: "gradient";
+      key: string;
+      title: string;
+      type: "sphere" | "plane" | "waterPlane" | "volumetric";
+      auto?: boolean;
+      c: string[];
+    }
+  | {
+      kind: "dot-face";
+      key: string;
+      title: string;
+      backgroundPreset: string;
+      glyph: { size: number; points: DotFacePoint[] };
+    };
+
+export type AvatarRender = {
+  kind: "gradient" | "dot-face";
+  background: string;
+  color: string;
+  preset: string;
+  glyph: { size: number; points: DotFacePoint[] } | null;
 };
 
 export const AVATAR_PRESETS = avatarMod.PRESETS as unknown as AvatarPreset[];
-
-/** The `background` and `color` to paint, plus which preset produced them. */
-export const avatarStyleFor = avatarMod.avatarStyleFor as unknown as (
+export const avatarRenderFor = avatarMod.avatarRenderFor as unknown as (
   student: { id?: string; avatar_seed?: string | null } | null | undefined,
-) => { background: string; color: string; preset: string };
-
+) => AvatarRender;
+export const avatarStyleFor = avatarRenderFor;
 export const backgroundFor = avatarMod.backgroundFor as unknown as (p: AvatarPreset) => string;
 export const inkFor = avatarMod.inkFor as unknown as (p: AvatarPreset) => string;
-
-/** True when the seed is a preset key — i.e. the student chose this face
-    rather than being handed the one derived from their seed. */
 export const isChosenAvatar = avatarMod.isChosen as unknown as (
   student: { avatar_seed?: string | null } | null | undefined,
 ) => boolean;
-
 export const initialFor = avatarMod.initialFor as unknown as (label?: string | null) => string;
