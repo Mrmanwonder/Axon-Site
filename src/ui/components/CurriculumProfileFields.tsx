@@ -142,15 +142,19 @@ export default function CurriculumProfileFields({
 
       <div className="sectitle">Subjects</div>
       <div className="selected-subjects" aria-live="polite">
-        {subjects.map((subject) => (
+        {subjects.map((subject) => {
+          const supportedLevels = subject.levels_supported
+            ?? offerings.find((offering) => offering.id === subject.offering_id)?.levelsSupported
+            ?? [];
+          return (
           <div className="selected-subject" key={subject.offering_id}>
             <div className="selected-subject-copy">
               <strong>{subject.subject}</strong>
               {subject.external_code && <small>{subject.external_code}</small>}
             </div>
-            {(subject.levels_supported?.length ?? 0) > 0 && (
+            {supportedLevels.length > 0 && (
               <div className="seg compact" role="group" aria-label={`${subject.subject} level`}>
-                {subject.levels_supported!.map((level) => (
+                {supportedLevels.map((level) => (
                   <button
                     key={level}
                     type="button"
@@ -172,7 +176,8 @@ export default function CurriculumProfileFields({
               ×
             </button>
           </div>
-        ))}
+          );
+        })}
         <button
           type="button"
           className="add-subjects"
