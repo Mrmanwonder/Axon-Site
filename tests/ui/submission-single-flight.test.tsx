@@ -41,6 +41,7 @@ vi.mock("../../src/scan/crops.js", () => ({ releaseCrops: fixture.releaseCrops }
 vi.mock("../../src/scan/enhance.js", () => ({ RESCUED_NOTICE: "rescued" }));
 vi.mock("../../src/papers.js", () => ({
   PAPER_TYPES: [{ label: "Class test", value: "unit_test" }],
+  paperTypesFor: () => [{ label: "Class test", value: "unit_test" }],
   tierForType: () => "tier_1",
 }));
 
