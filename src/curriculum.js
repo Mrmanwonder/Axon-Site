@@ -1,117 +1,286 @@
-// The curriculum the app is scoped to.
+// Curriculum reference client.
 //
-// v1 is Cambridge (CAIE) only: IGCSE, AS Level and A Level. One board, stated
-// in one place, so nothing downstream has to guess which syllabus a paper sits
-// against.
-//
-// `student.class_level` stays a 9-12 smallint because that is what the schema
-// holds and what an Indian Cambridge school calls its grades. Cambridge's own
-// year names are the labels, not the storage:
-//
-//   class 9  → IGCSE, Year 10        class 11 → AS Level, Year 12
-//   class 10 → IGCSE, Year 11        class 12 → A Level, Year 13
-//
-// The mapping is one-to-one, so the stage is derived rather than stored — two
-// columns that must agree are two columns that eventually don't.
+// The database is the catalog authority. This module contains only taxonomy
+// helpers, caching, formatting and backwards-compatibility shims for legacy
+// Cambridge rows. Subject lists never live in application code.
 
+import { sb } from './supabase.js';
+
+export const PROVIDER_KEYS = ['cambridge', 'cbse', 'ib'];
+
+const PROVIDER_LABELS = {
+  cambridge: 'Cambridge',
+  cbse: 'CBSE',
+  ib: 'IB Diploma',
+};
+
+const cache = {
+  providers: null,
+  programmes: new Map(),
+  programmeByKey: new Map(),
+  stages: new Map(),
+  stageByKey: new Map(),
+  offerings: new Map(),
+};
+
+function rowsOrThrow(result) {
+  if (result.error) throw result.error;
+  return result.data ?? [];
+}
+
+export async function getProviders() {
+  if (!cache.providers) {
+    cache.providers = sb.from('curriculum_provider')
+      .select('id,key,name')
+      .eq('active', true)
+      .order('name')
+      .then(rowsOrThrow);
+  }
+  return cache.providers;
+}
+
+async function providerByKey(key) {
+  const providers = await getProviders();
+  const provider = providers.find((row) => row.key === key);
+  if (!provider) throw new Error('That curriculum is unavailable.');
+  return provider;
+}
+
+async function programmeByKey(key) {
+  if (!cache.programmeByKey.has(key)) {
+    cache.programmeByKey.set(key, sb.from('curriculum_programme')
+      .select('id,provider_id,key,label,metadata')
+      .eq('key', key)
+      .eq('active', true)
+      .single()
+      .then((result) => {
+        if (result.error) throw result.error;
+        return result.data;
+      }));
+  }
+  return cache.programmeByKey.get(key);
+}
+
+async function stageByKey(key) {
+  if (!cache.stageByKey.has(key)) {
+    cache.stageByKey.set(key, sb.from('curriculum_stage')
+      .select('id,programme_id,key,label,school_year_label,legacy_class_level,sort_order,metadata')
+      .eq('key', key)
+      .eq('active', true)
+      .single()
+      .then((result) => {
+        if (result.error) throw result.error;
+        return result.data;
+      }));
+  }
+  return cache.stageByKey.get(key);
+}
+
+export async function getProgrammes(providerKey) {
+  if (!cache.programmes.has(providerKey)) {
+    cache.programmes.set(providerKey, providerByKey(providerKey).then((provider) =>
+      sb.from('curriculum_programme')
+        .select('id,provider_id,key,label,metadata')
+        .eq('provider_id', provider.id)
+        .eq('active', true)
+        .order('label')
+        .then(rowsOrThrow)
+    ));
+  }
+  return cache.programmes.get(providerKey);
+}
+
+export async function getStages(programmeKey) {
+  if (!cache.stages.has(programmeKey)) {
+    cache.stages.set(programmeKey, programmeByKey(programmeKey).then((programme) =>
+      sb.from('curriculum_stage')
+        .select('id,programme_id,key,label,school_year_label,legacy_class_level,sort_order,metadata')
+        .eq('programme_id', programme.id)
+        .eq('active', true)
+        .order('sort_order')
+        .then(rowsOrThrow)
+    ));
+  }
+  return cache.stages.get(programmeKey);
+}
+
+export async function getSubjectOfferings({ programmeKey, stageKey }) {
+  const cacheKey = `${programmeKey}:${stageKey}`;
+  if (!cache.offerings.has(cacheKey)) {
+    cache.offerings.set(cacheKey, Promise.all([
+      programmeByKey(programmeKey),
+      stageByKey(stageKey),
+    ]).then(([programme, stage]) => {
+      if (stage.programme_id !== programme.id) throw new Error('Stage does not belong to this curriculum.');
+      return sb.from('subject_offering')
+        .select('id,programme_id,stage_id,subject_id,display_name,external_code,external_code_kind,levels_supported,language_code,variant,aliases,metadata')
+        .eq('programme_id', programme.id)
+        .eq('stage_id', stage.id)
+        .eq('availability', 'active')
+        .order('display_name')
+        .then(rowsOrThrow);
+    }));
+  }
+  return cache.offerings.get(cacheKey);
+}
+
+export function filterSubjectOfferings(offerings, query) {
+  const q = String(query ?? '').trim().toLocaleLowerCase();
+  if (!q) return offerings;
+  return offerings.filter((offering) => {
+    const haystack = [
+      offering.display_name,
+      offering.external_code,
+      offering.language_code,
+      offering.variant,
+      ...(offering.aliases ?? []),
+      offering.metadata?.group,
+      offering.metadata?.group_key,
+    ].filter(Boolean).join(' ').toLocaleLowerCase();
+    return haystack.includes(q);
+  });
+}
+
+export function formatSubjectIdentity(offering, selectedLevel = null) {
+  if (!offering) return '';
+  const suffix = [offering.external_code, selectedLevel].filter(Boolean).join(' · ');
+  return suffix ? `${offering.display_name} · ${suffix}` : offering.display_name;
+}
+
+export function validateSubjectSelection(offering, level = null) {
+  const levels = offering?.levels_supported ?? [];
+  if (!levels.length) return level == null || level === '';
+  return !!level && levels.includes(level);
+}
+
+export function defaultLevelFor(offering) {
+  const levels = offering?.levels_supported ?? [];
+  return levels.length === 1 ? levels[0] : null;
+}
+
+export function providerLabel(key) {
+  return PROVIDER_LABELS[key] ?? key ?? '';
+}
+
+export function programmeLabelFromKey(key) {
+  return {
+    cambridge_igcse: 'Cambridge IGCSE',
+    cambridge_as: 'Cambridge International AS Level',
+    cambridge_a_level: 'Cambridge International A Level',
+    cbse_secondary: 'CBSE Secondary',
+    cbse_senior_secondary: 'CBSE Senior Secondary',
+    ibdp: 'IB Diploma Programme',
+  }[key] ?? key ?? '';
+}
+
+export function stageLabelFromKey(key) {
+  return {
+    cambridge_igcse_y10: 'IGCSE · Year 10',
+    cambridge_igcse_y11: 'IGCSE · Year 11',
+    cambridge_as: 'AS Level · Year 12',
+    cambridge_a_level: 'A Level · Year 13',
+    cbse_9: 'Class 9',
+    cbse_10: 'Class 10',
+    cbse_11: 'Class 11',
+    cbse_12: 'Class 12',
+    ibdp_1: 'DP1',
+    ibdp_2: 'DP2',
+  }[key] ?? key ?? '';
+}
+
+export function legacyCurriculumForStudent(student = {}) {
+  if (student.programme_key && student.stage_key) {
+    return {
+      providerKey: student.provider_key,
+      programmeKey: student.programme_key,
+      stageKey: student.stage_key,
+    };
+  }
+  const n = Number(student.class_level);
+  if (student.board === 'CBSE') {
+    return {
+      providerKey: 'cbse',
+      programmeKey: n <= 10 ? 'cbse_secondary' : 'cbse_senior_secondary',
+      stageKey: `cbse_${n}`,
+    };
+  }
+  if (student.board === 'IBDP') {
+    return { providerKey: 'ib', programmeKey: 'ibdp', stageKey: null };
+  }
+  if (n <= 10) {
+    return {
+      providerKey: 'cambridge',
+      programmeKey: 'cambridge_igcse',
+      stageKey: n === 9 ? 'cambridge_igcse_y10' : 'cambridge_igcse_y11',
+    };
+  }
+  return {
+    providerKey: 'cambridge',
+    programmeKey: n === 11 ? 'cambridge_as' : 'cambridge_a_level',
+    stageKey: n === 11 ? 'cambridge_as' : 'cambridge_a_level',
+  };
+}
+
+export function assessmentRulesFor({ providerKey, programmeKey } = {}) {
+  const provider = providerKey
+    ?? (programmeKey?.startsWith('cambridge_') ? 'cambridge'
+      : programmeKey?.startsWith('cbse_') ? 'cbse'
+      : programmeKey === 'ibdp' ? 'ib' : null);
+  // Do not invent half marks. A provider-specific adapter may narrow or extend
+  // this when an official assessment model proves a different granularity.
+  return {
+    provider,
+    markStep: 1,
+    maxPrecision: 0,
+    supportsTeacherPenMarks: true,
+    officialSchemeTerminology: provider === 'cbse' ? 'marking scheme'
+      : provider === 'ib' ? 'markscheme'
+      : 'mark scheme',
+    paperLabels: paperLabelsFor(provider),
+  };
+}
+
+export function paperLabelsFor(providerKey) {
+  if (providerKey === 'cbse') {
+    return { pyq: 'Board paper', sample_paper: 'Sample Question Paper' };
+  }
+  if (providerKey === 'ib') {
+    return { pyq: 'Examination paper', sample_paper: 'Official sample paper' };
+  }
+  return { pyq: 'Cambridge past paper', sample_paper: 'Specimen paper' };
+}
+
+// ── Legacy compatibility ───────────────────────────────────────────────────
+// Kept while old code paths and historical cached profiles still exist. New
+// onboarding/settings code uses the normalized async API above.
 export const BOARD = 'CAIE';
 export const BOARD_LABEL = 'Cambridge (CAIE)';
-
-/** Stages, in the order a student moves through them. */
-export const STAGES = [
-  { stage: 'igcse',    label: 'IGCSE',    classLevels: [9, 10] },
-  { stage: 'as_level', label: 'AS Level', classLevels: [11] },
-  { stage: 'a_level',  label: 'A Level',  classLevels: [12] },
-];
-
-/** Cambridge year name per class level, for labelling only. */
-const YEAR_OF_CLASS = { 9: 10, 10: 11, 11: 12, 12: 13 };
-
 export const CLASS_LEVELS = [9, 10, 11, 12];
-
+export const STAGES = [
+  { stage: 'igcse', label: 'IGCSE', classLevels: [9, 10] },
+  { stage: 'as_level', label: 'AS Level', classLevels: [11] },
+  { stage: 'a_level', label: 'A Level', classLevels: [12] },
+];
+const YEAR_OF_CLASS = { 9: 10, 10: 11, 11: 12, 12: 13 };
 export function stageForClass(classLevel) {
   const n = Number(classLevel);
   return STAGES.find((s) => s.classLevels.includes(n)) ?? STAGES[0];
 }
-
-/** "IGCSE · Year 11". The form used everywhere the class is shown. */
 export function classLabel(classLevel) {
   const n = Number(classLevel);
   return `${stageForClass(n).label} · Year ${YEAR_OF_CLASS[n] ?? n}`;
 }
-
-/** Short form, for a settings row's value column. */
 export function classLabelShort(classLevel) {
   const n = Number(classLevel);
   const stage = stageForClass(n);
   return stage.stage === 'igcse' ? `IGCSE Y${YEAR_OF_CLASS[n]}` : stage.label;
 }
-
-/** The class level a student moves to next, or null at the end of A Level. */
 export function nextClassLevel(classLevel) {
   const i = CLASS_LEVELS.indexOf(Number(classLevel));
   return i >= 0 && i < CLASS_LEVELS.length - 1 ? CLASS_LEVELS[i + 1] : null;
 }
-
-// ── subjects ────────────────────────────────────────────────────────────────
-// The syllabus code is the thing that identifies a Cambridge subject: "Physics"
-// is 0625 at IGCSE and 9702 at A Level, and they are different syllabuses with
-// different papers and different mark schemes. Carrying the code means a past
-// paper can be matched to the right one rather than to a subject name that
-// happens to collide.
-
-const IGCSE_SUBJECTS = [
-  { subject: 'Mathematics',                code: '0580' },
-  { subject: 'Additional Mathematics',     code: '0606' },
-  { subject: 'Physics',                    code: '0625' },
-  { subject: 'Chemistry',                  code: '0620' },
-  { subject: 'Biology',                    code: '0610' },
-  { subject: 'Combined Science',           code: '0653' },
-  { subject: 'Computer Science',           code: '0478' },
-  { subject: 'Economics',                  code: '0455' },
-  { subject: 'Business Studies',           code: '0450' },
-  { subject: 'Accounting',                 code: '0452' },
-  { subject: 'English — First Language',   code: '0500' },
-  { subject: 'English as a Second Language', code: '0510' },
-  { subject: 'English Literature',         code: '0475' },
-  { subject: 'Geography',                  code: '0460' },
-  { subject: 'History',                    code: '0470' },
-  { subject: 'ICT',                        code: '0417' },
-];
-
-const A_LEVEL_SUBJECTS = [
-  { subject: 'Mathematics',        code: '9709' },
-  { subject: 'Further Mathematics', code: '9231' },
-  { subject: 'Physics',            code: '9702' },
-  { subject: 'Chemistry',          code: '9701' },
-  { subject: 'Biology',            code: '9700' },
-  { subject: 'Computer Science',   code: '9618' },
-  { subject: 'Economics',          code: '9708' },
-  { subject: 'Business',           code: '9609' },
-  { subject: 'Accounting',         code: '9706' },
-  { subject: 'English Language',   code: '9093' },
-  { subject: 'English Literature', code: '9695' },
-  { subject: 'Psychology',         code: '9990' },
-  { subject: 'Geography',          code: '9696' },
-  { subject: 'History',            code: '9489' },
-  { subject: 'Sociology',          code: '9699' },
-];
-
-/**
- * Subjects offered at a class level, each with its Cambridge syllabus code.
- * AS and A Level share a syllabus code — the difference is which papers are
- * sat, not which syllabus — so both stages read the same list.
- */
-export function subjectsForClass(classLevel) {
-  return stageForClass(classLevel).stage === 'igcse' ? IGCSE_SUBJECTS : A_LEVEL_SUBJECTS;
-}
-
-/** Code for a subject at a class level, or null if it isn't offered there. */
-export function syllabusCode(subject, classLevel) {
-  return subjectsForClass(classLevel).find((s) => s.subject === subject)?.code ?? null;
-}
-
-/** "Physics · 9702", the form used wherever a chosen subject is displayed. */
+export function subjectsForClass() { return []; }
+export function syllabusCode() { return null; }
 export function subjectLabel(subject, code) {
   return code ? `${subject} · ${code}` : subject;
 }

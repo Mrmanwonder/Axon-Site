@@ -32,7 +32,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { avatarStyleFor, initialFor } from "../data/modules";
+import { AvatarDisc } from "../components/AvatarPicker";
 import { destinations, activeIndex } from "../app/nav";
 import { paths } from "../app/paths";
 import { LibraryNavGlyph } from "../components/NavGlyphs";
@@ -55,8 +55,6 @@ export default function TabNav() {
      the top of Settings read `avatarStyleFor` now, so there is one definition
      of what a student looks like and no way for the two to disagree. */
   const { student, guardian, papers } = useApp();
-  const avatar = avatarStyleFor(student);
-  const initial = initialFor(student?.first_name ?? guardian?.name);
 
   const layerRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
@@ -244,14 +242,11 @@ export default function TabNav() {
                     : d.icon}
                 </svg>
               ) : (
-                <div
+                <AvatarDisc
+                  presetKey={student?.avatar_seed}
+                  label={student?.first_name ?? guardian?.name}
                   className="pfp"
-                  aria-hidden="true"
-                  data-preset={avatar.preset}
-                  style={{ background: avatar.background, color: avatar.color }}
-                >
-                  {initial}
-                </div>
+                />
               )}
               <span className="lbl">{d.label}</span>
             </PressBox>

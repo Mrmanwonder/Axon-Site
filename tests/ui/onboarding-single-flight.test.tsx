@@ -27,20 +27,55 @@ vi.mock("../../src/ui/data/profiles", () => ({
 vi.mock("../../src/ui/data/useParentMode", () => ({
   useParentMode: () => ({ guard: fixture.parentGuard }),
 }));
-vi.mock("../../src/ui/data/modules", () => ({
-  sb: { rpc: fixture.rpc, from: fixture.from },
-  sendOtp: vi.fn(), verifyOtp: vi.fn(), currentSession: fixture.currentSession,
-  currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
-  signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
-  OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
-  listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
-  BOARD: "CAIE", CLASS_LEVELS: [9, 10, 11, 12],
-  classLabel: (level: number) => `Class ${level}`,
-  stageForClass: () => ({ label: "Cambridge International AS & A Level" }),
-  subjectsForClass: () => [{ subject: "Physics", code: "9702" }],
-  syllabusCode: () => "9702",
-  PAPER_TYPES: [], startCheckout: vi.fn(),
-}));
+vi.mock("../../src/ui/data/modules", () => {
+  const offering = {
+    id: "00000000-0000-0000-0000-000000009702",
+    programme_id: "programme-as",
+    stage_id: "stage-as",
+    subject_id: "subject-physics",
+    display_name: "Physics",
+    external_code: "9702",
+    external_code_kind: "syllabus_code",
+    levels_supported: [],
+    language_code: null,
+    variant: null,
+    aliases: [],
+    metadata: {},
+  };
+  return {
+    sb: { rpc: fixture.rpc, from: fixture.from },
+    sendOtp: vi.fn(), verifyOtp: vi.fn(), currentSession: fixture.currentSession,
+    currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
+    signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
+    OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
+    listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
+    startCheckout: vi.fn(),
+    paperTypesFor: () => [],
+    PROVIDER_KEYS: ["cambridge", "cbse", "ib"],
+    providerLabel: (key: string) => ({ cambridge: "Cambridge", cbse: "CBSE", ib: "IB Diploma" }[key] ?? key),
+    getProgrammes: async () => [{
+      id: "programme-as", provider_id: "provider-cambridge",
+      key: "cambridge_as", label: "Cambridge International AS Level", metadata: {},
+    }],
+    getStages: async () => [{
+      id: "stage-as", programme_id: "programme-as", key: "cambridge_as",
+      label: "AS Level", school_year_label: "Year 12", legacy_class_level: 11,
+      sort_order: 10, metadata: {},
+    }],
+    getSubjectOfferings: async () => [offering],
+    filterSubjectOfferings: (rows: typeof offering[], query: string) =>
+      rows.filter(row => !query || row.display_name.toLowerCase().includes(query.toLowerCase()) || row.external_code?.includes(query)),
+    defaultLevelFor: () => null,
+    AVATAR_PRESETS: [{
+      kind: "gradient", key: "dreamBloom", title: "Dream bloom",
+      type: "volumetric", c: ["#eee", "#aaa", "#222", "#fff"],
+    }],
+    avatarRenderFor: () => ({
+      kind: "gradient", preset: "dreamBloom", background: "#ddd", color: "#111", glyph: null,
+    }),
+    initialFor: (label?: string | null) => label?.trim()[0]?.toUpperCase() ?? "?",
+  };
+});
 
 import Onboarding from "../../src/ui/onboarding/Onboarding";
 
@@ -62,18 +97,36 @@ test("ten rapid Create Profile actions issue one atomic profile request", async 
 
   await screen.findByRole("heading", { name: "The student" });
   await userEvent.type(screen.getByLabelText("First name"), "Sam");
-  await userEvent.click(screen.getByRole("button", { name: /Physics/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Cambridge" }));
+  await userEvent.click(await screen.findByRole("button", { name: "AS Level" }));
+  await userEvent.click(screen.getByRole("button", { name: "+ Add subjects" }));
+  const physics = await screen.findByText("Physics");
+  await userEvent.click(physics.closest("button")!);
+  await userEvent.click(screen.getByRole("button", { name: "Done" }));
+
   const create = screen.getByRole("button", { name: "Create profile" });
   for (let tap = 0; tap < 10; tap += 1) fireEvent.click(create);
 
   await waitFor(() => expect(fixture.rpc).toHaveBeenCalledTimes(1));
   expect((create as HTMLButtonElement).disabled).toBe(true);
-  expect(fixture.rpc).toHaveBeenCalledWith("create_student_profile", expect.objectContaining({
+  expect(fixture.rpc).toHaveBeenCalledWith("create_student_profile_v2", expect.objectContaining({
     p_first_name: "Sam",
-    p_subjects: [{ subject: "Physics", syllabus_code: "9702" }],
+    p_programme_key: "cambridge_as",
+    p_stage_key: "cambridge_as",
+    p_avatar_key: "dreamBloom",
+    p_subjects: [{ offering_id: "00000000-0000-0000-0000-000000009702", level: null }],
   }));
 
-  await act(async () => result.resolve({ data: { id: "student", first_name: "Sam" }, error: null }));
+  await act(async () => result.resolve({
+    data: {
+      id: "student", first_name: "Sam", provider_key: "cambridge",
+      programme_key: "cambridge_as", stage_key: "cambridge_as", subjects: [{
+        offering_id: "00000000-0000-0000-0000-000000009702",
+        subject: "Physics", external_code: "9702", level: null,
+      }],
+    },
+    error: null,
+  }));
   await screen.findByRole("heading", { name: /Hello, Sam/ });
 });
 
