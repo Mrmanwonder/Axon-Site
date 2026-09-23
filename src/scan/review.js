@@ -11,7 +11,40 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { markAlternatives, allocationIsUsable, WHOLE_MARKS_ONLY } from './marks.js';
+import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
+import { assessmentRulesFor } from '../curriculum.js';
+
+async function assessmentRulesForStudent(studentId) {
+  const { data: student, error } = await sb.from('student')
+    .select('programme_id,board')
+    .eq('id', studentId)
+    .single();
+  if (error) throw error;
+
+  let providerKey = null;
+  let programmeKey = null;
+  if (student.programme_id) {
+    const { data: programme, error: programmeError } = await sb.from('curriculum_programme')
+      .select('key,provider_id')
+      .eq('id', student.programme_id)
+      .single();
+    if (programmeError) throw programmeError;
+    programmeKey = programme.key;
+    const { data: provider, error: providerError } = await sb.from('curriculum_provider')
+      .select('key')
+      .eq('id', programme.provider_id)
+      .single();
+    if (providerError) throw providerError;
+    providerKey = provider.key;
+  } else {
+    providerKey = student.board === 'CBSE' ? 'cbse'
+      : student.board === 'IBDP' ? 'ib'
+      : student.board === 'CAIE' || student.board === 'IGCSE' || student.board === 'AS_A_LEVEL'
+        ? 'cambridge'
+        : null;
+  }
+  return assessmentRulesFor({ providerKey, programmeKey });
+}
 
 /**
  * Everything the review screen needs for one run.
@@ -26,6 +59,8 @@ export async function loadReview(runId) {
     .eq('id', runId)
     .single();
   if (error) throw error;
+
+  const markRules = await assessmentRulesForStudent(run.student_id);
 
   const [{ data: paper }, { data: regions }, { data: pages }, { data: explanations }, { data: unreadable }] =
     await Promise.all([
@@ -70,11 +105,11 @@ export async function loadReview(runId) {
       unreadableReason: r.confidence_tier === 'unreadable'
         ? (r.confidence_signals?.unreadable_reason ?? 'We could not read this question.')
         : null,
-      alternatives: markAlternatives(r),
+      alternatives: markAlternatives(r, markRules),
       // Hard rule 4. A part whose allocation could not be read as a whole
       // number gets no correction grid, and the screen says why rather than
       // rendering an empty space where a row used to be.
-      allocationUnusable: r.marks_available !== null && !allocationIsUsable(r),
+      allocationUnusable: r.marks_available !== null && !allocationIsUsable(r, markRules),
       explanation: explanation && explanation.body
         ? {
             cause: explanation.cause,
@@ -95,6 +130,7 @@ export async function loadReview(runId) {
   return {
     run,
     paper,
+    markRules,
     questions,
     pagesUnreadable: unreadable ?? [],
     delta: deltaFor(run, paper),
@@ -167,22 +203,23 @@ export async function confirmQuestions(regionIds) {
  */
 export async function correctMark(regionId, value) {
   const { data: region, error: readError } = await sb.from('question_region')
-    .select('marks_available, marks_awarded_box, page_spans').eq('id', regionId).single();
+    .select('marks_available, marks_awarded_box, page_spans, run_id').eq('id', regionId).single();
   if (readError) throw readError;
 
   const available = region.marks_available === null ? null : Number(region.marks_available);
+  const { data: run, error: runError } = await sb.from('extraction_run')
+    .select('student_id').eq('id', region.run_id).single();
+  if (runError) throw runError;
+  const markRules = await assessmentRulesForStudent(run.student_id);
+
   if (available !== null && value > available) {
     throw new Error(`This question is out of ${available}, so ${value} can't be the mark on it.`);
   }
-  // The typed rung of the ladder. The chip row cannot offer a half mark any
-  // more, but this path takes whatever was entered, and a CAIE paper has no
-  // half marks on it to record. Caught here so the student reads a sentence
-  // about their paper rather than a constraint violation from Postgres.
-  if (WHOLE_MARKS_ONLY && Number.isFinite(value) && value !== Math.round(value)) {
-    throw new Error(`Cambridge papers are marked in whole marks, so ${value} isn't a mark your teacher could have written.`);
-  }
-  if (value < 0) {
-    throw new Error(`A mark can't be less than zero.`);
+  if (!markValueIsUsable(value, available, markRules)) {
+    const wording = markRules.markStep === 1
+      ? 'This paper is marked in whole marks.'
+      : `This paper uses ${markRules.markStep}-mark steps.`;
+    throw new Error(`${wording} Check the number written on the paper.`);
   }
 
   // Provenance survives a correction: the box stays the one we read from, or —
