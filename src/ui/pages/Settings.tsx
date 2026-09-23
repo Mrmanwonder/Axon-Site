@@ -61,16 +61,18 @@ import { useParentMode } from "../data/useParentMode";
 import {
   exportMyData, downloadJson, deleteAccount, openBillingPortal, sb,
   isParentModeRequired,
-  AVATAR_PRESETS, avatarStyleFor, backgroundFor, inkFor, isChosenAvatar, initialFor,
-  BOARD_LABEL, CLASS_LEVELS, classLabel, subjectsForClass, syllabusCode,
+  avatarStyleFor, initialFor,
 } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { ANALYTICS_CONSENT_EVENT, getAnalyticsConsent, setAnalyticsConsent } from "../lib/analytics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
-import type { Prefs } from "../data/modules";
+import type { Prefs, CurriculumProviderKey } from "../data/modules";
 import { paths } from "../app/paths";
+import CurriculumProfileFields from "../components/CurriculumProfileFields";
+import type { EditableSubject } from "../components/CurriculumProfileFields";
+import AvatarPicker from "../components/AvatarPicker";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -138,8 +140,14 @@ export default function Settings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState(student?.first_name ?? "");
-  const [profileClass, setProfileClass] = useState(student?.class_level ?? 11);
-  const [profileSubjects, setProfileSubjects] = useState<string[]>(student?.subjects ?? []);
+  const [profileProvider, setProfileProvider] = useState<CurriculumProviderKey>(
+    (student?.provider_key as CurriculumProviderKey | null) ?? "cambridge",
+  );
+  const [profileProgramme, setProfileProgramme] = useState(student?.programme_key ?? "cambridge_as");
+  const [profileStage, setProfileStage] = useState(student?.stage_key ?? "cambridge_as");
+  const [profileSubjects, setProfileSubjects] = useState<EditableSubject[]>(
+    (student?.subjectSelections ?? []).filter((subject) => !!subject.offering_id),
+  );
   const [analyticsAllowed, setAnalyticsAllowed] = useState(() => getAnalyticsConsent() === "granted");
   const name = student?.first_name ?? guardian?.name ?? "";
 
@@ -153,46 +161,49 @@ export default function Settings() {
   /* The same call the nav swatch makes, from the same module. Two surfaces draw
      this student and neither owns the definition. */
   const avatar = avatarStyleFor(student);
-  const chosen = isChosenAvatar(student);
 
   const beginProfileEdit = () => {
     if (!student) return;
     hapticTick();
     setProfileName(student.first_name);
-    setProfileClass(student.class_level);
-    setProfileSubjects(student.subjects ?? []);
+    setProfileProvider((student.provider_key as CurriculumProviderKey | null) ?? "cambridge");
+    setProfileProgramme(student.programme_key ?? "cambridge_as");
+    setProfileStage(student.stage_key ?? "cambridge_as");
+    setProfileSubjects((student.subjectSelections ?? [])
+      .filter((subject) => !!subject.offering_id)
+      .map((subject) => ({ ...subject })));
     setEditingProfile(true);
-  };
-
-  const pickProfileClass = (next: number) => {
-    hapticTick();
-    const offered = new Set(subjectsForClass(next).map(({ subject }) => subject));
-    setProfileClass(next);
-    // Keep subjects whose names exist at the new stage. Their syllabus codes
-    // are remapped on save; a Physics student should not have to pick Physics
-    // again merely because 0625 became 9702.
-    setProfileSubjects((current) => current.filter((subject) => offered.has(subject)));
   };
 
   const saveProfile = async () => {
     const firstName = profileName.trim();
     if (!firstName) return toast("Enter the student's first name.", "warn");
     if (!profileSubjects.length) return toast("Pick at least one subject.", "warn");
+    if (profileSubjects.some((subject) => subject.levels_supported?.length && !subject.level)) {
+      return toast("Choose SL or HL for each IB subject.", "warn");
+    }
     setBusy("profile");
     hapticFirm();
     try {
       await updateStudentProfile({
         firstName,
-        classLevel: profileClass,
+        programmeKey: profileProgramme,
+        stageKey: profileStage,
+        avatarKey: student?.avatar_seed ?? "dreamBloom",
         subjects: profileSubjects.map((subject) => ({
-          subject,
-          syllabus_code: syllabusCode(subject, profileClass)!,
+          offering_id: subject.offering_id,
+          subject: subject.subject,
+          external_code: subject.external_code ?? null,
+          level: subject.level ?? null,
         })),
       });
       setEditingProfile(false);
       toast("Profile saved.");
     } catch (e) {
-      toast((e as Error).message || "The profile could not be saved.", "warn");
+      const message = (e as Error).message || "";
+      toast(message.includes("migration when papers already exist")
+        ? "Changing to a different curriculum needs a migration because this profile already has papers."
+        : "The profile could not be saved. Check the curriculum and subjects, then try again.", "warn");
     } finally {
       setBusy(null);
     }
@@ -274,52 +285,14 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* ── The picture ──
-          No photograph, here or anywhere: there is no avatar bucket, no upload
-          path and no column that could hold an image of a child. What a student
-          picks is a gradient, and what is stored is its name.
-
-          Ten presets, all of them offered. Two of them — Halo and Mandarin —
-          are close enough to the reserved sign-out red that the app will never
-          hand one out unasked, but a student choosing red for themselves is not
-          the interface spending it, so both are here to pick.
-
-          A tap is the whole interaction. No confirm step and no save button:
-          this is reversible decoration, and asking someone to ratify their
-          choice of colour is exactly the "prove yourself to the machine" the
-          copy rules rule out. */}
       {student && (
         <>
-          <div className="sectitle">Picture</div>
-          <div className="card lookcard">
-            <fieldset className="lookrow" aria-label="Your picture">
-              {AVATAR_PRESETS.map((p) => {
-                const on = chosen && student.avatar_seed === p.key;
-                return (
-                  <label
-                    key={p.key}
-                    className={"look" + (on ? " on" : "")}
-                    title={p.title}
-                  >
-                    <input type="radio" name="avatar" value={p.key} checked={!!on}
-                      aria-label={p.title} onChange={() => { void pickAvatar(p.key); }} />
-                    <span
-                      className="disc"
-                      aria-hidden="true"
-                      style={{ background: backgroundFor(p), color: inkFor(p) }}
-                    >
-                      {initial}
-                    </span>
-                  </label>
-                );
-              })}
-            </fieldset>
-          </div>
-          <div className="note">
-            {chosen
-              ? "Yours on every device you sign in on."
-              : "Picked for you from your profile. Choose another whenever you like."}
-          </div>
+          <AvatarPicker
+            value={student.avatar_seed ?? avatar.preset}
+            studentName={student.first_name}
+            onChange={(key) => { void pickAvatar(key); }}
+          />
+          <div className="note">Yours on every device you sign in on.</div>
         </>
       )}
 
@@ -336,34 +309,18 @@ export default function Settings() {
             />
           </label>
 
-          <div className="profilelabel">Stage</div>
-          <div className="seg" role="group" aria-label="Class">
-            {CLASS_LEVELS.map((level) => (
-              <button key={level} type="button" className={level === profileClass ? "on" : undefined}
-                      aria-pressed={level === profileClass} onClick={() => pickProfileClass(level)}>
-                {level}
-              </button>
-            ))}
-          </div>
-          <div className="profilehint">{classLabel(profileClass)} · {BOARD_LABEL}</div>
-
-          <div className="profilelabel">Subjects</div>
-          <div className="profilechips" role="group" aria-label="Subjects">
-            {subjectsForClass(profileClass).map(({ subject, code }) => {
-              const selected = profileSubjects.includes(subject);
-              return (
-                <button key={subject} type="button" className={"fchip" + (selected ? " active" : "")}
-                        aria-pressed={selected} onClick={() => {
-                          hapticTick();
-                          setProfileSubjects((current) => selected
-                            ? current.filter((item) => item !== subject)
-                            : [...current, subject]);
-                        }}>
-                  {subject} · {code}
-                </button>
-              );
-            })}
-          </div>
+          <CurriculumProfileFields
+            providerKey={profileProvider}
+            programmeKey={profileProgramme}
+            stageKey={profileStage}
+            subjects={profileSubjects}
+            onIdentityChange={(next) => {
+              setProfileProvider(next.providerKey);
+              setProfileProgramme(next.programmeKey);
+              setProfileStage(next.stageKey);
+            }}
+            onSubjectsChange={setProfileSubjects}
+          />
 
           <div className="profileactions">
             <PressBox as="button" type="button" className="btn primary"
@@ -383,22 +340,31 @@ export default function Settings() {
             <Chevron />
           </PressBox>
           <div className="srow noicon">
-            <div className="lbl">Board</div>
-            <div className="aux">{student ? BOARD_LABEL : "—"}</div>
+            <div className="lbl">Curriculum</div>
+            <div className="aux">{student?.programme_label ?? "—"}</div>
           </div>
           <div className="srow noicon">
             <div className="lbl">Stage</div>
-            <div className="aux">{student ? classLabel(student.class_level) : "—"}</div>
+            <div className="aux">
+              {student
+                ? [student.stage_label, student.school_year_label]
+                    .filter((value, index, array) => value && array.indexOf(value) === index)
+                    .join(" · ") || "—"
+                : "—"}
+            </div>
           </div>
           <div className="srow noicon">
             <div className="lbl">Subjects</div>
             <div className="aux">
-              {student?.subjects?.length ? student.subjects.join(", ") : "None yet"}
+              {student?.subjectSelections?.length
+                ? student.subjectSelections
+                    .map((subject) => [subject.subject, subject.level].filter(Boolean).join(" · "))
+                    .join(", ")
+                : student?.subjects?.length ? student.subjects.join(", ") : "None yet"}
             </div>
           </div>
         </div>
       )}
-
 
       {/* ── Billing ──
           Four states, and the read itself is a fifth. "Loading" is not "free"
