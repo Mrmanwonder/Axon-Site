@@ -14,8 +14,9 @@ import {
   GUIDANCE_DWELL_MS, GUIDANCE_HYSTERESIS, LIVE_SOURCE_FLOOR, MIN_EDGE_COVERAGE,
   LIVE_SEARCH_MIN_FILL, LIVE_PROXY_LONG_EDGE, LIVE_PROXY_RECOVERY_LONG_EDGE,
   PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
-  captureConfirmFrame, coverCropRect, fitLongEdge, isVerifiedQuad, liveGateVerdict, resolveOverlayPhase,
-  settledGuidance, settledPaperEvidence, settledScannerGuidance, shouldAutoCapture,
+  applyPreviewStabilizer, captureConfirmFrame, coverCropRect, fitLongEdge, isVerifiedQuad, liveGateVerdict,
+  previewStabilizerFrame, resolveOverlayPhase, settledGuidance, settledPaperEvidence,
+  settledScannerGuidance, shouldAutoCapture,
 } from '../src/scan/capture.js';
 import { easeQuad, isPageShaped } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -79,6 +80,32 @@ test('still-frame detection keeps its own permissive fill floor', () => {
   ];
   assert.equal(isPageShaped(quad, 100, 100), false);
   assert.equal(isPageShaped(quad, 100, 100, 0.07), true);
+});
+
+
+test('preview stabilizer overscans and opposes small hand tremor', () => {
+  const q = page();
+  const first = previewStabilizerFrame(null, q, W, H);
+  const moved = q.map((p) => ({ x: p.x + 8, y: p.y + 3 }));
+  const second = previewStabilizerFrame(first, moved, W, H);
+  assert.match(second.transform, /scale\(1\.060\)/);
+  assert.ok(second.panX < 0, `expected a left pan against rightward tremor, got ${second.panX}`);
+  assert.ok(second.panY < 0, `expected an upward pan against downward tremor, got ${second.panY}`);
+  assert.ok(Math.abs(second.panX) <= W * 0.035 + 0.01);
+  assert.ok(Math.abs(second.panY) <= H * 0.035 + 0.01);
+
+  const point = applyPreviewStabilizer({ x: W / 2 + 8, y: H / 2 }, second, W, H);
+  assert.ok(point.x < W / 2 + 8,
+    'overlay transform did not follow the video pan');
+});
+
+test('preview stabilizer resets instead of fighting a deliberate reframe', () => {
+  const first = previewStabilizerFrame(null, page(), W, H);
+  const reframed = page().map((p) => ({ x: p.x + 70, y: p.y }));
+  const second = previewStabilizerFrame(first, reframed, W, H);
+  assert.equal(second.panX, 0);
+  assert.equal(second.panY, 0);
+  assert.match(second.transform, /translate\(0\.00px, 0\.00px\)/);
 });
 
 // ── the shutter decision ───────────────────────────────────────────────────
