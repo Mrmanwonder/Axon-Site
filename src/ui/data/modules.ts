@@ -40,12 +40,32 @@ export type Prefs = {
 };
 
 export type Guardian = { id: string; name: string; contact: string };
+export type SubjectSelection = {
+  offering_id: string;
+  subject: string;
+  external_code: string | null;
+  level: "SL" | "HL" | null;
+};
+
 export type Student = {
   id: string;
   first_name: string;
-  board: string;
-  class_level: number;
+  board: string | null;
+  class_level: number | null;
+  programme_id?: string | null;
+  stage_id?: string | null;
+  curriculum_version?: string | null;
+  provider_key?: string | null;
+  provider_label?: string | null;
+  programme_key?: string | null;
+  programme_label?: string | null;
+  stage_key?: string | null;
+  stage_label?: string | null;
+  school_year_label?: string | null;
+  /** Compatibility display names for older surfaces. */
   subjects?: string[];
+  /** Normalized subject identities used by profile editing and assessment matching. */
+  subject_selections?: SubjectSelection[];
   /** Either the original random hex seed (nothing chosen — the face is derived
       from it) or a preset key the student picked. Never an image: there is no
       avatar bucket and no upload path anywhere in this app. */
@@ -152,29 +172,66 @@ export {
 export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
 
 // ── curriculum ─────────────────────────────────────────────────────────────
-/* AGENTS.md: this is the single source for the board, the stages, the
-   class-level mapping and the syllabus codes. Nothing else may hardcode
-   "CAIE", a stage name or a four-digit code. */
+// The database catalog is authoritative. These helpers fetch only the selected
+// programme/stage and cache it in the browser for the current session.
+export const PROVIDER_KEYS = curriculumMod.PROVIDER_KEYS as ("cambridge" | "cbse" | "ib")[];
+export type CurriculumProvider = { id: string; key: "cambridge" | "cbse" | "ib"; name: string };
+export type CurriculumProgramme = { id: string; provider_id: string; key: string; label: string; metadata?: Record<string, unknown> };
+export type CurriculumStage = {
+  id: string; programme_id: string; key: string; label: string;
+  school_year_label: string | null; legacy_class_level: number | null;
+  sort_order: number; metadata?: Record<string, unknown>;
+};
+export type SubjectOffering = {
+  id: string; programme_id: string; stage_id: string; subject_id: string;
+  display_name: string; external_code: string | null; external_code_kind: string | null;
+  levels_supported: ("SL" | "HL")[]; language_code: string | null; variant: string | null;
+  aliases: string[]; metadata?: Record<string, unknown>;
+};
+export const getProviders = curriculumMod.getProviders as () => Promise<CurriculumProvider[]>;
+export const getProgrammes = curriculumMod.getProgrammes as (providerKey: string) => Promise<CurriculumProgramme[]>;
+export const getStages = curriculumMod.getStages as (programmeKey: string) => Promise<CurriculumStage[]>;
+export const getSubjectOfferings = curriculumMod.getSubjectOfferings as (a: {
+  programmeKey: string; stageKey: string;
+}) => Promise<SubjectOffering[]>;
+export const filterSubjectOfferings = curriculumMod.filterSubjectOfferings as (
+  offerings: SubjectOffering[], query: string,
+) => SubjectOffering[];
+export const formatSubjectIdentity = curriculumMod.formatSubjectIdentity as (
+  offering: SubjectOffering, selectedLevel?: string | null,
+) => string;
+export const validateSubjectSelection = curriculumMod.validateSubjectSelection as (
+  offering: SubjectOffering, level?: string | null,
+) => boolean;
+export const defaultLevelFor = curriculumMod.defaultLevelFor as (
+  offering: SubjectOffering,
+) => "SL" | "HL" | null;
+export const providerLabel = curriculumMod.providerLabel as (key?: string | null) => string;
+export const programmeLabelFromKey = curriculumMod.programmeLabelFromKey as (key?: string | null) => string;
+export const stageLabelFromKey = curriculumMod.stageLabelFromKey as (key?: string | null) => string;
+export const legacyCurriculumForStudent = curriculumMod.legacyCurriculumForStudent as (student?: Partial<Student>) => {
+  providerKey: string | null; programmeKey: string | null; stageKey: string | null;
+};
+export const assessmentRulesFor = curriculumMod.assessmentRulesFor as (a?: {
+  providerKey?: string | null; programmeKey?: string | null;
+}) => {
+  provider: string | null; markStep: number; maxPrecision: number;
+  supportsTeacherPenMarks: boolean; officialSchemeTerminology: string;
+  paperLabels: Record<string, string>;
+};
+export const paperLabelsFor = curriculumMod.paperLabelsFor as (providerKey?: string | null) => Record<string, string>;
+
+// Legacy read helpers remain exported until cached pre-v2 profiles age out.
 export const BOARD = curriculumMod.BOARD as string;
 export const BOARD_LABEL = curriculumMod.BOARD_LABEL as string;
 export const CLASS_LEVELS = curriculumMod.CLASS_LEVELS as number[];
-export const STAGES = curriculumMod.STAGES as {
-  stage: string; label: string; classLevels: number[];
-}[];
-export const stageForClass = curriculumMod.stageForClass as (c: number) => {
-  stage: string; label: string; classLevels: number[];
-};
+export const STAGES = curriculumMod.STAGES as { stage: string; label: string; classLevels: number[] }[];
+export const stageForClass = curriculumMod.stageForClass as (c: number) => { stage: string; label: string; classLevels: number[] };
 export const classLabel = curriculumMod.classLabel as (c: number) => string;
 export const classLabelShort = curriculumMod.classLabelShort as (c: number) => string;
-export const subjectsForClass = curriculumMod.subjectsForClass as (
-  c: number,
-) => { subject: string; code: string }[];
-export const syllabusCode = curriculumMod.syllabusCode as (
-  subject: string, c: number,
-) => string | null;
-export const subjectLabel = curriculumMod.subjectLabel as (
-  subject: string, code: string | null,
-) => string;
+export const subjectsForClass = curriculumMod.subjectsForClass as (c: number) => { subject: string; code: string }[];
+export const syllabusCode = curriculumMod.syllabusCode as (subject: string, c: number) => string | null;
+export const subjectLabel = curriculumMod.subjectLabel as (subject: string, code: string | null) => string;
 
 // ── prefs ──────────────────────────────────────────────────────────────────
 export const DEFAULTS = prefsMod.DEFAULTS as Prefs;
