@@ -10,8 +10,9 @@ import {
 
 test("Cambridge IGCSE parser preserves exact syllabus codes and variants", () => {
   const html = [
-    '<a href="/math">Mathematics - 0580</a>',
-    '<a href="/math-9-1">Mathematics (9-1) - 0980</a>',
+    '<a href="/programmes-and-qualifications/cambridge-igcse-mathematics-0580/">Mathematics - 0580</a>',
+    '<a href="/programmes-and-qualifications/cambridge-igcse-mathematics-9-1-0980/">Mathematics (9-1) - 0980</a>',
+    '<a href="/news/2026/">Unrelated 2026 update</a>',
   ].join("");
   const rows = parseCambridgeIgcse(html);
   assert.equal(rows.length, 4);
@@ -28,9 +29,10 @@ test("Cambridge IGCSE parser preserves exact syllabus codes and variants", () =>
 
 test("Cambridge advanced parser keeps AS-only and A-only routes distinct", () => {
   const html = [
-    '<a href="/french">French Language (AS Level only) - 8682</a>',
-    '<a href="/literature">English Literature (A Level only) - 9695</a>',
-    '<a href="/physics">Physics - 9702</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-french-language-8682/">French Language (AS Level only) - 8682</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-english-literature-9695/">English Literature (A Level only) - 9695</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-physics-9702/">Physics - 9702</a>',
+    '<a href="/other/9701/">Unrelated 9701 link</a>',
   ].join("");
   const rows = parseCambridgeAdvanced(html);
 
@@ -52,8 +54,8 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
   const html = [
     "<h2>Secondary School Curriculum Class IX</h2>",
     "<h3>Optional Skill Subjects</h3>",
-    "<li>401 - Retail</li>",
-    "<li>402 - Information Technology</li>",
+    "<li>RETAIL (401) <a href='/retail-x'>IX</a></li>",
+    "<li>INFORMATION TECHNOLOGY (402) <a href='/it-x'>IX</a></li>",
     "<h2>Senior Secondary Classes XI-XII</h2>",
     "<h3>Optional Skill Subjects</h3>",
     "<li>801 - Retail</li>",
