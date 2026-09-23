@@ -3,7 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
-const fixture = vi.hoisted(() => ({ rpc: vi.fn(), finish: vi.fn() }));
+const fixture = vi.hoisted(() => ({
+  rpc: vi.fn(),
+  finish: vi.fn(),
+  parentGuard: vi.fn((action: () => void | Promise<void>) => action()),
+}));
 vi.mock("../../src/ui/data/AppProvider", () => ({
   useApp: () => ({
     session: { user: { id: "guardian", email: "parent@example.test" } },
@@ -12,6 +16,9 @@ vi.mock("../../src/ui/data/AppProvider", () => ({
   }),
 }));
 vi.mock("../../src/ui/data/profiles", () => ({ loadProfiles: vi.fn(), selectedProfile: vi.fn() }));
+vi.mock("../../src/ui/data/useParentMode", () => ({
+  useParentMode: () => ({ guard: fixture.parentGuard }),
+}));
 vi.mock("../../src/ui/data/modules", () => ({
   sb: { rpc: fixture.rpc, from: vi.fn() },
   sendOtp: vi.fn(), verifyOtp: vi.fn(), currentSession: vi.fn(),
