@@ -275,15 +275,15 @@ export default function CurriculumEditor({
           onChange={event => setQuery(event.target.value)}
         />
       </div>
-      <div className="curriculum-results" role="list">
+      <div className="curriculum-results" role="listbox" aria-multiselectable="true">
         {shownOfferings.map(offering => {
           const selected = selectedIds.has(offering.id);
           return <button
             key={offering.id}
             type="button"
-            role="listitem"
+            role="option"
             className={"curriculum-result" + (selected ? " on" : "")}
-            aria-pressed={selected}
+            aria-selected={selected}
             onClick={() => toggleSubject(offering)}
           >
             <span>
