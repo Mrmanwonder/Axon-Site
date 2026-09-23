@@ -204,11 +204,12 @@ spanning the whole failure taxonomy (blurry, glared, low-resolution, blank,
 ungraded, non-schoolwork...), and this repo has real photographs for only a
 slice of that so far: five real captured pages across a skew/tilt range, the
 two real viewfinder frames the live gate actually sees, and one deliberate
-non-page scene. That last one is a known, currently-passing false accept —
-`golden.test.mjs` pins it rather than hiding it, so a change that makes
-detection *more* permissive is caught even though this one specific gap isn't
-closed yet. Fixing quad-detector accuracy itself is out of scope for that
-pass — see the audit's own phasing.
+non-page scene. That last one used to be the known empty-floor false accept:
+colour/paper share alone scored it as page-like. The current detector rejects
+it with the interior-texture gate in `edges.js`, and `golden.test.mjs` now
+pins that rejection so the false accept cannot silently return. The corpus is
+still intentionally described as partial: one fixed negative does not replace
+the broader real-photo failure taxonomy the redesign calls for.
 
 `golden-report.mjs` runs the same fixtures and prints the false-accept and
 false-reject rates directly, plus a per-fixture quality-gate breakdown, for
