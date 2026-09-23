@@ -923,12 +923,12 @@
      mark keeps its four brand colours while the surrounding button stays on
      Axon's neutral surface. */
   .obalt{margin:0 var(--gutter) 13px;display:flex;flex-direction:column;gap:9px;}
-  .obalt .btn{position:relative;min-height:50px;padding:0 18px;border-radius:17px;
+  .obalt .btn{min-height:50px;padding:0 18px;border-radius:17px;gap:8px;
     font-size:15.5px;font-weight:600;letter-spacing:-.012em;
     background:var(--surface);border:.5px solid var(--hairline);color:var(--label);
     transition:background var(--d-state) ease,border-color var(--d-state) ease;}
   [data-theme="light"] .obalt .btn{box-shadow:0 1px 2px rgba(28,28,40,.05),0 8px 20px rgba(28,28,40,.05);}
-  .obalt .btn svg{position:absolute;left:17px;width:20px;height:20px;flex-shrink:0;}
+  .obalt .btn svg{position:static;width:19px;height:19px;flex-shrink:0;fill:initial;stroke:none;stroke-width:0;}
   .obalt .btn span{line-height:1;}
   @media(hover:hover) and (pointer:fine){
     .obalt .btn:hover{filter:none;background:color-mix(in srgb,var(--surface) 95%,var(--label) 5%);
