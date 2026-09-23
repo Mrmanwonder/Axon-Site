@@ -83,38 +83,16 @@ function sortedUnique(rows, keyFn) {
 }
 
 async function fetchBytes(source) {
-  const browserHeaders = {
-    "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36",
-    "accept": source.provider === "ib"
-      ? "application/pdf,application/octet-stream;q=0.9,*/*;q=0.8"
-      : "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-    "accept-language": "en-GB,en;q=0.9",
-    ...(source.provider === "ib"
-      ? { "referer": "https://ibo.org/programmes/diploma-programme/curriculum/" }
-      : {})
+  const headers = {
+    "user-agent": "Axon curriculum catalog reconciler/1.0 (+https://axonstudy.online/)",
+    "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+    "accept-language": "en-GB,en;q=0.9"
   };
-
-  let response = await fetch(source.url, { redirect: "follow", headers: browserHeaders });
-
-  // The IB CDN sometimes refuses a direct non-browser PDF request. Retry once
-  // after visiting the first-party curriculum page and carry only first-party
-  // cookies into the PDF request. This is ordinary public-site navigation, not
-  // an access-control bypass; a second 403 remains a hard source-unavailable
-  // failure so drift is never reported as clean without checking the PDF.
-  if (response.status === 403 && source.provider === "ib") {
-    const landing = await fetch("https://ibo.org/programmes/diploma-programme/curriculum/", {
-      redirect: "follow",
-      headers: browserHeaders
-    });
-    const cookies = typeof landing.headers.getSetCookie === "function"
-      ? landing.headers.getSetCookie().map(function (value) { return value.split(";")[0]; }).join("; ")
-      : "";
-    response = await fetch(source.url, {
-      redirect: "follow",
-      headers: Object.assign({}, browserHeaders, cookies ? { cookie: cookies } : {})
-    });
-  }
-
+  const response = await fetch(source.url, {
+    redirect: "follow",
+    headers: headers,
+    signal: AbortSignal.timeout(20_000)
+  });
   if (!response.ok) throw new Error(source.url + " returned " + response.status);
   const bytes = Buffer.from(await response.arrayBuffer());
   return { bytes: bytes, sha256: sha256(bytes), fetched_at: new Date().toISOString() };
@@ -487,7 +465,7 @@ export function validateFixture(provider, data) {
 }
 
 async function generate() {
-  const keys = ["cambridge_igcse", "cambridge_advanced", "cbse_curriculum", "cbse_skill", "ibdp_subjects"];
+  const keys = ["cambridge_igcse", "cambridge_advanced", "cbse_curriculum", "cbse_skill"];
   const fetched = {};
   await Promise.all(keys.map(async function (key) { fetched[key] = await fetchBytes(SOURCES[key]); }));
 
@@ -499,17 +477,34 @@ async function generate() {
     ...parseCbseCurriculum(fetched.cbse_curriculum.bytes.toString("utf8")),
     ...parseCbseSkill(fetched.cbse_skill.bytes.toString("utf8"))
   ], function (row) { return row.stage_key + "|" + loose(row.display_name); });
-  const ib = parseIbText(pdfText(fetched.ibdp_subjects.bytes));
 
-  return {
-    generated: { cambridge: cambridge, cbse: cbse, ib: ib },
-    source_meta: Object.fromEntries(keys.map(function (key) {
-      return [key, Object.assign({}, SOURCES[key], {
-        sha256: fetched[key].sha256,
-        fetched_at: fetched[key].fetched_at
-      })];
-    }))
-  };
+  const generated = { cambridge: cambridge, cbse: cbse };
+  const sourceMeta = Object.fromEntries(keys.map(function (key) {
+    return [key, Object.assign({}, SOURCES[key], {
+      sha256: fetched[key].sha256,
+      fetched_at: fetched[key].fetched_at
+    })];
+  }));
+  const unavailable = {};
+
+  // IBO currently returns HTTP 403 to GitHub-hosted automation for this public
+  // PDF. Respect that response. An admin can download the official PDF through
+  // normal first-party access and pass its local path here; the same parser,
+  // hash and diff logic is then used without bypassing the provider's controls.
+  const ibPath = process.env.AXON_IB_CATALOG_PDF;
+  if (ibPath) {
+    const bytes = readFileSync(ibPath);
+    generated.ib = parseIbText(pdfText(bytes));
+    sourceMeta.ibdp_subjects = Object.assign({}, SOURCES.ibdp_subjects, {
+      sha256: sha256(bytes),
+      fetched_at: new Date().toISOString(),
+      acquisition: "admin-supplied-official-file"
+    });
+  } else {
+    unavailable.ib = "manual official-PDF reconciliation required; set AXON_IB_CATALOG_PDF to the downloaded first-party PDF";
+  }
+
+  return { generated: generated, source_meta: sourceMeta, unavailable: unavailable };
 }
 
 function printReport(report) {
@@ -545,15 +540,19 @@ async function main() {
   }
 
   const result = await generate();
-  const report = ["cambridge", "cbse", "ib"].map(function (provider) {
+  const checkedProviders = Object.keys(result.generated);
+  const report = checkedProviders.map(function (provider) {
     return compare(provider, result.generated[provider], loadFixture(provider).offerings);
   });
   printReport(report);
+  for (const entry of Object.entries(result.unavailable)) {
+    console.warn("\n" + entry[0] + ": SOURCE NOT CHECKED — " + entry[1]);
+  }
 
   if (command === "snapshot") {
     const generatedDir = new URL("../../curriculum/generated/", import.meta.url);
     mkdirSync(generatedDir, { recursive: true });
-    for (const provider of ["cambridge", "cbse", "ib"]) {
+    for (const provider of checkedProviders) {
       const path = new URL("../../curriculum/generated/" + provider + ".json", import.meta.url);
       writeFileSync(path, JSON.stringify({
         schema_version: 1,
