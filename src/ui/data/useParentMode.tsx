@@ -26,13 +26,13 @@ import { useApp } from "./AppProvider";
 import { parentModeState, sendParentCode, unlockWithCode } from "./modules";
 import { hapticFirm } from "../lib/haptics";
 
-export function useParentMode() {
+export function useParentMode(contactOverride?: string | null) {
   const { guardian } = useApp();
   const { openSheet } = useSheetControls();
   const toast = useToast();
 
   const guard = useCallback((action: () => void | Promise<void>) => {
-    const contact = guardian?.contact ?? "";
+    // Onboarding has created the guardian row locally but has not promoted it\n    // into AppProvider yet. Let that flow supply the same account-owned contact\n    // without weakening the proof: the code still goes only to the contact\n    // already stored on the guardian account.\n    const contact = contactOverride?.trim() || guardian?.contact || "";
 
     const run = () => action();
 
@@ -95,7 +95,7 @@ export function useParentMode() {
         // read it: at worst the parent confirms when they did not have to.
         offerUnlock();
       });
-  }, [guardian, openSheet, toast]);
+  }, [contactOverride, guardian, openSheet, toast]);
 
   return { guard };
 }
