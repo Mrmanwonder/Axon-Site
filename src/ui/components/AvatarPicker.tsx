@@ -1,6 +1,8 @@
-import {
-  AVATAR_PRESETS, backgroundFor, inkFor, initialFor,
-} from "../data/modules";
+import * as avatarMod from "../../avatar.js";
+
+const AVATAR_PRESETS = avatarMod.PRESETS;
+const backgroundFor = avatarMod.backgroundFor;
+const inkFor = avatarMod.inkFor;
 import { hapticTick } from "../lib/haptics";
 
 type Props = {
@@ -11,7 +13,7 @@ type Props = {
 };
 
 export default function AvatarPicker({ value, label = "Picture", studentName = "", onChange }: Props) {
-  const initial = initialFor(studentName);
+  const initial = studentName.trim()[0]?.toUpperCase() ?? "?";
   return (
     <>
       <div className="sectitle">{label}</div>
