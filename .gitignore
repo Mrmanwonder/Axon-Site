@@ -27,3 +27,6 @@ deno.lock
 /playwright-report/
 /build-check.log
 /supabase/.temp/
+
+# Review-only output from the official-source curriculum reconciler.
+/curriculum/generated/
