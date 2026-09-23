@@ -75,6 +75,72 @@ function viewportScaled() {
   return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
 }
 
+const PREVIEW_OVERSCAN = 1.06;
+const PREVIEW_ANCHOR_ALPHA = 0.08;
+const PREVIEW_PAN_RESPONSE = 0.65;
+const PREVIEW_MAX_PAN_SHARE = 0.035;
+const PREVIEW_REFRAME_RESET_SHARE = 0.10;
+
+function pointsCentroid(points) {
+  const total = points.reduce((sum, p) => ({ x: sum.x + p.x, y: sum.y + p.y }), { x: 0, y: 0 });
+  return { x: total.x / points.length, y: total.y / points.length };
+}
+
+/**
+ * Display-only preview stabilisation.
+ *
+ * The raw stream and captured bitmap are never transformed. This only pans an
+ * overscanned video element by a few percent to cancel high-frequency hand
+ * tremor. A large move is treated as an intentional reframe and resets the
+ * anchor immediately instead of fighting the student.
+ */
+export function previewStabilizerFrame(previous, points, width, height) {
+  const scale = PREVIEW_OVERSCAN;
+  if (!points?.length || width <= 0 || height <= 0) {
+    return { anchorX: null, anchorY: null, lastX: null, lastY: null, panX: 0, panY: 0, scale, transform: '' };
+  }
+
+  const { x, y } = pointsCentroid(points);
+  if (!previous?.anchorX || !previous?.anchorY) {
+    return {
+      anchorX: x, anchorY: y, lastX: x, lastY: y, panX: 0, panY: 0, scale,
+      transform: `translate(0.00px, 0.00px) scale(${scale.toFixed(3)})`,
+    };
+  }
+
+  const frameDiagonal = Math.hypot(width, height) || 1;
+  const frameMove = Math.hypot(x - previous.lastX, y - previous.lastY) / frameDiagonal;
+  if (frameMove > PREVIEW_REFRAME_RESET_SHARE) {
+    return {
+      anchorX: x, anchorY: y, lastX: x, lastY: y, panX: 0, panY: 0, scale,
+      transform: `translate(0.00px, 0.00px) scale(${scale.toFixed(3)})`,
+    };
+  }
+
+  const anchorX = previous.anchorX + (x - previous.anchorX) * PREVIEW_ANCHOR_ALPHA;
+  const anchorY = previous.anchorY + (y - previous.anchorY) * PREVIEW_ANCHOR_ALPHA;
+  const maxPanX = width * PREVIEW_MAX_PAN_SHARE;
+  const maxPanY = height * PREVIEW_MAX_PAN_SHARE;
+  const targetX = Math.max(-maxPanX, Math.min(maxPanX, anchorX - x));
+  const targetY = Math.max(-maxPanY, Math.min(maxPanY, anchorY - y));
+  const panX = previous.panX + (targetX - previous.panX) * PREVIEW_PAN_RESPONSE;
+  const panY = previous.panY + (targetY - previous.panY) * PREVIEW_PAN_RESPONSE;
+
+  return {
+    anchorX, anchorY, lastX: x, lastY: y, panX, panY, scale,
+    transform: `translate(${panX.toFixed(2)}px, ${panY.toFixed(2)}px) scale(${scale.toFixed(3)})`,
+  };
+}
+
+export function applyPreviewStabilizer(point, frame, width, height) {
+  if (!frame?.transform) return point;
+  const cx = width / 2, cy = height / 2;
+  return {
+    x: (point.x - cx) * frame.scale + cx + frame.panX,
+    y: (point.y - cy) * frame.scale + cy + frame.panY,
+  };
+}
+
 /**
  * Source rectangle visible through an object-fit: cover preview.
  *
@@ -403,6 +469,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let autoStableAnchor = null;
   let autoStableSince = 0;
   let autoCandidateSince = 0;
+  let previewStabilizer = null;
 
   let imageCapture = null;
   let cameraTrack = null;
@@ -515,6 +582,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }
     running = true;
     armed = true;
+    previewStabilizer = null;
+    video.style.transformOrigin = '50% 50%';
+    video.style.willChange = 'transform';
 
     cameraTrack = stream.getVideoTracks?.()[0] ?? null;
     imageCapture = null;
@@ -588,7 +658,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     autoStableAnchor = null;
     autoStableSince = 0;
     autoCandidateSince = 0;
+    previewStabilizer = null;
     video.style.removeProperty('transform');
+    video.style.removeProperty('transform-origin');
+    video.style.removeProperty('will-change');
     releaseCamera();
   }
 
@@ -1020,7 +1093,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     lastRenderedFrame = video.currentTime;
     trackStep();
 
-    const rect = video.getBoundingClientRect();
+    // Use the untransformed overlay box as the coordinate space. Reading the
+    // video's bounding rect after applying a CSS transform feeds the stabiliser
+    // back into its own geometry and makes the overlay drift.
+    const rect = overlay.getBoundingClientRect();
     const dpr = Math.min(2, devicePixelRatio || 1);
     const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
     if (overlay.width !== w || overlay.height !== h) { overlay.width = w; overlay.height = h; }
@@ -1028,10 +1104,31 @@ export function createCapture({ video, overlay, onState, onShot }) {
     ctx.clearRect(0, 0, w, h);
     if (!video.videoWidth) return;
 
-    const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
-    const offsetX = (w - video.videoWidth * scale) / 2;
-    const offsetY = (h - video.videoHeight * scale) / 2;
-    const toOverlay = (p) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
+    const cssScale = Math.max(rect.width / video.videoWidth, rect.height / video.videoHeight);
+    const cssOffsetX = (rect.width - video.videoWidth * cssScale) / 2;
+    const cssOffsetY = (rect.height - video.videoHeight * cssScale) / 2;
+    const toCss = (p) => ({ x: p.x * cssScale + cssOffsetX, y: p.y * cssScale + cssOffsetY });
+
+    if (viewportScaled()) {
+      previewStabilizer = null;
+      video.style.removeProperty('transform');
+    } else if (quad) {
+      previewStabilizer = previewStabilizerFrame(
+        previewStabilizer,
+        quad.map(toCss),
+        rect.width,
+        rect.height,
+      );
+      video.style.transform = previewStabilizer.transform;
+    } else {
+      previewStabilizer = null;
+      video.style.removeProperty('transform');
+    }
+
+    const toOverlay = (p) => {
+      const visual = applyPreviewStabilizer(toCss(p), previewStabilizer, rect.width, rect.height);
+      return { x: visual.x * dpr, y: visual.y * dpr };
+    };
 
     overlayPhase = resolveOverlayPhase({
       confirming: !!captureConfirmation,
