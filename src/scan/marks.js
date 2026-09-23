@@ -8,14 +8,21 @@
  */
 
 /**
- * CAIE awards whole marks only, at IGCSE, AS and A Level alike.
- *
- * This is a fact about the board, not a policy of ours, which is why it is a
- * constant and not a setting. `board` is CAIE for every new profile; if the
- * CBSE rows that predate the switch ever need different arithmetic, this is the
- * flag to key off rather than a second grid.
+ * Resolve arithmetic from assessment identity rather than a global board flag.
+ * All currently supported public assessment models use integer question marks;
+ * keeping this provider-scoped is the important invariant, so a future verified
+ * half-mark scheme can change its own rule without changing another board.
  */
-export const WHOLE_MARKS_ONLY = true;
+export function assessmentRulesFor({ providerKey = null, paperIdentity = null } = {}) {
+  const declaredStep = Number(paperIdentity?.metadata?.mark_step);
+  const markStep = Number.isFinite(declaredStep) && declaredStep > 0 ? declaredStep : 1;
+  return {
+    providerKey,
+    markStep,
+    maxPrecision: markStep < 1 ? 1 : 0,
+    supportsTeacherPenMarks: true,
+  };
+}
 
 /**
  * Is the allocation we read off the page one a CAIE question could carry?
@@ -27,10 +34,12 @@ export const WHOLE_MARKS_ONLY = true;
  * plausible. Exported so the review screen can name the problem instead of
  * silently showing no row.
  */
-export function allocationIsUsable(region) {
+export function allocationIsUsable(region, rules = assessmentRulesFor()) {
   if (region.marks_available === null || region.marks_available === undefined) return false;
   const raw = Number(region.marks_available);
-  return Number.isFinite(raw) && raw > 0 && raw === Math.floor(raw);
+  if (!Number.isFinite(raw) || raw <= 0) return false;
+  const units = raw / rules.markStep;
+  return Math.abs(units - Math.round(units)) < 1e-9;
 }
 
 /**
@@ -56,8 +65,8 @@ export function allocationIsUsable(region) {
  * rejecting it after they tap it is the worst of both: it launders a bad read
  * into a plausible-looking choice and spends their time to tell them nothing.
  */
-export function markAlternatives(region) {
-  if (!allocationIsUsable(region)) return [];
+export function markAlternatives(region, rules = assessmentRulesFor()) {
+  if (!allocationIsUsable(region, rules)) return [];
   const available = Number(region.marks_available);
 
   const awardedRaw = region.marks_awarded === null || region.marks_awarded === undefined
@@ -69,7 +78,7 @@ export function markAlternatives(region) {
   // rounded into one.
   const awarded = awardedRaw !== null
     && Number.isFinite(awardedRaw)
-    && awardedRaw === Math.floor(awardedRaw)
+    && Math.abs((awardedRaw / rules.markStep) - Math.round(awardedRaw / rules.markStep)) < 1e-9
     && awardedRaw >= 0
     && awardedRaw <= available
       ? awardedRaw
@@ -79,16 +88,18 @@ export function markAlternatives(region) {
   // common corrections and neither should need a second tap to reach.
   const candidates = new Set([0, available]);
   if (awarded !== null) {
-    for (const step of [-2, -1, 0, 1, 2]) {
-      const value = awarded + step;
+    for (const delta of [-2, -1, 0, 1, 2]) {
+      const value = awarded + (delta * rules.markStep);
       if (value >= 0 && value <= available) candidates.add(value);
     }
   } else {
     // Nothing usable read at all: walk the whole range, widening the step on a
     // question too big to fit in the row rather than truncating it and leaving
     // the top mark unreachable.
-    const step = Math.max(1, Math.ceil(available / 6));
-    for (let v = 0; v <= available; v += step) candidates.add(v);
+    const rawStep = Math.max(rules.markStep, Math.ceil((available / 6) / rules.markStep) * rules.markStep);
+    for (let v = 0; v <= available + 1e-9; v += rawStep) {
+      candidates.add(Number(v.toFixed(rules.maxPrecision)));
+    }
   }
 
   const sorted = [...candidates].sort((a, b) => a - b);
