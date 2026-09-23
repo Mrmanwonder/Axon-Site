@@ -30,6 +30,7 @@ import AnswerBlockView from "../components/AnswerBlock";
 import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import PageSkeleton from "../components/PageSkeleton";
+import MathText from "../components/MathText";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
 
@@ -40,7 +41,9 @@ function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean 
       {/* `steps` keeps the line breaks the student actually wrote. Their
           working is the answer in a notation-dense subject, and reading it
           back as one paragraph is reading someone else's answer. */}
-      <div className={"v" + (v ? "" : " empty") + (steps && v ? " steps" : "")}>{v || "Not read"}</div>
+      <div className={"v" + (v ? "" : " empty") + (steps && v ? " steps" : "")}>
+        {v ? <MathText text={v} /> : "Not read"}
+      </div>
     </div>
   );
 }
@@ -158,6 +161,13 @@ export default function QuestionDetail() {
           <Crop paperId={paperId} pageNumber={span?.page} box={span?.box} highlight={picked?.bbox ?? null} />
         </div>
 
+        {attempt.question_text && (
+          <div className="qfield">
+            <div className="k">Question</div>
+            <div className="v"><MathText text={attempt.question_text} /></div>
+          </div>
+        )}
+
         {/* Not "Your answer". The crop above is the student's answer; this is
             what we made of it, and the live data shows what that can cost —
             handwritten 8/2 stored as 8+1, which turns a correct step into a
@@ -194,8 +204,8 @@ export default function QuestionDetail() {
           && loss.grounding_status === "complete"
           && loss.model_answer_source && (
           <div className="qfield">
-            <Disclose label="See how this question is answered">
-              <div className="worked">{loss.model_answer}</div>
+            <Disclose label="See a worked answer">
+              <div className="worked"><MathText text={loss.model_answer} /></div>
               <div className="wnote">
                 {loss.model_answer_source === "verified_scheme"
                   ? "From the official marking scheme for this paper."
@@ -272,7 +282,7 @@ export default function QuestionDetail() {
             </div>
             {loss.ai_explanation && (
               <div className="v" style={{ marginTop: 7, color: "var(--label-2)" }}>
-                {loss.ai_explanation}
+                <MathText text={loss.ai_explanation} />
               </div>
             )}
             {/* What an ungrounded diagnosis was actually written from. The
@@ -320,7 +330,7 @@ export default function QuestionDetail() {
                         <span className="cz">{(r.cause && CAUSE_LABEL[r.cause]) || r.cause}</span>
                         <span className="m">{numMark(r.marks)} mark{r.marks === 1 ? "" : "s"}</span>
                       </div>
-                      {r.note && <div className="nt">{r.note}</div>}
+                      {r.note && <div className="nt"><MathText text={r.note} /></div>}
                     </div>
                   </div>
                 ))}
@@ -331,7 +341,7 @@ export default function QuestionDetail() {
                 honest — generic advice trains a student to stop reading. */}
             {loss.do_this_next && (
               <div className="v" style={{ marginTop: 9 }}>
-                <b>Do this next.</b> {loss.do_this_next}
+                <b>Do this next.</b>{" "}<MathText text={loss.do_this_next} />
               </div>
             )}
             {/* What this question was about. Descriptive, not evaluative — a

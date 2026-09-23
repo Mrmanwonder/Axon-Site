@@ -21,6 +21,7 @@ import { useMemo, useState } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import type { AnswerBlock as Block, Segment } from "../data/modules";
+import MathText from "./MathText";
 
 /**
  * Untrusted LaTeX, rendered or refused.
@@ -100,7 +101,7 @@ function SegmentView({
         </span>
       );
     }
-    return <span>{seg.text}</span>;
+    return <MathText text={seg.text} />;
   })();
 
   // Only a segment that knows where it came from is tappable — otherwise the
@@ -111,6 +112,7 @@ function SegmentView({
       type="button"
       className={cls.join(" ")}
       aria-pressed={picked}
+      aria-label={seg.text ?? seg.latex ?? undefined}
       aria-description="Show this part in your handwriting"
       onClick={() => onPick(seg)}
     >
@@ -172,7 +174,9 @@ export default function AnswerBlockView({
         /* No structured block yet — every row written before the extraction
            stage produced one. The raw text is what exists, shown as steps so at
            least the student's line breaks survive. */
-        <div className={"v" + (rawText ? " steps" : " empty")}>{rawText || "Not read"}</div>
+        <div className={"v" + (rawText ? " steps" : " empty")}>
+          {rawText ? <MathText text={rawText} /> : "Not read"}
+        </div>
       )}
 
       {picked && (

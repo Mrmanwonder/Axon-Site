@@ -16,6 +16,7 @@ import { sb } from './supabase.js';
 import { readThrough } from './cache.js';
 import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 import { CAPTURE } from './scan/contract.js';
+import { MASTERY_API_URL } from './config.js';
 
 /** Papers are Tier 2 candidates only if they are board material. */
 export function tierForType(type) {
@@ -210,9 +211,34 @@ const pageObj = minted.get('page');
 *
 * @returns {{url:string|null, mask_url:string|null}}
 */
+export function canonicalAssetUrl(raw) {
+  if (!raw || typeof raw !== 'string') return raw ?? null;
+  try {
+    const signed = new URL(raw);
+    // Older API deployments fell back to the non-existent generic
+    // mastery-api.workers.dev hostname when MASTERY_ASSET_URL was missing.
+    // The signature covers bucket:key:expiry, not the host, so repairing that
+    // known-bad origin keeps the exact signed asset path while sending it to
+    // the Worker that actually owns /asset.
+    if (signed.hostname === 'mastery-api.workers.dev') {
+      const api = new URL(MASTERY_API_URL);
+      signed.protocol = api.protocol;
+      signed.host = api.host;
+    }
+    return signed.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export async function pageAssetUrl(paperId, pageNumber) {
   const { urls } = await pageAssetUrls({ paper_id: paperId, page_numbers: [pageNumber] });
-  return urls?.[pageNumber] ?? urls?.[String(pageNumber)] ?? { url: null, mask_url: null };
+  const asset = urls?.[pageNumber] ?? urls?.[String(pageNumber)] ?? { url: null, mask_url: null };
+  return {
+    ...asset,
+    url: canonicalAssetUrl(asset?.url),
+    mask_url: canonicalAssetUrl(asset?.mask_url),
+  };
 }
 
 /**
