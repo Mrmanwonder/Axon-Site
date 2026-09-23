@@ -11,7 +11,21 @@ import { useResource } from "../../src/ui/data/useResource";
 const mocks = vi.hoisted(() => ({ papers: vi.fn(), progress: vi.fn(), consent: vi.fn(), session: vi.fn(), analytics: vi.fn() }));
 vi.mock("../../src/ui/data/useIngestion", () => ({ useIngestion: () => ({ addPaper() {} }) }));
 vi.mock("../../src/ui/data/modules", () => ({
-  sb: { from: (table: string) => ({ select: () => ({ eq: () => table === "student" ? { order: async () => ({ data: [{ id: "student", first_name: "Sam" }] }) } : Promise.resolve({ data: [{ subject: "physics" }] }) }) }) },
+  sb: {
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => table === "student"
+          ? { order: async () => ({ data: [{ id: "student", first_name: "Sam", programme_id: null, stage_id: null }] }) }
+          : Promise.resolve({ data: [{ subject: "physics" }] }),
+        in: async () => ({ data: table === "student_subject"
+          ? [{
+              student_id: "student", subject: "physics", subject_offering_id: null,
+              selected_level: null, display_name_snapshot: null, external_code_snapshot: null,
+            }]
+          : [] }),
+      }),
+    }),
+  },
   currentSession: mocks.session, currentGuardian: async () => ({ id: "guardian" }),
   takeProviderError: () => null, onAuthChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
   readLocal: () => ({ theme: "dark", text_size: "m", reduce_motion: true }), loadPrefs: async () => ({ theme: "dark" }), savePrefs: vi.fn(),
