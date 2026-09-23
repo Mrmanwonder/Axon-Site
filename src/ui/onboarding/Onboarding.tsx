@@ -58,7 +58,7 @@
 
 import { useNavigate } from "react-router-dom";
 import { loadProfiles, selectedProfile } from "../data/profiles";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
@@ -66,14 +66,16 @@ import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
-  BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
   PAPER_TYPES,
   startCheckout,
 } from "../data/modules";
-import type { Guardian, Student } from "../data/modules";
+import type { Guardian, Student, CurriculumProviderKey } from "../data/modules";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
+import CurriculumProfileFields from "../components/CurriculumProfileFields";
+import type { EditableSubject } from "../components/CurriculumProfileFields";
+import AvatarPicker from "../components/AvatarPicker";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
@@ -181,8 +183,11 @@ export default function Onboarding() {
      typed and picked. Being made to re-enter a name because one subject was
      missed is the flow calling the user careless. */
   const [studentFirst, setStudentFirst] = useState("");
-  const [studentClass, setStudentClass] = useState(11);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [curriculumProvider, setCurriculumProvider] = useState<CurriculumProviderKey>("cambridge");
+  const [programmeKey, setProgrammeKey] = useState("cambridge_as");
+  const [stageKey, setStageKey] = useState("cambridge_as");
+  const [subjects, setSubjects] = useState<EditableSubject[]>([]);
+  const [avatarKey, setAvatarKey] = useState("dreamBloom");
   const profileFlight = useRef(false);
   const profileRequest = useRef(crypto.randomUUID());
   const [profileBusy, setProfileBusy] = useState(false);
@@ -295,14 +300,6 @@ export default function Onboarding() {
       })
       .catch((e) => fail(e, "We could not load what you're agreeing to."));
   }, [step, purposes]);
-
-  /* Changing year can change stage, and the two stages have different subject
-     catalogues. Picks that do not exist in the new one are dropped rather than
-     carried into a syllabus that has no code for them. */
-  const catalogue = useMemo(() => subjectsForClass(studentClass), [studentClass]);
-  useEffect(() => {
-    setSubjects((prev) => prev.filter((x) => catalogue.some((c) => c.subject === x)));
-  }, [catalogue]);
 
   const back = BACK_TO[step];
   const shellProps = {
@@ -666,103 +663,109 @@ export default function Onboarding() {
 
   // ── student profile ──────────────────────────────────────────────────────
   if (step === "student") {
-    const stage = stageForClass(studentClass);
-
     const create = async () => {
       if (profileFlight.current) return;
       if (!studentFirst.trim()) return setError("What should we call the student?");
       if (!subjects.length) return setError("Pick at least one subject.");
+      if (subjects.some((subject) =>
+        (subject.levels_supported?.length ?? 0) > 0 && !subject.level
+      )) return setError("Choose SL or HL for each IB subject.");
+
       profileFlight.current = true;
       setProfileBusy(true);
       hapticFirm();
       try {
-        const { data, error: e } = await sb.rpc("create_student_profile", {
-          p_request_id: profileRequest.current, p_first_name: studentFirst.trim(),
-          p_board: BOARD, p_class_level: studentClass,
-          p_subjects: subjects.map(subject => ({ subject, syllabus_code: syllabusCode(subject, studentClass) })),
+        const { data, error: e } = await sb.rpc("create_student_profile_v2", {
+          p_request_id: profileRequest.current,
+          p_first_name: studentFirst.trim(),
+          p_programme_key: programmeKey,
+          p_stage_key: stageKey,
+          p_avatar_key: avatarKey,
+          p_subjects: subjects.map((subject) => ({
+            offering_id: subject.offering_id,
+            level: subject.level ?? null,
+          })),
         });
         if (e) throw e;
-        setStudent({ ...data, subjects });
+
+        const subjectSelections = subjects.map((subject) => ({
+          offering_id: subject.offering_id,
+          subject: subject.subject,
+          external_code: subject.external_code ?? null,
+          level: subject.level ?? null,
+        }));
+        setStudent({
+          ...data,
+          subjects: subjectSelections.map((subject) => subject.subject),
+          subjectSelections,
+        });
         go("firstRun");
       } catch (e) {
-        // The consent gate raises 42501 here if consent is somehow missing.
         setError((e as { code?: string }).code === "42501"
-          ? "We can't create the profile until consent is recorded. Go back a step."
-          : (e as Error).message || "The profile could not be created.");
-      } finally { profileFlight.current = false; setProfileBusy(false); }
+          ? "We can't create the profile until consent is recorded."
+          : "The profile could not be created. Check the curriculum and subjects, then try again.");
+      } finally {
+        profileFlight.current = false;
+        setProfileBusy(false);
+      }
     };
 
     return (
       <Shell {...shellProps} title="The student">
         <Err message={error} />
-        {/* Stripe has taken the payment; our own entitlement row is written by
-            the webhook a moment later. So this says what is actually known —
-            the payment went through — and not "Pro is active", which is a
-            different claim and not ours to make yet. */}
         {billingReturn === "success" && (
           <div className="obpanel tint">
             <div className="body" style={{ marginTop: 0 }}>
-              Payment received. Pro switches on as soon as Stripe confirms it,
-              usually within a few seconds. The profile is the last step.
+              Payment received. Pro switches on as soon as Stripe confirms it.
+              The profile is the last step.
             </div>
           </div>
         )}
+
         <div className="obfields">
-          <Field id="ob-sname" label="First name" value={studentFirst} onChange={setStudentFirst}
-                 placeholder="The student's first name" />
+          <Field
+            id="ob-sname"
+            label="First name"
+            value={studentFirst}
+            onChange={setStudentFirst}
+            placeholder="The student's first name"
+          />
         </div>
 
-        <div className="sectitle">Stage</div>
-        <div className="list">
-          <div className="srow">
-            <div className="ic ic-b"><Icon d={ICONS.cap} /></div>
-            <div className="lbl">Class<small>{classLabel(studentClass)}</small></div>
-            <div className="seg" role="group" aria-label="Class">
-              {CLASS_LEVELS.map((c) => (
-                <button key={c} type="button" className={c === studentClass ? "on" : undefined}
-                        aria-pressed={c === studentClass}
-                        onClick={() => { hapticTick(); setStudentClass(c); }}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* The board is not a question any more. v1 is Cambridge only, and
-              curriculum.js is the single source for that. */}
-          <SRow tone="ic-b" icon={ICONS.paper} label="Board" small={stage.label}
-                trailing={<span className="locked">Cambridge</span>} />
-        </div>
+        <AvatarPicker
+          value={avatarKey}
+          studentName={studentFirst}
+          onChange={setAvatarKey}
+        />
 
-        <div className="sectitle">Subjects</div>
-        <div className="filterbar" style={{ position: "static" }}>
-          {catalogue.map(({ subject, code: sc }) => {
-            const chosen = subjects.includes(subject);
-            return (
-              <button
-                key={subject}
-                type="button"
-                className={"fchip" + (chosen ? " active" : "")}
-                aria-pressed={chosen}
-                onClick={() => {
-                  hapticTick();
-                  setSubjects((prev) => chosen
-                    ? prev.filter((x) => x !== subject)
-                    : [...prev, subject]);
-                }}
-              >
-                {subject} <span className="obcode-badge">{sc}</span>
-              </button>
-            );
-          })}
-        </div>
+        <CurriculumProfileFields
+          providerKey={curriculumProvider}
+          programmeKey={programmeKey}
+          stageKey={stageKey}
+          subjects={subjects}
+          onIdentityChange={(next) => {
+            setCurriculumProvider(next.providerKey);
+            setProgrammeKey(next.programmeKey);
+            setStageKey(next.stageKey);
+          }}
+          onSubjectsChange={setSubjects}
+        />
+
         <div className="subnote">
-          The four-digit code is the syllabus, and it is what lets a past paper be
-          matched to the right mark scheme. Nothing else is collected — no school,
-          no address, no photograph.
+          Subject codes and levels are kept only to match the right curriculum and official
+          assessment material. No school, address, or photograph is collected here.
         </div>
+
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" disabled={profileBusy} aria-busy={profileBusy} onClick={() => void create()}>
-            Create profile
+          <PressBox
+            as="button"
+            type="button"
+            className="btn primary"
+            disabled={profileBusy}
+            aria-busy={profileBusy}
+            onClick={() => void create()}
+          >
+            {profileBusy ? "Creating…" : "Create profile"}
           </PressBox>
         </div>
       </Shell>
