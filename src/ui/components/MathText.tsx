@@ -115,7 +115,7 @@ const SUPERSCRIPT: Record<string, string> = {
 
 function normaliseSuperscripts(source: string): string {
   return source.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, (run) =>
-    \`^{\${[...run].map((char) => SUPERSCRIPT[char] ?? char).join("")}}\`,
+    "^{" + [...run].map((char) => SUPERSCRIPT[char] ?? char).join("") + "}",
   );
 }
 
@@ -141,7 +141,7 @@ function normaliseLegacyLatex(source: string): string {
     .replace(/\bbeta\b|β/gi, "\\beta")
     .replace(/\bgamma\b|γ/gi, "\\gamma")
     .replace(/\bdelta\b|δ/gi, "\\delta")
-    .replace(/\b(ln|log|sin|cos|tan|exp)\s*\(/gi, (_m, fn: string) => \`\\\${fn.toLowerCase()}(\`)
+    .replace(/\b(ln|log|sin|cos|tan|exp)\s*\(/gi, (_m, fn: string) => "\\" + fn.toLowerCase() + "(")
     .replace(/\bsqrt\s*\(([^()]*)\)/gi, "\\sqrt{$1}")
     .replace(/\s*\*\s*/g, " \\cdot ")
     .replace(/\s+~\s+/g, " \\sim ");
