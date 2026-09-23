@@ -556,6 +556,14 @@
     padding:12px 13px;border-radius:11px;background:var(--surface-sunk);
     border:.5px solid var(--hairline);font-variant-numeric:tabular-nums;}
   .worked + .wnote{font-size:12.5px;color:var(--label-3);line-height:1.45;margin-top:8px;}
+  .worked-steps{margin:0;padding:0;list-style:none;counter-reset:worked-step;display:flex;flex-direction:column;gap:10px;}
+  .worked-steps li{counter-increment:worked-step;position:relative;padding-left:31px;min-width:0;}
+  .worked-steps li::before{content:counter(worked-step);position:absolute;left:0;top:.08em;width:21px;height:21px;
+    display:grid;place-items:center;border-radius:7px;background:var(--fill-2);color:var(--label-2);
+    font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .worked-paragraphs{display:flex;flex-direction:column;gap:9px;}
+  .worked-paragraphs p{margin:0;}
+  .worked .math-display{margin:7px 0 8px;}
 
   .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
   .lookrow{display:flex;gap:12px;padding:0 16px;border:0;margin:0;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
