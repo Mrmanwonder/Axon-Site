@@ -66,7 +66,7 @@ import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
-  PAPER_TYPES,
+  paperTypesFor,
   startCheckout,
 } from "../data/modules";
 import type { Guardian, Student } from "../data/modules";
@@ -835,6 +835,7 @@ export default function Onboarding() {
     hapticFirm();
     void finishOnboarding({ guardian: guardian!, student: student!, firstPaperType: value });
   };
+  const paperTypes = paperTypesFor(student?.provider_key ?? curriculum.providerKey);
 
   return (
     <Shell {...shellProps} title="Your first paper">
@@ -846,14 +847,14 @@ export default function Onboarding() {
       </div>
       <div className="sectitle">School test</div>
       <div className="list">
-        {PAPER_TYPES.filter((t) => !isScheme(t)).map((t) => (
+        {paperTypes.filter((t) => !isScheme(t)).map((t) => (
           <Method key={t.value} icon={ICONS.paper} t1={t.label} onClick={() => choose(t.value)} />
         ))}
       </div>
       <div className="subnote">Explained from your teacher&rsquo;s marks and remarks.</div>
       <div className="sectitle">Board paper</div>
       <div className="list">
-        {PAPER_TYPES.filter(isScheme).map((t) => (
+        {paperTypes.filter(isScheme).map((t) => (
           <Method key={t.value} icon={ICONS.stamp} t1={t.label} onClick={() => choose(t.value)} />
         ))}
       </div>
