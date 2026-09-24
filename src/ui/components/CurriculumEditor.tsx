@@ -374,6 +374,9 @@ export default function CurriculumEditor({
             type="button"
             className={"curriculum-subject-chip" + (selected ? " on" : "")}
             aria-pressed={selected}
+            title={subjectSecondary(offering)
+              ? `${offering.display_name} ${subjectSecondary(offering)}`
+              : offering.display_name}
             disabled={disabled}
             onClick={() => toggleSubject(offering)}
           >
