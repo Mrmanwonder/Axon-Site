@@ -39,7 +39,7 @@ function buildDotFace(index) {
   const points = new Map();
   const add = (x, y, role = 'skin', tone = role === 'skin' || role === 'shirt' ? 1 : 2) => {
     if (x < 0 || x >= 20 || y < 0 || y >= 20) return;
-    points.set(\`\${x}:\${y}\`, { x, y, tone, fill: palette[role] });
+    points.set(`${x}:${y}`, { x, y, tone, fill: palette[role] });
   };
 
   // Shoulders make these read as tiny portraits rather than floating blobs.
@@ -109,8 +109,8 @@ const FACE_BACKGROUNDS = [
 
 const DOT_FACES = Array.from({ length: 8 }, (_, index) => ({
   kind: 'dot-face',
-  key: \`dotFace\${String(index + 1).padStart(2, '0')}\`,
-  title: \`Dot portrait \${index + 1}\`,
+  key: `dotFace${String(index + 1).padStart(2, '0')}`,
+  title: `Dot portrait ${index + 1}`,
   backgroundPreset: FACE_BACKGROUNDS[index],
   glyph: { size: 20, points: buildDotFace(index) },
 }));
