@@ -521,10 +521,24 @@ function subjectGroup(row) {
     : null;
 }
 
+function isManualCbseInternal(row) {
+  if (!row || !row.metadata) return false;
+  const group = loose(row.metadata.group || row.metadata.category || "");
+  return group === "internal" || group === "internal assessment";
+}
+
 function compare(provider, generated, current) {
-  const next = new Map(generated.map(function (row) { return [identity(provider, row), row]; }));
+  // CBSE's internal-assessment rows are preserved in Axon but are not exposed
+  // consistently as normal subject-list entries in the first-party HTML.
+  // Never auto-retire them from a missing <li>; they remain manually reconciled.
+  const generatedForCompare = provider === "cbse"
+    ? generated.filter(function (row) { return !isManualCbseInternal(row); })
+    : generated;
+  const next = new Map(generatedForCompare.map(function (row) { return [identity(provider, row), row]; }));
   const activeCurrent = current.filter(function (row) {
-    return row.availability === "active";
+    if (row.availability !== "active") return false;
+    if (provider === "cbse" && isManualCbseInternal(row)) return false;
+    return true;
   });
   const prev = new Map(activeCurrent.map(function (row) { return [identity(provider, row), row]; }));
   const added = [...next.keys()].filter(function (key) { return !prev.has(key); }).sort();
