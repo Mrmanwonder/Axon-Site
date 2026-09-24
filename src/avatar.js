@@ -23,154 +23,158 @@ const GRADIENTS = [
   { kind: 'gradient', key: 'copperRose', title: 'Copper rose', type: 'volumetric', c: ['#ffc6b0', '#bd6e86', '#4c263b', '#ffe4ca'] },
 ];
 
-const FACE_GRID_SIZE = 28;
+const FACE_GRID_SIZE = 36;
+
+const FACE_PALETTES = [
+  { skin: '#D99A73', skinLight: '#F4BE98', skinShadow: '#B97758', hair: '#2A1E1D', feature: '#241A1B', lip: '#8E4C52', shirt: '#DCE8FF', shirtShadow: '#8DA7DD' },
+  { skin: '#8F5A43', skinLight: '#B9795D', skinShadow: '#704333', hair: '#171619', feature: '#171416', lip: '#713B43', shirt: '#A9D2FF', shirtShadow: '#5B82C2' },
+  { skin: '#F0B58F', skinLight: '#FFD0AE', skinShadow: '#CD8C69', hair: '#5A3327', feature: '#30201E', lip: '#A6535B', shirt: '#A9E6C7', shirtShadow: '#5BA681' },
+  { skin: '#6F4536', skinLight: '#95634D', skinShadow: '#533127', hair: '#191719', feature: '#151315', lip: '#7C414A', shirt: '#FFB59F', shirtShadow: '#C66F60' },
+  { skin: '#E2A47D', skinLight: '#F6C3A0', skinShadow: '#BC795B', hair: '#714731', feature: '#2A1E1A', lip: '#98505A', shirt: '#EFE39A', shirtShadow: '#B4A64E' },
+  { skin: '#5D3A2F', skinLight: '#805545', skinShadow: '#432820', hair: '#211A19', feature: '#141214', lip: '#70414B', shirt: '#B2A9FF', shirtShadow: '#6C63C7' },
+  { skin: '#C98564', skinLight: '#E8AA87', skinShadow: '#A7654B', hair: '#3A2421', feature: '#25191A', lip: '#8C4650', shirt: '#B8E5FF', shirtShadow: '#6A9EC0' },
+  { skin: '#F2C4A4', skinLight: '#FFE0C6', skinShadow: '#D59A78', hair: '#8B5A3C', feature: '#35231E', lip: '#A55A64', shirt: '#F1B6D1', shirtShadow: '#B96E91' },
+];
 
 function buildDotFace(index) {
+  const palette = FACE_PALETTES[index];
   const points = new Map();
-  const add = (x, y, tone = 2) => {
+  const put = (x, y, fill, tone = 2) => {
     if (x < 0 || x >= FACE_GRID_SIZE || y < 0 || y >= FACE_GRID_SIZE) return;
-    const key = x + ':' + y;
-    const previous = points.get(key);
-    if (!previous || tone > previous.tone) points.set(key, { x, y, tone });
+    points.set(`${x}:${y}`, { x, y, tone, fill });
   };
-  const hair = (x, y) => add(x, y, 2);
-
-  // The reference language is a tiny pixel portrait: the gradient itself is
-  // the "skin", while a fine dot matrix draws the silhouette and expression.
-  // That keeps the face light and graphic instead of becoming a dense mask.
-  for (let y = 5; y <= 23; y += 1) {
-    const dy = (y - 14) / 9.5;
-    const radius = Math.round(7.4 * Math.sqrt(Math.max(0, 1 - dy * dy)));
-    add(14 - radius, y, 1);
-    add(14 + radius, y, 1);
-    if (y === 5 || y === 23) {
-      for (let x = 14 - radius; x <= 14 + radius; x += 1) add(x, y, 1);
+  const ellipse = (cx, cy, rx, ry, fill, tone = 2, predicate = null) => {
+    const minX = Math.floor(cx - rx);
+    const maxX = Math.ceil(cx + rx);
+    const minY = Math.floor(cy - ry);
+    const maxY = Math.ceil(cy + ry);
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const inside = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+        if (inside && (!predicate || predicate(x, y))) put(x, y, fill, tone);
+      }
     }
-  }
+  };
+  const rect = (x1, y1, x2, y2, fill, tone = 2, predicate = null) => {
+    for (let y = y1; y <= y2; y += 1) {
+      for (let x = x1; x <= x2; x += 1) {
+        if (!predicate || predicate(x, y)) put(x, y, fill, tone);
+      }
+    }
+  };
 
-  // Ears and a slightly stronger jaw keep the head readable at nav-avatar size.
-  [
-    [6,12],[5,13],[5,14],[5,15],[6,16],
-    [22,12],[23,13],[23,14],[23,15],[22,16],
-    [8,20],[9,21],[10,22],[11,23],
-    [17,23],[18,22],[19,21],[20,20],
-  ].forEach(([x, y]) => add(x, y, 1));
+  // Build a complete portrait from back to front. The face itself is a filled
+  // halftone surface, rather than an outline drawn over the gradient. This is
+  // what makes the portrait read immediately as a person at 44–64 px.
+  ellipse(18, 36.5, 15.5, 9.2, palette.shirtShadow, 1);
+  ellipse(18, 35.2, 14.2, 7.6, palette.shirt, 2);
+  rect(14, 25, 22, 31, palette.skinShadow, 1);
+  rect(15, 24, 21, 30, palette.skin, 2);
 
-  // Eight distinct, friendly silhouettes inspired by classic low-resolution
-  // character portraits. Hair is the only dense region; the face stays open.
+  ellipse(7.7, 19, 2.2, 4.5, palette.skinShadow, 1);
+  ellipse(28.3, 19, 2.2, 4.5, palette.skinShadow, 1);
+  ellipse(18, 18.2, index === 5 ? 10.2 : 10.8, index === 4 ? 12.0 : 12.8, palette.skin, 2);
+
+  // Soft directional lighting gives the tiny portrait volume without using a
+  // photographic texture. Highlights and shadows remain individual dots.
+  ellipse(14.1, 15.6, 5.2, 8.6, palette.skinLight, 1, (x, y) => x <= 16 && y <= 23);
+  ellipse(23.2, 19.6, 4.4, 7.5, palette.skinShadow, 1, (x) => x >= 22);
+
+  const hair = palette.hair;
   if (index === 0) {
-    for (let y = 4; y <= 10; y += 1) {
-      for (let x = 7; x <= 21; x += 1) {
-        if (((x - 14) / 8) ** 2 + ((y - 9) / 5.5) ** 2 <= 1.12
-          && (y <= 7 + (x - 7) * .2 || x <= 9)) hair(x, y);
-      }
-    }
-    for (let y = 8; y <= 13; y += 1) hair(7, y);
+    ellipse(17.2, 8.8, 11.0, 6.7, hair, 2, (x, y) => y <= 11.6 + (x - 8) * .18);
+    rect(7, 9, 10, 17, hair, 2, (x, y) => y <= 18 - (x - 7));
+    rect(24, 8, 28, 12, hair, 2, (x, y) => y <= 14 - (28 - x));
   } else if (index === 1) {
-    for (let y = 4; y <= 9; y += 1) {
-      for (let x = 7; x <= 21; x += 1) {
-        if (((x - 14) / 8) ** 2 + ((y - 9) / 5.5) ** 2 <= 1.15) hair(x, y);
-      }
-    }
-    for (let y = 8; y <= 18; y += 1) {
-      hair(7, y); hair(8, y); hair(20, y); hair(21, y);
-    }
-    for (let x = 8; x <= 11; x += 1) hair(x, 10);
+    ellipse(18, 9.4, 11.2, 6.9, hair, 2);
+    rect(7, 9, 10, 25, hair, 2);
+    rect(26, 9, 29, 25, hair, 2);
+    ellipse(9.5, 23, 2.5, 5.5, hair, 2);
+    ellipse(26.5, 23, 2.5, 5.5, hair, 2);
   } else if (index === 2) {
-    for (let y = 5; y <= 9; y += 1) {
-      for (let x = 7; x <= 21; x += 1) {
-        if (((x - 14) / 8) ** 2 + ((y - 9) / 5.5) ** 2 <= 1.2) hair(x, y);
-      }
-    }
-    [[9,5],[10,4],[11,3],[12,4],[13,2],[14,3],[15,4],[17,4],[18,3],[19,4],[20,5]]
-      .forEach(([x, y]) => hair(x, y));
-    for (let y = 8; y <= 12; y += 1) { hair(7, y); hair(21, y); }
+    const curls = [[9,8],[12,5],[16,5],[20,5],[24,7],[27,10],[8,12],[11,10],[15,9],[19,9],[23,10]];
+    curls.forEach(([cx, cy]) => ellipse(cx, cy, 3.0, 2.8, hair, 2));
+    rect(7, 11, 10, 17, hair, 2);
+    rect(26, 11, 29, 17, hair, 2);
   } else if (index === 3) {
-    for (let y = 4; y <= 9; y += 1) {
-      for (let x = 7; x <= 21; x += 1) {
-        if (((x - 14) / 8) ** 2 + ((y - 9) / 5.5) ** 2 <= 1.15) hair(x, y);
+    ellipse(17, 8.7, 11.2, 6.6, hair, 2);
+    rect(7, 9, 10, 20, hair, 2);
+    for (let y = 7; y <= 15; y += 1) {
+      for (let x = 10; x <= 27; x += 1) {
+        if (y <= 15 - (x - 10) * .38) put(x, y, hair, 2);
       }
     }
-    [[8,10],[9,10],[10,10],[11,10],[12,9],[13,9],[14,8],[15,8],[16,7],[17,7],[18,6]]
-      .forEach(([x, y]) => hair(x, y));
-    for (let y = 8; y <= 18; y += 1) hair(7, y);
   } else if (index === 4) {
-    for (let y = 5; y <= 8; y += 1) {
-      for (let x = 8; x <= 20; x += 1) hair(x, y);
-    }
-    for (let x = 8; x <= 20; x += 2) hair(x, 9);
+    ellipse(18, 7.6, 10.3, 4.7, hair, 2, (_x, y) => y <= 9);
+    rect(8, 8, 28, 10, hair, 2, (x, y) => (x + y) % 2 === 0 || y < 10);
   } else if (index === 5) {
-    for (let y = 4; y <= 9; y += 1) {
-      for (let x = 7; x <= 21; x += 1) {
-        if (((x - 14) / 8) ** 2 + ((y - 9) / 5.5) ** 2 <= 1.15) hair(x, y);
-      }
-    }
-    for (let y = 8; y <= 22; y += 1) {
-      hair(6, y); hair(7, y); hair(21, y); hair(22, y);
-    }
-    for (let x = 8; x <= 11; x += 1) hair(x, 10);
+    ellipse(18, 9.0, 11.5, 6.8, hair, 2);
+    rect(6, 10, 10, 28, hair, 2);
+    rect(26, 10, 30, 28, hair, 2);
+    ellipse(8.5, 25, 3.2, 6.0, hair, 2);
+    ellipse(27.5, 25, 3.2, 6.0, hair, 2);
   } else if (index === 6) {
-    [[8,7],[10,5],[13,4],[16,4],[19,5],[21,7],[7,10],[21,10]].forEach(([cx, cy]) => {
-      for (let y = cy - 1; y <= cy + 1; y += 1) {
-        for (let x = cx - 1; x <= cx + 1; x += 1) {
-          if (Math.abs(x - cx) + Math.abs(y - cy) <= 2) hair(x, y);
-        }
-      }
-    });
-    for (let y = 7; y <= 10; y += 1) {
-      for (let x = 8; x <= 20; x += 1) if ((x + y) % 2 === 0) hair(x, y);
-    }
+    ellipse(11, 7, 5.2, 5.0, hair, 2);
+    ellipse(25, 7, 5.2, 5.0, hair, 2);
+    ellipse(18, 10.3, 10.5, 5.8, hair, 2);
+    rect(7, 11, 10, 18, hair, 2);
+    rect(26, 11, 29, 18, hair, 2);
   } else {
-    for (let y = 5; y <= 9; y += 1) {
-      for (let x = 8; x <= 20; x += 1) hair(x, y);
+    ellipse(18, 8.4, 10.7, 5.8, hair, 2);
+    for (let x = 9; x <= 27; x += 1) {
+      const fringe = 10 + Math.round(2 * Math.sin((x - 9) * .72));
+      for (let y = 8; y <= fringe; y += 1) put(x, y, hair, 2);
     }
-    for (let y = 17; y <= 21; y += 1) {
-      const radius = Math.max(3, 6 - (y - 17));
-      hair(14 - radius, y); hair(14 + radius, y);
-    }
-    for (let x = 11; x <= 17; x += 1) hair(x, 22);
+    rect(8, 10, 10, 16, hair, 2);
   }
 
-  // Brows and eyes use only a handful of dots so expressions stay soft.
-  if (index === 2 || index === 6) {
-    [[9,12],[10,11],[11,12],[17,12],[18,11],[19,12]]
-      .forEach(([x, y]) => add(x, y));
-  } else {
-    [9,10,11,17,18,19].forEach((x) => add(x, 12));
-  }
-  add(10, 14);
-  add(18, 14);
+  // Brows sit above clearly separated eyes. Keeping a full dot between the two
+  // prevents the expression from collapsing into a horizontal stripe.
+  const browY = index === 3 ? 14 : 13;
+  [[11, browY],[12, browY - 1],[13, browY - 1],[14, browY],
+   [22, browY],[23, browY - 1],[24, browY - 1],[25, browY]]
+    .forEach(([x, y]) => put(x, y, hair, 2));
 
-  // A low-opacity three-dot nose is enough to imply form without making the
-  // portrait look uncanny.
-  add(14, 15, 0);
-  add(13, 16, 0);
-  add(14, 16, 0);
+  [[12,16],[13,16],[14,16],[22,16],[23,16],[24,16]]
+    .forEach(([x, y]) => put(x, y, palette.feature, 2));
+  put(13, 16, '#101014', 2);
+  put(23, 16, '#101014', 2);
+  put(12, 15, palette.skinLight, 1);
+  put(22, 15, palette.skinLight, 1);
 
-  const smiles = [
-    [[11,18],[12,19],[13,19],[14,19],[15,19],[16,19],[17,18]],
-    [[12,18],[13,19],[14,19],[15,19],[16,18]],
-    [[12,19],[13,19],[14,19],[15,19],[16,19]],
-    [[11,18],[12,18],[13,19],[14,19],[15,19],[16,18],[17,18]],
-    [[12,18],[13,18],[14,18],[15,18],[16,18]],
-    [[12,19],[13,19],[14,19],[15,19],[16,19]],
-    [[11,18],[12,19],[13,19],[14,19],[15,19],[16,19],[17,18]],
-    [[12,18],[13,19],[14,19],[15,19],[16,18]],
+  // A short shaded nose has enough structure to read without becoming a dark
+  // vertical line, which was one of the old portraits' uncanny artifacts.
+  put(18, 18, palette.skinShadow, 1);
+  put(18, 19, palette.skinShadow, 1);
+  put(17, 20, palette.skinShadow, 1);
+  put(18, 20, palette.skinShadow, 1);
+  put(19, 20, palette.skinShadow, 1);
+
+  const mouths = [
+    [[14,23],[15,24],[16,24],[17,25],[18,25],[19,25],[20,24],[21,24],[22,23]],
+    [[15,24],[16,24],[17,25],[18,25],[19,25],[20,24],[21,24]],
+    [[15,24],[16,25],[17,25],[18,25],[19,25],[20,25],[21,24]],
+    [[14,23],[15,24],[16,25],[17,25],[18,25],[19,25],[20,25],[21,24],[22,23]],
+    [[15,24],[16,24],[17,24],[18,24],[19,24],[20,24],[21,24]],
+    [[15,24],[16,25],[17,25],[18,25],[19,25],[20,25],[21,24]],
+    [[14,23],[15,24],[16,24],[17,25],[18,25],[19,25],[20,24],[21,24],[22,23]],
+    [[15,23],[16,24],[17,25],[18,25],[19,25],[20,24],[21,23]],
   ];
-  smiles[index].forEach(([x, y]) => add(x, y));
+  mouths[index].forEach(([x, y]) => put(x, y, palette.lip, 2));
 
-  // One glasses portrait and one freckled portrait add personality without
-  // changing the underlying friendly face grammar.
-  if (index === 4) {
-    for (let x = 8; x <= 12; x += 1) add(x, 13);
-    for (let x = 16; x <= 20; x += 1) add(x, 13);
-    [14,15].forEach((y) => {
-      add(8, y); add(12, y); add(16, y); add(20, y);
-    });
-    add(13, 14); add(14, 14); add(15, 14);
-  }
+  // Small individual traits keep the set from feeling like recolors.
   if (index === 3) {
-    [[8,16],[10,16],[18,16],[20,16]].forEach(([x, y]) => add(x, y, 0));
+    [[11,20],[13,21],[23,21],[25,20]].forEach(([x, y]) => put(x, y, palette.skinShadow, 1));
+  }
+  if (index === 4) {
+    const glass = '#302B31';
+    for (let x = 10; x <= 15; x += 1) { put(x, 15, glass, 2); put(x, 18, glass, 2); }
+    for (let x = 21; x <= 26; x += 1) { put(x, 15, glass, 2); put(x, 18, glass, 2); }
+    [16,17].forEach((y) => {
+      put(10, y, glass, 2); put(15, y, glass, 2);
+      put(21, y, glass, 2); put(26, y, glass, 2);
+    });
+    [16,17,18,19,20].forEach((x) => put(x, 16, glass, 2));
   }
 
   return [...points.values()];
