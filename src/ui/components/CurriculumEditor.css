@@ -1,153 +1,468 @@
-.curriculum-editor { width: 100%; }
-.curriculum-choice-row,
-.curriculum-stage-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.curriculum-choice,
-.curriculum-stage {
-  min-height: 42px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-chip);
-  background: var(--surface);
-  color: var(--label-2);
-  font: inherit;
-  font-weight: var(--fw-medium);
-  padding: 0 14px;
-  cursor: pointer;
-  transition: background var(--d-state) var(--spring), border-color var(--d-state) var(--spring), color var(--d-state) var(--spring), transform 120ms var(--spring);
-}
-.curriculum-choice:active,
-.curriculum-stage:active,
-.curriculum-add:active,
-.curriculum-result:active,
-.curriculum-remove:active { transform: scale(.96); }
-.curriculum-choice.on,
-.curriculum-stage.on {
-  background: var(--accent-wash);
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--hairline));
-  color: var(--accent);
-}
-.curriculum-selected {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-card);
-  background: var(--surface);
-  overflow: hidden;
-}
-.curriculum-subject {
-  min-height: 54px;
-  padding: 9px 10px 9px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--hairline);
-}
-.curriculum-subject-copy {
+.curriculum-editor {
+  width: 100%;
   min-width: 0;
-  flex: 1;
-  display: grid;
-  gap: 2px;
 }
-.curriculum-subject-copy b,
-.curriculum-result b { font-size: var(--fs-row2); font-weight: var(--fw-medium); }
-.curriculum-subject-copy small,
-.curriculum-result small {
-  display: block;
-  color: var(--label-3);
-  font-size: var(--fs-meta);
-  margin-top: 2px;
+
+.curriculum-stage-title {
+  margin-top: 26px;
 }
-.curriculum-level { flex: 0 0 auto; }
-.curriculum-remove {
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--label-3);
-  font: 22px/1 var(--font-sans);
-  cursor: pointer;
-}
-.curriculum-add {
-  width: 100%;
-  min-height: 48px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-weight: var(--fw-medium);
-  text-align: left;
-  padding: 0 14px;
-  cursor: pointer;
-}
-.curriculum-empty,
-.curriculum-no-results {
-  color: var(--label-3);
-  font-size: var(--fs-body);
-  padding: 14px;
-}
-.curriculum-stage-row > .curriculum-empty { padding: 4px 0; }
-.curriculum-error {
-  margin-top: 8px;
-  color: var(--attention);
-  font-size: var(--fs-meta);
-}
-.curriculum-search {
-  margin: 16px 0 10px;
-  display: grid;
-  gap: 6px;
-}
-.curriculum-search label {
-  color: var(--label-3);
-  font-size: var(--fs-meta);
-  font-weight: var(--fw-medium);
-}
-.curriculum-search input {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-field);
-  background: var(--field);
-  color: var(--label);
-  font: inherit;
-  padding: 0 12px;
-}
-.curriculum-results {
-  max-height: min(54dvh, 520px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--hairline);
+
+.curriculum-stage-card {
+  margin: 0 var(--gutter);
+  min-width: 0;
+  overflow: hidden;
+  border: .5px solid var(--hairline);
   border-radius: var(--r-card);
   background: var(--surface);
 }
-.curriculum-result {
-  width: 100%;
-  min-height: 52px;
-  border: 0;
-  border-bottom: 1px solid var(--hairline);
-  background: transparent;
+[data-theme="light"] .curriculum-stage-card {
+  box-shadow: 0 1px 2px rgba(28,28,40,.05), 0 8px 20px rgba(28,28,40,.05);
+}
+
+/*
+  The card has three real columns: icon, label, selector. The previous flex
+  version gave the selector a fixed width and then added a 50px left margin at
+  narrow widths, which made the control physically wider than the card. Grid
+  lets the copy yield first while keeping the selector inside the card.
+*/
+.curriculum-stage-card-row {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 44px minmax(64px,1fr) minmax(165px,230px);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.curriculum-stage-divider {
+  height: .5px;
+  margin-left: 70px;
+  background: var(--hairline);
+}
+
+.curriculum-row-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--accent);
+  background: var(--accent-wash);
+}
+.curriculum-row-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.curriculum-row-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  align-content: center;
+}
+.curriculum-row-copy b {
+  min-width: 0;
   color: var(--label);
+  font-size: 16px;
+  font-weight: var(--fw-medium);
+  letter-spacing: -.018em;
+}
+.curriculum-row-copy small {
+  min-width: 0;
+  min-height: 18px;
+  overflow: hidden;
+  color: var(--label-3);
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curriculum-class-selector,
+.curriculum-board-selector {
+  --active-index: 0;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  align-items: stretch;
+  padding: 2px;
+  border: .5px solid color-mix(in srgb,var(--hairline) 72%,transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb,var(--surface-sunk) 92%,transparent);
+  overflow: hidden;
+  isolation: isolate;
+}
+.curriculum-class-selector {
+  grid-template-columns: repeat(4,minmax(0,1fr));
+}
+.curriculum-board-selector {
+  grid-template-columns: repeat(3,minmax(0,1fr));
+}
+.curriculum-selector-glider {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  border: .5px solid color-mix(in srgb,var(--hairline) 72%,transparent);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+  transform: translate3d(calc(var(--active-index) * 100%),0,0);
+  transition:
+    transform 220ms cubic-bezier(.1,.9,.2,1),
+    background var(--d-theme) ease;
+  will-change: transform;
+}
+.curriculum-class-selector .curriculum-selector-glider {
+  width: calc((100% - 4px) / 4);
+}
+.curriculum-board-selector .curriculum-selector-glider {
+  width: calc((100% - 4px) / 3);
+}
+.curriculum-class-selector button,
+.curriculum-board-selector button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--label-3);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    transform 120ms cubic-bezier(.1,.9,.2,1);
+  -webkit-tap-highlight-color: transparent;
+}
+.curriculum-board-selector button {
+  font-size: clamp(10px,2.5vw,11.5px);
+  letter-spacing: -.018em;
+}
+.curriculum-class-selector button[aria-pressed="true"],
+.curriculum-board-selector button[aria-pressed="true"] {
+  color: var(--label);
+  font-weight: var(--fw-semibold);
+}
+.curriculum-class-selector button:active:not(:disabled),
+.curriculum-board-selector button:active:not(:disabled) {
+  transform: scale(.92);
+}
+.curriculum-class-selector button:focus-visible,
+.curriculum-board-selector button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.curriculum-class-selector button:disabled,
+.curriculum-board-selector button:disabled {
+  opacity: .28;
+  cursor: default;
+}
+
+.curriculum-subject-heading {
+  margin: 26px var(--text-gutter) 9px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  text-align: left;
-  padding: 9px 12px;
+}
+.curriculum-subject-heading .sectitle {
+  margin: 0;
+}
+.curriculum-search-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--label-3);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 120ms cubic-bezier(.1,.9,.2,1);
+}
+.curriculum-search-toggle svg,
+.curriculum-inline-search > svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.curriculum-search-toggle.on {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.curriculum-search-toggle:active:not(:disabled) {
+  transform: scale(.9);
+}
+.curriculum-search-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.curriculum-search-toggle:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+.curriculum-inline-search {
+  margin: 0 var(--gutter) 10px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: .5px solid var(--hairline);
+  border-radius: 15px;
+  color: var(--label-3);
+  background: var(--surface);
+  animation: curriculum-search-in 180ms var(--spring) both;
+}
+.curriculum-inline-search:focus-within {
+  border-color: color-mix(in srgb,var(--accent) 56%,var(--hairline));
+}
+.curriculum-inline-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--label);
   font: inherit;
+  font-size: 14px;
+}
+.curriculum-inline-search input::placeholder {
+  color: var(--label-3);
+}
+.curriculum-inline-search button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-sunk);
+  color: var(--label-2);
+  font: 18px/1 var(--font-sans);
   cursor: pointer;
 }
-.curriculum-result:last-child { border-bottom: 0; }
-.curriculum-result.on { background: var(--accent-wash); }
-.curriculum-result-state {
-  color: var(--accent);
-  font-size: 18px;
-  font-weight: var(--fw-semibold);
+@keyframes curriculum-search-in {
+  from { opacity: 0; transform: translateY(-5px) scale(.985); }
+  to { opacity: 1; transform: none; }
 }
-.curriculum-no-results { text-align: center; }
-@media (max-width: 480px) {
-  .curriculum-choice,
-  .curriculum-stage { flex: 1 1 auto; }
-  .curriculum-subject { align-items: flex-start; flex-wrap: wrap; }
-  .curriculum-level { margin-left: auto; }
+
+/*
+  Subject options are content-sized pills on roomy screens, but every text
+  fragment is allowed to shrink. A long syllabus name therefore becomes one
+  clean ellipsised row instead of a 2–3 line pseudo-card on a phone.
+*/
+.curriculum-chip-grid {
+  margin: 0 var(--gutter);
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+.curriculum-chip-wrap {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.curriculum-subject-chip {
+  min-width: 0;
+  min-height: 41px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  padding: 0 12px;
+  border: .5px solid var(--hairline);
+  border-radius: 15px;
+  background: var(--surface);
+  color: var(--label);
+  font: inherit;
+  font-size: clamp(13px,3.1vw,14.5px);
+  letter-spacing: -.012em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 120ms cubic-bezier(.1,.9,.2,1);
+  -webkit-tap-highlight-color: transparent;
+}
+.curriculum-subject-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curriculum-subject-chip small {
+  min-width: max-content;
+  flex: 0 0 auto;
+  color: var(--label-3);
+  font-size: clamp(11.5px,2.8vw,13px);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+.curriculum-subject-chip.on {
+  border-color: color-mix(in srgb,var(--accent) 42%,var(--hairline));
+  background: var(--accent-wash);
+}
+.curriculum-subject-chip.on small {
+  color: color-mix(in srgb,var(--accent) 66%,var(--label-2));
+}
+.curriculum-subject-chip:active:not(:disabled) {
+  transform: scale(.96);
+}
+.curriculum-subject-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.curriculum-subject-chip:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.curriculum-chip-levels {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 11px;
+  background: var(--surface-sunk);
+}
+.curriculum-chip-levels button {
+  min-width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--label-3);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 120ms var(--spring);
+}
+.curriculum-chip-levels button.on {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+.curriculum-chip-levels button:active {
+  transform: scale(.9);
+}
+
+.curriculum-empty {
+  width: 100%;
+  color: var(--label-3);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 3px 2px 8px;
+}
+.curriculum-error {
+  margin: 10px var(--gutter) 0;
+  color: var(--attention);
+  font-size: var(--fs-meta);
+}
+
+@media (max-width: 560px) {
+  .curriculum-stage-card-row {
+    grid-template-columns: 40px minmax(58px,1fr) minmax(150px,180px);
+    gap: 10px;
+    padding: 11px 12px;
+  }
+  .curriculum-row-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+  .curriculum-row-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .curriculum-stage-divider {
+    margin-left: 62px;
+  }
+  .curriculum-row-copy b {
+    font-size: 15px;
+  }
+  .curriculum-row-copy small {
+    font-size: 11.5px;
+  }
+  .curriculum-class-selector button {
+    font-size: 12px;
+  }
+  .curriculum-board-selector button {
+    padding-inline: 2px;
+  }
+
+  .curriculum-chip-grid {
+    gap: 7px;
+  }
+  .curriculum-subject-chip {
+    min-height: 39px;
+    padding-inline: 11px;
+    border-radius: 14px;
+  }
+}
+
+/* Very narrow Android/iPhone widths get a deliberate second selector row.
+   Crucially it starts at the text column and ends at the card edge; it never
+   uses margin + width:100%, so there is nothing to clip. */
+@media (max-width: 360px) {
+  .curriculum-stage-card-row {
+    grid-template-columns: 40px minmax(0,1fr);
+    align-items: center;
+  }
+  .curriculum-class-selector,
+  .curriculum-board-selector {
+    grid-column: 2 / -1;
+    width: 100%;
+    margin-top: 1px;
+  }
+  .curriculum-row-copy {
+    align-self: center;
+  }
+  .curriculum-stage-divider {
+    margin-left: 62px;
+  }
+
+  .curriculum-subject-chip {
+    font-size: 13px;
+  }
+  .curriculum-subject-chip small {
+    font-size: 11.5px;
+  }
+}
+
+/* On larger onboarding columns, keep the chip field readable rather than
+   stretching a single option into a desktop-sized slab. */
+@media (min-width: 700px) {
+  .curriculum-subject-chip {
+    max-width: 390px;
+  }
 }

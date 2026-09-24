@@ -16,12 +16,13 @@ test('avatar preset keys are unique and include the new Axon families', () => {
   }
 });
 
-test('dot-face presets are fine local portrait grids, never image URLs', () => {
+test('dot-face presets stay light, detailed local circle grids', () => {
   const faces = PRESETS.filter(preset => preset.kind === 'dot-face');
   assert.equal(faces.length, 8);
   for (const face of faces) {
     assert.equal(face.glyph.size, 28);
-    assert.ok(face.glyph.points.length > 60, 'portrait needs enough dots to read as a face');
+    assert.ok(face.glyph.points.length > 70, 'portrait needs enough points to read as a face');
+    assert.ok(face.glyph.points.length < 230, 'portrait should stay airy rather than becoming a filled mask');
     assert.ok(face.glyph.points.every(point =>
       Number.isInteger(point.x) && Number.isInteger(point.y)
       && point.x >= 0 && point.x < 28 && point.y >= 0 && point.y < 28

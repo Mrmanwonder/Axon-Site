@@ -187,7 +187,7 @@ export default function Onboarding() {
   const [studentFirst, setStudentFirst] = useState("");
   const [avatarKey, setAvatarKey] = useState("dreamBloom");
   const [curriculum, setCurriculum] = useState<CurriculumSelection>({
-    providerKey: "",
+    providerKey: "cambridge",
     programmeKey: "",
     stageKey: "",
     subjects: [],
@@ -682,7 +682,7 @@ export default function Onboarding() {
       if (profileFlight.current) return;
       if (!studentFirst.trim()) return setError("What should we call the student?");
       if (!curriculum.providerKey || !curriculum.programmeKey || !curriculum.stageKey) {
-        return setError("Choose the student's curriculum and stage.");
+        return setError("Choose the student's board and class.");
       }
       if (!curriculum.subjects.length) return setError("Pick at least one subject.");
       if (!curriculumSelectionIsComplete(curriculum)) {
@@ -742,7 +742,14 @@ export default function Onboarding() {
           </div>
         )}
 
-        <div className="obfields">
+        <div className="student-identity-row">
+          <AvatarPicker
+            value={avatarKey}
+            label={studentFirst}
+            onChange={setAvatarKey}
+            disabled={profileBusy}
+            className="onboarding-avatar-picker"
+          />
           <Field
             id="ob-sname"
             label="First name"
@@ -752,24 +759,15 @@ export default function Onboarding() {
           />
         </div>
 
-        <div className="sectitle">Picture</div>
-        <AvatarPicker
-          value={avatarKey}
-          label={studentFirst}
-          onChange={setAvatarKey}
-          disabled={profileBusy}
-          className="onboarding-avatar-picker"
-        />
-
         <CurriculumEditor
           value={curriculum}
           onChange={setCurriculum}
           disabled={profileBusy}
         />
 
-        <div className="subnote">
-          Curriculum choices come from the current official catalog. Your picture
-          is generated inside Axon — no profile photo is uploaded.
+        <div className="subnote student-profile-note">
+          Board, class and subjects come from the official catalog. The profile
+          picture is generated inside Axon — no photo is uploaded.
         </div>
 
         <div className="obfoot">

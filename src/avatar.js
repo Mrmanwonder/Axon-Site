@@ -140,6 +140,16 @@ function buildDotFace(index) {
   }
   add(10, 14);
   add(18, 14);
+  // A second, softer dot beneath each eye gives the expression just enough
+  // depth at 58–70px without turning the face back into a dense mask.
+  add(10, 15, 0);
+  add(18, 15, 0);
+  // Inner-ear and temple dots are the small detail the previous set was
+  // missing. They help the silhouette read as a head rather than an outline.
+  add(6, 14, 0);
+  add(22, 14, 0);
+  add(8, 18, 0);
+  add(20, 18, 0);
 
   // A low-opacity three-dot nose is enough to imply form without making the
   // portrait look uncanny.
@@ -171,6 +181,12 @@ function buildDotFace(index) {
   }
   if (index === 3) {
     [[8,16],[10,16],[18,16],[20,16]].forEach(([x, y]) => add(x, y, 0));
+  }
+  if (index === 0 || index === 5) {
+    [[9,17],[19,17]].forEach(([x, y]) => add(x, y, 0));
+  }
+  if (index === 7) {
+    [[12,21],[16,21],[13,22],[15,22]].forEach(([x, y]) => add(x, y, 0));
   }
 
   return [...points.values()];
