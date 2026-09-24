@@ -98,6 +98,11 @@ async function fetchBytes(source) {
   return { bytes: bytes, sha256: sha256(bytes), fetched_at: new Date().toISOString() };
 }
 
+function mainContent(html) {
+  const match = /<main\b[^>]*>([\s\S]*?)<\/main>/i.exec(html);
+  return match ? match[1] : html;
+}
+
 function extractAnchors(html) {
   const rows = [];
   const re = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
@@ -164,7 +169,7 @@ function cambridgeBase(anchor, source) {
 export function parseCambridgeIgcse(html, source) {
   source = source || SOURCES.cambridge_igcse;
   const byCode = new Map();
-  for (const anchor of extractAnchors(html)) {
+  for (const anchor of extractAnchors(mainContent(html))) {
     const row = cambridgeBase(anchor, source);
     if (row) byCode.set(row.external_code, row);
   }
@@ -179,7 +184,7 @@ export function parseCambridgeIgcse(html, source) {
 export function parseCambridgeAdvanced(html, source) {
   source = source || SOURCES.cambridge_advanced;
   const byCode = new Map();
-  for (const anchor of extractAnchors(html)) {
+  for (const anchor of extractAnchors(mainContent(html))) {
     const row = cambridgeBase(anchor, source, "/programmes-and-qualifications/cambridge-international-as-and-a-level-");
     if (!row) continue;
     row.metadata.only_as = /\(\s*AS(?: Level)? only\s*\)/i.test(anchor.text);
