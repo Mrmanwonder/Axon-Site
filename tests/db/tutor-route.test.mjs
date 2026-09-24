@@ -41,6 +41,7 @@ test('tutor model routing is explicit and training stays disabled', async () => 
         ('explain', 'gemini-3.1-flash-lite', 'explain_tier1.v2', true);
     `);
     await db.exec(await readFile(new URL('../../supabase/migrations/20260924111500_intelligence_v2_model_routes.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20260924052811_intelligence_v2_observability_contract.sql', import.meta.url), 'utf8'));
     const result = await db.query("select stage, primary_model, thinking_level, allow_training, prompt_version from public.model_route order by stage");
     assert.equal(result.rows.length, 6);
     assert.ok(result.rows.every((row) => row.primary_model === 'gemini-3.5-flash-lite'));
@@ -50,7 +51,30 @@ test('tutor model routing is explicit and training stays disabled', async () => 
       { adjudicate: 'high', content: 'medium', explain: 'medium', structure: 'low', triage: 'minimal', tutor: 'medium' },
     );
     assert.equal(result.rows.find((row) => row.stage === 'explain').prompt_version, 'paper_feedback.v2');
-    await db.exec("insert into public.model_call(stage) values ('tutor')");
+    await db.exec(`
+      insert into public.model_call(
+        stage, intent, verification_failures, tool_calls, grounding_used,
+        repair_attempted, answer_status
+      ) values (
+        'tutor', 'current_information', '[{"code":"source_required"}]',
+        '["tavily.search"]', true, true, 'partially_supported'
+      )
+    `);
+    const telemetry = await db.query(`
+      select intent, verification_failures, tool_calls, grounding_used,
+             repair_attempted, answer_status
+      from public.model_call
+    `);
+    assert.deepEqual(telemetry.rows[0], {
+      intent: 'current_information',
+      verification_failures: [{ code: 'source_required' }],
+      tool_calls: ['tavily.search'],
+      grounding_used: true,
+      repair_attempted: true,
+      answer_status: 'partially_supported',
+    });
+    await assert.rejects(db.exec("insert into public.model_call(stage, intent) values ('tutor', 'invented')"));
+    await assert.rejects(db.exec("insert into public.model_call(stage, tool_calls) values ('tutor', '{}')"));
     await assert.rejects(db.exec("insert into public.model_call(stage) values ('unknown')"));
   } finally {
     await db.close();
