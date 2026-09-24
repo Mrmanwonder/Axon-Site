@@ -16,28 +16,27 @@ test('avatar preset keys are unique and include the new Axon families', () => {
   }
 });
 
-test('dot-face presets are fine local portrait grids, never image URLs', () => {
+test('dot-face presets stay light, detailed local circle grids', () => {
   const faces = PRESETS.filter(preset => preset.kind === 'dot-face');
   assert.equal(faces.length, 8);
   for (const face of faces) {
-    assert.equal(face.glyph.size, 36);
-    assert.ok(face.glyph.points.length > 300, 'portrait needs a filled halftone silhouette, not a sparse outline');
+    assert.equal(face.glyph.size, 28);
+    assert.ok(face.glyph.points.length > 70, 'portrait needs enough points to read as a face');
+    assert.ok(face.glyph.points.length < 230, 'portrait should stay airy rather than becoming a filled mask');
     assert.ok(face.glyph.points.every(point =>
       Number.isInteger(point.x) && Number.isInteger(point.y)
-      && point.x >= 0 && point.x < 36 && point.y >= 0 && point.y < 36
+      && point.x >= 0 && point.x < 28 && point.y >= 0 && point.y < 28
     ));
     assert.ok(face.glyph.points.every(point => [0, 1, 2].includes(point.tone)));
-    assert.ok(new Set(face.glyph.points.map(point => point.tone)).size >= 2,
-      'portrait needs primary and secondary dot tones');
-    assert.ok(face.glyph.points.every(point => /^#[0-9a-f]{6}$/i.test(point.fill)),
-      'every portrait dot should carry an explicit local palette color');
-    assert.ok(new Set(face.glyph.points.map(point => point.fill)).size >= 6,
-      'portrait needs distinct skin, hair, feature, lip, and clothing colors');
+    assert.ok(new Set(face.glyph.points.map(point => point.tone)).size >= 3,
+      'portrait needs feature, outline, and soft-detail tones');
+    assert.ok(face.glyph.points.every(point => !('fill' in point)),
+      'portrait should inherit one clean ink color over its gradient');
     assert.equal('src' in face, false);
     assert.equal('url' in face, false);
   }
   assert.equal(new Set(faces.map(face =>
-    face.glyph.points.map(point => point.x + ':' + point.y + ':' + point.tone + ':' + point.fill).join('|')
+    face.glyph.points.map(point => point.x + ':' + point.y + ':' + point.tone).join('|')
   )).size, faces.length, 'each portrait silhouette should be distinct');
 });
 
