@@ -71,7 +71,7 @@ test("CBSE skill parser preserves official subject codes by fixed class section"
     "<li>AGRICULTURE (408) <a href='/ag-x'>X</a></li>",
     "<h4>Classes XI-XII</h4>",
     "<li>RETAIL (801) <a href='/retail-xi'>XI</a> | <a href='/retail-xii'>XII</a></li>",
-    "<td>BUSINESS ADMINISTRATION (833)</td>",
+    "<li>BUSINESS ADMINISTRATION (833) <a href='/business-xi'>XI</a> | <a href='/business-xii'>XII</a></li>",
     "<h4>Skill Modules (Optional)</h4>",
     "<h4>Class IX</h4>",
     "<li>SECURITY (403) <a href='/old'>IX</a></li>",
