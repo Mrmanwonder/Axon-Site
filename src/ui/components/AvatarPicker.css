@@ -151,6 +151,11 @@
   content: "";
   position: absolute;
   inset: -42% -22% -26%;
+  background: linear-gradient(118deg,
+    var(--avatar-wash-3) 0%,
+    var(--avatar-wash-1) 34%,
+    var(--avatar-wash-2) 68%,
+    var(--avatar-wash-4) 100%);
   background:
     radial-gradient(58% 72% at 14% 20%,
       color-mix(in oklab, var(--avatar-wash-1) 92%, transparent) 0%,
