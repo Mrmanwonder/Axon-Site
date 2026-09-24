@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { hapticTick } from "../lib/haptics";
 import {
   PROVIDER_KEYS,
@@ -122,7 +123,7 @@ export default function CurriculumEditor({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [preferredClass, setPreferredClass] = useState(11);
+  const [preferredClass, setPreferredClass] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,6 +131,7 @@ export default function CurriculumEditor({
       setStageChoices([]);
       return;
     }
+    setStageChoices([]);
     setLoadingStages(true);
     setCatalogError(null);
     (async () => {
@@ -164,15 +166,25 @@ export default function CurriculumEditor({
   useEffect(() => {
     if (!value.providerKey || loadingStages || !stageChoices.length) return;
     const selectedClass = selectedStage ? inferredClass(selectedStage.stage) : null;
-    if (selectedClass === preferredClass) return;
 
-    const exact = stageByClass.get(preferredClass);
+    // Existing profiles keep their stored class when the editor first loads.
+    // New onboarding profiles have no selected stage, so Class 11 is the
+    // intentional starting point shown in the design.
+    if (selectedClass && preferredClass == null) {
+      setPreferredClass(selectedClass);
+      return;
+    }
+
+    const targetClass = preferredClass ?? 11;
+    if (selectedClass === targetClass) return;
+
+    const exact = stageByClass.get(targetClass);
     const fallback = exact ?? [...stageChoices]
-      .sort((a, b) => Math.abs((inferredClass(a.stage) ?? 99) - preferredClass)
-        - Math.abs((inferredClass(b.stage) ?? 99) - preferredClass))[0];
+      .sort((a, b) => Math.abs((inferredClass(a.stage) ?? 99) - targetClass)
+        - Math.abs((inferredClass(b.stage) ?? 99) - targetClass))[0];
     if (!fallback) return;
     const nextClass = inferredClass(fallback.stage);
-    if (nextClass) setPreferredClass(nextClass);
+    if (nextClass && nextClass !== preferredClass) setPreferredClass(nextClass);
     onChange({
       ...value,
       programmeKey: fallback.programme.key,
@@ -203,16 +215,20 @@ export default function CurriculumEditor({
   const selectedById = useMemo(() => new Map(value.subjects.map(item => [item.offering.id, item])), [value.subjects]);
   const shownOfferings = useMemo(() => filterSubjectOfferings(offerings, query), [offerings, query]);
 
-  const activeClass = selectedStage ? inferredClass(selectedStage.stage) ?? preferredClass : preferredClass;
+  const activeClass = selectedStage ? inferredClass(selectedStage.stage) ?? preferredClass ?? 11 : preferredClass ?? 11;
   const classIndex = Math.max(0, CLASS_LEVELS.indexOf(activeClass as typeof CLASS_LEVELS[number]));
   const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(value.providerKey || "cambridge"));
 
   const chooseProvider = (providerKey: "cambridge" | "cbse" | "ib") => {
     if (disabled || providerKey === value.providerKey) return;
     hapticTick();
-    const nextClass = providerKey === "ib" && preferredClass < 11 ? 11 : preferredClass;
+    const currentClass = preferredClass ?? activeClass ?? 11;
+    const nextClass = providerKey === "ib" && currentClass < 11 ? 11 : currentClass;
     setPreferredClass(nextClass);
+    setStageChoices([]);
+    setOfferings([]);
     setQuery("");
+    setSearchOpen(false);
     onChange({ providerKey, programmeKey: "", stageKey: "", subjects: [] });
   };
 
@@ -266,7 +282,7 @@ export default function CurriculumEditor({
           className="curriculum-class-selector"
           role="group"
           aria-label="Class"
-          style={{ "--active-index": classIndex } as React.CSSProperties}
+          style={{ "--active-index": classIndex } as CSSProperties}
         >
           <span className="curriculum-selector-glider" aria-hidden="true" />
           {CLASS_LEVELS.map(classLevel => {
@@ -297,7 +313,7 @@ export default function CurriculumEditor({
           className="curriculum-board-selector"
           role="group"
           aria-label="Board"
-          style={{ "--active-index": boardIndex } as React.CSSProperties}
+          style={{ "--active-index": boardIndex } as CSSProperties}
         >
           <span className="curriculum-selector-glider" aria-hidden="true" />
           {PROVIDER_KEYS.map(key => (
