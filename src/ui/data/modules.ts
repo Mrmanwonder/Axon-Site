@@ -597,6 +597,7 @@ export type AvatarPreset =
 export type AvatarRender = {
   kind: "gradient" | "dot-face";
   background: string;
+  palette: [string, string, string, string];
   color: string;
   preset: string;
   glyph: { size: number; points: DotFacePoint[] } | null;
