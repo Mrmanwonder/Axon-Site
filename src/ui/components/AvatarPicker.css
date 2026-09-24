@@ -293,16 +293,16 @@
 }
 
 .onboarding-avatar-picker {
-  width: 76px;
-  max-width: 76px;
+  width: clamp(64px,18vw,76px);
+  max-width: 100%;
   margin: 0;
   align-self: center;
   justify-self: center;
 }
 .onboarding-avatar-picker .avatar-trigger .avatar-preview {
-  width: 70px;
-  height: 70px;
-  font-size: 22px;
+  width: clamp(60px,16.5vw,70px);
+  height: clamp(60px,16.5vw,70px);
+  font-size: clamp(19px,5vw,22px);
 }
 .onboarding-avatar-picker .avatar-trigger-badge {
   right: 0;
@@ -310,6 +310,9 @@
 }
 
 @media (max-width: 480px) {
+  .onboarding-avatar-picker {
+    width: min(100%,68px);
+  }
   .sheet.avatar-dialog {
     --avatar-option-max: 58px;
     padding-inline: 18px;
@@ -329,6 +332,14 @@
   .avatar-dialog-footer { margin-top: 8px; }
   .avatar-done { min-height: 40px; padding-block: 9px; }
   .avatar-ambient { height: 136px; }
+}
+
+@media (max-width: 360px) {
+  .onboarding-avatar-picker { width: 62px; }
+  .onboarding-avatar-picker .avatar-trigger .avatar-preview {
+    width: 58px;
+    height: 58px;
+  }
 }
 
 @media (max-height: 520px) {
