@@ -34,9 +34,9 @@ export function AvatarDisc({
             key={index}
             cx={point.x + .5}
             cy={point.y + .5}
-            r=".36"
-            fill={point.fill ?? "currentColor"}
-            opacity={point.tone === 0 ? .5 : point.tone === 1 ? .88 : .98}
+            r=".28"
+            fill="currentColor"
+            opacity={point.tone === 0 ? .46 : point.tone === 1 ? .82 : .96}
           />
         ))}
       </svg>
