@@ -16,22 +16,27 @@ test('avatar preset keys are unique and include the new Axon families', () => {
   }
 });
 
-test('dot-face presets are local circle-grid definitions, never image URLs', () => {
+test('dot-face presets are fine local portrait grids, never image URLs', () => {
   const faces = PRESETS.filter(preset => preset.kind === 'dot-face');
   assert.equal(faces.length, 8);
   for (const face of faces) {
-    assert.equal(face.glyph.size, 20);
-    assert.ok(face.glyph.points.length > 20);
+    assert.equal(face.glyph.size, 28);
+    assert.ok(face.glyph.points.length > 60, 'portrait needs enough dots to read as a face');
     assert.ok(face.glyph.points.every(point =>
       Number.isInteger(point.x) && Number.isInteger(point.y)
-      && point.x >= 0 && point.x < 20 && point.y >= 0 && point.y < 20
+      && point.x >= 0 && point.x < 28 && point.y >= 0 && point.y < 28
     ));
-    assert.ok(face.glyph.points.every(point => /^#[0-9a-f]{6}$/i.test(point.fill)));
-    assert.ok(new Set(face.glyph.points.map(point => point.fill)).size >= 4,
-      'portrait needs distinct skin, hair, features, and clothing');
+    assert.ok(face.glyph.points.every(point => [0, 1, 2].includes(point.tone)));
+    assert.ok(new Set(face.glyph.points.map(point => point.tone)).size >= 3,
+      'portrait needs feature, outline, and soft-detail tones');
+    assert.ok(face.glyph.points.every(point => !('fill' in point)),
+      'portrait should inherit one clean ink color over its gradient');
     assert.equal('src' in face, false);
     assert.equal('url' in face, false);
   }
+  assert.equal(new Set(faces.map(face =>
+    face.glyph.points.map(point => point.x + ':' + point.y + ':' + point.tone).join('|')
+  )).size, faces.length, 'each portrait silhouette should be distinct');
 });
 
 test('new volumetric gradients stay static CSS and contain no fetched assets', () => {
