@@ -66,9 +66,12 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
     "<h3>Optional Skill Subjects</h3>",
     "<li>RETAIL (401) <a href='/retail-x'>IX</a></li>",
     "<li>INFORMATION TECHNOLOGY (402) <a href='/it-x'>IX</a></li>",
+    "<td>Class X</td>",
+    "<td>AGRICULTURE (408)</td>",
     "<h2>Senior Secondary Classes XI-XII</h2>",
     "<h3>Optional Skill Subjects</h3>",
     "<li>801 - Retail</li>",
+    "<td>BUSINESS ADMINISTRATION (833)</td>",
     "<h4>Skill Modules (Optional)</h4>",
     "<h4>Class IX</h4>",
     "<li>AGRICULTURE (408) <a href='/old'>IX</a></li>",
@@ -79,6 +82,9 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
   assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "402"));
   assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "801"));
   assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "801"));
+  assert.ok(rows.some(row => row.stage_key === "cbse_10" && row.external_code === "408"));
+  assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "833"));
+  assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "833"));
   assert.equal(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "408"), false);
 });
 
