@@ -282,10 +282,29 @@ function sliceHtmlSection(html, startPattern, endPattern) {
   return end ? tail.slice(0, end.index) : tail;
 }
 
-function parseCbseCurriculumSection(html, stages, source) {
+function findCbseToken(tokens, pattern, fromIndex) {
+  const start = Math.max(0, fromIndex || 0);
+  for (let i = start; i < tokens.length; i++) {
+    if (pattern.test(tokens[i].text)) return i;
+  }
+  return -1;
+}
+
+function cbseTokenSlice(tokens, startPattern, endPattern, fromIndex) {
+  const start = findCbseToken(tokens, startPattern, fromIndex || 0);
+  if (start < 0) return { tokens: [], start: -1, end: -1 };
+  const end = endPattern ? findCbseToken(tokens, endPattern, start + 1) : tokens.length;
+  return {
+    tokens: tokens.slice(start + 1, end < 0 ? tokens.length : end),
+    start: start,
+    end: end < 0 ? tokens.length : end
+  };
+}
+
+function parseCbseCurriculumSection(tokens, stages, source) {
   let category = null;
   const rows = [];
-  for (const token of tokenizeCbse(html, true)) {
+  for (const token of tokens) {
     if (token.type === "heading") {
       category = cbseCategory(token.text, category);
       continue;
@@ -310,32 +329,38 @@ function parseCbseCurriculumSection(html, stages, source) {
 
 export function parseCbseCurriculum(html, source) {
   source = source || SOURCES.cbse_curriculum;
-  const current = sliceHtmlSection(
-    html,
-    /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i,
-    null
-  ) || html;
+  const tokens = tokenizeCbse(html, true);
 
-  const class9 = sliceHtmlSection(
-    current,
+  const currentStart = findCbseToken(
+    tokens,
+    /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i,
+    0
+  );
+  const from = currentStart >= 0 ? currentStart + 1 : 0;
+
+  const class9 = cbseTokenSlice(
+    tokens,
     /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+IX\)/i,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i
-  );
-  const class10 = sliceHtmlSection(
-    current,
     /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i
+    from
   );
-  const senior = sliceHtmlSection(
-    current,
+  const class10 = cbseTokenSlice(
+    tokens,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i,
     /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i,
-    /©|Contact\s+Us/i
+    class9.end > 0 ? class9.end : from
+  );
+  const senior = cbseTokenSlice(
+    tokens,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i,
+    /(?:Contact\s+Us|©)/i,
+    class10.end > 0 ? class10.end : from
   );
 
   const rows = [
-    ...parseCbseCurriculumSection(class9, ["cbse_9"], source),
-    ...parseCbseCurriculumSection(class10, ["cbse_10"], source),
-    ...parseCbseCurriculumSection(senior, ["cbse_11", "cbse_12"], source)
+    ...parseCbseCurriculumSection(class9.tokens, ["cbse_9"], source),
+    ...parseCbseCurriculumSection(class10.tokens, ["cbse_10"], source),
+    ...parseCbseCurriculumSection(senior.tokens, ["cbse_11", "cbse_12"], source)
   ];
   return sortedUnique(rows, function (row) {
     return row.stage_key + "|" + loose(row.display_name);
@@ -352,10 +377,10 @@ function currentCbseSkillScope(html) {
   return scope;
 }
 
-function parseCbseSkillSection(html, stages, source) {
+function parseCbseSkillSection(tokens, stages, source) {
   let category = "skill";
   const rows = [];
-  for (const token of tokenizeCbse(html, true)) {
+  for (const token of tokens) {
     if (/Mandatory Skill/i.test(token.text)) {
       category = "mandatory_skill";
       continue;
@@ -387,28 +412,29 @@ function parseCbseSkillSection(html, stages, source) {
 
 export function parseCbseSkill(html, source) {
   source = source || SOURCES.cbse_skill;
-  const current = currentCbseSkillScope(html);
+  const tokens = tokenizeCbse(html, true);
 
-  const class9 = sliceHtmlSection(
-    current,
-    /Class\s+IX/i,
-    /Class\s+X/i
+  const session = findCbseToken(tokens, /Session\s+2026\s*-\s*2027/i, 0);
+  const from = session >= 0 ? session + 1 : 0;
+
+  const class9 = cbseTokenSlice(tokens, /^Class\s+IX$/i, /^Class\s+X$/i, from);
+  const class10 = cbseTokenSlice(
+    tokens,
+    /^Class\s+X$/i,
+    /^Classes\s+XI\s*[-–]\s*XII$/i,
+    class9.end > 0 ? class9.end : from
   );
-  const class10 = sliceHtmlSection(
-    current,
-    /Class\s+X/i,
-    /Classes\s+XI\s*[-–]\s*XII/i
-  );
-  const senior = sliceHtmlSection(
-    current,
-    /Classes\s+XI\s*[-–]\s*XII/i,
-    /Skill\s*Modules\s*\(Optional\)/i
+  const senior = cbseTokenSlice(
+    tokens,
+    /^Classes\s+XI\s*[-–]\s*XII$/i,
+    /Skill\s*Modules\s*\(Optional\)/i,
+    class10.end > 0 ? class10.end : from
   );
 
   const rows = [
-    ...parseCbseSkillSection(class9, ["cbse_9"], source),
-    ...parseCbseSkillSection(class10, ["cbse_10"], source),
-    ...parseCbseSkillSection(senior, ["cbse_11", "cbse_12"], source)
+    ...parseCbseSkillSection(class9.tokens, ["cbse_9"], source),
+    ...parseCbseSkillSection(class10.tokens, ["cbse_10"], source),
+    ...parseCbseSkillSection(senior.tokens, ["cbse_11", "cbse_12"], source)
   ];
 
   return sortedUnique(rows, function (row) {
