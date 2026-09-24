@@ -91,8 +91,20 @@ export default function AvatarPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const render = avatarRenderFor({ avatar_seed: value });
   const selected = AVATAR_PRESETS.find(preset => preset.key === render.preset);
-
-  const [wash1, wash2, wash3, wash4] = render.palette;
+  const palettePreset = selected?.kind === "dot-face"
+    ? AVATAR_PRESETS.find(preset => preset.kind === "gradient" && preset.key === selected.backgroundPreset)
+    : selected;
+  const fallbackPalette: [string, string, string, string] = palettePreset?.kind === "gradient"
+    ? [
+        palettePreset.c[0] ?? "#7f67ff",
+        palettePreset.c[1] ?? "#8ff3df",
+        palettePreset.c[2] ?? "#2d1c68",
+        palettePreset.c[3] ?? palettePreset.c[1] ?? "#f5e8ff",
+      ]
+    : ["#7f67ff", "#8ff3df", "#2d1c68", "#f5e8ff"];
+  // Keep the picker resilient to cached/test adapters that still return the
+  // pre-palette AvatarRender shape while production clients roll forward.
+  const [wash1, wash2, wash3, wash4] = render.palette ?? fallbackPalette;
 
   return <div
     className={`avatar-picker ${className}`.trim()}
