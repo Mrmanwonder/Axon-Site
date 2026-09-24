@@ -35,3 +35,19 @@ test("the dialog accent follows the newly selected preset", async () => {
   expect(picker?.style.getPropertyValue("--avatar-gradient")).toContain("radial-gradient");
   expect(screen.getByRole("button", { name: "Pensive" }).getAttribute("aria-pressed")).toBe("true");
 });
+
+
+test("dot portraits use the fine monochrome reference treatment", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<Harness />);
+
+  await user.click(screen.getByRole("button", { name: "Change profile picture" }));
+  await user.click(screen.getByRole("button", { name: "Dot portrait 1" }));
+
+  const selected = container.querySelector('[data-preset="dotFace01"]');
+  expect(selected?.getAttribute("data-kind")).toBe("dot-face");
+  const dots = selected?.querySelectorAll("circle") ?? [];
+  expect(dots.length).toBeGreaterThan(60);
+  expect(Array.from(dots).every(dot => dot.getAttribute("r") === ".28")).toBe(true);
+  expect(Array.from(dots).every(dot => dot.getAttribute("fill") === "currentColor")).toBe(true);
+});
