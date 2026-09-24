@@ -1,7 +1,7 @@
 {
   "name": "axon",
   "version": "0.1.0",
-  "description": "Axon — a study companion for Cambridge (CAIE) students, IGCSE through A Level.",
+  "description": "Axon — a multi-curriculum study companion for Cambridge, CBSE and IB Diploma students.",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/check-production-config.mjs && tsc -b && vite build && node scripts/build-offline-shell.mjs && node scripts/check-bundle-budget.mjs && node scripts/check-production-config.mjs --dist",
@@ -13,7 +13,9 @@
     "test:ui": "vitest run",
     "test:e2e": "playwright test",
     "test:a11y": "playwright test --grep @a11y",
-    "test:db": "node --test tests/db/*.test.mjs"
+    "test:db": "node --test tests/db/*.test.mjs",
+    "curriculum:validate": "node scripts/curriculum/catalog.mjs validate",
+    "curriculum:check": "node scripts/curriculum/catalog.mjs check"
   },
   "repository": {
     "type": "git",
