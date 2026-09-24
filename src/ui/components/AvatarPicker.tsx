@@ -92,9 +92,17 @@ export default function AvatarPicker({
   const render = avatarRenderFor({ avatar_seed: value });
   const selected = AVATAR_PRESETS.find(preset => preset.key === render.preset);
 
+  const [wash1, wash2, wash3, wash4] = render.palette;
+
   return <div
     className={`avatar-picker ${className}`.trim()}
-    style={{ "--avatar-gradient": render.background } as CSSProperties}
+    data-ambient-preset={render.preset}
+    style={{
+      "--avatar-wash-1": wash1,
+      "--avatar-wash-2": wash2,
+      "--avatar-wash-3": wash3,
+      "--avatar-wash-4": wash4,
+    } as CSSProperties}
   >
     <button
       ref={triggerRef}
@@ -121,11 +129,7 @@ export default function AvatarPicker({
       onClose={() => setOpen(false)}
       restoreFocus={triggerRef.current}
     >
-      <div className="avatar-drip" aria-hidden="true">
-        <span className="d1" />
-        <span className="d2" />
-        <span className="d3" />
-      </div>
+      <div className="avatar-ambient" aria-hidden="true" />
       <button
         type="button"
         className="avatar-dialog-close"
