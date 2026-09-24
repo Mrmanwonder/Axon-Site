@@ -42,6 +42,10 @@
   font-size: 15px;
 }
 .avatar-disc svg { width: 100%; height: 100%; display: block; }
+.avatar-disc[data-kind="dot-face"] svg {
+  transform: scale(.96);
+  transform-origin: center;
+}
 
 .avatar-trigger {
   position: relative;
@@ -242,13 +246,13 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  padding: 2px;
+  padding: 0;
   cursor: pointer;
   transition: transform 120ms var(--spring), box-shadow 120ms var(--spring);
   -webkit-tap-highlight-color: transparent;
 }
 .avatar-option .avatar-disc { width: 100%; height: 100%; }
-.avatar-option.on { box-shadow: 0 0 0 2.5px var(--accent); }
+.avatar-option.on { box-shadow: 0 0 0 2px var(--accent); }
 .avatar-option:hover { transform: scale(1.045); }
 .avatar-option:active { transform: scale(.91); }
 .avatar-option:focus-visible {

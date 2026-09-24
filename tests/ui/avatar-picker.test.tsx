@@ -42,7 +42,7 @@ test("the dialog accent follows the newly selected preset", async () => {
 });
 
 
-test("dot portraits use the fine monochrome reference treatment", async () => {
+test("dot portraits render as dense colored halftone faces without hundreds of DOM circles", async () => {
   const user = userEvent.setup();
   const { container } = render(<Harness />);
 
@@ -51,10 +51,11 @@ test("dot portraits use the fine monochrome reference treatment", async () => {
 
   const selected = container.querySelector('[data-preset="dotFace01"]');
   expect(selected?.getAttribute("data-kind")).toBe("dot-face");
-  const dots = selected?.querySelectorAll("circle") ?? [];
-  expect(dots.length).toBeGreaterThan(60);
-  expect(Array.from(dots).every(dot => dot.getAttribute("r") === ".28")).toBe(true);
-  expect(Array.from(dots).every(dot => dot.getAttribute("fill") === "currentColor")).toBe(true);
+  expect(selected?.querySelectorAll("circle")).toHaveLength(0);
+  const colorPaths = selected?.querySelectorAll("path") ?? [];
+  expect(colorPaths.length).toBeGreaterThanOrEqual(6);
+  expect(Array.from(colorPaths).every(path => /^#[0-9a-f]{6}$/i.test(path.getAttribute("fill") ?? ""))).toBe(true);
+  expect(Array.from(colorPaths).some(path => (path.getAttribute("d")?.match(/a0\.38/g)?.length ?? 0) > 100)).toBe(true);
 });
 
 
