@@ -52,12 +52,9 @@ function decodeHtml(value) {
 }
 
 function textOf(html) {
-  return decodeHtml(
-    html
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-  );
+  const fragment = JSDOM.fragment(String(html || ""));
+  for (const node of fragment.querySelectorAll("script,style")) node.remove();
+  return decodeHtml(fragment.textContent || "");
 }
 
 function loose(value) {
