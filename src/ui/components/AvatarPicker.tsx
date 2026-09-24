@@ -10,6 +10,40 @@ import {
 import type { AvatarPreset } from "../data/modules";
 import "./AvatarPicker.css";
 
+function DotFaceGlyph({
+  glyph,
+}: {
+  glyph: { size: number; points: Array<{ x: number; y: number; tone: number; fill?: string }> };
+}) {
+  const groups = new Map<string, typeof glyph.points>();
+  for (const point of glyph.points) {
+    const key = `${point.fill ?? "currentColor"}|${point.tone}`;
+    const group = groups.get(key);
+    if (group) group.push(point);
+    else groups.set(key, [point]);
+  }
+
+  const radius = .38;
+  return <svg viewBox={`0 0 ${glyph.size} ${glyph.size}`} focusable="false">
+    {[...groups.entries()].map(([key, points]) => {
+      const separator = key.lastIndexOf("|");
+      const fill = key.slice(0, separator);
+      const tone = Number(key.slice(separator + 1));
+      const d = points.map(point => {
+        const cx = point.x + .5;
+        const cy = point.y + .5;
+        return `M${cx - radius},${cy}a${radius},${radius} 0 1,0 ${radius * 2},0a${radius},${radius} 0 1,0 -${radius * 2},0`;
+      }).join("");
+      return <path
+        key={key}
+        d={d}
+        fill={fill}
+        opacity={tone === 0 ? .62 : tone === 1 ? .88 : .98}
+      />;
+    })}
+  </svg>;
+}
+
 export function AvatarDisc({
   presetKey,
   label,
@@ -28,18 +62,7 @@ export function AvatarDisc({
     aria-hidden="true"
   >
     {render.kind === "dot-face" && render.glyph ? (
-      <svg viewBox={`0 0 ${render.glyph.size} ${render.glyph.size}`} focusable="false">
-        {render.glyph.points.map((point, index) => (
-          <circle
-            key={index}
-            cx={point.x + .5}
-            cy={point.y + .5}
-            r=".28"
-            fill="currentColor"
-            opacity={point.tone === 0 ? .46 : point.tone === 1 ? .82 : .96}
-          />
-        ))}
-      </svg>
+      <DotFaceGlyph glyph={render.glyph} />
     ) : (
       <span>{initialFor(label)}</span>
     )}
