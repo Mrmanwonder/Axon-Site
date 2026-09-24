@@ -220,13 +220,17 @@ export function parseCambridgeAdvanced(html, source) {
   return out;
 }
 
-function tokenizeCbse(html) {
+function tokenizeCbse(html, includeCells) {
   const tokens = [];
-  const re = /<(h[1-6]|li)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  const tagSet = includeCells ? "h[1-6]|li|td|p" : "h[1-6]|li";
+  const re = new RegExp("<(" + tagSet + ")\\b[^>]*>([\\s\\S]*?)<\\/\\1>", "gi");
   let match;
   while ((match = re.exec(html))) {
     const text = textOf(match[2]);
-    if (text) tokens.push({ type: match[1].toLowerCase().startsWith("h") ? "heading" : "item", text: text });
+    if (text) tokens.push({
+      type: match[1].toLowerCase().startsWith("h") ? "heading" : "item",
+      text: text
+    });
   }
   return tokens;
 }
@@ -320,15 +324,45 @@ export function parseCbseSkill(html, source) {
   source = source || SOURCES.cbse_skill;
   let stages = [];
   let category = "skill";
+  let highestStageRank = 0;
   const rows = [];
-  for (const token of tokenizeCbse(currentCbseSkillScope(html))) {
-    if (token.type === "heading") {
-      if (stages.length && /Skill Modules|Archive|Session\s+20\d{2}/i.test(token.text)) break;
-      stages = cbseStages(token.text, stages);
-      if (/Mandatory Skill/i.test(token.text)) category = "mandatory_skill";
-      if (/Optional Skill/i.test(token.text)) category = "skill";
+  const scope = currentCbseSkillScope(html);
+
+  function stageRank(nextStages) {
+    if (nextStages.includes("cbse_11") || nextStages.includes("cbse_12")) return 3;
+    if (nextStages.includes("cbse_10")) return 2;
+    if (nextStages.includes("cbse_9")) return 1;
+    return 0;
+  }
+
+  for (const token of tokenizeCbse(scope, true)) {
+    if (/Skill Modules|Archive/i.test(token.text) && highestStageRank > 0) break;
+
+    const nextStages = cbseStages(token.text, stages);
+    const nextRank = stageRank(nextStages);
+    const isStageMarker = nextRank > 0 && (
+      /Class(?:es)?\s+(?:IX|X|XI|XII)\b/i.test(token.text)
+      || /XI\s*[-–|&]\s*XII/i.test(token.text)
+    );
+
+    if (isStageMarker && JSON.stringify(nextStages) !== JSON.stringify(stages)) {
+      // Current page order is IX -> X -> XI/XII. A later backward jump means
+      // we've reached an archived/older curriculum block.
+      if (highestStageRank >= 3 && nextRank < highestStageRank) break;
+      stages = nextStages;
+      highestStageRank = Math.max(highestStageRank, nextRank);
       continue;
     }
+
+    if (/Mandatory Skill/i.test(token.text)) {
+      category = "mandatory_skill";
+      continue;
+    }
+    if (/Optional Skill/i.test(token.text)) {
+      category = "skill";
+      continue;
+    }
+
     if (!stages.length || /Employability Skills/i.test(token.text)) continue;
     const parenthesized = /\((\d{3})\)/.exec(token.text);
     const prefixed = /^(\d{3})\s*-/.exec(token.text);
@@ -339,6 +373,7 @@ export function parseCbseSkill(html, source) {
     if (parenthesized) name = token.text.slice(0, parenthesized.index);
     name = name
       .replace(/^\d{3}\s*-\s*/, "")
+      .replace(/^.*?\b(?:IX|X|XI|XII)\b\s*[|&-]*\s*/i, "")
       .replace(/\s+(?:IX|X|XI|XII)(?:\s*[|&]\s*(?:XI|XII))?(?:\s.*)?$/i, "")
       .replace(/\s+/g, " ")
       .trim();
@@ -346,7 +381,9 @@ export function parseCbseSkill(html, source) {
 
     for (const stage of stages) rows.push(cbseRow(name, stage, category, source, code));
   }
-  return sortedUnique(rows, function (row) { return row.stage_key + "|" + (row.external_code || loose(row.display_name)); });
+  return sortedUnique(rows, function (row) {
+    return row.stage_key + "|" + (row.external_code || loose(row.display_name));
+  });
 }
 
 function pdfText(bytes) {
