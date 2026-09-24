@@ -10,9 +10,12 @@ import {
 
 test("Cambridge IGCSE parser preserves exact syllabus codes and variants", () => {
   const html = [
+    '<main>',
     '<a href="/programmes-and-qualifications/cambridge-igcse-mathematics-0580/">Mathematics - 0580</a>',
     '<a href="/programmes-and-qualifications/cambridge-igcse-mathematics-9-1-0980/">Mathematics (9-1) - 0980</a>',
     '<a href="/news/2026/">Unrelated 2026 update</a>',
+    '</main>',
+    '<footer><a href="/programmes-and-qualifications/cambridge-international-a-level-physics-9702/">Physics - 9702</a></footer>',
   ].join("");
   const rows = parseCambridgeIgcse(html);
   assert.equal(rows.length, 4);
