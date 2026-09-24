@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    APP SHELL
 
-   The persistent frame. The nav, header and appearance toggle live here and do
-   not remount across route changes — which is what lets the pill spring
-   between destinations instead of being rebuilt at each one.
+   The persistent frame. The nav and header live here and do not remount across
+   route changes — which is what lets the navigation pill spring between
+   destinations instead of being rebuilt at each one.
 
    Each screen renders into <Outlet /> inside its own scroll container. The
    container is keyed by pathname so a new screen starts at the top, rather
