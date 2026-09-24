@@ -5601,6 +5601,44 @@
       "source_version": "2026-live",
       "levels_supported": [],
       "external_code_kind": "syllabus_code"
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "new": true
+      },
+      "provider": "cambridge",
+      "stage_key": "cambridge_igcse_y10",
+      "source_url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-computer-science-0265/",
+      "availability": "active",
+      "display_name": "Computer Science",
+      "external_code": "0265",
+      "language_code": null,
+      "programme_key": "cambridge_igcse",
+      "canonical_name": "Computer Science",
+      "source_version": "2026-live",
+      "levels_supported": [],
+      "external_code_kind": "syllabus_code"
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "new": true
+      },
+      "provider": "cambridge",
+      "stage_key": "cambridge_igcse_y11",
+      "source_url": "https://www.cambridgeinternational.org/programmes-and-qualifications/cambridge-igcse-computer-science-0265/",
+      "availability": "active",
+      "display_name": "Computer Science",
+      "external_code": "0265",
+      "language_code": null,
+      "programme_key": "cambridge_igcse",
+      "canonical_name": "Computer Science",
+      "source_version": "2026-live",
+      "levels_supported": [],
+      "external_code_kind": "syllabus_code"
     }
   ]
 }
