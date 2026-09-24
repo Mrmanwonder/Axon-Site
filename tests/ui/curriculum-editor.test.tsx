@@ -108,7 +108,11 @@ test("board and class determine the stage automatically while subjects stay inli
   render(<Harness />);
 
   const classGroup = screen.getByRole("group", { name: "Class" });
-  await waitFor(() => expect(within(classGroup).getByRole("button", { name: "Class 11" }).getAttribute("aria-pressed")).toBe("true"));
+  const class11 = within(classGroup).getByRole("button", { name: "Class 11" });
+  expect(class11.getAttribute("aria-pressed")).toBe("false");
+  await waitFor(() => expect(screen.getByTestId("selection").textContent)
+    .toContain('"stageKey":"cambridge_as"'));
+  expect(class11.getAttribute("aria-pressed")).toBe("true");
   expect(screen.getByText("AS Level · Year 12")).toBeTruthy();
 
   const boardGroup = screen.getByRole("group", { name: "Board" });
