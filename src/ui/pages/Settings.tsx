@@ -298,24 +298,21 @@ export default function Settings() {
 
       {profiles.length > 1 && <ProfileChooser />}
       <div className="card sprofile">
-        <AvatarDisc presetKey={student?.avatar_seed} label={name} className="pic" />
+        {student ? (
+          <AvatarPicker
+            value={student.avatar_seed ?? "dreamBloom"}
+            label={name}
+            onChange={key => { void pickAvatar(key); }}
+            className="settings-avatar-picker"
+          />
+        ) : (
+          <AvatarDisc presetKey={null} label={name} className="pic" />
+        )}
         <div>
           <div className="n">{name}</div>
           <div className="e">{guardian?.contact}</div>
         </div>
       </div>
-
-      {student && (
-        <>
-          <div className="sectitle">Picture</div>
-          <AvatarPicker
-            value={student.avatar_seed ?? "dreamBloom"}
-            label={name}
-            onChange={key => { void pickAvatar(key); }}
-          />
-          <div className="note">Stored as a preset key. No photo is uploaded.</div>
-        </>
-      )}
 
       <div className="sectitle">Profile</div>
       {editingProfile && student ? (

@@ -23,43 +23,83 @@ const GRADIENTS = [
   { kind: 'gradient', key: 'copperRose', title: 'Copper rose', type: 'volumetric', c: ['#ffc6b0', '#bd6e86', '#4c263b', '#ffe4ca'] },
 ];
 
+const FACE_PALETTES = [
+  { skin: '#f3c8a8', hair: '#34251f', feature: '#17171b', shirt: '#f6f1e8' },
+  { skin: '#dca27d', hair: '#1f1c1d', feature: '#151519', shirt: '#b9d7ff' },
+  { skin: '#b97855', hair: '#2b1d19', feature: '#151519', shirt: '#ffd8a8' },
+  { skin: '#7f503b', hair: '#171719', feature: '#0d0d10', shirt: '#d8c6ff' },
+  { skin: '#edbb96', hair: '#6a3827', feature: '#17171b', shirt: '#c7f0dd' },
+  { skin: '#c98c68', hair: '#252025', feature: '#111116', shirt: '#ffe1ef' },
+  { skin: '#9f6548', hair: '#18181c', feature: '#0d0d10', shirt: '#d9f0ff' },
+  { skin: '#f0c3a0', hair: '#4a2d24', feature: '#151519', shirt: '#fff0b8' },
+];
+
 function buildDotFace(index) {
-  const points = [];
-  const add = (x, y, tone = 1) => points.push({ x, y, tone });
+  const palette = FACE_PALETTES[index];
+  const points = new Map();
+  const add = (x, y, role = 'skin', tone = role === 'skin' || role === 'shirt' ? 1 : 2) => {
+    if (x < 0 || x >= 20 || y < 0 || y >= 20) return;
+    points.set(`${x}:${y}`, { x, y, tone, fill: palette[role] });
+  };
 
-  // A sparse 20×20 circular head: active cells render as dots, never squares.
-  for (let y = 5; y <= 17; y += 1) {
-    const dy = (y - 11) / 6.5;
-    const radius = Math.floor(5.6 * Math.sqrt(Math.max(0, 1 - dy * dy)));
-    for (let x = 10 - radius; x <= 10 + radius; x += 1) {
-      if ((x + y + index) % 2 === 0) add(x, y, 0);
-    }
+  // Shoulders make these read as tiny portraits rather than floating blobs.
+  for (let y = 16; y <= 19; y += 1) {
+    const radius = y === 16 ? 3 : y === 17 ? 5 : 6;
+    for (let x = 10 - radius; x <= 10 + radius; x += 1) add(x, y, 'shirt');
   }
+  add(9, 16, 'skin'); add(10, 16, 'skin'); add(11, 16, 'skin');
 
-  // Eight deliberately different, generic hair silhouettes.
-  const hairModes = [
-    [[5,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7]],
-    [[5,7],[6,5],[7,4],[8,5],[9,4],[10,5],[11,4],[12,5],[13,4],[14,5],[15,7]],
-    [[4,8],[5,6],[6,5],[7,4],[8,4],[9,5],[10,4],[11,4],[12,5],[13,4],[14,5],[15,6],[16,8]],
-    [[5,5],[6,4],[7,4],[8,4],[9,4],[10,4],[11,5],[12,5],[13,6],[14,7],[15,8]],
-    [[5,8],[5,7],[6,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7]],
-    [[5,6],[6,5],[7,5],[8,4],[9,5],[10,4],[11,5],[12,4],[13,5],[14,5],[15,6],[6,8],[14,8]],
-    [[5,7],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,7],[7,7],[13,7]],
-    [[4,7],[5,6],[6,5],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,4],[14,5],[15,6],[16,7]],
+  // A compact face with visible ears. The coloured skin field is intentionally
+  // solid enough that eyes and mouth remain legible at the 44px nav size.
+  for (let y = 5; y <= 15; y += 1) {
+    const dy = (y - 10) / 5.6;
+    const radius = Math.max(2, Math.floor(4.6 * Math.sqrt(Math.max(0, 1 - dy * dy))));
+    for (let x = 10 - radius; x <= 10 + radius; x += 1) add(x, y, 'skin');
+  }
+  add(5, 10, 'skin'); add(5, 11, 'skin');
+  add(15, 10, 'skin'); add(15, 11, 'skin');
+
+  // Eight genuinely different hair silhouettes. They are broad shapes, not a
+  // single dotted arc, so the portraits stay recognisable when shrunk.
+  const hair = [
+    [[6,7],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[14,7],[7,6],[8,5],[9,5],[10,5],[11,5],[12,5],[13,6]],
+    [[5,8],[6,6],[7,5],[8,4],[9,5],[10,4],[11,5],[12,4],[13,5],[14,6],[15,8],[6,7],[8,6],[10,6],[12,6],[14,7]],
+    [[5,9],[5,8],[6,7],[6,6],[7,5],[8,5],[9,4],[10,4],[11,4],[12,5],[13,5],[14,6],[15,7],[15,8],[15,9],[7,6],[8,6],[9,5],[10,5],[11,5],[12,6],[13,6]],
+    [[6,7],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,4],[14,5],[14,6],[14,7],[7,6],[8,5],[9,5],[10,5],[11,5],[12,5],[13,5]],
+    [[5,8],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,5],[13,6],[14,7],[15,9],[6,7],[7,6],[8,5],[9,5],[10,5],[11,5],[12,6],[13,7],[14,8]],
+    [[5,7],[6,6],[7,5],[8,5],[9,4],[10,5],[11,4],[12,5],[13,5],[14,6],[15,7],[6,8],[14,8],[7,6],[9,6],[11,6],[13,6]],
+    [[5,9],[5,8],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,8],[15,9],[6,7],[7,6],[8,5],[9,5],[10,5],[11,5],[12,5],[13,6],[14,7]],
+    [[5,8],[6,6],[7,5],[8,4],[9,4],[10,4],[11,4],[12,4],[13,5],[14,6],[15,8],[6,7],[7,6],[8,5],[9,5],[10,5],[11,5],[12,5],[13,6],[14,7]],
   ];
-  for (const [x,y] of hairModes[index]) add(x, y, 2);
+  hair[index].forEach(([x, y]) => add(x, y, 'hair'));
 
-  // Eyes, brows and expressions vary without any demographic or gender label.
-  add(8, 10, 2); add(12, 10, 2);
+  // Brows, eyes, nose and mouth are deliberately high-contrast. Some portraits
+  // add glasses or freckles, but every one keeps the same clear facial grammar.
+  add(8, 9, 'hair'); add(12, 9, 'hair');
+  add(8, 10, 'feature'); add(12, 10, 'feature');
+  add(10, 12, 'feature', 0);
+
   if (index === 1 || index === 5) {
-    add(7,9,2); add(9,9,2); add(11,9,2); add(13,9,2); // glasses bridge below
-    add(10,10,2);
+    [[7,9],[9,9],[11,9],[13,9],[7,10],[9,10],[11,10],[13,10],[10,10]]
+      .forEach(([x, y]) => add(x, y, 'feature'));
   }
-  if (index % 3 === 0) { add(9,14,2); add(10,15,2); add(11,14,2); }
-  else if (index % 3 === 1) { add(9,15,2); add(10,15,2); add(11,15,2); }
-  else { add(9,14,2); add(10,14,2); add(11,14,2); }
-  if (index === 2 || index === 6) { add(7,12,1); add(13,12,1); }
-  return points;
+  if (index === 2 || index === 6) {
+    add(7, 12, 'feature', 0); add(13, 12, 'feature', 0);
+  }
+
+  const mouths = [
+    [[9,14],[10,15],[11,14]],
+    [[9,14],[10,14],[11,14]],
+    [[9,15],[10,14],[11,15]],
+    [[9,14],[10,14],[11,14],[10,15]],
+    [[9,15],[10,15],[11,15]],
+    [[9,14],[10,15],[11,14]],
+    [[9,14],[10,14],[11,14]],
+    [[9,15],[10,14],[11,15]],
+  ];
+  mouths[index].forEach(([x, y]) => add(x, y, 'feature'));
+
+  return [...points.values()];
 }
 
 const FACE_BACKGROUNDS = [
@@ -70,7 +110,7 @@ const FACE_BACKGROUNDS = [
 const DOT_FACES = Array.from({ length: 8 }, (_, index) => ({
   kind: 'dot-face',
   key: `dotFace${String(index + 1).padStart(2, '0')}`,
-  title: `Dot face ${index + 1}`,
+  title: `Dot portrait ${index + 1}`,
   backgroundPreset: FACE_BACKGROUNDS[index],
   glyph: { size: 20, points: buildDotFace(index) },
 }));

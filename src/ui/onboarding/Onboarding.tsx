@@ -758,6 +758,7 @@ export default function Onboarding() {
           label={studentFirst}
           onChange={setAvatarKey}
           disabled={profileBusy}
+          className="onboarding-avatar-picker"
         />
 
         <CurriculumEditor
@@ -767,8 +768,8 @@ export default function Onboarding() {
         />
 
         <div className="subnote">
-          Curriculum choices come from the current official catalog. Axon stores
-          the selected preset key for the picture — no school, address, or photo.
+          Curriculum choices come from the current official catalog. Your picture
+          is generated inside Axon — no profile photo is uploaded.
         </div>
 
         <div className="obfoot">
