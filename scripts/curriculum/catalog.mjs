@@ -148,8 +148,19 @@ function cambridgeBase(anchor, source) {
   // Detail-page slugs are inconsistent: some include the code and some do not.
   // Using the bounded list label keeps 0991/0475 while rejecting syllabus-year,
   // news and support links elsewhere in main content.
-  const codeAtEnd = new RegExp("(?:[-–—]|\\()\\s*" + code + "\\)?(?:\\s+New)?$", "i");
-  if (!codeAtEnd.test(anchor.text.trim())) return null;
+  const label = anchor.text.trim();
+  const codeIndex = label.indexOf(code);
+  if (codeIndex < 3) return null;
+  const suffix = label.slice(codeIndex + code.length).trim();
+  // Current Cambridge list formats include:
+  //   "... - 8689 (AS Level only)"
+  //   "... - 9689 (A Level only)"
+  //   "... (9866) – for centres in Pakistan"
+  //   "... (9-1) 0989"
+  //   "... - 0265 New"
+  // Reject generic year links by requiring a subject-like prefix and allowing
+  // only known list qualifiers after the code.
+  if (suffix && !/^(?:\)?\s*(?:\((?:AS Level only|A Level only)\)|New|[-–—].*)?)$/i.test(suffix)) return null;
   const name = cleanCambridgeName(anchor.text, code);
   if (!name || /past papers|syllabus overview|published resources/i.test(name)) return null;
   return {
@@ -295,12 +306,22 @@ export function parseCbseCurriculum(html, source) {
   return sortedUnique(rows, function (row) { return row.stage_key + "|" + loose(row.display_name); });
 }
 
+function currentCbseSkillScope(html) {
+  let scope = html;
+  const sessionMatch = /Session\s*2026\s*-\s*2027/i.exec(scope);
+  if (sessionMatch) scope = scope.slice(sessionMatch.index);
+
+  const stopMatch = /Skill\s*Modules\s*\(Optional\)/i.exec(scope);
+  if (stopMatch && stopMatch.index > 0) scope = scope.slice(0, stopMatch.index);
+  return scope;
+}
+
 export function parseCbseSkill(html, source) {
   source = source || SOURCES.cbse_skill;
   let stages = [];
   let category = "skill";
   const rows = [];
-  for (const token of tokenizeCbse(html)) {
+  for (const token of tokenizeCbse(currentCbseSkillScope(html))) {
     if (token.type === "heading") {
       if (stages.length && /Skill Modules|Archive|Session\s+20\d{2}/i.test(token.text)) break;
       stages = cbseStages(token.text, stages);
