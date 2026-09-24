@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { JSDOM } from "jsdom";
 
 export const SOURCES = {
   cambridge_igcse: {
@@ -220,107 +221,41 @@ export function parseCambridgeAdvanced(html, source) {
   return out;
 }
 
-function tokenizeCbse(html, includeCells) {
-  const tokens = [];
-  const tagSet = includeCells ? "h[1-6]|li|td|p" : "h[1-6]|li";
-  const re = new RegExp("<(" + tagSet + ")\\b[^>]*>([\\s\\S]*?)<\\/\\1>", "gi");
-  let match;
-  while ((match = re.exec(html))) {
-    const text = textOf(match[2]);
-    if (text) tokens.push({
-      type: match[1].toLowerCase().startsWith("h") ? "heading" : "item",
-      text: text
-    });
+function domText(node) {
+  return String(node?.textContent || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function cbseDom(html) {
+  return new JSDOM(html).window.document;
+}
+
+function cbseHeadingElements(document) {
+  return [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")];
+}
+
+function findDomHeading(headings, pattern, fromIndex) {
+  for (let i = Math.max(0, fromIndex || 0); i < headings.length; i++) {
+    if (pattern.test(domText(headings[i]))) return { element: headings[i], index: i };
   }
-  return tokens;
+  return null;
 }
 
-function cbseHeadings(html) {
-  const headings = [];
-  const re = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi;
-  let match;
-  while ((match = re.exec(html))) {
-    const text = textOf(match[2]);
-    if (text) headings.push({
-      text: text,
-      start: match.index,
-      end: re.lastIndex
-    });
-  }
-  return headings;
-}
-
-function findCbseHeading(headings, pattern, fromPosition) {
-  const from = Math.max(0, fromPosition || 0);
-  return headings.find(function (heading) {
-    return heading.start >= from && pattern.test(heading.text);
-  }) || null;
-}
-
-function cbseHtmlBetween(html, startHeading, endHeading) {
-  if (!startHeading) return "";
-  return html.slice(startHeading.end, endHeading ? endHeading.start : html.length);
-}
-
-function cbseTextLines(html) {
-  const cleaned = html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
-    .replace(/<br\s*\/?\s*>/gi, "\n")
-    .replace(/<[^>]+>/g, "\n");
-  return cleaned
-    .split(/\r?\n/)
-    .map(function (line) { return decodeHtml(line); })
-    .filter(Boolean);
-}
-
-function findLine(lines, pattern, fromIndex) {
-  for (let i = Math.max(0, fromIndex || 0); i < lines.length; i++) {
-    if (pattern.test(lines[i])) return i;
-  }
-  return -1;
-}
-
-function lineSlice(lines, startPattern, endPattern, fromIndex) {
-  const start = findLine(lines, startPattern, fromIndex || 0);
-  if (start < 0) return { lines: [], start: -1, end: -1 };
-  const end = endPattern ? findLine(lines, endPattern, start + 1) : lines.length;
-  return {
-    lines: lines.slice(start + 1, end < 0 ? lines.length : end),
-    start: start,
-    end: end < 0 ? lines.length : end
-  };
-}
-
-function cbseCategoryHeading(line, current) {
-  if (/^Languages\b/i.test(line)) return "language";
-  if (/^Main Subjects\b/i.test(line)) return "main";
-  if (/^(?:Other )?Academic Electives\b/i.test(line)) return "academic_elective";
-  if (/^Optional Subjects\b/i.test(line)) return "optional";
-  if (/^(?:Subjects of )?Internal Assessment\b/i.test(line)) return "internal_assessment";
-  if (/^Skill Subjects\b/i.test(line)) return "skill";
-  return current;
-}
-
-function isCbseNavigationLine(line) {
-  return /^(?:Initial Pages.*|Introduction.*|Reading Material|Archive|Home|Course [AB]|IX|X|XI|XII|XI\s*[|&]\s*XII|Class(?:es)?\s+(?:VI|VII|VIII|IX|X|XI|XII).*)$/i.test(line)
-    || /\.pdf\)?$/i.test(line);
-}
-
-function cbseStages(text, current) {
-  if (/Class IX\b/i.test(text) || /Part\s*-\s*1\s*\(Class IX\)/i.test(text)) return ["cbse_9"];
-  if (/Class X\b/i.test(text) || /Part\s*-\s*1\s*\(Class X\)/i.test(text)) return ["cbse_10"];
-  if (/XI\s*[-–]\s*XII|Classes XI-XII|Part\s*-\s*2\s*\(XI-XII\)/i.test(text)) return ["cbse_11", "cbse_12"];
-  return current;
+function domNodesBetween(document, startElement, endElement) {
+  if (!startElement) return [];
+  const all = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6,li")];
+  const start = all.indexOf(startElement);
+  const end = endElement ? all.indexOf(endElement) : all.length;
+  if (start < 0) return [];
+  return all.slice(start + 1, end >= 0 ? end : all.length);
 }
 
 function cbseCategory(text, current) {
-  if (/Languages/i.test(text)) return "language";
-  if (/Main Subjects/i.test(text)) return "main";
-  if (/Academic Electives/i.test(text)) return "academic_elective";
-  if (/Optional Subjects/i.test(text)) return "optional";
-  if (/Internal Assessment/i.test(text)) return "internal_assessment";
-  if (/Skill Subjects/i.test(text)) return "skill";
+  if (/^Languages\b/i.test(text)) return "language";
+  if (/^Main Subjects\b/i.test(text)) return "main";
+  if (/^(?:Other )?Academic Electives\b/i.test(text)) return "academic_elective";
+  if (/^Optional Subjects\b/i.test(text)) return "optional";
+  if (/^(?:Subjects of )?Internal Assessment\b/i.test(text)) return "internal_assessment";
+  if (/^Skill Subjects\b/i.test(text)) return "skill";
   return current;
 }
 
@@ -346,49 +281,26 @@ function cbseRow(name, stage, category, source, code) {
   };
 }
 
-function sliceHtmlSection(html, startPattern, endPattern) {
-  const start = startPattern.exec(html);
-  if (!start) return "";
-  const tail = html.slice(start.index + start[0].length);
-  const end = endPattern ? endPattern.exec(tail) : null;
-  return end ? tail.slice(0, end.index) : tail;
-}
-
-function findCbseToken(tokens, pattern, fromIndex) {
-  const start = Math.max(0, fromIndex || 0);
-  for (let i = start; i < tokens.length; i++) {
-    if (pattern.test(tokens[i].text)) return i;
-  }
-  return -1;
-}
-
-function cbseTokenSlice(tokens, startPattern, endPattern, fromIndex) {
-  const start = findCbseToken(tokens, startPattern, fromIndex || 0);
-  if (start < 0) return { tokens: [], start: -1, end: -1 };
-  const end = endPattern ? findCbseToken(tokens, endPattern, start + 1) : tokens.length;
-  return {
-    tokens: tokens.slice(start + 1, end < 0 ? tokens.length : end),
-    start: start,
-    end: end < 0 ? tokens.length : end
-  };
-}
-
-function parseCbseCurriculumHtml(html, stages, source) {
+function parseCbseCurriculumNodes(nodes, stages, source) {
   let category = null;
   const rows = [];
-  for (const token of tokenizeCbse(html, false)) {
-    if (token.type === "heading") {
-      category = cbseCategory(token.text, category);
+  for (const node of nodes) {
+    const text = domText(node);
+    if (!text) continue;
+    if (/^H[1-6]$/i.test(node.tagName)) {
+      category = cbseCategory(text, category);
       continue;
     }
-    if (!category || category === "skill" || isCbseNavigationLine(token.text)) continue;
+    if (node.tagName !== "LI" || !category || category === "skill") continue;
 
-    let name = token.text
+    let name = text
       .replace(/\s+Reading Material(?:\s.*)?$/i, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!name) continue;
+    if (!name || /^(?:Initial Pages|Introduction|Reading Material)$/i.test(name)) continue;
 
+    // The Class X Urdu item contains nested Course A / Course B links; keep the
+    // normalized runtime identity until codes for those routes are represented.
     const names = /^Urdu\s+Course A\s+Course B$/i.test(name) ? ["Urdu"] : [name];
     for (const stage of stages) {
       for (const subjectName of names) rows.push(cbseRow(subjectName, stage, category, source, null));
@@ -399,47 +311,43 @@ function parseCbseCurriculumHtml(html, stages, source) {
 
 export function parseCbseCurriculum(html, source) {
   source = source || SOURCES.cbse_curriculum;
-  const headings = cbseHeadings(html);
-  const current = findCbseHeading(
-    headings,
-    /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i,
-    0
-  );
-  const from = current ? current.end : 0;
-  const h9 = findCbseHeading(headings, /Secondary\s+Curriculum.*\(Class\s+IX\)/i, from);
-  const h10 = findCbseHeading(headings, /Secondary\s+Curriculum.*\(Class\s+X\)/i, h9 ? h9.end : from);
-  const hSenior = findCbseHeading(headings, /Secondary\s+Curriculum.*\(XI\s*[-–]\s*XII\)/i, h10 ? h10.end : from);
+  const document = cbseDom(html);
+  const headings = cbseHeadingElements(document);
+  const current = findDomHeading(headings, /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i, 0);
+  const from = current ? current.index + 1 : 0;
+  const h9 = findDomHeading(headings, /Secondary\s+Curriculum.*\(Class\s+IX\)/i, from);
+  const h10 = findDomHeading(headings, /Secondary\s+Curriculum.*\(Class\s+X\)/i, h9 ? h9.index + 1 : from);
+  const hSenior = findDomHeading(headings, /Secondary\s+Curriculum.*\(XI\s*[-–]\s*XII\)/i, h10 ? h10.index + 1 : from);
 
   const rows = [
-    ...parseCbseCurriculumHtml(cbseHtmlBetween(html, h9, h10), ["cbse_9"], source),
-    ...parseCbseCurriculumHtml(cbseHtmlBetween(html, h10, hSenior), ["cbse_10"], source),
-    ...parseCbseCurriculumHtml(cbseHtmlBetween(html, hSenior, null), ["cbse_11", "cbse_12"], source)
+    ...parseCbseCurriculumNodes(domNodesBetween(document, h9?.element, h10?.element), ["cbse_9"], source),
+    ...parseCbseCurriculumNodes(domNodesBetween(document, h10?.element, hSenior?.element), ["cbse_10"], source),
+    ...parseCbseCurriculumNodes(domNodesBetween(document, hSenior?.element, null), ["cbse_11", "cbse_12"], source)
   ];
   return sortedUnique(rows, function (row) {
     return row.stage_key + "|" + loose(row.display_name);
   });
 }
 
-function parseCbseSkillHtml(html, stages, source) {
+function parseCbseSkillNodes(nodes, stages, source) {
   let category = "skill";
   const rows = [];
-  for (const token of tokenizeCbse(html, true)) {
-    if (/Mandatory Skill Subject/i.test(token.text)) {
-      category = "mandatory_skill";
+  for (const node of nodes) {
+    const text = domText(node);
+    if (!text) continue;
+    if (/^H[1-6]$/i.test(node.tagName)) {
+      if (/Mandatory Skill Subject/i.test(text)) category = "mandatory_skill";
+      if (/Optional Skill Subjects/i.test(text)) category = "skill";
       continue;
     }
-    if (/Optional Skill Subjects/i.test(token.text)) {
-      category = "skill";
-      continue;
-    }
-    if (/Employability Skills/i.test(token.text) || isCbseNavigationLine(token.text)) continue;
+    if (node.tagName !== "LI" || /Employability Skills/i.test(text)) continue;
 
-    const parenthesized = /\((\d{3})\)/.exec(token.text);
-    const prefixed = /^(\d{3})\s*-/.exec(token.text);
+    const parenthesized = /\((\d{3})\)/.exec(text);
+    const prefixed = /^(\d{3})\s*-/.exec(text);
     const code = parenthesized ? parenthesized[1] : prefixed ? prefixed[1] : null;
     if (!code) continue;
 
-    let name = parenthesized ? token.text.slice(0, parenthesized.index) : token.text;
+    let name = parenthesized ? text.slice(0, parenthesized.index) : text;
     name = name
       .replace(/^\d{3}\s*-\s*/, "")
       .replace(/\s+(?:IX|X|XI|XII)(?:\s*[|&]\s*(?:XI|XII))?(?:\s.*)?$/i, "")
@@ -454,56 +362,24 @@ function parseCbseSkillHtml(html, stages, source) {
 
 export function parseCbseSkill(html, source) {
   source = source || SOURCES.cbse_skill;
-  const headings = cbseHeadings(html);
-  const session = findCbseHeading(headings, /Session\s+2026\s*-\s*2027/i, 0);
-  const from = session ? session.end : 0;
-  const h9 = findCbseHeading(headings, /^Class\s+IX$/i, from);
-  const h10 = findCbseHeading(headings, /^Class\s+X$/i, h9 ? h9.end : from);
-  const hSenior = findCbseHeading(headings, /^Classes\s+XI\s*[-–]\s*XII$/i, h10 ? h10.end : from);
-  const hModules = findCbseHeading(headings, /Skill\s*Modules\s*\(Optional\)/i, hSenior ? hSenior.end : from);
+  const document = cbseDom(html);
+  const headings = cbseHeadingElements(document);
+  const session = findDomHeading(headings, /Session\s+2026\s*-\s*2027/i, 0);
+  const from = session ? session.index + 1 : 0;
+  const h9 = findDomHeading(headings, /^Class\s+IX$/i, from);
+  const h10 = findDomHeading(headings, /^Class\s+X$/i, h9 ? h9.index + 1 : from);
+  const hSenior = findDomHeading(headings, /^Classes\s+XI\s*[-–]\s*XII$/i, h10 ? h10.index + 1 : from);
+  const hModules = findDomHeading(headings, /Skill\s*Modules\s*\(Optional\)/i, hSenior ? hSenior.index + 1 : from);
 
   const rows = [
-    ...parseCbseSkillHtml(cbseHtmlBetween(html, h9, h10), ["cbse_9"], source),
-    ...parseCbseSkillHtml(cbseHtmlBetween(html, h10, hSenior), ["cbse_10"], source),
-    ...parseCbseSkillHtml(cbseHtmlBetween(html, hSenior, hModules), ["cbse_11", "cbse_12"], source)
+    ...parseCbseSkillNodes(domNodesBetween(document, h9?.element, h10?.element), ["cbse_9"], source),
+    ...parseCbseSkillNodes(domNodesBetween(document, h10?.element, hSenior?.element), ["cbse_10"], source),
+    ...parseCbseSkillNodes(domNodesBetween(document, hSenior?.element, hModules?.element), ["cbse_11", "cbse_12"], source)
   ];
   return sortedUnique(rows, function (row) {
     return row.stage_key + "|" + (row.external_code || loose(row.display_name));
   });
 }
-
-function parseCbseSkillLines(lines, stages, source) {
-  let category = "skill";
-  const rows = [];
-  for (const line of lines) {
-    if (/Mandatory Skill Subject/i.test(line)) {
-      category = "mandatory_skill";
-      continue;
-    }
-    if (/Optional Skill Subjects/i.test(line)) {
-      category = "skill";
-      continue;
-    }
-    if (/Employability Skills/i.test(line) || isCbseNavigationLine(line)) continue;
-
-    const parenthesized = /\((\d{3})\)/.exec(line);
-    const prefixed = /^(\d{3})\s*-/.exec(line);
-    const code = parenthesized ? parenthesized[1] : prefixed ? prefixed[1] : null;
-    if (!code) continue;
-
-    let name = parenthesized ? line.slice(0, parenthesized.index) : line;
-    name = name
-      .replace(/^\d{3}\s*-\s*/, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!name) continue;
-
-    for (const stage of stages) rows.push(cbseRow(name, stage, category, source, code));
-  }
-  return rows;
-}
-
-
 
 function pdfText(bytes) {
   const dir = mkdtempSync(join(tmpdir(), "axon-ib-"));
