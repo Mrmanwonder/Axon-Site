@@ -36,6 +36,9 @@ test("Cambridge advanced parser keeps AS-only and A-only routes distinct", () =>
     '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-french-language-8682/">French Language (AS Level only) - 8682</a>',
     '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-english-literature-9695/">English Literature (A Level only) - 9695</a>',
     '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-physics-9702/">Physics - 9702</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-tamil-9689/">Tamil - 9689 (A Level only)</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-tamil-language-as-level-only-8689/">Tamil - Language - 8689 (AS Level only)</a>',
+    '<a href="/programmes-and-qualifications/cambridge-international-as-and-a-level-urdu-language-literature-9866/">Urdu Language & Literature (9866) – for centres in Pakistan</a>',
     '<a href="/other/9701/">Unrelated 9701 link</a>',
   ].join("");
   const rows = parseCambridgeAdvanced(html);
@@ -52,6 +55,9 @@ test("Cambridge advanced parser keeps AS-only and A-only routes distinct", () =>
     rows.filter(row => row.external_code === "9702").map(row => row.stage_key).sort(),
     ["cambridge_a_level", "cambridge_as"],
   );
+  assert.deepEqual(rows.filter(row => row.external_code === "9689").map(row => row.stage_key), ["cambridge_a_level"]);
+  assert.deepEqual(rows.filter(row => row.external_code === "8689").map(row => row.stage_key), ["cambridge_as"]);
+  assert.deepEqual(rows.filter(row => row.external_code === "9866").map(row => row.stage_key), ["cambridge_a_level"]);
 });
 
 test("CBSE skill parser preserves official subject codes by stage", () => {
