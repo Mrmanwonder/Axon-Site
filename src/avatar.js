@@ -221,6 +221,18 @@ function luminance(hex) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+function colorPresetFor(preset) {
+  if (!preset) return GRADIENTS[0];
+  if (preset.kind === 'dot-face') return BY_KEY.get(preset.backgroundPreset) ?? GRADIENTS[0];
+  return preset;
+}
+
+export function paletteFor(preset) {
+  const source = colorPresetFor(preset);
+  const [a, b, c, d] = source.c;
+  return [a, b, c, d ?? b];
+}
+
 export function backgroundFor(preset) {
   if (!preset) return 'var(--surface-sunk)';
   if (preset.kind === 'dot-face') return backgroundFor(BY_KEY.get(preset.backgroundPreset));
@@ -249,6 +261,7 @@ export function avatarRenderFor(student) {
     kind: preset.kind,
     preset: preset.key,
     background: backgroundFor(preset),
+    palette: paletteFor(preset),
     color: inkFor(preset),
     glyph: preset.kind === 'dot-face' ? preset.glyph : null,
   };

@@ -1,6 +1,32 @@
+@property --avatar-wash-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #7f67ff;
+}
+@property --avatar-wash-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8ff3df;
+}
+@property --avatar-wash-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #2d1c68;
+}
+@property --avatar-wash-4 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f5e8ff;
+}
+
 .avatar-picker {
   width: max-content;
   max-width: 100%;
+  transition:
+    --avatar-wash-1 2200ms cubic-bezier(.22,.61,.36,1),
+    --avatar-wash-2 2200ms cubic-bezier(.22,.61,.36,1),
+    --avatar-wash-3 2200ms cubic-bezier(.22,.61,.36,1),
+    --avatar-wash-4 2200ms cubic-bezier(.22,.61,.36,1);
 }
 
 .avatar-disc {
@@ -93,33 +119,86 @@
   padding-right: 34px;
 }
 
-.avatar-drip {
+.avatar-ambient {
   position: absolute;
   z-index: 0;
   inset: 0 0 auto;
-  height: 78px;
-  background: var(--avatar-gradient);
-  opacity: .38;
-  border-radius: 32px 32px 24px 24px;
+  height: 164px;
+  overflow: hidden;
+  border-radius: 32px 32px 0 0;
   pointer-events: none;
+  opacity: .72;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 34%,
+    rgba(0,0,0,.96) 48%,
+    rgba(0,0,0,.72) 62%,
+    rgba(0,0,0,.28) 80%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 34%,
+    rgba(0,0,0,.96) 48%,
+    rgba(0,0,0,.72) 62%,
+    rgba(0,0,0,.28) 80%,
+    transparent 100%
+  );
 }
-.avatar-drip::after {
+.avatar-ambient::before {
+  content: "";
+  position: absolute;
+  inset: -42% -22% -26%;
+  background: linear-gradient(118deg,
+    var(--avatar-wash-3) 0%,
+    var(--avatar-wash-1) 34%,
+    var(--avatar-wash-2) 68%,
+    var(--avatar-wash-4) 100%);
+  background:
+    radial-gradient(58% 72% at 14% 20%,
+      color-mix(in oklab, var(--avatar-wash-1) 92%, transparent) 0%,
+      transparent 72%),
+    radial-gradient(54% 78% at 86% 14%,
+      color-mix(in oklab, var(--avatar-wash-2) 86%, transparent) 0%,
+      transparent 72%),
+    radial-gradient(64% 82% at 56% 52%,
+      color-mix(in oklab, var(--avatar-wash-4) 72%, transparent) 0%,
+      transparent 76%),
+    linear-gradient(118deg,
+      var(--avatar-wash-3) 0%,
+      var(--avatar-wash-1) 34%,
+      var(--avatar-wash-2) 68%,
+      var(--avatar-wash-4) 100%);
+  filter: blur(14px) saturate(1.04);
+  transform: translate3d(-1.5%, -1%, 0) scale(1.06);
+  transform-origin: 50% 20%;
+  animation: avatar-ambient-drift 22s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.avatar-ambient::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(255,255,255,.12), transparent 78%);
-  border-radius: inherit;
+  background:
+    linear-gradient(to bottom,
+      rgba(255,255,255,.09) 0%,
+      transparent 26%,
+      color-mix(in srgb, var(--sheet-bg) 22%, transparent) 62%,
+      color-mix(in srgb, var(--sheet-bg) 82%, transparent) 100%);
 }
-.avatar-drip span {
-  position: absolute;
-  top: 54px;
-  display: block;
-  background: var(--avatar-gradient);
-  border-radius: 0 0 999px 999px;
+@keyframes avatar-ambient-drift {
+  0% {
+    transform: translate3d(-2.5%, -2%, 0) scale(1.07);
+  }
+  50% {
+    transform: translate3d(1.5%, 1%, 0) scale(1.11);
+  }
+  100% {
+    transform: translate3d(3%, -1%, 0) scale(1.08);
+  }
 }
-.avatar-drip .d1 { left: 9%; width: 18%; height: 74px; }
-.avatar-drip .d2 { left: 43%; width: 18%; height: 104px; }
-.avatar-drip .d3 { right: 8%; width: 18%; height: 82px; }
 
 .avatar-dialog-close {
   position: absolute !important;
@@ -229,11 +308,7 @@
   .avatar-grid { gap: 7px 6px; padding-top: 14px; }
   .avatar-dialog-footer { margin-top: 8px; }
   .avatar-done { min-height: 40px; padding-block: 9px; }
-  .avatar-drip { height: 64px; }
-  .avatar-drip span { top: 44px; }
-  .avatar-drip .d1 { height: 58px; }
-  .avatar-drip .d2 { height: 76px; }
-  .avatar-drip .d3 { height: 62px; }
+  .avatar-ambient { height: 136px; }
 }
 
 @media (max-height: 520px) {
@@ -248,9 +323,16 @@
   .avatar-selection-name { font-size: 12px; }
   .avatar-done { min-width: 92px; min-height: 34px; padding: 7px 16px; font-size: 14px; }
   .avatar-dialog-close { top: 9px; right: 10px; width: 30px; height: 30px; }
-  .avatar-drip { height: 50px; }
-  .avatar-drip span { top: 34px; }
-  .avatar-drip .d1 { height: 42px; }
-  .avatar-drip .d2 { height: 58px; }
-  .avatar-drip .d3 { height: 46px; }
+  .avatar-ambient { height: 108px; }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-picker {
+    transition: none;
+  }
+  .avatar-ambient::before {
+    animation: none;
+    transform: scale(1.06);
+  }
 }
