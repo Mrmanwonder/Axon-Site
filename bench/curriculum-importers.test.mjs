@@ -62,7 +62,7 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
   ].join("");
 
   const rows = parseCbseSkill(html);
-  assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "401" && row.display_name === "Retail"));
+  assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "401" && row.display_name === "RETAIL"));
   assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "402"));
   assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "801"));
   assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "801"));
