@@ -42,6 +42,7 @@ test("Insights filter rail paints directly below the sticky header after scrolli
             background: var(--surface);
           }
           .fixture-spacer { height: 520px; }
+          .fixture-tail { height: 1200px; }
         </style>
       </head>
       <body>
@@ -58,7 +59,7 @@ test("Insights filter rail paints directly below the sticky header after scrolli
               <button class="fchip app-dropdown-trigger">All papers</button>
               <button class="fchip app-dropdown-trigger">Any date</button>
             </div>
-            <div class="fixture-spacer"></div>
+            <div class="fixture-tail"></div>
           </main>
         </div>
       </body>
