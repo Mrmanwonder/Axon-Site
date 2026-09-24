@@ -60,32 +60,32 @@ test("Cambridge advanced parser keeps AS-only and A-only routes distinct", () =>
   assert.deepEqual(rows.filter(row => row.external_code === "9866").map(row => row.stage_key), ["cambridge_a_level"]);
 });
 
-test("CBSE skill parser preserves official subject codes by stage", () => {
+test("CBSE skill parser preserves official subject codes by fixed class section", () => {
   const html = [
-    "<h2>Secondary School Curriculum Class IX</h2>",
-    "<h3>Optional Skill Subjects</h3>",
-    "<li>RETAIL (401) <a href='/retail-x'>IX</a></li>",
-    "<li>INFORMATION TECHNOLOGY (402) <a href='/it-x'>IX</a></li>",
-    "<td>Class X</td>",
-    "<td>AGRICULTURE (408)</td>",
-    "<h2>Senior Secondary Classes XI-XII</h2>",
-    "<h3>Optional Skill Subjects</h3>",
-    "<li>801 - Retail</li>",
+    "<h4>Session 2026 - 2027</h4>",
+    "<h4>Class IX</h4>",
+    "<p>B. Optional Skill Subjects</p>",
+    "<li>RETAIL (401) <a href='/retail-ix'>IX</a></li>",
+    "<li>INFORMATION TECHNOLOGY (402) <a href='/it-ix'>IX</a></li>",
+    "<h4>Class X</h4>",
+    "<li>AGRICULTURE (408) <a href='/ag-x'>X</a></li>",
+    "<h4>Classes XI-XII</h4>",
+    "<li>RETAIL (801) <a href='/retail-xi'>XI</a> | <a href='/retail-xii'>XII</a></li>",
     "<td>BUSINESS ADMINISTRATION (833)</td>",
     "<h4>Skill Modules (Optional)</h4>",
     "<h4>Class IX</h4>",
-    "<li>AGRICULTURE (408) <a href='/old'>IX</a></li>",
+    "<li>SECURITY (403) <a href='/old'>IX</a></li>",
   ].join("");
 
   const rows = parseCbseSkill(html);
   assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "401" && row.display_name === "RETAIL"));
   assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "402"));
+  assert.ok(rows.some(row => row.stage_key === "cbse_10" && row.external_code === "408"));
   assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "801"));
   assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "801"));
-  assert.ok(rows.some(row => row.stage_key === "cbse_10" && row.external_code === "408"));
   assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "833"));
   assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "833"));
-  assert.equal(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "408"), false);
+  assert.equal(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "403"), false);
 });
 
 function ibHeader() {
