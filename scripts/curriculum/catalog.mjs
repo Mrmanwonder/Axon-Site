@@ -520,6 +520,24 @@ function compare(provider, generated, current) {
   const prev = new Map(activeCurrent.map(function (row) { return [identity(provider, row), row]; }));
   const added = [...next.keys()].filter(function (key) { return !prev.has(key); }).sort();
   const removed = [...prev.keys()].filter(function (key) { return !next.has(key); }).sort();
+  const added_details = added.map(function (key) {
+    const row = next.get(key);
+    return {
+      key: key,
+      external_code: row.external_code || null,
+      source_url: row.source_url || null,
+      category: row.metadata ? (row.metadata.category || row.metadata.group || null) : null
+    };
+  });
+  const removed_details = removed.map(function (key) {
+    const row = prev.get(key);
+    return {
+      key: key,
+      external_code: row.external_code || null,
+      source_url: row.source_url || null,
+      category: row.metadata ? (row.metadata.category || row.metadata.group || null) : null
+    };
+  });
   const changed = [];
 
   for (const entry of next.entries()) {
@@ -541,7 +559,16 @@ function compare(provider, generated, current) {
     }
     if (delta.length) changed.push({ key: key, fields: delta });
   }
-  return { provider: provider, generated: generated.length, current: current.length, added: added, removed: removed, changed: changed };
+  return {
+    provider: provider,
+    generated: generated.length,
+    current: current.length,
+    added: added,
+    removed: removed,
+    added_details: added_details,
+    removed_details: removed_details,
+    changed: changed
+  };
 }
 
 export function validateFixture(provider, data) {
@@ -631,8 +658,24 @@ async function generate() {
 function printReport(report) {
   for (const item of report) {
     console.log("\n" + item.provider + ": source=" + item.generated + " fixture=" + item.current);
-    if (item.added.length) console.log("  added (" + item.added.length + "):\n    " + item.added.join("\n    "));
-    if (item.removed.length) console.log("  removed (" + item.removed.length + "):\n    " + item.removed.join("\n    "));
+    if (item.added.length) {
+      console.log("  added (" + item.added.length + "):");
+      for (const row of item.added_details) {
+        console.log("    " + row.key
+          + (row.external_code ? " code=" + row.external_code : "")
+          + (row.category ? " category=" + row.category : "")
+          + (row.source_url ? " source=" + row.source_url : ""));
+      }
+    }
+    if (item.removed.length) {
+      console.log("  removed (" + item.removed.length + "):");
+      for (const row of item.removed_details) {
+        console.log("    " + row.key
+          + (row.external_code ? " code=" + row.external_code : "")
+          + (row.category ? " category=" + row.category : "")
+          + (row.source_url ? " source=" + row.source_url : ""));
+      }
+    }
     if (item.changed.length) console.log("  changed (" + item.changed.length + "):\n    " + item.changed.map(function (x) { return x.key + ": " + x.fields.join(","); }).join("\n    "));
     if (!item.added.length && !item.removed.length && !item.changed.length) console.log("  no catalog drift");
   }
