@@ -23,7 +23,8 @@ test("Cambridge IGCSE parser preserves exact syllabus codes and variants", () =>
     rows.filter(row => row.external_code === "0580").map(row => row.stage_key).sort(),
     ["cambridge_igcse_y10", "cambridge_igcse_y11"],
   );
-  assert.equal(rows.find(row => row.external_code === "0980")?.variant, "9-1");
+  assert.equal(rows.find(row => row.external_code === "0980")?.display_name, "Mathematics (9-1)");
+  assert.equal(rows.find(row => row.external_code === "0980")?.variant, null);
   assert.notEqual(
     rows.find(row => row.external_code === "0580")?.external_code,
     rows.find(row => row.external_code === "0980")?.external_code,
@@ -62,6 +63,9 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
     "<h2>Senior Secondary Classes XI-XII</h2>",
     "<h3>Optional Skill Subjects</h3>",
     "<li>801 - Retail</li>",
+    "<h4>Skill Modules (Optional)</h4>",
+    "<h4>Class IX</h4>",
+    "<li>AGRICULTURE (408) <a href='/old'>IX</a></li>",
   ].join("");
 
   const rows = parseCbseSkill(html);
@@ -69,6 +73,7 @@ test("CBSE skill parser preserves official subject codes by stage", () => {
   assert.ok(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "402"));
   assert.ok(rows.some(row => row.stage_key === "cbse_11" && row.external_code === "801"));
   assert.ok(rows.some(row => row.stage_key === "cbse_12" && row.external_code === "801"));
+  assert.equal(rows.some(row => row.stage_key === "cbse_9" && row.external_code === "408"), false);
 });
 
 function ibHeader() {
