@@ -1,0 +1,1 @@
+alter table public.curriculum_stage drop constraint if exists curriculum_stage_programme_id_label_key;

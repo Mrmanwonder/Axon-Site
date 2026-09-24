@@ -556,6 +556,14 @@
     padding:12px 13px;border-radius:11px;background:var(--surface-sunk);
     border:.5px solid var(--hairline);font-variant-numeric:tabular-nums;}
   .worked + .wnote{font-size:12.5px;color:var(--label-3);line-height:1.45;margin-top:8px;}
+  .worked-steps{margin:0;padding:0;list-style:none;counter-reset:worked-step;display:flex;flex-direction:column;gap:10px;}
+  .worked-steps li{counter-increment:worked-step;position:relative;padding-left:31px;min-width:0;}
+  .worked-steps li::before{content:counter(worked-step);position:absolute;left:0;top:.08em;width:21px;height:21px;
+    display:grid;place-items:center;border-radius:7px;background:var(--fill-2);color:var(--label-2);
+    font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .worked-paragraphs{display:flex;flex-direction:column;gap:9px;}
+  .worked-paragraphs p{margin:0;}
+  .worked .math-display{margin:7px 0 8px;}
 
   .lookcard{margin:0 var(--gutter);padding:14px 0;border-radius:var(--r-card);overflow:hidden;}
   .lookrow{display:flex;gap:12px;padding:0 16px;border:0;margin:0;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
@@ -570,7 +578,11 @@
      two holes. It is invisible on the saturated eight. */
   .look .disc{display:flex;width:40px;height:40px;border-radius:20px;align-items:center;justify-content:center;
     font-size:16px;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(0,0,0,.12);}
-  .look:focus-within{outline:2px solid var(--accent);outline-offset:1px;}
+  /* Selection and keyboard focus are different states. :focus-within stayed
+     active after a touch/click on the hidden radio, drawing a second blue ring
+     around the already-selected avatar. Keep the selection ring, and add the
+     outer ring only for keyboard focus. */
+  .look:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:1px;}
   .sprofile .n{font-size:19px;font-weight:700;letter-spacing:-.026em;}
   .sprofile .e{font-size:13.5px;color:var(--label-3);margin-top:2px;}
   .seg{display:flex;background:var(--surface-sunk);border-radius:11px;padding:2.5px;gap:2px;}
@@ -1143,8 +1155,17 @@
     border-radius:4px;background:color-mix(in srgb,var(--accent) 14%,transparent);
     transition:opacity 120ms ease;}
 
-  /* KaTeX inherits the card's colour rather than shipping its own. */
-  .answerblock .katex{font-size:1.02em;color:inherit;}
+  /* KaTeX inherits the surrounding student-facing copy. The shared MathText
+     renderer is used by OCR fallbacks, explanations, worked answers and review,
+     so maths has one visual grammar everywhere instead of looking like code. */
+  .answerblock .katex,.mathtext .katex{font-size:1.02em;color:inherit;}
+  .mathtext{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .math-rendered{white-space:normal;}
+  .math-display{display:block;max-width:100%;overflow-x:auto;overflow-y:hidden;
+    margin:8px 0 9px;padding:2px 0;scrollbar-width:thin;-webkit-overflow-scrolling:touch;}
+  .math-display .katex-display{margin:0;text-align:left;}
+  .math-raw{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;
+    overflow-wrap:anywhere;color:inherit;}
 
 dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
 .skip-link{position:fixed;top:8px;left:8px;z-index:200;transform:translateY(-200%);padding:12px;background:var(--surface);color:var(--label);}

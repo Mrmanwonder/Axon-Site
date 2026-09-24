@@ -18,59 +18,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useMemo, useState } from "react";
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import type { AnswerBlock as Block, Segment } from "../data/modules";
+import MathText, { SafeLatex } from "./MathText";
 
-/**
- * Untrusted LaTeX, rendered or refused.
- *
- * `strict` refuses silent coercion of malformed input; `trust: false` bars
- * \href, \includegraphics and raw HTML; `maxExpand` caps macro expansion so a
- * bomb cannot hang a student's phone; and `htmlAndMathml` emits the MathML a
- * screen reader needs — without it this content is simply inaccessible.
- *
- * On failure the raw text is shown in monospace with a quiet note. A KaTeX
- * error string must never reach the page, and a segment must never silently
- * vanish: a dropped segment is a missing piece of the student's answer with
- * nothing to say it was ever there.
- */
-/**
- * Commands refused before KaTeX ever sees them.
- *
- * `trust: false` does not throw on these — it renders them as literal text in
- * KaTeX's own error red. Two problems with that. It puts an error string inside
- * a student's own answer, which the addendum forbids outright; and red in this
- * product is reserved for signing out, so a model emitting `\href` would paint
- * the one colour the design language spends nowhere else onto their working.
- *
- * The colour commands are here for the same reason: what colour a student's
- * answer is rendered in is a product decision, not something a model gets to
- * set from inside a LaTeX string.
- *
- * Refusing them falls back to the raw text in monospace, which is honest and
- * quiet, and is what the fallback exists for.
- */
-const REFUSED = /\\(href|url|includegraphics|html(?:Class|Id|Style|Data)|color|textcolor|colorbox|fcolorbox|mathcolor)\b/;
-
-function render(latex: string): { html: string } | { failed: true } {
-  if (REFUSED.test(latex)) return { failed: true };
-  try {
-    return {
-      html: katex.renderToString(latex, {
-        displayMode: false,
-        strict: true,
-        trust: false,
-        maxExpand: 1000,
-        output: "htmlAndMathml",
-        throwOnError: true,
-      }),
-    };
-  } catch {
-    return { failed: true };
-  }
-}
-
+/* All mathematical text, including structured OCR segments, goes through
+ * MathText's one hardened KaTeX boundary. Keeping one renderer matters here:
+ * model explanations and the student's transcription must refuse the same
+ * unsafe commands and fail in the same quiet way. */
 const ANNOTATION_CLASS: Record<string, string> = {
   struck_through: "an-struck",
   boxed: "an-boxed",
@@ -92,15 +46,9 @@ function SegmentView({
 
   const body = (() => {
     if (seg.latex) {
-      const out = render(seg.latex);
-      if ("html" in out) return <span dangerouslySetInnerHTML={{ __html: out.html }} />;
-      return (
-        <span className="seg-raw" title="This part could not be typeset, so it is shown as read.">
-          {seg.text ?? seg.latex}
-        </span>
-      );
+      return <SafeLatex latex={seg.latex} fallback={seg.text ?? seg.latex} className="seg-latex" />;
     }
-    return <span>{seg.text}</span>;
+    return <MathText text={seg.text} />;
   })();
 
   // Only a segment that knows where it came from is tappable — otherwise the
@@ -111,6 +59,7 @@ function SegmentView({
       type="button"
       className={cls.join(" ")}
       aria-pressed={picked}
+      aria-label={seg.text ?? seg.latex ?? undefined}
       aria-description="Show this part in your handwriting"
       onClick={() => onPick(seg)}
     >
@@ -172,7 +121,9 @@ export default function AnswerBlockView({
         /* No structured block yet — every row written before the extraction
            stage produced one. The raw text is what exists, shown as steps so at
            least the student's line breaks survive. */
-        <div className={"v" + (rawText ? " steps" : " empty")}>{rawText || "Not read"}</div>
+        <div className={"v" + (rawText ? " steps" : " empty")}>
+          {rawText ? <MathText text={rawText} /> : "Not read"}
+        </div>
       )}
 
       {picked && (

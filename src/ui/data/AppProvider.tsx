@@ -107,12 +107,13 @@ type AppValue = {
       an app that did not hear you. */
   setAvatar: (presetKey: string) => Promise<void>;
 
-  /** Save the identity fields as one database transaction. Class and subject
-      syllabus codes must never be allowed to drift apart. */
+  /** Save normalized curriculum identity and subject selections atomically. */
   updateStudentProfile: (profile: {
     firstName: string;
-    classLevel: number;
-    subjects: { subject: string; syllabus_code: string }[];
+    programmeKey: string;
+    stageKey: string;
+    avatarKey: string;
+    subjects: { offeringId: string; level: "SL" | "HL" | null }[];
   }) => Promise<void>;
 
   online: boolean;
@@ -281,20 +282,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [profiles, guardian]);
   const updateStudentProfile = useCallback(async (profile: {
     firstName: string;
-    classLevel: number;
-    subjects: { subject: string; syllabus_code: string }[];
+    programmeKey: string;
+    stageKey: string;
+    avatarKey: string;
+    subjects: { offeringId: string; level: "SL" | "HL" | null }[];
   }) => {
     if (!student) throw new Error("There is no student profile to update.");
-    const { data, error } = await sb.rpc("update_student_profile", {
+    const { data, error } = await sb.rpc("update_student_profile_v2", {
       p_student_id: student.id,
       p_first_name: profile.firstName,
-      p_class_level: profile.classLevel,
-      p_subjects: profile.subjects,
+      p_programme_key: profile.programmeKey,
+      p_stage_key: profile.stageKey,
+      p_avatar_key: profile.avatarKey,
+      p_subjects: profile.subjects.map(item => ({
+        offering_id: item.offeringId,
+        level: item.level,
+      })),
     });
     if (error) throw error;
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved) throw new Error("The profile was saved but could not be read back.");
-    const updated = { ...student, ...saved, subjects: profile.subjects.map(({ subject }) => subject) };
+    const rows = Array.isArray(saved.subjects) ? saved.subjects : [];
+    const updated = {
+      ...student,
+      ...saved,
+      subjects: rows.map((row: { subject: string }) => row.subject),
+      subject_selections: rows.map((row: {
+        offering_id: string; subject: string; external_code: string | null; level: "SL" | "HL" | null;
+      }) => ({
+        offering_id: row.offering_id,
+        subject: row.subject,
+        external_code: row.external_code,
+        level: row.level,
+      })),
+    };
     setStudent(current => current?.id === updated.id ? updated : current);
     setProfiles(current => current.map(item => item.id === updated.id ? updated : item));
   }, [student]);

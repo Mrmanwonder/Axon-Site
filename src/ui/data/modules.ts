@@ -40,12 +40,32 @@ export type Prefs = {
 };
 
 export type Guardian = { id: string; name: string; contact: string };
+export type SubjectSelection = {
+  offering_id: string;
+  subject: string;
+  external_code: string | null;
+  level: "SL" | "HL" | null;
+};
+
 export type Student = {
   id: string;
   first_name: string;
-  board: string;
-  class_level: number;
+  board: string | null;
+  class_level: number | null;
+  programme_id?: string | null;
+  stage_id?: string | null;
+  curriculum_version?: string | null;
+  provider_key?: string | null;
+  provider_label?: string | null;
+  programme_key?: string | null;
+  programme_label?: string | null;
+  stage_key?: string | null;
+  stage_label?: string | null;
+  school_year_label?: string | null;
+  /** Compatibility display names for older surfaces. */
   subjects?: string[];
+  /** Normalized subject identities used by profile editing and assessment matching. */
+  subject_selections?: SubjectSelection[];
   /** Either the original random hex seed (nothing chosen — the face is derived
       from it) or a preset key the student picked. Never an image: there is no
       avatar bucket and no upload path anywhere in this app. */
@@ -152,29 +172,66 @@ export {
 export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
 
 // ── curriculum ─────────────────────────────────────────────────────────────
-/* AGENTS.md: this is the single source for the board, the stages, the
-   class-level mapping and the syllabus codes. Nothing else may hardcode
-   "CAIE", a stage name or a four-digit code. */
+// The database catalog is authoritative. These helpers fetch only the selected
+// programme/stage and cache it in the browser for the current session.
+export const PROVIDER_KEYS = curriculumMod.PROVIDER_KEYS as ("cambridge" | "cbse" | "ib")[];
+export type CurriculumProvider = { id: string; key: "cambridge" | "cbse" | "ib"; name: string };
+export type CurriculumProgramme = { id: string; provider_id: string; key: string; label: string; metadata?: Record<string, unknown> };
+export type CurriculumStage = {
+  id: string; programme_id: string; key: string; label: string;
+  school_year_label: string | null; legacy_class_level: number | null;
+  sort_order: number; metadata?: Record<string, unknown>;
+};
+export type SubjectOffering = {
+  id: string; programme_id: string; stage_id: string; subject_id: string;
+  display_name: string; external_code: string | null; external_code_kind: string | null;
+  levels_supported: ("SL" | "HL")[]; language_code: string | null; variant: string | null;
+  aliases: string[]; metadata?: Record<string, unknown>;
+};
+export const getProviders = curriculumMod.getProviders as unknown as () => Promise<CurriculumProvider[]>;
+export const getProgrammes = curriculumMod.getProgrammes as (providerKey: string) => Promise<CurriculumProgramme[]>;
+export const getStages = curriculumMod.getStages as (programmeKey: string) => Promise<CurriculumStage[]>;
+export const getSubjectOfferings = curriculumMod.getSubjectOfferings as (a: {
+  programmeKey: string; stageKey: string;
+}) => Promise<SubjectOffering[]>;
+export const filterSubjectOfferings = curriculumMod.filterSubjectOfferings as (
+  offerings: SubjectOffering[], query: string,
+) => SubjectOffering[];
+export const formatSubjectIdentity = curriculumMod.formatSubjectIdentity as (
+  offering: SubjectOffering, selectedLevel?: string | null,
+) => string;
+export const validateSubjectSelection = curriculumMod.validateSubjectSelection as (
+  offering: SubjectOffering, level?: string | null,
+) => boolean;
+export const defaultLevelFor = curriculumMod.defaultLevelFor as (
+  offering: SubjectOffering,
+) => "SL" | "HL" | null;
+export const providerLabel = curriculumMod.providerLabel as (key?: string | null) => string;
+export const programmeLabelFromKey = curriculumMod.programmeLabelFromKey as (key?: string | null) => string;
+export const stageLabelFromKey = curriculumMod.stageLabelFromKey as (key?: string | null) => string;
+export const legacyCurriculumForStudent = curriculumMod.legacyCurriculumForStudent as (student?: Partial<Student>) => {
+  providerKey: string | null; programmeKey: string | null; stageKey: string | null;
+};
+export const assessmentRulesFor = curriculumMod.assessmentRulesFor as (a?: {
+  providerKey?: string | null; programmeKey?: string | null;
+}) => {
+  provider: string | null; markStep: number; maxPrecision: number;
+  supportsTeacherPenMarks: boolean; officialSchemeTerminology: string;
+  paperLabels: Record<string, string>;
+};
+export const paperLabelsFor = curriculumMod.paperLabelsFor as (providerKey?: string | null) => Record<string, string>;
+
+// Legacy read helpers remain exported until cached pre-v2 profiles age out.
 export const BOARD = curriculumMod.BOARD as string;
 export const BOARD_LABEL = curriculumMod.BOARD_LABEL as string;
 export const CLASS_LEVELS = curriculumMod.CLASS_LEVELS as number[];
-export const STAGES = curriculumMod.STAGES as {
-  stage: string; label: string; classLevels: number[];
-}[];
-export const stageForClass = curriculumMod.stageForClass as (c: number) => {
-  stage: string; label: string; classLevels: number[];
-};
+export const STAGES = curriculumMod.STAGES as { stage: string; label: string; classLevels: number[] }[];
+export const stageForClass = curriculumMod.stageForClass as (c: number) => { stage: string; label: string; classLevels: number[] };
 export const classLabel = curriculumMod.classLabel as (c: number) => string;
 export const classLabelShort = curriculumMod.classLabelShort as (c: number) => string;
-export const subjectsForClass = curriculumMod.subjectsForClass as (
-  c: number,
-) => { subject: string; code: string }[];
-export const syllabusCode = curriculumMod.syllabusCode as (
-  subject: string, c: number,
-) => string | null;
-export const subjectLabel = curriculumMod.subjectLabel as (
-  subject: string, code: string | null,
-) => string;
+export const subjectsForClass = curriculumMod.subjectsForClass as (c: number) => { subject: string; code: string }[];
+export const syllabusCode = curriculumMod.syllabusCode as (subject: string, c: number) => string | null;
+export const subjectLabel = curriculumMod.subjectLabel as (subject: string, code: string | null) => string;
 
 // ── prefs ──────────────────────────────────────────────────────────────────
 export const DEFAULTS = prefsMod.DEFAULTS as Prefs;
@@ -217,7 +274,8 @@ export const addLinkPage = papersMod.addLinkPage as (a: {
 }) => Promise<unknown>;
 export const parsePaperLink = papersMod.parsePaperLink as (raw: string) => string;
 export const PAPER_TYPES = papersMod.PAPER_TYPES as { value: string; label: string }[];
-export const paperTypeLabel = papersMod.paperTypeLabel as (type: string) => string;
+export const paperTypesFor = papersMod.paperTypesFor as (providerKey?: string | null) => { value: string; label: string }[];
+export const paperTypeLabel = papersMod.paperTypeLabel as (type: string, providerKey?: string | null) => string;
 
 /** The five in-flight states AXON_FIX_BRIEF.md §6.5 asks the Library to
     show, keyed by what `paperProgress` reports. A committed paper needs
@@ -518,32 +576,41 @@ export const deleteAccount = accountMod.deleteAccount as (
    which is to say it was not the student's face at all, and two independent
    definitions are what let that happen. */
 
-export type AvatarPreset = {
-  key: string;
-  title: string;
-  type: "sphere" | "plane" | "waterPlane";
-  /** Absent means the app may hand this preset out unasked. `false` means it
-      may not — Halo and Mandarin are close enough to the reserved sign-out red
-      that deriving one onto someone would spend red on decoration. Both stay
-      pickable. */
-  auto?: boolean;
-  c: [string, string, string];
+export type DotFacePoint = { x: number; y: number; tone: number };
+export type AvatarPreset =
+  | {
+      kind: "gradient";
+      key: string;
+      title: string;
+      type: "sphere" | "plane" | "waterPlane" | "volumetric";
+      auto?: boolean;
+      c: string[];
+    }
+  | {
+      kind: "dot-face";
+      key: string;
+      title: string;
+      backgroundPreset: string;
+      glyph: { size: number; points: DotFacePoint[] };
+    };
+
+export type AvatarRender = {
+  kind: "gradient" | "dot-face";
+  background: string;
+  palette: [string, string, string, string];
+  color: string;
+  preset: string;
+  glyph: { size: number; points: DotFacePoint[] } | null;
 };
 
 export const AVATAR_PRESETS = avatarMod.PRESETS as unknown as AvatarPreset[];
-
-/** The `background` and `color` to paint, plus which preset produced them. */
-export const avatarStyleFor = avatarMod.avatarStyleFor as unknown as (
+export const avatarRenderFor = avatarMod.avatarRenderFor as unknown as (
   student: { id?: string; avatar_seed?: string | null } | null | undefined,
-) => { background: string; color: string; preset: string };
-
+) => AvatarRender;
+export const avatarStyleFor = avatarRenderFor;
 export const backgroundFor = avatarMod.backgroundFor as unknown as (p: AvatarPreset) => string;
 export const inkFor = avatarMod.inkFor as unknown as (p: AvatarPreset) => string;
-
-/** True when the seed is a preset key — i.e. the student chose this face
-    rather than being handed the one derived from their seed. */
 export const isChosenAvatar = avatarMod.isChosen as unknown as (
   student: { avatar_seed?: string | null } | null | undefined,
 ) => boolean;
-
 export const initialFor = avatarMod.initialFor as unknown as (label?: string | null) => string;

@@ -58,7 +58,7 @@
 
 import { useNavigate } from "react-router-dom";
 import { loadProfiles, selectedProfile } from "../data/profiles";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
@@ -66,14 +66,17 @@ import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
-  BOARD, CLASS_LEVELS, classLabel, stageForClass, subjectsForClass, syllabusCode,
-  PAPER_TYPES,
+  paperTypesFor,
   startCheckout,
 } from "../data/modules";
 import type { Guardian, Student } from "../data/modules";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
+import AvatarPicker from "../components/AvatarPicker";
+import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
+import type { CurriculumSelection } from "../components/CurriculumEditor";
+import { useParentMode } from "../data/useParentMode";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
@@ -155,6 +158,7 @@ export default function Onboarding() {
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
+  const { guard: guardParentMode } = useParentMode(guardian?.contact || contact);
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
 
@@ -181,8 +185,13 @@ export default function Onboarding() {
      typed and picked. Being made to re-enter a name because one subject was
      missed is the flow calling the user careless. */
   const [studentFirst, setStudentFirst] = useState("");
-  const [studentClass, setStudentClass] = useState(11);
-  const [subjects, setSubjects] = useState<string[]>([]);
+  const [avatarKey, setAvatarKey] = useState("dreamBloom");
+  const [curriculum, setCurriculum] = useState<CurriculumSelection>({
+    providerKey: "",
+    programmeKey: "",
+    stageKey: "",
+    subjects: [],
+  });
   const profileFlight = useRef(false);
   const profileRequest = useRef(crypto.randomUUID());
   const [profileBusy, setProfileBusy] = useState(false);
@@ -295,14 +304,6 @@ export default function Onboarding() {
       })
       .catch((e) => fail(e, "We could not load what you're agreeing to."));
   }, [step, purposes]);
-
-  /* Changing year can change stage, and the two stages have different subject
-     catalogues. Picks that do not exist in the new one are dropped rather than
-     carried into a syllabus that has no code for them. */
-  const catalogue = useMemo(() => subjectsForClass(studentClass), [studentClass]);
-  useEffect(() => {
-    setSubjects((prev) => prev.filter((x) => catalogue.some((c) => c.subject === x)));
-  }, [catalogue]);
 
   const back = BACK_TO[step];
   const shellProps = {
@@ -536,14 +537,25 @@ export default function Onboarding() {
 
   // ── itemised consent ─────────────────────────────────────────────────────
   if (step === "consent") {
-    const give = async () => {
+    const give = () => {
       hapticFirm();
-      try {
-        // Guardian-scope: the student profile does not exist yet, which is
-        // exactly why consent_event.student_id is nullable.
-        await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
-        go("plan");
-      } catch (e) { fail(e, "Consent could not be recorded."); }
+      setError(null);
+
+      /* Consent is protected by the same Parent Mode boundary as consent
+         changes in Settings. A parent can legitimately reach this screen with
+         an older still-valid session (for example, returning to onboarding
+         later), in which case the database correctly rejects the write with
+         42501. Do not turn that security boundary into a dead-end error: ask
+         the account holder to re-authenticate, then perform the exact same
+         guarded write. */
+      guardParentMode(async () => {
+        try {
+          // Guardian-scope: the student profile does not exist yet, which is
+          // exactly why consent_event.student_id is nullable.
+          await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
+          go("plan");
+        } catch (e) { fail(e, "Consent could not be recorded."); }
+      });
     };
 
     const row = (p: Purpose) => {
@@ -595,7 +607,7 @@ export default function Onboarding() {
         </div>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" disabled={!purposes}
-                    onClick={() => void give()}>
+                    onClick={give}>
             Give consent
           </PressBox>
         </div>
@@ -666,39 +678,61 @@ export default function Onboarding() {
 
   // ── student profile ──────────────────────────────────────────────────────
   if (step === "student") {
-    const stage = stageForClass(studentClass);
-
     const create = async () => {
       if (profileFlight.current) return;
       if (!studentFirst.trim()) return setError("What should we call the student?");
-      if (!subjects.length) return setError("Pick at least one subject.");
+      if (!curriculum.providerKey || !curriculum.programmeKey || !curriculum.stageKey) {
+        return setError("Choose the student's curriculum and stage.");
+      }
+      if (!curriculum.subjects.length) return setError("Pick at least one subject.");
+      if (!curriculumSelectionIsComplete(curriculum)) {
+        return setError("Choose SL or HL for every subject that needs a level.");
+      }
+
       profileFlight.current = true;
       setProfileBusy(true);
       hapticFirm();
       try {
-        const { data, error: e } = await sb.rpc("create_student_profile", {
-          p_request_id: profileRequest.current, p_first_name: studentFirst.trim(),
-          p_board: BOARD, p_class_level: studentClass,
-          p_subjects: subjects.map(subject => ({ subject, syllabus_code: syllabusCode(subject, studentClass) })),
+        const { data, error: e } = await sb.rpc("create_student_profile_v2", {
+          p_request_id: profileRequest.current,
+          p_first_name: studentFirst.trim(),
+          p_programme_key: curriculum.programmeKey,
+          p_stage_key: curriculum.stageKey,
+          p_avatar_key: avatarKey,
+          p_subjects: curriculum.subjects.map(({ offering, level }) => ({
+            offering_id: offering.id,
+            level,
+          })),
         });
         if (e) throw e;
-        setStudent({ ...data, subjects });
+
+        const rows = Array.isArray(data?.subjects) ? data.subjects : [];
+        setStudent({
+          ...data,
+          subjects: rows.map((row: { subject: string }) => row.subject),
+          subject_selections: rows.map((row: {
+            offering_id: string; subject: string; external_code: string | null; level: "SL" | "HL" | null;
+          }) => ({
+            offering_id: row.offering_id,
+            subject: row.subject,
+            external_code: row.external_code,
+            level: row.level,
+          })),
+        } as Student);
         go("firstRun");
       } catch (e) {
-        // The consent gate raises 42501 here if consent is somehow missing.
         setError((e as { code?: string }).code === "42501"
           ? "We can't create the profile until consent is recorded. Go back a step."
-          : (e as Error).message || "The profile could not be created.");
-      } finally { profileFlight.current = false; setProfileBusy(false); }
+          : "The profile could not be created. Check the curriculum choices and try again.");
+      } finally {
+        profileFlight.current = false;
+        setProfileBusy(false);
+      }
     };
 
     return (
       <Shell {...shellProps} title="The student">
         <Err message={error} />
-        {/* Stripe has taken the payment; our own entitlement row is written by
-            the webhook a moment later. So this says what is actually known —
-            the payment went through — and not "Pro is active", which is a
-            different claim and not ours to make yet. */}
         {billingReturn === "success" && (
           <div className="obpanel tint">
             <div className="body" style={{ marginTop: 0 }}>
@@ -707,61 +741,46 @@ export default function Onboarding() {
             </div>
           </div>
         )}
+
         <div className="obfields">
-          <Field id="ob-sname" label="First name" value={studentFirst} onChange={setStudentFirst}
-                 placeholder="The student's first name" />
+          <Field
+            id="ob-sname"
+            label="First name"
+            value={studentFirst}
+            onChange={setStudentFirst}
+            placeholder="The student's first name"
+          />
         </div>
 
-        <div className="sectitle">Stage</div>
-        <div className="list">
-          <div className="srow">
-            <div className="ic ic-b"><Icon d={ICONS.cap} /></div>
-            <div className="lbl">Class<small>{classLabel(studentClass)}</small></div>
-            <div className="seg" role="group" aria-label="Class">
-              {CLASS_LEVELS.map((c) => (
-                <button key={c} type="button" className={c === studentClass ? "on" : undefined}
-                        aria-pressed={c === studentClass}
-                        onClick={() => { hapticTick(); setStudentClass(c); }}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* The board is not a question any more. v1 is Cambridge only, and
-              curriculum.js is the single source for that. */}
-          <SRow tone="ic-b" icon={ICONS.paper} label="Board" small={stage.label}
-                trailing={<span className="locked">Cambridge</span>} />
-        </div>
+        <div className="sectitle">Picture</div>
+        <AvatarPicker
+          value={avatarKey}
+          label={studentFirst}
+          onChange={setAvatarKey}
+          disabled={profileBusy}
+          className="onboarding-avatar-picker"
+        />
 
-        <div className="sectitle">Subjects</div>
-        <div className="filterbar" style={{ position: "static" }}>
-          {catalogue.map(({ subject, code: sc }) => {
-            const chosen = subjects.includes(subject);
-            return (
-              <button
-                key={subject}
-                type="button"
-                className={"fchip" + (chosen ? " active" : "")}
-                aria-pressed={chosen}
-                onClick={() => {
-                  hapticTick();
-                  setSubjects((prev) => chosen
-                    ? prev.filter((x) => x !== subject)
-                    : [...prev, subject]);
-                }}
-              >
-                {subject} <span className="obcode-badge">{sc}</span>
-              </button>
-            );
-          })}
-        </div>
+        <CurriculumEditor
+          value={curriculum}
+          onChange={setCurriculum}
+          disabled={profileBusy}
+        />
+
         <div className="subnote">
-          The four-digit code is the syllabus, and it is what lets a past paper be
-          matched to the right mark scheme. Nothing else is collected — no school,
-          no address, no photograph.
+          Curriculum choices come from the current official catalog. Your picture
+          is generated inside Axon — no profile photo is uploaded.
         </div>
+
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" disabled={profileBusy} aria-busy={profileBusy} onClick={() => void create()}>
+          <PressBox
+            as="button"
+            type="button"
+            className="btn primary"
+            disabled={profileBusy}
+            aria-busy={profileBusy}
+            onClick={() => void create()}
+          >
             Create profile
           </PressBox>
         </div>
@@ -817,6 +836,7 @@ export default function Onboarding() {
     hapticFirm();
     void finishOnboarding({ guardian: guardian!, student: student!, firstPaperType: value });
   };
+  const paperTypes = paperTypesFor(student?.provider_key ?? curriculum.providerKey);
 
   return (
     <Shell {...shellProps} title="Your first paper">
@@ -828,14 +848,14 @@ export default function Onboarding() {
       </div>
       <div className="sectitle">School test</div>
       <div className="list">
-        {PAPER_TYPES.filter((t) => !isScheme(t)).map((t) => (
+        {paperTypes.filter((t) => !isScheme(t)).map((t) => (
           <Method key={t.value} icon={ICONS.paper} t1={t.label} onClick={() => choose(t.value)} />
         ))}
       </div>
       <div className="subnote">Explained from your teacher&rsquo;s marks and remarks.</div>
       <div className="sectitle">Board paper</div>
       <div className="list">
-        {PAPER_TYPES.filter(isScheme).map((t) => (
+        {paperTypes.filter(isScheme).map((t) => (
           <Method key={t.value} icon={ICONS.stamp} t1={t.label} onClick={() => choose(t.value)} />
         ))}
       </div>

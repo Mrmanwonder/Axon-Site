@@ -16,26 +16,34 @@ import { sb } from './supabase.js';
 import { readThrough } from './cache.js';
 import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 import { CAPTURE } from './scan/contract.js';
+import { MASTERY_API_URL } from './config.js';
+import { paperLabelsFor } from './curriculum.js';
 
 /** Papers are Tier 2 candidates only if they are board material. */
 export function tierForType(type) {
   return type === 'pyq' || type === 'sample_paper' ? 'tier_2' : 'tier_1';
 }
-// Cambridge names its own material: a "past paper" is a real Cambridge exam
-// from a previous series, and a "specimen paper" is the board's own published
-// example. The stored enum values are unchanged — pyq and sample_paper are what
-// the schema calls them — because renaming an enum for a label is how a
-// migration ends up being about vocabulary.
-export const PAPER_TYPES = [
+
+const BASE_PAPER_TYPES = [
   { value: 'unit_test', label: 'Class test' },
   { value: 'mid_term', label: 'Mid-term' },
   { value: 'final_exam', label: 'End-of-year exam' },
-  { value: 'pyq', label: 'Cambridge past paper' },
-  { value: 'sample_paper', label: 'Specimen paper' },
-  ];
+];
 
-export function paperTypeLabel(type) {
-  return PAPER_TYPES.find((t) => t.value === type)?.label ?? type;
+export function paperTypesFor(providerKey = 'cambridge') {
+  const labels = paperLabelsFor(providerKey);
+  return [
+    ...BASE_PAPER_TYPES,
+    { value: 'pyq', label: labels.pyq },
+    { value: 'sample_paper', label: labels.sample_paper },
+  ];
+}
+
+// Compatibility for callers that do not yet have profile context.
+export const PAPER_TYPES = paperTypesFor('cambridge');
+
+export function paperTypeLabel(type, providerKey = 'cambridge') {
+  return paperTypesFor(providerKey).find((item) => item.value === type)?.label ?? type;
 }
 
 function requireOnline(action) {
@@ -210,9 +218,34 @@ const pageObj = minted.get('page');
 *
 * @returns {{url:string|null, mask_url:string|null}}
 */
+export function canonicalAssetUrl(raw) {
+  if (!raw || typeof raw !== 'string') return raw ?? null;
+  try {
+    const signed = new URL(raw);
+    // Older API deployments fell back to the non-existent generic
+    // mastery-api.workers.dev hostname when MASTERY_ASSET_URL was missing.
+    // The signature covers bucket:key:expiry, not the host, so repairing that
+    // known-bad origin keeps the exact signed asset path while sending it to
+    // the Worker that actually owns /asset.
+    if (signed.hostname === 'mastery-api.workers.dev') {
+      const api = new URL(MASTERY_API_URL);
+      signed.protocol = api.protocol;
+      signed.host = api.host;
+    }
+    return signed.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export async function pageAssetUrl(paperId, pageNumber) {
   const { urls } = await pageAssetUrls({ paper_id: paperId, page_numbers: [pageNumber] });
-  return urls?.[pageNumber] ?? urls?.[String(pageNumber)] ?? { url: null, mask_url: null };
+  const asset = urls?.[pageNumber] ?? urls?.[String(pageNumber)] ?? { url: null, mask_url: null };
+  return {
+    ...asset,
+    url: canonicalAssetUrl(asset?.url),
+    mask_url: canonicalAssetUrl(asset?.mask_url),
+  };
 }
 
 /**
