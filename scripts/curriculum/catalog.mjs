@@ -274,18 +274,22 @@ function cbseRow(name, stage, category, source, code) {
   };
 }
 
-export function parseCbseCurriculum(html, source) {
-  source = source || SOURCES.cbse_curriculum;
-  let stages = [];
+function sliceHtmlSection(html, startPattern, endPattern) {
+  const start = startPattern.exec(html);
+  if (!start) return "";
+  const tail = html.slice(start.index + start[0].length);
+  const end = endPattern ? endPattern.exec(tail) : null;
+  return end ? tail.slice(0, end.index) : tail;
+}
+
+function parseCbseCurriculumSection(html, stages, source) {
   let category = null;
   const rows = [];
-  for (const token of tokenizeCbse(html)) {
+  for (const token of tokenizeCbse(html, true)) {
     if (token.type === "heading") {
-      stages = cbseStages(token.text, stages);
       category = cbseCategory(token.text, category);
       continue;
     }
-    if (!stages.length) continue;
     if (/^(Initial Pages|Introduction|Reading Material|Archive|Course [AB]|IX|X|XI|XII)$/i.test(token.text)) continue;
     if (/Employability Skills|Mandatory Skill Subject/i.test(token.text)) continue;
     if (category === "skill") continue;
@@ -296,18 +300,46 @@ export function parseCbseCurriculum(html, source) {
       .trim();
     if (!name) continue;
 
-    // Class X Urdu is rendered as one list item with two nested course links.
-    // Preserve the two actual selectable routes instead of concatenating all
-    // descendant anchor text into a fake subject name.
-    const names = /^Urdu\s+Course A\s+Course B$/i.test(name)
-      ? ["Urdu"]
-      : [name];
-
+    const names = /^Urdu\s+Course A\s+Course B$/i.test(name) ? ["Urdu"] : [name];
     for (const stage of stages) {
       for (const subjectName of names) rows.push(cbseRow(subjectName, stage, category, source, null));
     }
   }
-  return sortedUnique(rows, function (row) { return row.stage_key + "|" + loose(row.display_name); });
+  return rows;
+}
+
+export function parseCbseCurriculum(html, source) {
+  source = source || SOURCES.cbse_curriculum;
+  const current = sliceHtmlSection(
+    html,
+    /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i,
+    null
+  ) || html;
+
+  const class9 = sliceHtmlSection(
+    current,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+IX\)/i,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i
+  );
+  const class10 = sliceHtmlSection(
+    current,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i
+  );
+  const senior = sliceHtmlSection(
+    current,
+    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i,
+    /©|Contact\s+Us/i
+  );
+
+  const rows = [
+    ...parseCbseCurriculumSection(class9, ["cbse_9"], source),
+    ...parseCbseCurriculumSection(class10, ["cbse_10"], source),
+    ...parseCbseCurriculumSection(senior, ["cbse_11", "cbse_12"], source)
+  ];
+  return sortedUnique(rows, function (row) {
+    return row.stage_key + "|" + loose(row.display_name);
+  });
 }
 
 function currentCbseSkillScope(html) {
@@ -320,40 +352,10 @@ function currentCbseSkillScope(html) {
   return scope;
 }
 
-export function parseCbseSkill(html, source) {
-  source = source || SOURCES.cbse_skill;
-  let stages = [];
+function parseCbseSkillSection(html, stages, source) {
   let category = "skill";
-  let highestStageRank = 0;
   const rows = [];
-  const scope = currentCbseSkillScope(html);
-
-  function stageRank(nextStages) {
-    if (nextStages.includes("cbse_11") || nextStages.includes("cbse_12")) return 3;
-    if (nextStages.includes("cbse_10")) return 2;
-    if (nextStages.includes("cbse_9")) return 1;
-    return 0;
-  }
-
-  for (const token of tokenizeCbse(scope, true)) {
-    if (/Skill Modules|Archive/i.test(token.text) && highestStageRank > 0) break;
-
-    const nextStages = cbseStages(token.text, stages);
-    const nextRank = stageRank(nextStages);
-    const isStageMarker = nextRank > 0 && (
-      /Class(?:es)?\s+(?:IX|X|XI|XII)\b/i.test(token.text)
-      || /XI\s*[-–|&]\s*XII/i.test(token.text)
-    );
-
-    if (isStageMarker && JSON.stringify(nextStages) !== JSON.stringify(stages)) {
-      // Current page order is IX -> X -> XI/XII. A later backward jump means
-      // we've reached an archived/older curriculum block.
-      if (highestStageRank >= 3 && nextRank < highestStageRank) break;
-      stages = nextStages;
-      highestStageRank = Math.max(highestStageRank, nextRank);
-      continue;
-    }
-
+  for (const token of tokenizeCbse(html, true)) {
     if (/Mandatory Skill/i.test(token.text)) {
       category = "mandatory_skill";
       continue;
@@ -362,15 +364,14 @@ export function parseCbseSkill(html, source) {
       category = "skill";
       continue;
     }
+    if (/Employability Skills/i.test(token.text)) continue;
 
-    if (!stages.length || /Employability Skills/i.test(token.text)) continue;
     const parenthesized = /\((\d{3})\)/.exec(token.text);
     const prefixed = /^(\d{3})\s*-/.exec(token.text);
     const code = parenthesized ? parenthesized[1] : prefixed ? prefixed[1] : null;
-    if (!code && !/Vocational Education/i.test(token.text)) continue;
+    if (!code) continue;
 
-    let name = token.text;
-    if (parenthesized) name = token.text.slice(0, parenthesized.index);
+    let name = parenthesized ? token.text.slice(0, parenthesized.index) : token.text;
     name = name
       .replace(/^\d{3}\s*-\s*/, "")
       .replace(/^.*?\b(?:IX|X|XI|XII)\b\s*[|&-]*\s*/i, "")
@@ -381,6 +382,35 @@ export function parseCbseSkill(html, source) {
 
     for (const stage of stages) rows.push(cbseRow(name, stage, category, source, code));
   }
+  return rows;
+}
+
+export function parseCbseSkill(html, source) {
+  source = source || SOURCES.cbse_skill;
+  const current = currentCbseSkillScope(html);
+
+  const class9 = sliceHtmlSection(
+    current,
+    /Class\s+IX/i,
+    /Class\s+X/i
+  );
+  const class10 = sliceHtmlSection(
+    current,
+    /Class\s+X/i,
+    /Classes\s+XI\s*[-–]\s*XII/i
+  );
+  const senior = sliceHtmlSection(
+    current,
+    /Classes\s+XI\s*[-–]\s*XII/i,
+    /Skill\s*Modules\s*\(Optional\)/i
+  );
+
+  const rows = [
+    ...parseCbseSkillSection(class9, ["cbse_9"], source),
+    ...parseCbseSkillSection(class10, ["cbse_10"], source),
+    ...parseCbseSkillSection(senior, ["cbse_11", "cbse_12"], source)
+  ];
+
   return sortedUnique(rows, function (row) {
     return row.stage_key + "|" + (row.external_code || loose(row.display_name));
   });
