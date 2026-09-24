@@ -66,7 +66,7 @@ test("Insights filter rail paints directly below the sticky header after scrolli
   `);
 
   const view = page.locator(".view");
-  await view.evaluate((node) => { node.scrollTop = 620; });
+  await view.evaluate((node) => { node.scrollTop = 900; });
   await page.waitForTimeout(50);
 
   const geometry = await page.evaluate(() => {
