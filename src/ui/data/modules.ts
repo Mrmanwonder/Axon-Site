@@ -576,7 +576,7 @@ export const deleteAccount = accountMod.deleteAccount as (
    which is to say it was not the student's face at all, and two independent
    definitions are what let that happen. */
 
-export type DotFacePoint = { x: number; y: number; tone: number };
+export type DotFacePoint = { x: number; y: number; tone: number; fill?: string };
 export type AvatarPreset =
   | {
       kind: "gradient";
