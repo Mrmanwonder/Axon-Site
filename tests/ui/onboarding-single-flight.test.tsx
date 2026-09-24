@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -96,6 +96,12 @@ test("ten rapid Create Profile actions issue one atomic profile request", async 
   render(<MemoryRouter initialEntries={["/?billing=success"]}><Onboarding /></MemoryRouter>);
 
   await screen.findByRole("heading", { name: "The student" });
+  const identity = document.querySelector<HTMLElement>(".student-identity-row");
+  expect(identity).toBeTruthy();
+  expect(within(identity!).getByRole("button", { name: "Change profile picture" })).toBeTruthy();
+  expect(within(identity!).getByLabelText("First name")).toBeTruthy();
+  expect(screen.queryByText("Picture")).toBeNull();
+
   await userEvent.type(screen.getByLabelText("First name"), "Sam");
 
   const class11 = await screen.findByRole("button", { name: "Class 11" });
