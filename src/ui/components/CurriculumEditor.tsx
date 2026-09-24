@@ -291,7 +291,7 @@ export default function CurriculumEditor({
               key={classLevel}
               type="button"
               aria-label={`Class ${classLevel}`}
-              aria-pressed={activeClass === classLevel}
+              aria-pressed={selectedStage ? inferredClass(selectedStage.stage) === classLevel : false}
               disabled={disabled || !available}
               onClick={() => chooseClass(classLevel)}
             >
