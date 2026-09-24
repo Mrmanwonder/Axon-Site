@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import Dialog from "./Dialog";
+import { useEffect, useMemo, useState } from "react";
 import { hapticTick } from "../lib/haptics";
 import {
   PROVIDER_KEYS,
@@ -32,26 +31,49 @@ export type CurriculumSelection = {
 type StageChoice = {
   programme: CurriculumProgramme;
   stage: CurriculumStage;
-  label: string;
 };
 
-function stageChoiceLabel(providerKey: string, programme: CurriculumProgramme, stage: CurriculumStage) {
-  if (providerKey === "cambridge") {
-    if (programme.key === "cambridge_igcse") {
-      return stage.school_year_label ? `IGCSE · ${stage.school_year_label}` : "IGCSE";
-    }
-    return programme.key === "cambridge_as" ? "AS Level" : "A Level";
+const CLASS_LEVELS = [9, 10, 11, 12] as const;
+const BOARD_LABELS: Record<Exclude<CurriculumSelection["providerKey"], "">, string> = {
+  cambridge: "Cambridge",
+  cbse: "CBSE",
+  ib: "IBDP",
+};
+
+function inferredClass(stage: CurriculumStage) {
+  if (stage.legacy_class_level) return stage.legacy_class_level;
+  const key = stage.key.toLowerCase();
+  if (/(_9|y10|dp1)$/.test(key)) return key.includes("dp1") ? 11 : 9;
+  if (/(_10|y11)$/.test(key)) return 10;
+  if (/(_11|_as|dp1)$/.test(key)) return 11;
+  if (/(_12|a_level|dp2)$/.test(key)) return 12;
+  return null;
+}
+
+function stageSummary(choice: StageChoice | null) {
+  if (!choice) return "Choose a class";
+  const { stage } = choice;
+  if (stage.school_year_label && !stage.label.includes(stage.school_year_label)) {
+    return `${stage.label} · ${stage.school_year_label}`;
   }
-  if (providerKey === "ib") return stage.label;
   return stage.label;
 }
 
+function programmeSummary(choice: StageChoice | null) {
+  if (!choice) return "Choose a curriculum";
+  switch (choice.programme.key) {
+    case "cambridge_igcse": return "IGCSE";
+    case "cambridge_as": return "AS Level";
+    case "cambridge_a_level": return "A Level";
+    case "cbse_secondary": return "Secondary";
+    case "cbse_senior_secondary": return "Senior Secondary";
+    case "ibdp": return "Diploma Programme";
+    default: return choice.programme.label;
+  }
+}
+
 function subjectSecondary(offering: SubjectOffering) {
-  const bits = [
-    offering.external_code,
-    typeof offering.metadata?.group === "string" ? offering.metadata.group : null,
-  ].filter(Boolean);
-  return bits.join(" · ");
+  return offering.external_code ?? "";
 }
 
 export function curriculumSelectionIsComplete(selection: CurriculumSelection) {
@@ -60,6 +82,28 @@ export function curriculumSelectionIsComplete(selection: CurriculumSelection) {
     const levels = offering.levels_supported ?? [];
     return !levels.length || (!!level && levels.includes(level));
   });
+}
+
+function StageIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m3.5 8.5 8.5-4.2 8.5 4.2-8.5 4.2-8.5-4.2Z" />
+    <path d="M7.5 10.6v4.7c2.5 2.2 6.5 2.2 9 0v-4.7" />
+    <path d="M20.5 8.7v5.4" />
+  </svg>;
+}
+
+function BoardIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 3.8h7l4 4V20H7z" />
+    <path d="M14 3.8V8h4" />
+  </svg>;
+}
+
+function SearchIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="10.8" cy="10.8" r="6.2" />
+    <path d="m15.4 15.4 4.2 4.2" />
+  </svg>;
 }
 
 export default function CurriculumEditor({
@@ -76,9 +120,9 @@ export default function CurriculumEditor({
   const [loadingStages, setLoadingStages] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [preferredClass, setPreferredClass] = useState(11);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,17 +140,49 @@ export default function CurriculumEditor({
       })));
       if (cancelled) return;
       setStageChoices(stages.flatMap(({ programme, stages: rows }) =>
-        rows.map(stage => ({
-          programme,
-          stage,
-          label: stageChoiceLabel(value.providerKey, programme, stage),
-        }))
+        rows.map(stage => ({ programme, stage }))
       ));
     })().catch(() => {
       if (!cancelled) setCatalogError("The curriculum catalog could not be loaded.");
     }).finally(() => { if (!cancelled) setLoadingStages(false); });
     return () => { cancelled = true; };
   }, [value.providerKey]);
+
+  const selectedStage = useMemo(() => stageChoices.find(choice =>
+    choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey
+  ) ?? null, [stageChoices, value.programmeKey, value.stageKey]);
+
+  const stageByClass = useMemo(() => {
+    const map = new Map<number, StageChoice>();
+    for (const choice of stageChoices) {
+      const classLevel = inferredClass(choice.stage);
+      if (classLevel && !map.has(classLevel)) map.set(classLevel, choice);
+    }
+    return map;
+  }, [stageChoices]);
+
+  useEffect(() => {
+    if (!value.providerKey || loadingStages || !stageChoices.length) return;
+    const selectedClass = selectedStage ? inferredClass(selectedStage.stage) : null;
+    if (selectedClass === preferredClass) return;
+
+    const exact = stageByClass.get(preferredClass);
+    const fallback = exact ?? [...stageChoices]
+      .sort((a, b) => Math.abs((inferredClass(a.stage) ?? 99) - preferredClass)
+        - Math.abs((inferredClass(b.stage) ?? 99) - preferredClass))[0];
+    if (!fallback) return;
+    const nextClass = inferredClass(fallback.stage);
+    if (nextClass) setPreferredClass(nextClass);
+    onChange({
+      ...value,
+      programmeKey: fallback.programme.key,
+      stageKey: fallback.stage.key,
+      subjects: [],
+    });
+  }, [
+    loadingStages, onChange, preferredClass, selectedStage, stageByClass,
+    stageChoices, value,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,23 +200,29 @@ export default function CurriculumEditor({
   }, [value.programmeKey, value.stageKey]);
 
   const selectedIds = useMemo(() => new Set(value.subjects.map(item => item.offering.id)), [value.subjects]);
-  const shownOfferings = useMemo(() => {
-    const filtered = filterSubjectOfferings(offerings, query);
-    return [...filtered].sort((a, b) => {
-      const selectedDelta = Number(selectedIds.has(b.id)) - Number(selectedIds.has(a.id));
-      return selectedDelta || a.display_name.localeCompare(b.display_name);
-    });
-  }, [offerings, query, selectedIds]);
+  const selectedById = useMemo(() => new Map(value.subjects.map(item => [item.offering.id, item])), [value.subjects]);
+  const shownOfferings = useMemo(() => filterSubjectOfferings(offerings, query), [offerings, query]);
+
+  const activeClass = selectedStage ? inferredClass(selectedStage.stage) ?? preferredClass : preferredClass;
+  const classIndex = Math.max(0, CLASS_LEVELS.indexOf(activeClass as typeof CLASS_LEVELS[number]));
+  const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(value.providerKey || "cambridge"));
 
   const chooseProvider = (providerKey: "cambridge" | "cbse" | "ib") => {
     if (disabled || providerKey === value.providerKey) return;
     hapticTick();
+    const nextClass = providerKey === "ib" && preferredClass < 11 ? 11 : preferredClass;
+    setPreferredClass(nextClass);
+    setQuery("");
     onChange({ providerKey, programmeKey: "", stageKey: "", subjects: [] });
   };
 
-  const chooseStage = (choice: StageChoice) => {
-    if (disabled || (choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey)) return;
+  const chooseClass = (classLevel: number) => {
+    if (disabled) return;
+    const choice = stageByClass.get(classLevel);
+    if (!choice) return;
     hapticTick();
+    setPreferredClass(classLevel);
+    if (choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey) return;
     onChange({
       ...value,
       programmeKey: choice.programme.key,
@@ -163,6 +245,7 @@ export default function CurriculumEditor({
   };
 
   const setLevel = (offeringId: string, level: "SL" | "HL") => {
+    if (disabled) return;
     hapticTick();
     onChange({
       ...value,
@@ -171,133 +254,138 @@ export default function CurriculumEditor({
   };
 
   return <div className="curriculum-editor">
-    <div className="sectitle">Curriculum</div>
-    <div className="curriculum-choice-row" role="group" aria-label="Curriculum">
-      {PROVIDER_KEYS.map(key => (
-        <button
-          key={key}
-          type="button"
-          className={"curriculum-choice" + (value.providerKey === key ? " on" : "")}
-          aria-pressed={value.providerKey === key}
-          disabled={disabled}
-          onClick={() => chooseProvider(key)}
+    <div className="sectitle curriculum-stage-title">Stage</div>
+    <div className="curriculum-stage-card">
+      <div className="curriculum-stage-card-row">
+        <span className="curriculum-row-icon"><StageIcon /></span>
+        <span className="curriculum-row-copy">
+          <b>Class</b>
+          <small>{loadingStages ? "Loading…" : stageSummary(selectedStage)}</small>
+        </span>
+        <div
+          className="curriculum-class-selector"
+          role="group"
+          aria-label="Class"
+          style={{ "--active-index": classIndex } as React.CSSProperties}
         >
-          {providerLabel(key)}
-        </button>
-      ))}
+          <span className="curriculum-selector-glider" aria-hidden="true" />
+          {CLASS_LEVELS.map(classLevel => {
+            const available = !value.providerKey || loadingStages || stageByClass.has(classLevel);
+            return <button
+              key={classLevel}
+              type="button"
+              aria-label={`Class ${classLevel}`}
+              aria-pressed={activeClass === classLevel}
+              disabled={disabled || !available}
+              onClick={() => chooseClass(classLevel)}
+            >
+              {classLevel}
+            </button>;
+          })}
+        </div>
+      </div>
+
+      <div className="curriculum-stage-divider" />
+
+      <div className="curriculum-stage-card-row">
+        <span className="curriculum-row-icon"><BoardIcon /></span>
+        <span className="curriculum-row-copy">
+          <b>Board</b>
+          <small>{loadingStages ? "Loading…" : programmeSummary(selectedStage)}</small>
+        </span>
+        <div
+          className="curriculum-board-selector"
+          role="group"
+          aria-label="Board"
+          style={{ "--active-index": boardIndex } as React.CSSProperties}
+        >
+          <span className="curriculum-selector-glider" aria-hidden="true" />
+          {PROVIDER_KEYS.map(key => (
+            <button
+              key={key}
+              type="button"
+              aria-label={providerLabel(key)}
+              aria-pressed={value.providerKey === key}
+              disabled={disabled}
+              onClick={() => chooseProvider(key)}
+            >
+              {BOARD_LABELS[key]}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
 
-    <div className="sectitle">Stage</div>
-    <div className="curriculum-stage-row" role="group" aria-label="Stage">
-      {!value.providerKey && <div className="curriculum-empty">Choose a curriculum first.</div>}
-      {value.providerKey && loadingStages && <div className="curriculum-empty">Loading stages…</div>}
-      {value.providerKey && !loadingStages && stageChoices.map(choice => {
-        const on = choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey;
-        return <button
-          key={choice.stage.id}
-          type="button"
-          className={"curriculum-stage" + (on ? " on" : "")}
-          aria-pressed={on}
-          disabled={disabled}
-          onClick={() => chooseStage(choice)}
-        >
-          {choice.label}
-        </button>;
-      })}
+    <div className="curriculum-subject-heading">
+      <div className="sectitle">Subjects</div>
+      <button
+        type="button"
+        className={"curriculum-search-toggle" + (searchOpen ? " on" : "")}
+        aria-label="Search subjects"
+        aria-expanded={searchOpen}
+        disabled={disabled || !value.stageKey}
+        onClick={() => {
+          hapticTick();
+          setSearchOpen(open => !open);
+          if (searchOpen) setQuery("");
+        }}
+      >
+        <SearchIcon />
+      </button>
     </div>
 
-    <div className="sectitle">Subjects</div>
-    <div className="curriculum-selected" aria-live="polite">
-      {value.subjects.map(({ offering, level }) => (
-        <div className="curriculum-subject" key={offering.id}>
-          <div className="curriculum-subject-copy">
-            <b>{offering.display_name}</b>
+    {searchOpen && <div className="curriculum-inline-search">
+      <SearchIcon />
+      <input
+        aria-label="Search subjects"
+        value={query}
+        autoFocus
+        autoComplete="off"
+        placeholder="Subject name or code"
+        onChange={event => setQuery(event.target.value)}
+      />
+      {query && <button type="button" aria-label="Clear subject search" onClick={() => setQuery("")}>×</button>}
+    </div>}
+
+    <div className="curriculum-chip-grid" aria-live="polite">
+      {!value.stageKey && <div className="curriculum-empty">Choose a board and class to see subjects.</div>}
+      {value.stageKey && loadingSubjects && <div className="curriculum-empty">Loading subjects…</div>}
+      {value.stageKey && !loadingSubjects && shownOfferings.map(offering => {
+        const selected = selectedIds.has(offering.id);
+        const choice = selectedById.get(offering.id);
+        return <div className={"curriculum-chip-wrap" + (selected ? " selected" : "")} key={offering.id}>
+          <button
+            type="button"
+            className={"curriculum-subject-chip" + (selected ? " on" : "")}
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => toggleSubject(offering)}
+          >
+            <span>{offering.display_name}</span>
             {subjectSecondary(offering) && <small>{subjectSecondary(offering)}</small>}
-          </div>
-          {!!offering.levels_supported?.length && (
-            <div className="seg curriculum-level" role="group" aria-label={`${offering.display_name} level`}>
-              {offering.levels_supported.map(candidate => (
+          </button>
+          {selected && (offering.levels_supported?.length ?? 0) > 1 && (
+            <div className="curriculum-chip-levels" role="group" aria-label={`${offering.display_name} level`}>
+              {offering.levels_supported.map(level => (
                 <button
-                  key={candidate}
                   type="button"
-                  className={level === candidate ? "on" : undefined}
-                  aria-pressed={level === candidate}
-                  disabled={disabled}
-                  onClick={() => setLevel(offering.id, candidate)}
+                  key={level}
+                  className={choice?.level === level ? "on" : ""}
+                  aria-pressed={choice?.level === level}
+                  onClick={() => setLevel(offering.id, level)}
                 >
-                  {candidate}
+                  {level}
                 </button>
               ))}
             </div>
           )}
-          <button
-            type="button"
-            className="curriculum-remove"
-            aria-label={`Remove ${offering.display_name}`}
-            disabled={disabled}
-            onClick={() => toggleSubject(offering)}
-          >
-            ×
-          </button>
-        </div>
-      ))}
-      {!value.subjects.length && (
-        <div className="curriculum-empty">
-          {value.stageKey ? "No subjects selected yet." : "Choose a stage to see its subjects."}
-        </div>
+        </div>;
+      })}
+      {value.stageKey && !loadingSubjects && !shownOfferings.length && (
+        <div className="curriculum-empty">No matching subjects.</div>
       )}
-      <button
-        ref={addButtonRef}
-        type="button"
-        className="curriculum-add"
-        disabled={disabled || !value.stageKey || loadingSubjects}
-        onClick={() => { hapticTick(); setQuery(""); setPickerOpen(true); }}
-      >
-        {loadingSubjects ? "Loading subjects…" : "+ Add subjects"}
-      </button>
     </div>
 
     {catalogError && <div className="curriculum-error" role="alert">{catalogError}</div>}
-
-    {pickerOpen && <Dialog
-      title="Add subjects"
-      description="Search the official catalog for the curriculum and stage you selected."
-      onClose={() => setPickerOpen(false)}
-      restoreFocus={addButtonRef.current}
-    >
-      <div className="curriculum-search">
-        <label htmlFor="curriculum-subject-search">Search</label>
-        <input
-          id="curriculum-subject-search"
-          value={query}
-          autoComplete="off"
-          placeholder="Subject name or code"
-          onChange={event => setQuery(event.target.value)}
-        />
-      </div>
-      <div className="curriculum-results" role="listbox" aria-multiselectable="true">
-        {shownOfferings.map(offering => {
-          const selected = selectedIds.has(offering.id);
-          return <button
-            key={offering.id}
-            type="button"
-            role="option"
-            className={"curriculum-result" + (selected ? " on" : "")}
-            aria-selected={selected}
-            onClick={() => toggleSubject(offering)}
-          >
-            <span>
-              <b>{offering.display_name}</b>
-              {subjectSecondary(offering) && <small>{subjectSecondary(offering)}</small>}
-            </span>
-            <span className="curriculum-result-state" aria-hidden="true">{selected ? "✓" : "+"}</span>
-          </button>;
-        })}
-        {!shownOfferings.length && <div className="curriculum-no-results">No matching subjects.</div>}
-      </div>
-      <div className="acts">
-        <button type="button" className="btn primary" onClick={() => setPickerOpen(false)}>Done</button>
-      </div>
-    </Dialog>}
   </div>;
 }
