@@ -12,9 +12,10 @@ test("Insights filter rail sticks below the shell header and centers chips", asy
   const css = await readFile(new URL("../src/ui/styles/system.css", import.meta.url), "utf8");
   const rule = css.match(/\.insightfilters\{[\s\S]*?\}/)?.[0] ?? "";
 
-  assert.match(rule, /top:calc\(var\(--top-inset\) \+ 52px\)/);
+  assert.match(rule, /top:calc\(var\(--top-inset\) \+ 52px - var\(--view-top\)\)/);
   assert.match(rule, /align-items:center/);
   assert.match(rule, /min-height:56px/);
   assert.match(rule, /padding:9px var\(--gutter\)/);
   assert.doesNotMatch(rule, /top:var\(--view-top\)/);
+  assert.match(rule, /background:var\(--bg\)/);
 });
