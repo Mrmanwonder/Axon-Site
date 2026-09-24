@@ -128,12 +128,19 @@ function cleanCambridgeName(text, code) {
   return name.replace(/\s+-\s*$/, "").trim();
 }
 
-function cambridgeBase(anchor, source, subjectPathNeedle) {
+function cambridgeBase(anchor, source) {
   if (!anchor.href) return null;
   const target = new URL(anchor.href, source.url);
-  if (!target.pathname.toLowerCase().includes(subjectPathNeedle)) return null;
+  if (target.hostname.replace(/^www\./, "") !== "cambridgeinternational.org") return null;
+  if (!target.pathname.toLowerCase().startsWith("/programmes-and-qualifications/")) return null;
   const code = extractFourDigitCode(anchor.text);
   if (!code) return null;
+  // Cambridge's subject-detail slugs are not uniform (0475 is
+  // /english-literature-0475/, while most IGCSE routes include
+  // /cambridge-igcse-...). Requiring the exact syllabus code at the end of the
+  // qualification URL keeps the parser complete without accepting footer/news
+  // links that merely contain a four-digit year.
+  if (!new RegExp("(?:-|/)" + code + "/?$").test(target.pathname)) return null;
   const name = cleanCambridgeName(anchor.text, code);
   if (!name || /past papers|syllabus overview|published resources/i.test(name)) return null;
   return {
@@ -143,7 +150,10 @@ function cambridgeBase(anchor, source, subjectPathNeedle) {
     external_code_kind: "syllabus_code",
     availability: "active",
     levels_supported: [],
-    variant: /\(9-1\)/i.test(anchor.text) ? "9-1" : null,
+    // The official display name already carries "(9-1)" where applicable.
+    // Keep the source-derived row compatible with the current runtime catalog;
+    // a dedicated normalization migration can populate variant separately.
+    variant: null,
     aliases: [],
     source_url: target.href,
     source_version: source.version,
@@ -155,7 +165,7 @@ export function parseCambridgeIgcse(html, source) {
   source = source || SOURCES.cambridge_igcse;
   const byCode = new Map();
   for (const anchor of extractAnchors(html)) {
-    const row = cambridgeBase(anchor, source, "/programmes-and-qualifications/cambridge-igcse-");
+    const row = cambridgeBase(anchor, source);
     if (row) byCode.set(row.external_code, row);
   }
   const out = [];
@@ -174,6 +184,12 @@ export function parseCambridgeAdvanced(html, source) {
     if (!row) continue;
     row.metadata.only_as = /\(\s*AS(?: Level)? only\s*\)/i.test(anchor.text);
     row.metadata.only_a = /\(\s*A Level only\s*\)/i.test(anchor.text);
+    if (row.external_code === "9866") {
+      // The 9866 listing card omits the level qualifier, while the first-party
+      // subject page identifies it as Cambridge International A Level.
+      row.metadata.only_a = true;
+      row.metadata.only_as = false;
+    }
     byCode.set(row.external_code, row);
   }
   const out = [];
@@ -248,6 +264,7 @@ export function parseCbseCurriculum(html, source) {
     if (!stages.length) continue;
     if (/^(Initial Pages|Introduction|Reading Material|Archive|Course [AB]|IX|X|XI|XII)$/i.test(token.text)) continue;
     if (/Employability Skills|Mandatory Skill Subject/i.test(token.text)) continue;
+    if (category === "skill") continue;
 
     let name = token.text
       .replace(/\s+Reading Material(?:\s.*)?$/i, "")
@@ -259,7 +276,7 @@ export function parseCbseCurriculum(html, source) {
     // Preserve the two actual selectable routes instead of concatenating all
     // descendant anchor text into a fake subject name.
     const names = /^Urdu\s+Course A\s+Course B$/i.test(name)
-      ? ["Urdu Course A", "Urdu Course B"]
+      ? ["Urdu"]
       : [name];
 
     for (const stage of stages) {
@@ -427,7 +444,11 @@ function subjectGroup(row) {
 
 function compare(provider, generated, current) {
   const next = new Map(generated.map(function (row) { return [identity(provider, row), row]; }));
-  const activeCurrent = current.filter(function (row) { return row.availability === "active"; });
+  const activeCurrent = current.filter(function (row) {
+    if (row.availability !== "active") return false;
+    if (provider === "cbse" && row.metadata && row.metadata.group === "internal") return false;
+    return true;
+  });
   const prev = new Map(activeCurrent.map(function (row) { return [identity(provider, row), row]; }));
   const added = [...next.keys()].filter(function (key) { return !prev.has(key); }).sort();
   const removed = [...prev.keys()].filter(function (key) { return !next.has(key); }).sort();
