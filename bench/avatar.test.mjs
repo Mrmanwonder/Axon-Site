@@ -26,6 +26,9 @@ test('dot-face presets are local circle-grid definitions, never image URLs', () 
       Number.isInteger(point.x) && Number.isInteger(point.y)
       && point.x >= 0 && point.x < 20 && point.y >= 0 && point.y < 20
     ));
+    assert.ok(face.glyph.points.every(point => /^#[0-9a-f]{6}$/i.test(point.fill)));
+    assert.ok(new Set(face.glyph.points.map(point => point.fill)).size >= 4,
+      'portrait needs distinct skin, hair, features, and clothing');
     assert.equal('src' in face, false);
     assert.equal('url' in face, false);
   }
