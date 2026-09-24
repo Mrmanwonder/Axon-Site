@@ -293,15 +293,17 @@ function parseCbseCurriculumNodes(nodes, stages, source) {
     }
     if (node.tagName !== "LI" || !category || category === "skill") continue;
 
-    let name = text
+    const clone = node.cloneNode(true);
+    for (const nested of clone.querySelectorAll("a")) {
+      if (/Reading Material|Course\s+[AB]$/i.test(domText(nested))) nested.remove();
+    }
+    let name = domText(clone)
       .replace(/\s+Reading Material(?:\s.*)?$/i, "")
       .replace(/\s+/g, " ")
       .trim();
     if (!name || /^(?:Initial Pages|Introduction|Reading Material)$/i.test(name)) continue;
 
-    // The Class X Urdu item contains nested Course A / Course B links; keep the
-    // normalized runtime identity until codes for those routes are represented.
-    const names = /^Urdu\s+Course A\s+Course B$/i.test(name) ? ["Urdu"] : [name];
+    const names = /^Urdu$/i.test(name) ? ["Urdu"] : [name];
     for (const stage of stages) {
       for (const subjectName of names) rows.push(cbseRow(subjectName, stage, category, source, null));
     }
@@ -329,7 +331,19 @@ export function parseCbseCurriculum(html, source) {
   });
 }
 
-function parseCbseSkillNodes(nodes, stages, source) {
+function stagesFromCbseSkillRow(node, fallbackStages) {
+  const stages = new Set();
+  for (const anchor of node.querySelectorAll("a")) {
+    const label = domText(anchor).toUpperCase();
+    if (label === "IX") stages.add("cbse_9");
+    if (label === "X") stages.add("cbse_10");
+    if (label === "XI") stages.add("cbse_11");
+    if (label === "XII") stages.add("cbse_12");
+  }
+  return stages.size ? [...stages] : fallbackStages;
+}
+
+function parseCbseSkillNodes(nodes, fallbackStages, source) {
   let category = "skill";
   const rows = [];
   for (const node of nodes) {
@@ -355,7 +369,9 @@ function parseCbseSkillNodes(nodes, stages, source) {
       .trim();
     if (!name) continue;
 
-    for (const stage of stages) rows.push(cbseRow(name, stage, category, source, code));
+    for (const stage of stagesFromCbseSkillRow(node, fallbackStages)) {
+      rows.push(cbseRow(name, stage, category, source, code));
+    }
   }
   return rows;
 }
