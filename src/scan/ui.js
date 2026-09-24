@@ -584,6 +584,17 @@ async function run(paperType) {
     });
 
     if (epoch !== S.epoch) return;
+    if (result.processing) {
+      recoverCamera = false;
+      host.renderProgress({
+        heading: 'Your paper is submitted',
+        now: 'The server has not finished processing it yet.',
+        steps: [],
+        note: 'Your pages are saved. You can leave this screen and check the paper in Library; there is no need to upload it again.',
+      });
+      await host.refreshLibrary();
+      return;
+    }
     if (result.refused) {
       host.renderProgress({
         heading: 'This one we did not read',
