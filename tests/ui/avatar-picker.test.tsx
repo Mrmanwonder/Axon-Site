@@ -55,7 +55,7 @@ test("dot portraits render as dense colored halftone faces without hundreds of D
   const colorPaths = selected?.querySelectorAll("path") ?? [];
   expect(colorPaths.length).toBeGreaterThanOrEqual(6);
   expect(Array.from(colorPaths).every(path => /^#[0-9a-f]{6}$/i.test(path.getAttribute("fill") ?? ""))).toBe(true);
-  expect(Array.from(colorPaths).some(path => (path.getAttribute("d")?.match(/a\.38/g)?.length ?? 0) > 100)).toBe(true);
+  expect(Array.from(colorPaths).some(path => (path.getAttribute("d")?.match(/a0\.38/g)?.length ?? 0) > 100)).toBe(true);
 });
 
 
