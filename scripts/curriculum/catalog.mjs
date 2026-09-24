@@ -235,6 +235,51 @@ function tokenizeCbse(html, includeCells) {
   return tokens;
 }
 
+function cbseTextLines(html) {
+  const cleaned = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "\n");
+  return cleaned
+    .split(/\r?\n/)
+    .map(function (line) { return decodeHtml(line); })
+    .filter(Boolean);
+}
+
+function findLine(lines, pattern, fromIndex) {
+  for (let i = Math.max(0, fromIndex || 0); i < lines.length; i++) {
+    if (pattern.test(lines[i])) return i;
+  }
+  return -1;
+}
+
+function lineSlice(lines, startPattern, endPattern, fromIndex) {
+  const start = findLine(lines, startPattern, fromIndex || 0);
+  if (start < 0) return { lines: [], start: -1, end: -1 };
+  const end = endPattern ? findLine(lines, endPattern, start + 1) : lines.length;
+  return {
+    lines: lines.slice(start + 1, end < 0 ? lines.length : end),
+    start: start,
+    end: end < 0 ? lines.length : end
+  };
+}
+
+function cbseCategoryHeading(line, current) {
+  if (/^Languages\b/i.test(line)) return "language";
+  if (/^Main Subjects\b/i.test(line)) return "main";
+  if (/^(?:Other )?Academic Electives\b/i.test(line)) return "academic_elective";
+  if (/^Optional Subjects\b/i.test(line)) return "optional";
+  if (/^(?:Subjects of )?Internal Assessment\b/i.test(line)) return "internal_assessment";
+  if (/^Skill Subjects\b/i.test(line)) return "skill";
+  return current;
+}
+
+function isCbseNavigationLine(line) {
+  return /^(?:Initial Pages.*|Introduction.*|Reading Material|Archive|Home|Course [AB]|IX|X|XI|XII|XI\s*[|&]\s*XII|Class(?:es)?\s+(?:VI|VII|VIII|IX|X|XI|XII).*)$/i.test(line)
+    || /\.pdf\)?$/i.test(line);
+}
+
 function cbseStages(text, current) {
   if (/Class IX\b/i.test(text) || /Part\s*-\s*1\s*\(Class IX\)/i.test(text)) return ["cbse_9"];
   if (/Class X\b/i.test(text) || /Part\s*-\s*1\s*\(Class X\)/i.test(text)) return ["cbse_10"];
@@ -301,19 +346,18 @@ function cbseTokenSlice(tokens, startPattern, endPattern, fromIndex) {
   };
 }
 
-function parseCbseCurriculumSection(tokens, stages, source) {
+function parseCbseCurriculumLines(lines, stages, source) {
   let category = null;
   const rows = [];
-  for (const token of tokens) {
-    if (token.type === "heading") {
-      category = cbseCategory(token.text, category);
-      continue;
+  for (const line of lines) {
+    const nextCategory = cbseCategoryHeading(line, category);
+    if (nextCategory !== category || /^(Languages|Main Subjects|Other Academic Electives|Academic Electives|Optional Subjects|Subjects of Internal Assessment|Internal Assessment|Skill Subjects)\b/i.test(line)) {
+      category = nextCategory;
+      if (/^(Languages|Main Subjects|Other Academic Electives|Academic Electives|Optional Subjects|Subjects of Internal Assessment|Internal Assessment|Skill Subjects)\b/i.test(line)) continue;
     }
-    if (/^(Initial Pages|Introduction|Reading Material|Archive|Course [AB]|IX|X|XI|XII)$/i.test(token.text)) continue;
-    if (/Employability Skills|Mandatory Skill Subject/i.test(token.text)) continue;
-    if (category === "skill") continue;
+    if (!category || category === "skill" || isCbseNavigationLine(line)) continue;
 
-    let name = token.text
+    let name = line
       .replace(/\s+Reading Material(?:\s.*)?$/i, "")
       .replace(/\s+/g, " ")
       .trim();
@@ -329,78 +373,61 @@ function parseCbseCurriculumSection(tokens, stages, source) {
 
 export function parseCbseCurriculum(html, source) {
   source = source || SOURCES.cbse_curriculum;
-  const tokens = tokenizeCbse(html, true);
+  const lines = cbseTextLines(html);
+  const current = findLine(lines, /^Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27$/i, 0);
+  const from = current >= 0 ? current + 1 : 0;
 
-  const currentStart = findCbseToken(
-    tokens,
-    /Curriculum\s+for\s+the\s+Academic\s+Year\s+2026\s*-\s*27/i,
-    0
-  );
-  const from = currentStart >= 0 ? currentStart + 1 : 0;
-
-  const class9 = cbseTokenSlice(
-    tokens,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+IX\)/i,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i,
+  const class9 = lineSlice(
+    lines,
+    /^Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+IX\)$/i,
+    /^Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)$/i,
     from
   );
-  const class10 = cbseTokenSlice(
-    tokens,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)/i,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i,
+  const class10 = lineSlice(
+    lines,
+    /^Secondary\s+Curriculum\s*:\s*Part\s*-\s*1\s*\(Class\s+X\)$/i,
+    /^Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)$/i,
     class9.end > 0 ? class9.end : from
   );
-  const senior = cbseTokenSlice(
-    tokens,
-    /Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)/i,
-    /(?:Contact\s+Us|©)/i,
+  const senior = lineSlice(
+    lines,
+    /^Secondary\s+Curriculum\s*:\s*Part\s*-\s*2\s*\(XI\s*[-–]\s*XII\)$/i,
+    /^(?:Contact Us|©)/i,
     class10.end > 0 ? class10.end : from
   );
 
   const rows = [
-    ...parseCbseCurriculumSection(class9.tokens, ["cbse_9"], source),
-    ...parseCbseCurriculumSection(class10.tokens, ["cbse_10"], source),
-    ...parseCbseCurriculumSection(senior.tokens, ["cbse_11", "cbse_12"], source)
+    ...parseCbseCurriculumLines(class9.lines, ["cbse_9"], source),
+    ...parseCbseCurriculumLines(class10.lines, ["cbse_10"], source),
+    ...parseCbseCurriculumLines(senior.lines, ["cbse_11", "cbse_12"], source)
   ];
   return sortedUnique(rows, function (row) {
     return row.stage_key + "|" + loose(row.display_name);
   });
 }
 
-function currentCbseSkillScope(html) {
-  let scope = html;
-  const sessionMatch = /Session\s*2026\s*-\s*2027/i.exec(scope);
-  if (sessionMatch) scope = scope.slice(sessionMatch.index);
-
-  const stopMatch = /Skill\s*Modules\s*\(Optional\)/i.exec(scope);
-  if (stopMatch && stopMatch.index > 0) scope = scope.slice(0, stopMatch.index);
-  return scope;
-}
-
-function parseCbseSkillSection(tokens, stages, source) {
+function parseCbseSkillLines(lines, stages, source) {
   let category = "skill";
   const rows = [];
-  for (const token of tokens) {
-    if (/Mandatory Skill/i.test(token.text)) {
+  for (const line of lines) {
+    if (/Mandatory Skill Subject/i.test(line)) {
       category = "mandatory_skill";
       continue;
     }
-    if (/Optional Skill/i.test(token.text)) {
+    if (/Optional Skill Subjects/i.test(line)) {
       category = "skill";
       continue;
     }
-    if (/Employability Skills/i.test(token.text)) continue;
+    if (/Employability Skills/i.test(line) || isCbseNavigationLine(line)) continue;
 
-    const parenthesized = /\((\d{3})\)/.exec(token.text);
-    const prefixed = /^(\d{3})\s*-/.exec(token.text);
+    const parenthesized = /\((\d{3})\)/.exec(line);
+    const prefixed = /^(\d{3})\s*-/.exec(line);
     const code = parenthesized ? parenthesized[1] : prefixed ? prefixed[1] : null;
     if (!code) continue;
 
-    let name = parenthesized ? token.text.slice(0, parenthesized.index) : token.text;
+    let name = parenthesized ? line.slice(0, parenthesized.index) : line;
     name = name
       .replace(/^\d{3}\s*-\s*/, "")
-      .replace(/^.*?\b(?:IX|X|XI|XII)\b\s*[|&-]*\s*/i, "")
-      .replace(/\s+(?:IX|X|XI|XII)(?:\s*[|&]\s*(?:XI|XII))?(?:\s.*)?$/i, "")
       .replace(/\s+/g, " ")
       .trim();
     if (!name) continue;
@@ -412,29 +439,28 @@ function parseCbseSkillSection(tokens, stages, source) {
 
 export function parseCbseSkill(html, source) {
   source = source || SOURCES.cbse_skill;
-  const tokens = tokenizeCbse(html, true);
-
-  const session = findCbseToken(tokens, /Session\s+2026\s*-\s*2027/i, 0);
+  const lines = cbseTextLines(html);
+  const session = findLine(lines, /^Session\s+2026\s*-\s*2027$/i, 0);
   const from = session >= 0 ? session + 1 : 0;
 
-  const class9 = cbseTokenSlice(tokens, /^Class\s+IX$/i, /^Class\s+X$/i, from);
-  const class10 = cbseTokenSlice(
-    tokens,
+  const class9 = lineSlice(lines, /^Class\s+IX$/i, /^Class\s+X$/i, from);
+  const class10 = lineSlice(
+    lines,
     /^Class\s+X$/i,
     /^Classes\s+XI\s*[-–]\s*XII$/i,
     class9.end > 0 ? class9.end : from
   );
-  const senior = cbseTokenSlice(
-    tokens,
+  const senior = lineSlice(
+    lines,
     /^Classes\s+XI\s*[-–]\s*XII$/i,
-    /Skill\s*Modules\s*\(Optional\)/i,
+    /^Skill\s*Modules\s*\(Optional\)$/i,
     class10.end > 0 ? class10.end : from
   );
 
   const rows = [
-    ...parseCbseSkillSection(class9.tokens, ["cbse_9"], source),
-    ...parseCbseSkillSection(class10.tokens, ["cbse_10"], source),
-    ...parseCbseSkillSection(senior.tokens, ["cbse_11", "cbse_12"], source)
+    ...parseCbseSkillLines(class9.lines, ["cbse_9"], source),
+    ...parseCbseSkillLines(class10.lines, ["cbse_10"], source),
+    ...parseCbseSkillLines(senior.lines, ["cbse_11", "cbse_12"], source)
   ];
 
   return sortedUnique(rows, function (row) {
