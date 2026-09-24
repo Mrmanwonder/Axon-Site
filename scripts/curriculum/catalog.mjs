@@ -130,7 +130,11 @@ function cleanCambridgeName(text, code) {
     const suffix = new RegExp("\\s*[-–—]?\\s*\\(?" + code + "\\)?(?:\\s*[-–—].*)?$");
     name = name.replace(suffix, "").replace(/\s+/g, " ").trim();
   }
-  return name.replace(/\s+-\s*$/, "").trim();
+  return name
+    .replace(/\s*[–—]\s*/g, " - ")
+    .replace(/\s+-\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function cambridgeBase(anchor, source) {
@@ -140,12 +144,12 @@ function cambridgeBase(anchor, source) {
   if (!target.pathname.toLowerCase().startsWith("/programmes-and-qualifications/")) return null;
   const code = extractFourDigitCode(anchor.text);
   if (!code) return null;
-  // Cambridge's subject-detail slugs are not uniform (0475 is
-  // /english-literature-0475/, while most IGCSE routes include
-  // /cambridge-igcse-...). Requiring the exact syllabus code at the end of the
-  // qualification URL keeps the parser complete without accepting footer/news
-  // links that merely contain a four-digit year.
-  if (!new RegExp("(?:-|/)" + code + "/?$").test(target.pathname)) return null;
+  // Subject-list labels end in the syllabus code (optionally followed by New).
+  // Detail-page slugs are inconsistent: some include the code and some do not.
+  // Using the bounded list label keeps 0991/0475 while rejecting syllabus-year,
+  // news and support links elsewhere in main content.
+  const codeAtEnd = new RegExp("(?:[-–—]|\\()\\s*" + code + "\\)?(?:\\s+New)?$", "i");
+  if (!codeAtEnd.test(anchor.text.trim())) return null;
   const name = cleanCambridgeName(anchor.text, code);
   if (!name || /past papers|syllabus overview|published resources/i.test(name)) return null;
   return {
@@ -185,7 +189,7 @@ export function parseCambridgeAdvanced(html, source) {
   source = source || SOURCES.cambridge_advanced;
   const byCode = new Map();
   for (const anchor of extractAnchors(mainContent(html))) {
-    const row = cambridgeBase(anchor, source, "/programmes-and-qualifications/cambridge-international-as-and-a-level-");
+    const row = cambridgeBase(anchor, source);
     if (!row) continue;
     row.metadata.only_as = /\(\s*AS(?: Level)? only\s*\)/i.test(anchor.text);
     row.metadata.only_a = /\(\s*A Level only\s*\)/i.test(anchor.text);
@@ -298,6 +302,7 @@ export function parseCbseSkill(html, source) {
   const rows = [];
   for (const token of tokenizeCbse(html)) {
     if (token.type === "heading") {
+      if (stages.length && /Skill Modules|Archive|Session\s+20\d{2}/i.test(token.text)) break;
       stages = cbseStages(token.text, stages);
       if (/Mandatory Skill/i.test(token.text)) category = "mandatory_skill";
       if (/Optional Skill/i.test(token.text)) category = "skill";
@@ -470,6 +475,7 @@ function compare(provider, generated, current) {
         ? ["display_name", "variant"]
         : ["display_name", "external_code"];
     const delta = fields.filter(function (field) {
+      if (field === "display_name") return loose(old[field]) !== loose(row[field]);
       return JSON.stringify(old[field] || null) !== JSON.stringify(row[field] || null);
     });
     if (provider === "ib" && loose(subjectGroup(old)) !== loose(subjectGroup(row))) {
