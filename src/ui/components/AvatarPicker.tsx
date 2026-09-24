@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import Dialog from "./Dialog";
 import { hapticTick } from "../lib/haptics";
 import {
@@ -33,9 +34,9 @@ export function AvatarDisc({
             key={index}
             cx={point.x + .5}
             cy={point.y + .5}
-            r=".34"
-            fill="currentColor"
-            opacity={point.tone === 0 ? .34 : point.tone === 1 ? .58 : .92}
+            r=".36"
+            fill={point.fill ?? "currentColor"}
+            opacity={point.tone === 0 ? .5 : point.tone === 1 ? .88 : .98}
           />
         ))}
       </svg>
@@ -49,11 +50,13 @@ function PresetButton({
   preset,
   selected,
   label,
+  disabled,
   onPick,
 }: {
   preset: AvatarPreset;
   selected: boolean;
   label?: string | null;
+  disabled?: boolean;
   onPick: (key: string) => void;
 }) {
   return <button
@@ -62,6 +65,7 @@ function PresetButton({
     aria-label={preset.title}
     aria-pressed={selected}
     title={preset.title}
+    disabled={disabled}
     onClick={() => { hapticTick(); onPick(preset.key); }}
   >
     <AvatarDisc presetKey={preset.key} label={label} />
@@ -73,60 +77,86 @@ export default function AvatarPicker({
   label,
   onChange,
   disabled = false,
+  className = "",
+  triggerClassName = "",
 }: {
   value: string;
   label?: string | null;
   onChange: (key: string) => void;
   disabled?: boolean;
+  className?: string;
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const moreRef = useRef<HTMLButtonElement>(null);
-  const quick = AVATAR_PRESETS.slice(0, 9);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const render = avatarRenderFor({ avatar_seed: value });
+  const selected = AVATAR_PRESETS.find(preset => preset.key === render.preset);
 
-  return <div className="avatar-picker">
-    <div className="avatar-picker-compact">
+  return <div
+    className={`avatar-picker ${className}`.trim()}
+    style={{ "--avatar-gradient": render.background } as CSSProperties}
+  >
+    <button
+      ref={triggerRef}
+      type="button"
+      className={`avatar-trigger ${triggerClassName}`.trim()}
+      disabled={disabled}
+      aria-label="Change profile picture"
+      aria-haspopup="dialog"
+      onClick={() => { hapticTick(); setOpen(true); }}
+    >
       <AvatarDisc presetKey={value} label={label} className="avatar-preview" />
-      <div className="avatar-quick" role="group" aria-label="Picture">
-        {quick.map(preset => (
-          <PresetButton
-            key={preset.key}
-            preset={preset}
-            selected={value === preset.key}
-            label={label}
-            onPick={onChange}
-          />
-        ))}
-      </div>
-      <button
-        ref={moreRef}
-        type="button"
-        className="avatar-more"
-        disabled={disabled}
-        onClick={() => { hapticTick(); setOpen(true); }}
-      >
-        More
-      </button>
-    </div>
+      <span className="avatar-trigger-badge" aria-hidden="true">
+        <svg viewBox="0 0 20 20">
+          <path d="M4.2 13.9 3.7 16.3l2.4-.5L14.7 7.2 12.8 5.3 4.2 13.9Z" />
+          <path d="m11.9 6.2 1.9 1.9" />
+        </svg>
+      </span>
+    </button>
 
     {open && <Dialog
-      title="Choose a picture"
-      description="Original gradients and dot illustrations. Axon does not ask for a photo."
+      className="avatar-dialog"
+      title="Choose your picture"
+      description="Pick a gradient or a dot portrait. Nothing is uploaded."
       onClose={() => setOpen(false)}
-      restoreFocus={moreRef.current}
+      restoreFocus={triggerRef.current}
     >
-      <div className="avatar-grid" role="group" aria-label="All pictures">
+      <div className="avatar-drip" aria-hidden="true">
+        <span className="d1" />
+        <span className="d2" />
+        <span className="d3" />
+      </div>
+      <button
+        type="button"
+        className="avatar-dialog-close"
+        aria-label="Close picture picker"
+        onClick={() => setOpen(false)}
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="m5 5 10 10M15 5 5 15" />
+        </svg>
+      </button>
+
+      <div className="avatar-grid" role="group" aria-label="Profile pictures">
         {AVATAR_PRESETS.map(preset => (
           <PresetButton
             key={preset.key}
             preset={preset}
-            selected={value === preset.key}
+            selected={render.preset === preset.key}
             label={label}
-            onPick={key => { onChange(key); }}
+            disabled={disabled}
+            onPick={onChange}
           />
         ))}
       </div>
-      <div className="acts">
-        <button type="button" className="btn primary" onClick={() => setOpen(false)}>Done</button>
+
+      <div className="avatar-dialog-footer">
+        <span className="avatar-selection-name" aria-live="polite">
+          {selected?.title ?? "Profile picture"}
+        </span>
+        <button type="button" className="btn primary avatar-done" onClick={() => setOpen(false)}>
+          Done
+        </button>
       </div>
     </Dialog>}
   </div>;
