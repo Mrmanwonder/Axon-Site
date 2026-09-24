@@ -691,10 +691,11 @@
     .rvscroll{padding-inline:max(0px,calc((100% - var(--rail-w) - 760px) / 2));}
     .themebtn{bottom:16px;right:16px;}
 
-    /* sheets centre inside the content area rather than spanning the rail */
-    .sheet{left:var(--rail-w);right:0;bottom:16px;
+    /* Sheets remain attached to the physical bottom edge on tablet too.
+       Width can narrow and centre, but the material never floats above a gap. */
+    .sheet{left:var(--rail-w);right:0;bottom:0;
       width:min(520px,calc(100% - var(--rail-w) - 2 * var(--gutter)));
-      margin-inline:auto;}
+      margin-inline:auto;border-radius:32px 32px 0 0;border-bottom:0;}
 
     /* Home — hero insight + needs-attention side by side above recent scans */
     [data-screen="home"]{--vmax:900px;}
@@ -916,8 +917,14 @@
      label and the Library's search box for the input, which is most of why it
      read as a preferences screen rather than a welcome. */
   .obfields{margin:0 var(--gutter);display:flex;flex-direction:column;gap:11px;}
-  .student-identity-row{margin:0 var(--gutter);display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;align-items:stretch;}
+  .student-identity-row{margin:0 var(--gutter);min-width:0;display:grid;
+    grid-template-columns:clamp(64px,18vw,76px) minmax(0,1fr);gap:12px;align-items:stretch;}
   .student-identity-row .obfield{min-width:0;height:100%;display:flex;flex-direction:column;justify-content:center;}
+  @media(max-width:360px){
+    .student-identity-row{grid-template-columns:62px minmax(0,1fr);gap:10px;}
+    .student-identity-row .obfield{padding-inline:12px;}
+    .student-identity-row .obfield input{font-size:15.5px;}
+  }
   .student-profile-note{margin-top:16px;}
   .obfield{background:var(--surface);border:.5px solid var(--hairline);border-radius:17px;
     padding:12px 15px 13px;transition:border-color .12s ease;}
