@@ -2345,20 +2345,20 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "skill"
       },
       "provider": "cbse",
       "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "source_url": "https://cbseacademic.nic.in/skill-education-curriculum.html",
       "availability": "active",
       "display_name": "Artificial Intelligence",
-      "external_code": null,
+      "external_code": "417",
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Artificial Intelligence",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -2649,20 +2649,20 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "skill"
       },
       "provider": "cbse",
       "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "source_url": "https://cbseacademic.nic.in/skill-education-curriculum.html",
       "availability": "active",
       "display_name": "Front Office Operations",
-      "external_code": null,
+      "external_code": "410",
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Front Office Operations",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -2744,20 +2744,20 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "skill"
       },
       "provider": "cbse",
       "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "source_url": "https://cbseacademic.nic.in/skill-education-curriculum.html",
       "availability": "active",
       "display_name": "Information Technology",
-      "external_code": null,
+      "external_code": "402",
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Information Technology",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -3029,20 +3029,20 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "skill"
       },
       "provider": "cbse",
       "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "source_url": "https://cbseacademic.nic.in/skill-education-curriculum.html",
       "availability": "active",
       "display_name": "Marketing and Sales",
-      "external_code": null,
+      "external_code": "412",
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Marketing and Sales",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -3257,20 +3257,20 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "skill"
       },
       "provider": "cbse",
       "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "source_url": "https://cbseacademic.nic.in/skill-education-curriculum.html",
       "availability": "active",
       "display_name": "Retail",
-      "external_code": null,
+      "external_code": "401",
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Retail",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -8021,6 +8021,44 @@
       "source_version": "2026-27",
       "levels_supported": [],
       "external_code_kind": "cbse_subject_code"
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "group": "elective"
+      },
+      "provider": "cbse",
+      "stage_key": "cbse_9",
+      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "availability": "active",
+      "display_name": "Home Science",
+      "external_code": null,
+      "language_code": null,
+      "programme_key": "cbse_secondary",
+      "canonical_name": "Home Science",
+      "source_version": "2026-27",
+      "levels_supported": [],
+      "external_code_kind": null
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "group": "elective"
+      },
+      "provider": "cbse",
+      "stage_key": "cbse_10",
+      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "availability": "active",
+      "display_name": "Home Science",
+      "external_code": null,
+      "language_code": null,
+      "programme_key": "cbse_secondary",
+      "canonical_name": "Home Science",
+      "source_version": "2026-27",
+      "levels_supported": [],
+      "external_code_kind": null
     }
   ]
 }
