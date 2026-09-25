@@ -241,23 +241,15 @@ select public._share_t('revoked capability no longer resolves',
   (public.resolve_academic_share(current_setting('axon.test.question_token', true))->>'found')::boolean=false);
 
 reset role;
-insert into private.academic_share(
-  guardian_id,student_id,resource_type,paper_id,attempt_id,token_hash,created_at,expires_at
-) values (
-  '89000000-0000-4000-8000-000000000011',
-  '89000000-0000-4000-8000-000000000021',
-  'paper',
-  '89000000-0000-4000-8000-000000000031',
-  null,
-  digest(repeat('e',64),'sha256'),
-  now()-interval '2 hours',
-  now()-interval '1 hour'
-);
+update private.academic_share
+   set created_at = now()-interval '2 hours',
+       expires_at = now()-interval '1 hour'
+ where id = current_setting('axon.test.share_id', true)::uuid;
 
 set local role anon;
 set local "request.jwt.claims" = '{"role":"anon"}';
 select public._share_t('expired capability no longer resolves',
-  (public.resolve_academic_share(repeat('e',64))->>'found')::boolean=false);
+  (public.resolve_academic_share(current_setting('axon.test.share_token', true))->>'found')::boolean=false);
 
 reset role;
 
