@@ -35,10 +35,12 @@ function TrashIcon() {
 export default function ResourceActions({
   resourceLabel,
   onShare,
+  shareActive = false,
   onDelete,
 }: {
   resourceLabel: "paper" | "question";
   onShare?: () => void;
+  shareActive?: boolean;
   onDelete?: () => void;
 }) {
   return (
@@ -47,8 +49,9 @@ export default function ResourceActions({
         <PressBox
           as="button"
           type="button"
-          className="resourceaction"
+          className={"resourceaction" + (shareActive ? " active" : "")}
           aria-label={`Share ${resourceLabel}`}
+          aria-pressed={shareActive}
           onClick={onShare}
           data-interactive=""
         >
