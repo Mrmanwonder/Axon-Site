@@ -302,8 +302,8 @@ begin
         'tier', p.tier,
         'date_taken', p.date_taken,
         'subject', p.subject,
-        'total_awarded', p.total_awarded,
-        'total_available', p.total_available,
+        'total_awarded', totals.total_awarded,
+        'total_available', totals.total_available,
         'reconciled', p.reconciled
       ),
       'questions', coalesce((
@@ -332,6 +332,13 @@ begin
     )
     into v_result
     from public.paper p
+    left join lateral (
+      select sum(a.marks_awarded) as total_awarded,
+             sum(a.max_marks) as total_available
+        from public.student_attempt a
+       where a.paper_id = p.id
+         and a.student_id = p.student_id
+    ) totals on true
     where p.id = v_share.paper_id
       and p.student_id = v_share.student_id;
   else
