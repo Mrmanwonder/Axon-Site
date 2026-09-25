@@ -69,6 +69,67 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   background: linear-gradient(to bottom, transparent, rgba(0,0,0,.5));
 }
 
+
+/* Apple-style horizon level. It is purely visual and never participates in
+   tracking or capture gates. Sensor updates write two CSS custom properties,
+   so React does not re-render the scanner at device-orientation frequency. */
+.scanhero .scanlevel {
+  --scan-level-opacity: 0;
+  --scan-level-rotation: 0deg;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(46vw, 196px);
+  height: 30px;
+  z-index: 7;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 120ms linear;
+  contain: layout paint style;
+}
+
+.scanhero .scanlevel[data-visible="true"] {
+  opacity: var(--scan-level-opacity);
+}
+
+.scanhero .scanlevel-reference,
+.scanhero .scanlevel-moving {
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.88);
+  box-shadow: 0 0 .5px rgba(0,0,0,.46);
+}
+
+.scanhero .scanlevel-reference {
+  right: calc(50% + 7px);
+  width: 52px;
+}
+
+.scanhero .scanlevel-moving {
+  left: calc(50% + 7px);
+  width: 108px;
+  transform: rotate(var(--scan-level-rotation));
+  transform-origin: left center;
+  transition: background 90ms linear, box-shadow 90ms linear;
+  will-change: transform;
+}
+
+/* Match Camera: the two translucent white pieces snap together and turn
+   yellow when the phone reaches level. The line remains translucent so it
+   never becomes a dominant scanner affordance. */
+.scanhero .scanlevel[data-aligned="true"] .scanlevel-reference,
+.scanhero .scanlevel[data-aligned="true"] .scanlevel-moving {
+  background: rgba(255,214,10,.92);
+  box-shadow: 0 0 1px rgba(0,0,0,.38);
+}
+
+html.scanner-active:has(.scrim.on) .scanhero .scanlevel {
+  opacity: 0;
+}
+
 .scanhero .scanctrls {
   bottom: max(18px, env(safe-area-inset-bottom));
   z-index: 8;
