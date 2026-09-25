@@ -78,7 +78,7 @@ export default function QuestionDetail() {
   const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
-  const { activeShare, requestShare } = useAcademicShare({
+  const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "question",
     resourceId: qId,
     title: "Shared question from Axon",
@@ -173,7 +173,7 @@ export default function QuestionDetail() {
           </svg>
         </Link>
         <div className="rvtitle">{paperTypeLabel(paper.type)}</div>
-        <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={!!activeShare} onDelete={requestDelete} />
+        <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
 
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
