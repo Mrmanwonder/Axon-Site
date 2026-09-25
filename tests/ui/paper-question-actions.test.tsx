@@ -20,6 +20,10 @@ vi.mock("../../src/ui/data/useParentMode", () => ({
   useParentMode: () => ({ guard: fixture.guard }),
 }));
 
+vi.mock("../../src/ui/data/useAcademicShare", () => ({
+  useAcademicShare: () => ({ activeShare: null, requestShare: vi.fn() }),
+}));
+
 vi.mock("../../src/ui/data/modules", () => ({
   readPaper: fixture.readPaper,
   deletePaper: fixture.deletePaper,
