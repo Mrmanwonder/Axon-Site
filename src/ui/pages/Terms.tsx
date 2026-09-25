@@ -87,6 +87,15 @@ export default function Terms() {
           submit and use the User Content through Axon. Do not upload material that you are prohibited
           from possessing, copying, sharing or processing.
         </p>
+        <p>
+          Where Axon offers a share-link feature, only the adult account holder may authorise an
+          external read-only share of a saved paper or question. A share link is intended for the
+          recipient chosen by the account holder, may expose the selected student's academic work to
+          anyone who obtains the link until it expires or is revoked, and must not be used to distribute
+          material that the account holder is not permitted to share. The account holder can stop
+          sharing from Axon, but Axon cannot recall copies a recipient has already made outside the
+          Service.
+        </p>
       </section>
 
       <section><h2>7. Licence needed to operate the Service</h2>
