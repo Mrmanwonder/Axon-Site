@@ -404,6 +404,7 @@ html.scanner-active .scanhero .drafttoast .dh:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .scanhero,
   .scanhero .scanhint,
+  .scanhero .scanlevel,
   .scanhero .shutter,
   .scanhero .sidebtn,
   .scanhero .autotoggle,
