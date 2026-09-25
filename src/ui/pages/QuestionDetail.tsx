@@ -38,6 +38,7 @@ import ResourceActions from "../components/ResourceActions";
 import { useParentMode } from "../data/useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
+import { useAcademicShare } from "../data/useAcademicShare";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -77,6 +78,11 @@ export default function QuestionDetail() {
   const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
+  const { activeShare, requestShare } = useAcademicShare({
+    resourceType: "question",
+    resourceId: qId,
+    title: "Shared question from Axon",
+  });
 
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -167,7 +173,7 @@ export default function QuestionDetail() {
           </svg>
         </Link>
         <div className="rvtitle">{paperTypeLabel(paper.type)}</div>
-        <ResourceActions resourceLabel="question" onDelete={requestDelete} />
+        <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={!!activeShare} onDelete={requestDelete} />
       </div>
 
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
