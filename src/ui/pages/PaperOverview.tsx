@@ -41,7 +41,7 @@ export default function PaperOverview() {
   const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
-  const { activeShare, requestShare } = useAcademicShare({
+  const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "paper",
     resourceId: paperId,
     title: "Shared paper from Axon",
@@ -106,7 +106,7 @@ export default function PaperOverview() {
             {stale ? " · offline copy" : ""}
           </div>
         </div>
-        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={!!activeShare} onDelete={requestDelete} />
+        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
 
       {marksRows.length > 0 && (
