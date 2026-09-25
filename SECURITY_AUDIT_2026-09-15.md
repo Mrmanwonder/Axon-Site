@@ -195,7 +195,7 @@ Automate at least:
 
 **Severity:** High  
 **Status:** Patched with migration + SQL regression suite  
-**Affected baseline:** `supabase/migrations/20260909140000_parent_mode_authority_boundary.sql`  
+**Affected baseline:** `supabase/migrations/20260909065241_parent_mode_authority_boundary.sql`
 **Affected function:** `private.auth_age()`
 
 ### Security property
@@ -232,7 +232,7 @@ No real account action is needed. The SQL regression suite constructs signed-cla
 
 Migration:
 
-`supabase/migrations/20260915111500_parent_mode_requires_interactive_amr.sql`
+`supabase/migrations/20260923061158_parent_mode_requires_interactive_amr.sql`
 
 redefines `private.auth_age()` to use an **allow-list of interactive authentication methods** rather than trusting every AMR method. Background `token_refresh` and unknown methods are ignored; unknown future methods fail closed until intentionally classified.
 
@@ -392,7 +392,7 @@ Do not try to hide REST endpoints in the client. Route the privileged export thr
 **Severity:** High product-trust/compliance risk; not a cross-account exploit  
 **Status:** Open by design / provider implementation required
 
-The repository has already corrected a serious earlier design flaw: an authenticated browser can no longer declare itself `digilocker`-verified. `20260909160000_verification_needs_a_server_assertion.sql` requires a private, service-authored, expiring assertion that confirms identity, adulthood and relationship before a guardian can be marked verified.
+The repository has already corrected a serious earlier design flaw: an authenticated browser can no longer declare itself `digilocker`-verified. `20260909111419_verification_needs_a_server_assertion.sql` requires a private, service-authored, expiring assertion that confirms identity, adulthood and relationship before a guardian can be marked verified.
 
 However, the current onboarding code explicitly says the verification step is removed because no real adapter is implemented. Nothing in the normal onboarding path currently establishes those verification facts before the product proceeds.
 
@@ -519,7 +519,7 @@ Expected security diff after cleanup:
    - validate pasted-link origin;
    - inspect candidate session in a non-persistent client before installation.
 
-2. `supabase/migrations/20260915111500_parent_mode_requires_interactive_amr.sql`
+2. `supabase/migrations/20260923061158_parent_mode_requires_interactive_amr.sql`
    - only interactive AMR methods count toward Parent Mode freshness.
 
 3. `supabase/tests/parent_mode_refresh_regression.sql`
@@ -622,7 +622,7 @@ Verify the CSP in a real browser does not block Supabase auth/WebSocket, R2 asse
 # 11. Deployment order
 
 1. Review/merge the application changes.
-2. **Apply `20260915111500_parent_mode_requires_interactive_amr.sql` to the live Supabase project manually.** Current CI does not deploy migrations.
+2. **Apply `20260923061158_parent_mode_requires_interactive_amr.sql` to the live Supabase project manually.** Current CI does not deploy migrations.
 3. Deploy Edge Functions containing upload intent/completion changes.
 4. Deploy the site/Cloudflare Worker.
 5. Verify production response headers.

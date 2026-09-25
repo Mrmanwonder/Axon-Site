@@ -31,7 +31,7 @@
 
    The seam it will come back through is already built and enforced:
    `public.record_guardian_verification()` is the only path that can write those
-   columns (migration 20260909120000), and the database refuses any method that
+   columns (migration 20260909065142), and the database refuses any method that
    proves nothing about a real person. When a real adapter exists, a step goes
    back here and calls it.
 

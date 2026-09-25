@@ -17,7 +17,7 @@
 //
 // Purpose labels are keyed by `consent_purpose.purpose`, the table's primary
 // key, rather than added as a `label_hi` column. The keys are seeded in
-// 20260810180000_identity_and_consent.sql and are stable; a translation that
+// 20260810173906_identity_and_consent.sql and are stable; a translation that
 // lives here can be corrected without a migration. The trade is that a purpose
 // added in SQL and not added here falls back to its English label — which is
 // handled explicitly below rather than left to produce `undefined`.

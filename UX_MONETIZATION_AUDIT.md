@@ -11,7 +11,7 @@ didn't happen.
 The **entitlements and billing backbone** — the part of the thesis with a
 literal, checkable spec (Parts 1 and 5 of the workstream instructions):
 
-- `supabase/migrations/20260821100000_entitlements_and_billing.sql` — subscription
+- `supabase/migrations/20260902125040_entitlements_and_billing.sql` — subscription
   state on `guardian`, `public.get_entitlements()`, `public.get_cross_subject_signal()`,
   `pattern_insight`, `parent_progress_report`, `stripe_event`, and every gate as
   an RLS policy or CHECK constraint rather than a client-side flag.
@@ -43,7 +43,7 @@ ones) pass — `rls_and_hard_rules.sql`, `extraction_pipeline.sql`,
 
 ## Amendment (2026-09-02) — past_due ends Pro immediately
 
-`20260902120000_past_due_ends_pro_immediately.sql` reverses the 7-day grace
+`20260902125055_past_due_ends_pro_immediately.sql` reverses the 7-day grace
 window this pass shipped. A failed payment now ends Pro entitlement at the
 moment Stripe reports it. Decided deliberately, not discovered as a bug — so
 what the original migration's comments describe as the grace period no longer

@@ -413,7 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!student) return;
 
-    let timer: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const coalesced = () => {
       clearTimeout(timer);
       timer = setTimeout(() => { void refreshLibrary(); }, 350);

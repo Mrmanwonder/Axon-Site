@@ -61,7 +61,7 @@ No cross-account UPDATE was established; normal RLS still scopes the attacker to
 
 ### Database boundary
 
-`supabase/migrations/20260915114500_billing_fields_are_server_authored.sql`
+`supabase/migrations/20260923061207_billing_fields_are_server_authored.sql`
 
 Adds a `BEFORE INSERT OR UPDATE` guardian trigger that rejects subscription/Stripe authority changes when the DB role is `authenticated`. Trusted server/service-role paths remain able to author them.
 
@@ -90,7 +90,7 @@ The old Checkout implementation writes `stripe_customer_id` using the authentica
 
 1. deploy updated `billing-checkout`;
 2. verify a controlled/test Checkout can create or reuse its Stripe customer linkage;
-3. apply `20260915114500_billing_fields_are_server_authored.sql`;
+3. apply `20260923061207_billing_fields_are_server_authored.sql`;
 4. verify a normal authenticated client cannot change subscription or Stripe fields;
 5. verify Stripe webhook/service-role writes still update legitimate subscription state.
 
@@ -122,7 +122,7 @@ A holder of the ordinary persistent guardian session—including the shared-devi
 
 Migration:
 
-`supabase/migrations/20260915113000_reassert_consent_parent_mode_policy.sql`
+`supabase/migrations/20260923061202_reassert_consent_parent_mode_policy.sql`
 
 It removes the stale policy and reasserts one canonical authenticated INSERT policy requiring:
 
@@ -153,7 +153,7 @@ An older guardian authentication followed by a recent background refresh can loo
 
 ## Remediation
 
-`supabase/migrations/20260915111500_parent_mode_requires_interactive_amr.sql`
+`supabase/migrations/20260923061158_parent_mode_requires_interactive_amr.sql`
 
 `private.auth_age()` now uses an explicit allow-list of interactive methods:
 
@@ -239,7 +239,7 @@ Run storage integration tests against a non-production bucket before these funct
 
 Remediation:
 
-`supabase/migrations/20260915115500_extraction_priority_is_server_authored.sql`
+`supabase/migrations/20260923061212_extraction_priority_is_server_authored.sql`
 
 Adds a narrow guard rejecting authenticated changes to `priority` while allowing legitimate updates to other run fields.
 
@@ -266,9 +266,9 @@ Every security release should record the expected migration set and run read-onl
 ## P0 / immediate production remediation
 
 1. Deploy the hardened `billing-checkout` function.
-2. Apply `20260915114500_billing_fields_are_server_authored.sql`.
-3. Apply `20260915111500_parent_mode_requires_interactive_amr.sql`.
-4. Apply `20260915113000_reassert_consent_parent_mode_policy.sql`.
+2. Apply `20260923061207_billing_fields_are_server_authored.sql`.
+3. Apply `20260923061158_parent_mode_requires_interactive_amr.sql`.
+4. Apply `20260923061202_reassert_consent_parent_mode_policy.sql`.
 5. Deploy the frontend authentication-link binding fix.
 6. Deploy the Cloudflare CSP update where Cloudflare serves the app.
 

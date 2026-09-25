@@ -13,7 +13,7 @@
    ── What this module is not ──────────────────────────────────────────────
 
    It is not the boundary. The boundary is in the database — see
-   20260909140000_parent_mode_authority_boundary.sql — where withdrawing
+   20260909065241_parent_mode_authority_boundary.sql — where withdrawing
    consent, deleting papers, deleting a profile and deleting the account are
    refused for a session that has not re-authenticated recently. That refusal
    holds against a fetch typed into the console, which is the only version of

@@ -73,20 +73,24 @@ and the extraction-priority immutability trigger did not exist.
 
 The audit reconciled the already-live first migration only after checking its
 objects, row count, RLS and grants, then applied the remaining migrations and
-verified their concrete schema effects. Supabase MCP stamps these with their
-application time, so compare by migration **name**, not filename timestamp.
+verified their concrete schema effects. Supabase MCP originally stamped these
+with their application time. The repository filenames were reconciled to those
+production versions on 2026-09-25 so previews, fresh resets, and the production
+ledger now compare by the same version and name.
 
-The live ledger also contains `sweep_dead_letters_discovers_queues`, which is
-not a standalone file here. That is intentional: its final queue-discovery
-behavior is folded into
-`20260904110000_honest_sweep_messages_for_real.sql`, the replayable
-consolidated migration produced by the 2026-09-04 reconciliation.
+The live ledger also contains `sweep_dead_letters_discovers_queues`. Its final
+queue-discovery behavior is folded into
+`20260904113038_honest_sweep_messages_for_real.sql`, the replayable
+consolidated migration produced by the 2026-09-04 reconciliation. The matching
+`20260904113950_sweep_dead_letters_discovers_queues.sql` file is therefore a
+documented no-op ledger marker: replaying the older production function body
+would discard the consolidated page-status reset behavior.
 
 The same audit ran Supabase's security advisor. It found
 `paper_canonical_run` executing with view-owner rights over an RLS-protected
 base table and two private helpers with mutable search paths. The live database
 was hardened first, and
-`20260923120000_supabase_advisor_security_hardening.sql` records the exact
+`20260923061333_supabase_advisor_security_hardening.sql` records the exact
 change for fresh environments.
 
 ## What this directory still is not
@@ -95,11 +99,9 @@ Reconciled is not the same as authoritative. Two things are still true:
 
 1. **The Stripe FDW is not in the migration history.** `public."Subscribers"`
    and the `stripe` schema exist in production and are created by nothing here.
-2. **Version numbers differ on the two sides.** Migrations applied through the
-   MCP `apply_migration` are stamped with the time they were applied, not the
-   filename, so `supabase migration list` shows different numbers for the same
-   migration. Cosmetic — the content is what was verified above — but it means
-   the two ledgers line up by name, not by version.
+2. **The production ledger records historical application order.** Local files
+   use those exact versions now. Do not rename a migration after it is applied;
+   add a forward migration instead.
 
 ## Applying one
 
