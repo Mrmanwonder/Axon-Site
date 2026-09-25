@@ -17,12 +17,14 @@ import SharedAcademic from "../../src/ui/pages/SharedAcademic";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  window.location.hash = "#token=" + "a".repeat(64);
+  sessionStorage.clear();
+  window.history.replaceState({}, "", "/share#token=" + "a".repeat(64));
 });
 
 afterEach(() => {
   cleanup();
-  window.location.hash = "";
+  sessionStorage.clear();
+  window.history.replaceState({}, "", "/");
 });
 
 test("paper share renders only the deliberately shared academic snapshot and is noindex", async () => {
@@ -61,6 +63,8 @@ test("paper share renders only the deliberately shared academic snapshot and is 
   expect(screen.getByText(/Only this saved paper was shared/)).toBeTruthy();
 
   expect(fixture.resolve).toHaveBeenCalledWith("a".repeat(64));
+  expect(window.location.hash).toBe("");
+  expect(sessionStorage.getItem("axon.academic-share-token")).toBe("a".repeat(64));
   await waitFor(() => {
     expect(document.head.querySelector('meta[name="robots"]')?.getAttribute("content"))
       .toBe("noindex, nofollow");
