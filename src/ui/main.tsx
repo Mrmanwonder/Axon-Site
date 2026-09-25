@@ -10,12 +10,13 @@ import "./styles/shell.css";
 import "./styles/performance.css";
 import "./styles/cookie-consent.css";
 
-if (getAnalyticsConsent() === "granted") initAnalytics();
+const academicShareRoute = location.pathname === "/share";
+if (!academicShareRoute && getAnalyticsConsent() === "granted") initAnalytics();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RouterProvider router={router} />
-    <CookieConsent />
+    {!academicShareRoute && <CookieConsent />}
   </StrictMode>,
 );
 
