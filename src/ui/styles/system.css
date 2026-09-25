@@ -163,6 +163,28 @@
   .btn.plain{color:var(--label-3);font-weight:500;padding:11px;}
   .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
+  /* Saved paper/question actions. Compact, neutral chrome; destructive meaning
+     lives in the red glyph and the consequence sheet, not a giant danger block. */
+  .resourceactions{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+  .resourceaction{width:36px;height:36px;border-radius:18px;display:grid;place-items:center;padding:0;
+    font:inherit;-webkit-appearance:none;appearance:none;
+    background:var(--surface-sunk);color:var(--label-2);border:.5px solid var(--hairline);
+    cursor:pointer;will-change:transform;}
+  .resourceaction svg{width:17px;height:17px;}
+  .resourceaction.danger{color:var(--red);}
+  .resourceaction.active{color:var(--accent);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 30%,transparent);}
+  .resourceaction.unknown{color:var(--label-3);border-style:dashed;}
+  .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .detailgreet > .detailcopy{min-width:0;}
+  .detailhead{position:relative;}
+  .detailhead .rvtitle{position:absolute;left:50%;transform:translateX(-50%);max-width:48%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  @media(max-width:420px){
+    .detailgreet{gap:10px;}
+    .resourceactions{gap:6px;}
+    .resourceaction{width:34px;height:34px;border-radius:17px;}
+  }
+
   /* library thumb */
   .thumb{width:44px;height:56px;border-radius:8px;flex-shrink:0;overflow:hidden;background:var(--surface-sunk);position:relative;border:.5px solid var(--hairline);}
   .thumb .ln{position:absolute;left:6px;right:6px;height:2px;border-radius:1px;background:var(--label-3);opacity:.35;}
@@ -1205,3 +1227,55 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
   margin:0;
 }.isection{min-width:0}.evidencegap{display:flex;align-items:flex-start;gap:13px;padding:17px;border-style:dashed}.unknownmark{width:31px;height:31px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;background:var(--surface-sunk);color:var(--label-3);font-weight:700}.evidencegap h3,.filterempty h3{font-size:15px;margin:0 0 4px;letter-spacing:-.015em}.evidencegap p,.filterempty p,.coveragecard p{font-size:13px;line-height:1.5;color:var(--label-3);margin:0}.coveragecard{padding:18px}.coveragehead{display:flex;justify-content:space-between;gap:12px;font-size:13px}.coveragehead span{color:var(--label-3)}.covertrack{height:7px;background:var(--surface-sunk);border-radius:4px;overflow:hidden;margin:13px 0}.covertrack i{display:block;height:100%;background:var(--accent);border-radius:4px}.miniadd,.filterempty button{margin-top:13px;color:var(--accent);font-size:13px;font-weight:650}.filterempty{padding:22px}.spark{height:130px;display:flex;align-items:flex-end;gap:8px;border-bottom:.5px solid var(--hairline)}.sparkcol{height:100%;flex:1;display:flex;align-items:flex-end;justify-content:center;position:relative}.sparkcol i{display:block;width:min(30px,68%);background:var(--accent);border-radius:6px 6px 0 0;opacity:.82}.sparkcol span{position:absolute;bottom:-22px;font-size:10px;color:var(--label-3)}.spark+.widgetnote{margin-top:30px}.widgetnote{font-size:11.5px!important;line-height:1.45;color:var(--label-3);margin:14px 0 0}.causecard .widgetnote{padding-top:13px;border-top:.5px solid var(--hairline)}
 @media(min-width:768px){.nextstep{margin-top:18px}.igrid{gap:8px var(--gutter)}.isection .sectitle{margin-top:20px}}
+
+
+  /* ── public read-only academic share ─────────────────────────────────────
+     Standalone by design: no app rail/tab bar, no student identity, no private
+     image URLs. It uses the same surfaces/type rhythm as the authenticated app
+     so the recipient sees Axon rather than a generic exported document. */
+  .shared-page{min-height:100dvh;background:var(--bg);color:var(--label);overflow:auto;}
+  .shared-shell{width:min(calc(100% - 2 * var(--gutter)),720px);margin:0 auto;
+    padding:calc(var(--top-inset) + 18px) 0 calc(36px + var(--bot-inset));}
+  .shared-header{height:44px;display:flex;align-items:center;justify-content:space-between;
+    border-bottom:.5px solid var(--hairline);}
+  .shared-wordmark{font-size:18px;font-weight:700;letter-spacing:-.035em;}
+  .shared-readonly{font-size:11.5px;font-weight:600;letter-spacing:.045em;text-transform:uppercase;
+    color:var(--label-2);padding:6px 9px;border:.5px solid var(--hairline);border-radius:999px;}
+  .shared-hero{padding:clamp(30px,7vw,58px) 2px 22px;}
+  .shared-eyebrow{font-size:11.5px;font-weight:600;letter-spacing:.055em;text-transform:uppercase;
+    color:var(--label-3);margin-bottom:10px;}
+  .shared-hero h1{font-size:clamp(29px,7vw,38px);font-weight:700;letter-spacing:-.04em;margin:0;}
+  .shared-sub{font-size:14px;color:var(--label-2);margin-top:7px;}
+  .shared-expiry{font-size:12.5px;color:var(--label-3);margin:14px 0 0;line-height:1.45;}
+  .shared-score{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
+    background:var(--surface);border:.5px solid var(--hairline);border-radius:var(--r-card);
+    padding:16px 18px;margin-bottom:24px;box-shadow:var(--card-shadow);}
+  .shared-score>span{font-size:13px;color:var(--label-2);}
+  .shared-score strong{font-size:27px;letter-spacing:-.03em;}
+  .shared-score small{font-size:17px;color:var(--label-3);font-weight:500;}
+  .shared-section-title{font-size:12px;font-weight:600;letter-spacing:.055em;text-transform:uppercase;
+    color:var(--label-3);margin:0 4px 10px;}
+  .shared-question-list{display:flex;flex-direction:column;gap:12px;}
+  .shared-question{background:var(--surface);border:.5px solid var(--hairline);border-radius:var(--r-card);
+    padding:17px 18px;box-shadow:var(--card-shadow);}
+  .shared-question__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding-bottom:12px;border-bottom:.5px solid var(--hairline);}
+  .shared-question__label{font-size:16px;font-weight:650;letter-spacing:-.02em;margin-bottom:6px;}
+  .shared-question__marks{font-size:22px;font-weight:700;letter-spacing:-.025em;white-space:nowrap;}
+  .shared-question__marks span{font-size:14px;color:var(--label-3);font-weight:500;}
+  .shared-field{padding:14px 0 2px;}
+  .shared-field+.shared-field{border-top:.5px solid var(--hairline);margin-top:12px;}
+  .shared-field .k{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;
+    font-weight:600;color:var(--label-3);margin-bottom:7px;}
+  .shared-field .v{font-size:15px;line-height:1.52;color:var(--label);}
+  .shared-field .v.steps{white-space:pre-wrap;}
+  .shared-field--meta .v{color:var(--label-2);font-size:13.5px;}
+  .shared-state{margin-top:clamp(50px,15vh,140px);background:var(--surface);
+    border:.5px solid var(--hairline);border-radius:var(--r-card);padding:22px;box-shadow:var(--card-shadow);}
+  .shared-state h1{font-size:22px;letter-spacing:-.03em;margin:0 0 8px;}
+  .shared-state p{font-size:14px;line-height:1.5;color:var(--label-2);margin:0;}
+  .shared-footer{font-size:12px;line-height:1.5;color:var(--label-3);margin:22px 4px 0;}
+  @media(max-width:420px){
+    .shared-question{padding:15px 15px;}
+    .shared-score{padding:15px;}
+  }

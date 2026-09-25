@@ -11,6 +11,7 @@ export const router = createBrowserRouter([
   { path: "/privacy", lazy: async () => ({ Component: (await import("../pages/Privacy")).default }) },
   { path: "/terms", lazy: async () => ({ Component: (await import("../pages/Terms")).default }) },
   { path: "/cookies", lazy: async () => ({ Component: (await import("../pages/Cookies")).default }) },
+  { path: "/share", lazy: async () => ({ Component: (await import("../pages/SharedAcademic")).default }) },
   {
     path: "/",
     element: <Root />,

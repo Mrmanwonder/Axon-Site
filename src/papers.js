@@ -13,7 +13,7 @@
 // scanning, that needs a connection.
 
 import { sb } from './supabase.js';
-import { readThrough } from './cache.js';
+import { readThrough, clearCache } from './cache.js';
 import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 import { CAPTURE } from './scan/contract.js';
 import { MASTERY_API_URL } from './config.js';
@@ -353,6 +353,39 @@ export async function readPaper(studentId, paperId) {
     if (error) throw error;
     return data;
   });
+}
+
+/**
+ * Permanently remove one saved paper.
+ *
+ * The database owns the destructive semantics: `delete_paper` runs as the
+ * caller, so RLS requires a fresh Parent Mode session and the paper's deletion
+ * triggers enqueue both R2 prefixes. The client only asks for that operation
+ * and clears read caches after it succeeds so an offline copy cannot resurrect
+ * something the guardian just removed.
+ */
+export async function deletePaper(paperId) {
+  requireOnline('Deleting this paper');
+  const { data, error } = await sb.rpc('delete_paper', { p_paper_id: paperId });
+  if (error) throw error;
+  await clearCache();
+  return data;
+}
+
+/**
+ * Permanently remove one committed question from a saved paper.
+ *
+ * `delete_question` deletes the committed question_region and its
+ * student_attempt atomically, then recomputes the paper summary. Browser roles
+ * have no direct DELETE grant on either table; the RPC is the client-facing
+ * authority boundary and itself requires current ownership + Parent Mode.
+ */
+export async function deleteQuestion(attemptId) {
+  requireOnline('Deleting this question');
+  const { data, error } = await sb.rpc('delete_question', { p_attempt_id: attemptId });
+  if (error) throw error;
+  await clearCache();
+  return data;
 }
 
 /**

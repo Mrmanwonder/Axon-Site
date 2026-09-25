@@ -23,6 +23,7 @@ import * as supabaseMod from "../../supabase.js";
 import * as prefsMod from "../../prefs.js";
 import * as consentMod from "../../consent.js";
 import * as papersMod from "../../papers.js";
+import * as sharesMod from "../../shares.js";
 import * as accountMod from "../../account.js";
 import * as verificationMod from "../../verification.js";
 import * as entitlementsMod from "../../entitlements.js";
@@ -486,6 +487,76 @@ export const readPaper = papersMod.readPaper as unknown as (
   studentId: string,
   paperId: string,
 ) => Promise<Cached<PaperDetail>>;
+
+export const deletePaper = papersMod.deletePaper as unknown as (
+  paperId: string,
+) => Promise<{ deleted: boolean; paper_id: string }>;
+
+export const deleteQuestion = papersMod.deleteQuestion as unknown as (
+  attemptId: string,
+) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
+
+
+export type AcademicShareState = {
+  share_id: string;
+  resource_type: "paper" | "question";
+  expires_at: string;
+};
+
+export type CreatedAcademicShare = AcademicShareState & { token: string };
+
+export type SharedQuestionSnapshot = {
+  question_label: string | null;
+  question_text: string | null;
+  student_answer: string | null;
+  marks_awarded: number | null;
+  max_marks: number | null;
+  marks_source: "teacher_pen" | "official_scheme";
+  teacher_remark: string | null;
+  extraction_confidence: "confirmed" | "likely" | "unsure";
+};
+
+export type SharedAcademicSnapshot =
+  | {
+      found: true;
+      kind: "paper";
+      expires_at: string;
+      paper: {
+        type: string; tier: string | null; date_taken: string; subject: string | null;
+        total_awarded: number | null; total_available: number | null; reconciled: boolean | null;
+      };
+      questions: SharedQuestionSnapshot[];
+    }
+  | {
+      found: true;
+      kind: "question";
+      expires_at: string;
+      paper: { type: string; tier: string | null; date_taken: string; subject: string | null };
+      question: SharedQuestionSnapshot;
+    }
+  | { found: false };
+
+export const activeAcademicShare = sharesMod.activeAcademicShare as unknown as (args: {
+  resourceType: "paper" | "question"; resourceId: string;
+}) => Promise<AcademicShareState | null>;
+
+export const createAcademicShare = sharesMod.createAcademicShare as unknown as (args: {
+  resourceType: "paper" | "question"; resourceId: string; expiresMinutes?: number;
+}) => Promise<CreatedAcademicShare>;
+
+export const revokeAcademicShare = sharesMod.revokeAcademicShare as unknown as (
+  shareId: string,
+) => Promise<boolean>;
+
+export const resolveAcademicShare = sharesMod.resolveAcademicShare as unknown as (
+  token: string,
+) => Promise<SharedAcademicSnapshot>;
+
+export const academicShareUrl = sharesMod.academicShareUrl as unknown as (token: string) => string;
+
+export const presentAcademicShare = sharesMod.presentAcademicShare as unknown as (args: {
+  url: string; title: string; text: string; preferNative?: boolean;
+}) => Promise<"shared" | "copied" | "cancelled">;
 
 /** Signed URLs for a stored page and its mask. */
 export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (
