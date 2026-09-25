@@ -70,22 +70,28 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
 }
 
 
-/* Apple-style horizon level. It is purely visual and never participates in
-   tracking or capture gates. Sensor updates write two CSS custom properties,
-   so React does not re-render the scanner at device-orientation frequency. */
+/* Apple Camera-style horizon level. The reference is three pieces: two short
+   fixed outer guides and one long center segment that rotates around its own
+   midpoint. At level, the gaps close and the three pieces read as one yellow
+   line. This overlay is visual only and never participates in capture logic. */
 .scanhero .scanlevel {
   --scan-level-opacity: 0;
   --scan-level-rotation: 0deg;
+  --scan-level-gap: 3%;
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(46vw, 196px);
-  height: 30px;
+  width: clamp(152px, 41vw, 184px);
+  height: 28px;
   z-index: 7;
+  display: grid;
+  grid-template-columns: 12% minmax(0, 1fr) 12%;
+  column-gap: var(--scan-level-gap);
+  align-items: center;
   pointer-events: none;
   opacity: 0;
   transform: translate(-50%, -50%);
-  transition: opacity 120ms linear;
+  transition: opacity 110ms linear, column-gap 90ms var(--scan-snap);
   contain: layout paint style;
 }
 
@@ -93,37 +99,31 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   opacity: var(--scan-level-opacity);
 }
 
-.scanhero .scanlevel-reference,
+.scanhero .scanlevel-guide,
 .scanhero .scanlevel-moving {
-  position: absolute;
-  top: 50%;
+  display: block;
+  width: 100%;
   height: 1px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.88);
-  box-shadow: 0 0 .5px rgba(0,0,0,.46);
-}
-
-.scanhero .scanlevel-reference {
-  right: calc(50% + 7px);
-  width: 52px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 .5px .5px rgba(0,0,0,.36);
 }
 
 .scanhero .scanlevel-moving {
-  left: calc(50% + 7px);
-  width: 108px;
   transform: rotate(var(--scan-level-rotation));
-  transform-origin: left center;
-  transition: background 90ms linear, box-shadow 90ms linear;
+  transform-origin: 50% 50%;
   will-change: transform;
 }
 
-/* Match Camera: the two translucent white pieces snap together and turn
-   yellow when the phone reaches level. The line remains translucent so it
-   never becomes a dominant scanner affordance. */
-.scanhero .scanlevel[data-aligned="true"] .scanlevel-reference,
+/* Apple's aligned state is not three yellow dashes. The pieces close into one
+   continuous line, then the complete guide turns yellow. */
+.scanhero .scanlevel[data-aligned="true"] {
+  --scan-level-gap: 0%;
+}
+
+.scanhero .scanlevel[data-aligned="true"] .scanlevel-guide,
 .scanhero .scanlevel[data-aligned="true"] .scanlevel-moving {
-  background: rgba(255,214,10,.92);
-  box-shadow: 0 0 1px rgba(0,0,0,.38);
+  background: rgba(255,214,10,.94);
+  box-shadow: 0 .5px .5px rgba(0,0,0,.32);
 }
 
 html.scanner-active:has(.scrim.on) .scanhero .scanlevel {

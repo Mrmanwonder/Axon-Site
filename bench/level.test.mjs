@@ -23,7 +23,7 @@ test('angle normalization always selects the nearest horizontal', () => {
 });
 
 test('level only appears near horizontal and snaps when aligned', () => {
-  assert.equal(cameraLevelFrame(20).visible, false);
+  assert.equal(cameraLevelFrame(11).visible, false);
   assert.equal(cameraLevelFrame(10).visible, true);
 
   const aligned = cameraLevelFrame(0.4);
