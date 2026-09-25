@@ -30,7 +30,7 @@ test('tutor model routing is explicit and training stays disabled', async () => 
         updated_at timestamptz not null default now()
       );
     `);
-    await db.exec(await readFile(new URL('../../supabase/migrations/20260923152617_add_tutor_model_route.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20260923154400_add_tutor_model_route.sql', import.meta.url), 'utf8'));
     await db.exec(`
       insert into public.model_route(stage, primary_model, prompt_version, allow_training)
       values
@@ -40,8 +40,8 @@ test('tutor model routing is explicit and training stays disabled', async () => 
         ('adjudicate', 'gemini-3.1-flash-lite', 'adjudicate.v1', true),
         ('explain', 'gemini-3.1-flash-lite', 'explain_tier1.v2', true);
     `);
-    await db.exec(await readFile(new URL('../../supabase/migrations/20260924111500_intelligence_v2_model_routes.sql', import.meta.url), 'utf8'));
-    await db.exec(await readFile(new URL('../../supabase/migrations/20260924052811_intelligence_v2_observability_contract.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20260924051235_intelligence_v2_model_routes.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20260924141540_intelligence_v2_observability_contract.sql', import.meta.url), 'utf8'));
     const result = await db.query("select stage, primary_model, thinking_level, allow_training, prompt_version from public.model_route order by stage");
     assert.equal(result.rows.length, 6);
     assert.ok(result.rows.every((row) => row.primary_model === 'gemini-3.5-flash-lite'));
