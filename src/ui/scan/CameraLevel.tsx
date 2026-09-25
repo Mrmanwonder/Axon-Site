@@ -96,8 +96,9 @@ export default function CameraLevel({ active }: { active: boolean }) {
 
   return (
     <div className="scanlevel" ref={levelRef} aria-hidden="true">
-      <span className="scanlevel-reference" />
+      <span className="scanlevel-guide scanlevel-guide-left" />
       <span className="scanlevel-moving" />
+      <span className="scanlevel-guide scanlevel-guide-right" />
     </div>
   );
 }
