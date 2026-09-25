@@ -1,0 +1,136 @@
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, expect, test, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { SheetProvider } from "../../src/ui/components/SheetProvider";
+import { ToastProvider } from "../../src/ui/components/ToastProvider";
+import ResourceActions from "../../src/ui/components/ResourceActions";
+
+const fixture = vi.hoisted(() => ({
+  active: vi.fn(),
+  create: vi.fn(),
+  revoke: vi.fn(),
+  present: vi.fn(),
+  guard: vi.fn((action: () => void | Promise<void>) => action()),
+}));
+
+vi.mock("../../src/ui/data/modules", () => ({
+  activeAcademicShare: fixture.active,
+  createAcademicShare: fixture.create,
+  revokeAcademicShare: fixture.revoke,
+  academicShareUrl: (token: string) => `https://axonstudy.online/share#token=${token}`,
+  presentAcademicShare: fixture.present,
+}));
+
+vi.mock("../../src/ui/data/useParentMode", () => ({
+  useParentMode: () => ({ guard: fixture.guard }),
+}));
+
+import { useAcademicShare } from "../../src/ui/data/useAcademicShare";
+
+function Harness() {
+  const { activeShare, requestShare } = useAcademicShare({
+    resourceType: "paper",
+    resourceId: "paper-1",
+    title: "Shared paper from Axon",
+  });
+  return (
+    <ResourceActions
+      resourceLabel="paper"
+      onShare={requestShare}
+      shareActive={!!activeShare}
+    />
+  );
+}
+
+function mount() {
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <SheetProvider>
+          <Harness />
+        </SheetProvider>
+      </ToastProvider>
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixture.active.mockResolvedValue(null);
+  fixture.create.mockResolvedValue({
+    share_id: "share-1",
+    resource_type: "paper",
+    token: "a".repeat(64),
+    expires_at: "2026-09-26T07:00:00Z",
+  });
+  fixture.revoke.mockResolvedValue(true);
+  fixture.present.mockResolvedValue("shared");
+  Object.defineProperty(navigator, "share", {
+    configurable: true,
+    value: vi.fn().mockResolvedValue(undefined),
+  });
+});
+
+test("Share is Parent-Mode gated, mints a 24-hour capability, then uses a second explicit Share-link tap", async () => {
+  mount();
+
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  expect(trigger.getAttribute("aria-pressed")).toBe("false");
+
+  await userEvent.click(trigger);
+
+  await waitFor(() => expect(fixture.guard).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(fixture.create).toHaveBeenCalledWith({
+    resourceType: "paper",
+    resourceId: "paper-1",
+    expiresMinutes: 1440,
+  }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(dialog.textContent).toContain("Anyone with this link can read only this saved paper.");
+  expect(dialog.textContent).toContain("expires in 24 hours");
+  expect(dialog.textContent).toContain("does not include the student's profile");
+
+  expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("true");
+
+  await userEvent.click(within(dialog).getByRole("button", { name: "Share link" }));
+
+  await waitFor(() => expect(fixture.present).toHaveBeenCalledWith({
+    url: "https://axonstudy.online/share#token=" + "a".repeat(64),
+    title: "Shared paper from Axon",
+    text: "A read-only paper shared from Axon.",
+    preferNative: true,
+  }));
+  expect(await screen.findByText("Share sheet opened.")).toBeTruthy();
+});
+
+test("the newly-created link can be revoked from the same guarded share flow", async () => {
+  mount();
+
+  await userEvent.click(await screen.findByRole("button", { name: "Share paper" }));
+  const dialog = await screen.findByRole("dialog", { name: "Share this paper" });
+
+  await userEvent.click(within(dialog).getByRole("button", { name: "Stop sharing" }));
+
+  await waitFor(() => expect(fixture.revoke).toHaveBeenCalledWith("share-1"));
+  expect(await screen.findByText("Sharing stopped.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("false");
+});
+
+test("an existing active share is reflected before a fresh link replaces it", async () => {
+  fixture.active.mockResolvedValue({
+    share_id: "old-share",
+    resource_type: "paper",
+    expires_at: "2026-09-25T22:00:00Z",
+  });
+
+  mount();
+
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("true"));
+  await userEvent.click(trigger);
+
+  const dialog = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(dialog.textContent).toContain("A fresh link replaced the previous one.");
+});
