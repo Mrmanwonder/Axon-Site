@@ -35,11 +35,6 @@ from (values
 cross join public.consent_purpose cp
 where cp.is_required;
 
-insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
-select g.id, null, cp.purpose, true, 'v1.0', 'in_app_itemised'
-from public.guardian g cross join public.consent_purpose cp
-where cp.is_required;
-
 insert into public.student(id,guardian_id,first_name,class_level,age_band) values
 ('89000000-0000-4000-8000-000000000021','89000000-0000-4000-8000-000000000011','Student Secret A',10,'under_18'),
 ('89000000-0000-4000-8000-000000000022','89000000-0000-4000-8000-000000000012','Student Secret B',10,'under_18');
