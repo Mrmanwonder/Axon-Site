@@ -172,6 +172,7 @@
     cursor:pointer;will-change:transform;}
   .resourceaction svg{width:17px;height:17px;}
   .resourceaction.danger{color:var(--red);}
+  .resourceaction.active{color:var(--accent);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 30%,transparent);}
   .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
   .detailgreet > .detailcopy{min-width:0;}
   .detailhead{position:relative;}
