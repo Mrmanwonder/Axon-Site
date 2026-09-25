@@ -12,6 +12,7 @@ import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
 import { DraftAlert, DraftsButton } from "../components/ScanDrafts";
+import CameraLevel from "../scan/CameraLevel";
 import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { paths } from "../app/paths";
@@ -94,6 +95,7 @@ export default function Scan() {
 
         <canvas id="scanOverlay" ref={overlayRef} />
         <div className="feed"><div className="feedgrid" /></div>
+        <CameraLevel active={camera.on} />
 
         <div
           className="scanhint"
