@@ -26,6 +26,7 @@ import ResourceActions from "../components/ResourceActions";
 import { useParentMode } from "../data/useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
+import { useAcademicShare } from "../data/useAcademicShare";
 
 const CONF_LABEL: Record<string, string> = {
   confirmed: "Confirmed",
@@ -40,6 +41,11 @@ export default function PaperOverview() {
   const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
+  const { activeShare, requestShare } = useAcademicShare({
+    resourceType: "paper",
+    resourceId: paperId,
+    title: "Shared paper from Axon",
+  });
 
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [stale, setStale] = useState(false);
@@ -100,7 +106,7 @@ export default function PaperOverview() {
             {stale ? " · offline copy" : ""}
           </div>
         </div>
-        <ResourceActions resourceLabel="paper" onDelete={requestDelete} />
+        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={!!activeShare} onDelete={requestDelete} />
       </div>
 
       {marksRows.length > 0 && (
