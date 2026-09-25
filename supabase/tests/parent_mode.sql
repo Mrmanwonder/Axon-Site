@@ -245,7 +245,7 @@ do $$ declare r jsonb; begin
   r := public.delete_my_account();
   perform public._t('parent mode can delete the account', (r->>'erased')::boolean);
   -- Erasure keeps the guardian and student rows as tombstones so the
-  -- append-only consent ledger keeps its referents (20260810190200). Asserted
+  -- append-only consent ledger keeps its referents (20260810234336). Asserted
   -- here because adding the Parent Mode gate meant redefining this function,
   -- and redefining it from an older copy silently reintroduces the erasure bug
   -- that migration exists to fix — which is exactly what happened once.

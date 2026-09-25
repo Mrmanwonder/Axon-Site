@@ -59,7 +59,7 @@ create or replace function auth.uid() returns uuid language sql stable as $$
 $$;
 
 -- The whole claim set, which is what Supabase's own auth.jwt() returns. Parent
--- Mode (20260909140000) reads the `amr` array out of it to answer "how long ago
+-- Mode (20260909065241) reads the `amr` array out of it to answer "how long ago
 -- did a person actually prove they were here", so a shim without this cannot
 -- run the migrations at all, let alone test the boundary.
 create or replace function auth.jwt() returns jsonb language sql stable as $$

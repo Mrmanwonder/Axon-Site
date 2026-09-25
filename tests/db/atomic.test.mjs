@@ -25,7 +25,7 @@ test('profile and linked-paper transactions are atomic, scoped and idempotent', 
       grant usage on schema public,private,auth to authenticated;
       grant select,insert on all tables in schema public to authenticated;
     `);
-    await db.exec(await readFile(new URL('../../supabase/migrations/20260912040233_frontend_atomic_mutations.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../../supabase/migrations/20260923061150_frontend_atomic_mutations.sql', import.meta.url), 'utf8'));
     await db.exec('set role authenticated');
     const id = '10000000-0000-0000-0000-000000000001';
     const create = subjects => db.query('select create_student_profile($1,$2,11::smallint,$3,$4) as profile', [id,'Sam','CAIE',JSON.stringify(subjects)]);

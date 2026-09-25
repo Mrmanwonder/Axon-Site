@@ -52,7 +52,7 @@ production extraction service is not invoked by these fixtures.
 
 ## Release requirements and limits
 
-- The user applied `supabase/migrations/20260912040233_frontend_atomic_mutations.sql`.
+- The user applied `supabase/migrations/20260923061150_frontend_atomic_mutations.sql`.
   Live catalog verification confirmed both RPCs exist, use invoker security,
   grant authenticated execution, and deny anonymous execution. No additional
   database schema change was made during release integration.
