@@ -3,8 +3,8 @@
 // This module stays DOM-free so the scanner UI can use the same projection
 // without coupling it to capture, tracking, or React state.
 
-export const LEVEL_VISIBLE_DEG = 18;
-export const LEVEL_ALIGNED_DEG = 0.65;
+export const LEVEL_VISIBLE_DEG = 10;
+export const LEVEL_ALIGNED_DEG = 0.45;
 const FLAT_PROJECTION_FLOOR = 0.12;
 
 export function normalizeLevelAngle(degrees) {
@@ -51,12 +51,13 @@ export function cameraLevelFrame(angle) {
   }
 
   const aligned = distance <= LEVEL_ALIGNED_DEG;
-  const proximity = 1 - distance / LEVEL_VISIBLE_DEG;
   return {
     visible: true,
     aligned,
-    // The world horizon moves opposite the phone's roll in the viewfinder.
+    // Apple's center segment counters the phone roll while the two short outer
+    // guides stay horizontal. Keep the white state at a stable translucency;
+    // proximity should change geometry, not make the guide "breathe".
     rotationDeg: aligned ? 0 : -normalized,
-    opacity: aligned ? 0.78 : 0.30 + proximity * 0.36,
+    opacity: aligned ? 0.86 : 0.62,
   };
 }
