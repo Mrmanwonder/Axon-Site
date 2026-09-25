@@ -179,7 +179,7 @@ test("failed deletion remains in the consequence sheet and does not navigate", a
   const dialog = await screen.findByRole("dialog", { name: "Delete this paper" });
   await userEvent.click(within(dialog).getByRole("button", { name: "Delete paper" }));
 
-  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Deletion failed");
+  expect((await within(dialog).findByRole("alert")).textContent).toContain("Deletion failed");
   expect(screen.getByTestId("location").textContent).toBe("/library/paper-1");
   expect(screen.getByRole("dialog", { name: "Delete this paper" })).toBeTruthy();
 });
