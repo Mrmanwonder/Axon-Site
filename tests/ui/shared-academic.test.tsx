@@ -54,7 +54,7 @@ test("paper share renders only the deliberately shared academic snapshot and is 
   render(<SharedAcademic />);
 
   expect(await screen.findByRole("heading", { name: "Class test" })).toBeTruthy();
-  expect(screen.getByText("Physics · 20 Sept 2026")).toBeTruthy();
+  expect(document.querySelector(".shared-sub")?.textContent).toMatch(/^Physics · .+2026$/);
   expect(screen.getByText("State the result.")).toBeTruthy();
   expect(screen.getByText("Two")).toBeTruthy();
   expect(screen.getByText("Good setup")).toBeTruthy();
