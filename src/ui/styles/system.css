@@ -163,6 +163,25 @@
   .btn.plain{color:var(--label-3);font-weight:500;padding:11px;}
   .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
+  /* Saved paper/question actions. Compact, neutral chrome; destructive meaning
+     lives in the red glyph and the consequence sheet, not a giant danger block. */
+  .resourceactions{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+  .resourceaction{width:36px;height:36px;border-radius:18px;display:grid;place-items:center;
+    background:var(--surface-sunk);color:var(--label-2);border:.5px solid var(--hairline);
+    cursor:pointer;will-change:transform;}
+  .resourceaction svg{width:17px;height:17px;}
+  .resourceaction.danger{color:var(--red);}
+  .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .detailgreet > .detailcopy{min-width:0;}
+  .detailhead{position:relative;}
+  .detailhead .rvtitle{position:absolute;left:50%;transform:translateX(-50%);max-width:48%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  @media(max-width:420px){
+    .detailgreet{gap:10px;}
+    .resourceactions{gap:6px;}
+    .resourceaction{width:34px;height:34px;border-radius:17px;}
+  }
+
   /* library thumb */
   .thumb{width:44px;height:56px;border-radius:8px;flex-shrink:0;overflow:hidden;background:var(--surface-sunk);position:relative;border:.5px solid var(--hairline);}
   .thumb .ln{position:absolute;left:6px;right:6px;height:2px;border-radius:1px;background:var(--label-3);opacity:.35;}
