@@ -58,6 +58,22 @@ test('production host configuration carries transport protections', () => {
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
 
+test('academic share route stays public, noindex and outside analytics', () => {
+  const routes = read('src/ui/app/routes.tsx');
+  const page = read('src/ui/pages/SharedAcademic.tsx');
+  const main = read('src/ui/main.tsx');
+  const sitemap = read('public/sitemap.xml');
+
+  const sharePosition = routes.indexOf('{ path: "/share"');
+  const rootPosition = routes.indexOf('path: "/"');
+  assert.ok(sharePosition >= 0 && sharePosition < rootPosition, 'share route must live outside authenticated Root');
+  assert.match(page, /path="\/share"[\s\S]*noIndex/);
+  assert.match(main, /academicShareRoute = location\.pathname === "\/share"/);
+  assert.match(main, /!academicShareRoute && getAnalyticsConsent\(\) === "granted"/);
+  assert.match(main, /!academicShareRoute && <CookieConsent/);
+  assert.doesNotMatch(sitemap, /\/share<\/loc>/);
+});
+
 test('optional PostHog analytics is consent gated', () => {
   const main = read('src/ui/main.tsx');
   const analytics = read('src/ui/lib/analytics.ts');
