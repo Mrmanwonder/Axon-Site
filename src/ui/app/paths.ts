@@ -16,6 +16,7 @@ export const paths = {
   privacy: "/privacy",
   terms: "/terms",
   cookies: "/cookies",
+  share: "/share",
   library: "/library",
   paper: (paperId: string) => `/library/${paperId}`,
   question: (paperId: string, qId: string) => `/library/${paperId}/${qId}`,
