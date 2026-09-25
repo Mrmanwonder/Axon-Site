@@ -101,12 +101,12 @@ begin
 
   perform set_config('axon.test.share_token', token, true);
   perform set_config('axon.test.share_id', share_id::text, true);
-end $;
+end $$;
 
 -- Inspect the private registry only as the test/database owner. Authenticated
 -- clients are deliberately denied SELECT on private.academic_share.
 reset role;
-do $
+do $$
 declare
   token text := current_setting('axon.test.share_token', true);
   share_id uuid := current_setting('axon.test.share_id', true)::uuid;
@@ -116,7 +116,7 @@ begin
     from private.academic_share where id=share_id;
   perform public._share_t('raw capability is not stored',
     stored_hash is not null and stored_hash <> token);
-end $;
+end $$;
 
 -- ── anonymous resolution returns only the selected academic snapshot ───────
 
