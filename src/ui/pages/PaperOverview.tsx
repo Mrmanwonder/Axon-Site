@@ -13,15 +13,19 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { readPaper, paperTypeLabel } from "../data/modules";
+import { deletePaper, readPaper, paperTypeLabel } from "../data/modules";
 import type { PaperDetail } from "../data/modules";
 import { numMark } from "../data/causes";
 import { paths } from "../app/paths";
+import ResourceActions from "../components/ResourceActions";
+import { useParentMode } from "../data/useParentMode";
+import { useSheetControls } from "../components/SheetProvider";
+import { useToast } from "../components/ToastProvider";
 
 const CONF_LABEL: Record<string, string> = {
   confirmed: "Confirmed",
@@ -32,6 +36,10 @@ const CONF_LABEL: Record<string, string> = {
 export default function PaperOverview() {
   const { paperId } = useParams();
   const { student } = useApp();
+  const navigate = useNavigate();
+  const { guard } = useParentMode();
+  const { openSheet } = useSheetControls();
+  const toast = useToast();
 
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [stale, setStale] = useState(false);
@@ -64,15 +72,35 @@ export default function PaperOverview() {
   const sumAwarded = marksRows.reduce((t, a) => t + Number(a.marks_awarded), 0);
   const sumAvailable = marksRows.reduce((t, a) => t + Number(a.max_marks), 0);
 
+  const requestDelete = () => {
+    if (!paperId) return;
+    guard(() => {
+      openSheet({
+        title: "Delete this paper",
+        body:
+          "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
+        primary: "Delete paper",
+        onConfirm: async () => {
+          await deletePaper(paperId);
+          toast("Paper deleted.");
+          navigate(paths.library, { replace: true });
+        },
+      });
+    });
+  };
+
   return (
     <>
-      <div className="greet">
-        <h1>{paperTypeLabel(paper.type)}</h1>
-        <div className="sub">
-          {paper.subject ? `${paper.subject} · ` : ""}
-          {new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-          {stale ? " · offline copy" : ""}
+      <div className="greet detailgreet">
+        <div className="detailcopy">
+          <h1>{paperTypeLabel(paper.type)}</h1>
+          <div className="sub">
+            {paper.subject ? `${paper.subject} · ` : ""}
+            {new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+            {stale ? " · offline copy" : ""}
+          </div>
         </div>
+        <ResourceActions resourceLabel="paper" onDelete={requestDelete} />
       </div>
 
       {marksRows.length > 0 && (
