@@ -33,7 +33,8 @@ export function useAcademicShare({
   resourceId: string | null | undefined;
   title: string;
 }) {
-  const [active, setActive] = useState<AcademicShareState | null>(null);
+  // undefined = status not established; null = established and not shared.
+  const [active, setActive] = useState<AcademicShareState | null | undefined>(undefined);
   const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
@@ -44,11 +45,12 @@ export function useAcademicShare({
       return;
     }
     let cancelled = false;
+    setActive(undefined);
     activeAcademicShare({ resourceType, resourceId })
       .then((share) => { if (!cancelled) setActive(share); })
-      // Share status is helpful furniture, never a reason the paper itself
-      // should fail to open.
-      .catch(() => { if (!cancelled) setActive(null); });
+      // A failed read is not evidence that sharing is off. Keep the state
+      // unknown and re-check before the guardian can create/revoke anything.
+      .catch(() => { if (!cancelled) setActive(undefined); });
     return () => { cancelled = true; };
   }, [resourceId, resourceType]);
 
@@ -123,10 +125,24 @@ export function useAcademicShare({
   const requestShare = useCallback(() => {
     if (!resourceId) return;
 
-    guard(() => {
-      if (!active) return createFreshShare(false);
+    guard(async () => {
+      let current = active;
+      if (current === undefined) {
+        try {
+          current = await activeAcademicShare({ resourceType, resourceId });
+          setActive(current);
+        } catch {
+          toast(`We can’t check whether this ${resourceType} is already shared right now.`, "warn");
+          return;
+        }
+      }
 
-      const expiry = new Date(active.expires_at).toLocaleString(undefined, {
+      if (!current) {
+        await createFreshShare(false);
+        return;
+      }
+
+      const expiry = new Date(current.expires_at).toLocaleString(undefined, {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -154,7 +170,7 @@ export function useAcademicShare({
         ],
         onChoice: async (choice) => {
           if (choice === "revoke") {
-            const stopped = await revokeAcademicShare(active.share_id);
+            const stopped = await revokeAcademicShare(current.share_id);
             if (!stopped) throw new Error("This share could not be stopped. Try again.");
             setActive(null);
             toast("Sharing stopped.");
@@ -168,5 +184,9 @@ export function useAcademicShare({
     });
   }, [active, createFreshShare, guard, openSheet, resourceId, resourceType, toast]);
 
-  return { activeShare: active, requestShare };
+  return {
+    activeShare: active ?? null,
+    shareStatusKnown: active !== undefined,
+    requestShare,
+  };
 }
