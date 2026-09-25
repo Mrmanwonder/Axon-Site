@@ -376,9 +376,9 @@ export async function deletePaper(paperId) {
  * Permanently remove one committed question from a saved paper.
  *
  * `delete_question` deletes the committed question_region and its
- * student_attempt atomically. The migration gives DELETE its own Parent Mode
- * policy, so a direct PostgREST delete from the console is refused exactly as
- * this helper is when the guardian has not re-authenticated recently.
+ * student_attempt atomically, then recomputes the paper summary. Browser roles
+ * have no direct DELETE grant on either table; the RPC is the client-facing
+ * authority boundary and itself requires current ownership + Parent Mode.
  */
 export async function deleteQuestion(attemptId) {
   requireOnline('Deleting this question');
