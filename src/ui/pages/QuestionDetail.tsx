@@ -20,9 +20,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { readPaper, paperTypeLabel } from "../data/modules";
+import { deleteQuestion, readPaper, paperTypeLabel } from "../data/modules";
 import type { PaperDetail, StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
@@ -34,6 +34,10 @@ import MathText from "../components/MathText";
 import WorkedAnswer from "../components/WorkedAnswer";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
+import ResourceActions from "../components/ResourceActions";
+import { useParentMode } from "../data/useParentMode";
+import { useSheetControls } from "../components/SheetProvider";
+import { useToast } from "../components/ToastProvider";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -69,6 +73,10 @@ const CONF_LABEL: Record<string, string> = {
 export default function QuestionDetail() {
   const { paperId, qId } = useParams();
   const { student } = useApp();
+  const navigate = useNavigate();
+  const { guard } = useParentMode();
+  const { openSheet } = useSheetControls();
+  const toast = useToast();
 
   const [paper, setPaper] = useState<PaperDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -132,9 +140,26 @@ export default function QuestionDetail() {
     ? Number(attempt.max_marks) - Number(attempt.marks_awarded)
     : null;
 
+  const requestDelete = () => {
+    if (!paperId || !qId) return;
+    guard(() => {
+      openSheet({
+        title: "Delete this question",
+        body:
+          "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
+        primary: "Delete question",
+        onConfirm: async () => {
+          await deleteQuestion(qId);
+          toast("Question deleted.");
+          navigate(paths.paper(paperId), { replace: true });
+        },
+      });
+    });
+  };
+
   return (
     <div style={{ padding: "0 0 32px" }}>
-      <div className="rvhead" style={{ position: "static" }}>
+      <div className="rvhead detailhead" style={{ position: "static" }}>
         <Link to={paths.paper(paperId!)} className="rvback" aria-label="Back to the paper">
           <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"
                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -142,6 +167,7 @@ export default function QuestionDetail() {
           </svg>
         </Link>
         <div className="rvtitle">{paperTypeLabel(paper.type)}</div>
+        <ResourceActions resourceLabel="question" onDelete={requestDelete} />
       </div>
 
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
