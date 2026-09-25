@@ -4,6 +4,8 @@ import MathText from "../components/MathText";
 import type { SharedAcademicSnapshot, SharedQuestionSnapshot } from "../data/modules";
 import { resolveAcademicShare } from "../data/modules";
 
+const SHARE_TOKEN_SESSION_KEY = "axon.academic-share-token";
+
 const TYPE_LABEL: Record<string, string> = {
   unit_test: "Class test",
   mid_term: "Mid-term",
@@ -75,7 +77,17 @@ export default function SharedAcademic() {
 
   const token = useMemo(() => {
     const params = new URLSearchParams(location.hash.replace(/^#/, ""));
-    return params.get("token")?.trim() ?? "";
+    const fromLink = params.get("token")?.trim() ?? "";
+    if (fromLink) {
+      // Fragments are not sent to Axon, but browsers can retain them in visible
+      // history. Move the bearer capability into this tab only, then scrub it
+      // from the address bar. A reload in the same tab still works; another
+      // tab/account cannot read this sessionStorage entry.
+      sessionStorage.setItem(SHARE_TOKEN_SESSION_KEY, fromLink);
+      history.replaceState(history.state, "", location.pathname + location.search);
+      return fromLink;
+    }
+    return sessionStorage.getItem(SHARE_TOKEN_SESSION_KEY)?.trim() ?? "";
   }, []);
 
   useEffect(() => {
@@ -85,7 +97,10 @@ export default function SharedAcademic() {
       return;
     }
     resolveAcademicShare(token)
-      .then((data) => { if (!cancelled) setSnapshot(data); })
+      .then((data) => {
+        if (!data.found) sessionStorage.removeItem(SHARE_TOKEN_SESSION_KEY);
+        if (!cancelled) setSnapshot(data);
+      })
       .catch(() => {
         if (!cancelled) setError("This shared item could not be opened right now.");
       });
