@@ -118,7 +118,7 @@ test("the newly-created link can be revoked from the same guarded share flow", a
   expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("false");
 });
 
-test("an existing active share is reflected before a fresh link replaces it", async () => {
+test("an existing active share can be stopped without creating a replacement", async () => {
   fixture.active.mockResolvedValue({
     share_id: "old-share",
     resource_type: "paper",
@@ -131,6 +131,39 @@ test("an existing active share is reflected before a fresh link replaces it", as
   await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("true"));
   await userEvent.click(trigger);
 
-  const dialog = await screen.findByRole("dialog", { name: "Share this paper" });
-  expect(dialog.textContent).toContain("A fresh link replaced the previous one.");
+  const dialog = await screen.findByRole("dialog", { name: "This paper is already shared" });
+  expect(dialog.textContent).toContain("the original link cannot be shown again");
+
+  await userEvent.click(within(dialog).getByRole("button", { name: "Stop sharing" }));
+
+  await waitFor(() => expect(fixture.revoke).toHaveBeenCalledWith("old-share"));
+  expect(fixture.create).not.toHaveBeenCalled();
+  expect(await screen.findByText("Sharing stopped.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("false");
+});
+
+test("an existing active share can be explicitly replaced with a fresh link", async () => {
+  fixture.active.mockResolvedValue({
+    share_id: "old-share",
+    resource_type: "paper",
+    expires_at: "2026-09-25T22:00:00Z",
+  });
+
+  mount();
+
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("true"));
+  await userEvent.click(trigger);
+
+  const existing = await screen.findByRole("dialog", { name: "This paper is already shared" });
+  await userEvent.click(within(existing).getByRole("button", { name: "Replace link" }));
+
+  await waitFor(() => expect(fixture.create).toHaveBeenCalledWith({
+    resourceType: "paper",
+    resourceId: "paper-1",
+    expiresMinutes: 1440,
+  }));
+
+  const fresh = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(fresh.textContent).toContain("The previous link has been stopped and replaced.");
 });
