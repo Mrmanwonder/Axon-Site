@@ -29,7 +29,7 @@ vi.mock("../../src/ui/data/useParentMode", () => ({
 import { useAcademicShare } from "../../src/ui/data/useAcademicShare";
 
 function Harness() {
-  const { activeShare, requestShare } = useAcademicShare({
+  const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "paper",
     resourceId: "paper-1",
     title: "Shared paper from Axon",
@@ -38,7 +38,7 @@ function Harness() {
     <ResourceActions
       resourceLabel="paper"
       onShare={requestShare}
-      shareActive={!!activeShare}
+      shareActive={shareStatusKnown ? !!activeShare : null}
     />
   );
 }
@@ -72,11 +72,28 @@ beforeEach(() => {
   });
 });
 
+test("unknown share status stays visibly unknown and never mints until the server can answer", async () => {
+  fixture.active.mockRejectedValue(new Error("offline"));
+
+  mount();
+
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("mixed"));
+
+  await userEvent.click(trigger);
+
+  await waitFor(() => expect(fixture.guard).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(fixture.active).toHaveBeenCalledTimes(2));
+  expect(fixture.create).not.toHaveBeenCalled();
+  expect(await screen.findByText("We can’t check whether this paper is already shared right now.")).toBeTruthy();
+  expect(trigger.getAttribute("aria-pressed")).toBe("mixed");
+});
+
 test("Share is Parent-Mode gated, mints a 24-hour capability, then uses a second explicit Share-link tap", async () => {
   mount();
 
   const trigger = await screen.findByRole("button", { name: "Share paper" });
-  expect(trigger.getAttribute("aria-pressed")).toBe("false");
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("false"));
 
   await userEvent.click(trigger);
 
