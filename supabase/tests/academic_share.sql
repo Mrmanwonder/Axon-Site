@@ -81,7 +81,7 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '5 seconds'), true);
 
-do $
+do $$
 declare
   first_created jsonb;
   created jsonb;
@@ -101,152 +101,7 @@ begin
   share_id := (created->>'share_id')::uuid;
 
   perform public._share_t('owner receives a 256-bit hex capability',
-    token ~ '^[0-9a-f]{64}
--- Inspect the private registry only as the test/database owner. Authenticated
--- clients are deliberately denied SELECT on private.academic_share.
-reset role;
-do $$
-declare
-  token text := current_setting('axon.test.share_token', true);
-  share_id uuid := current_setting('axon.test.share_id', true)::uuid;
-  stored_hash text;
-begin
-  select encode(token_hash,'hex') into stored_hash
-    from private.academic_share where id=share_id;
-  perform public._share_t('raw capability is not stored',
-    stored_hash is not null and stored_hash <> token);
-end $$;
-
--- Even a privileged accidental write cannot leave a second unrevoked bearer
--- capability for the same paper; the partial unique index is the final guard.
-do $
-begin
-  begin
-    insert into private.academic_share(
-      guardian_id,student_id,resource_type,paper_id,attempt_id,token_hash,expires_at
-    ) values (
-      '89000000-0000-4000-8000-000000000011',
-      '89000000-0000-4000-8000-000000000021',
-      'paper',
-      '89000000-0000-4000-8000-000000000031',
-      null,
-      digest(repeat('d',64),'sha256'),
-      now()+interval '1 hour'
-    );
-    perform public._share_t('database forbids a second unrevoked paper capability', false, 'insert succeeded');
-  exception when unique_violation then
-    perform public._share_t('database forbids a second unrevoked paper capability', true);
-  end;
-end $;
-
--- ── anonymous resolution returns only the selected academic snapshot ───────
-
-reset role;
-set local role anon;
-set local "request.jwt.claims" = '{"role":"anon"}';
-
-do $$
-declare
-  payload jsonb;
-  token text := current_setting('axon.test.share_token', true);
-begin
-  payload := public.resolve_academic_share(token);
-
-  perform public._share_t('anonymous recipient can resolve the valid paper capability',
-    (payload->>'found')::boolean and payload->>'kind'='paper');
-
-  perform public._share_t('paper share contains the chosen paper and question',
-    payload#>>'{paper,subject}'='Physics'
-    and payload#>>'{questions,0,question_label}'='Q1'
-    and payload#>>'{questions,0,student_answer}'='Two');
-
-  perform public._share_t('paper share does not expose account identity or sibling work',
-    position('Student Secret A' in payload::text)=0
-    and position('private-a@test.invalid' in payload::text)=0
-    and position('Private sibling question' in payload::text)=0
-    and position('89000000-0000-4000-8000-000000000021' in payload::text)=0);
-
-  perform public._share_t('unknown capability is indistinguishable from unavailable',
-    (public.resolve_academic_share(repeat('0',64))->>'found')::boolean=false);
-end $$;
-
--- ── question capability is scoped to that question only ───────────────────
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '5 seconds'), true);
-
-do $$
-declare created jsonb;
-begin
-  created := public.create_academic_share('question','89000000-0000-4000-8000-000000000041',60);
-  perform set_config('axon.test.question_token', created->>'token', true);
-  perform set_config('axon.test.question_share_id', created->>'share_id', true);
-end $$;
-
-reset role;
-set local role anon;
-set local "request.jwt.claims" = '{"role":"anon"}';
-
-do $$
-declare payload jsonb := public.resolve_academic_share(current_setting('axon.test.question_token', true));
-begin
-  perform public._share_t('question capability resolves only one question',
-    (payload->>'found')::boolean
-    and payload->>'kind'='question'
-    and payload#>>'{question,question_label}'='Q1'
-    and not (payload ? 'questions'));
-
-  perform public._share_t('question capability cannot traverse to sibling data',
-    position('Private sibling question' in payload::text)=0
-    and position('Private sibling answer' in payload::text)=0);
-end $$;
-
--- ── revocation and expiry fail closed ──────────────────────────────────────
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '5 seconds'), true);
-
-select public._share_t('owner can revoke the question share',
-  public.revoke_academic_share(current_setting('axon.test.question_share_id', true)::uuid));
-
-reset role;
-set local role anon;
-set local "request.jwt.claims" = '{"role":"anon"}';
-
-select public._share_t('revoked capability no longer resolves',
-  (public.resolve_academic_share(current_setting('axon.test.question_token', true))->>'found')::boolean=false);
-
-reset role;
-insert into private.academic_share(
-  guardian_id,student_id,resource_type,paper_id,attempt_id,token_hash,created_at,expires_at
-) values (
-  '89000000-0000-4000-8000-000000000011',
-  '89000000-0000-4000-8000-000000000021',
-  'paper',
-  '89000000-0000-4000-8000-000000000031',
-  null,
-  digest(repeat('e',64),'sha256'),
-  now()-interval '2 hours',
-  now()-interval '1 hour'
-);
-
-set local role anon;
-set local "request.jwt.claims" = '{"role":"anon"}';
-select public._share_t('expired capability no longer resolves',
-  (public.resolve_academic_share(repeat('e',64))->>'found')::boolean=false);
-
-reset role;
-
-select count(*) as total,
-       count(*) filter(where passed) as passed,
-       count(*) filter(where not passed) as failed
-from public._share_r;
-select seq,name,passed,detail from public._share_r where not passed order by seq;
-
-rollback;
-, token);
+    token ~ '^[0-9a-f]{64}$', token);
 
   select count(*) into unrevoked_count
     from private.academic_share
@@ -265,7 +120,7 @@ rollback;
 
   perform set_config('axon.test.share_token', token, true);
   perform set_config('axon.test.share_id', share_id::text, true);
-end $;
+end $$;
 
 -- Inspect the private registry only as the test/database owner. Authenticated
 -- clients are deliberately denied SELECT on private.academic_share.
@@ -280,6 +135,28 @@ begin
     from private.academic_share where id=share_id;
   perform public._share_t('raw capability is not stored',
     stored_hash is not null and stored_hash <> token);
+end $$;
+
+-- Even a privileged accidental write cannot leave a second unrevoked bearer
+-- capability for the same paper; the partial unique index is the final guard.
+do $$
+begin
+  begin
+    insert into private.academic_share(
+      guardian_id,student_id,resource_type,paper_id,attempt_id,token_hash,expires_at
+    ) values (
+      '89000000-0000-4000-8000-000000000011',
+      '89000000-0000-4000-8000-000000000021',
+      'paper',
+      '89000000-0000-4000-8000-000000000031',
+      null,
+      digest(repeat('d',64),'sha256'),
+      now()+interval '1 hour'
+    );
+    perform public._share_t('database forbids a second unrevoked paper capability', false, 'insert succeeded');
+  exception when unique_violation then
+    perform public._share_t('database forbids a second unrevoked paper capability', true);
+  end;
 end $$;
 
 -- ── anonymous resolution returns only the selected academic snapshot ───────
