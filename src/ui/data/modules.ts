@@ -487,6 +487,14 @@ export const readPaper = papersMod.readPaper as unknown as (
   paperId: string,
 ) => Promise<Cached<PaperDetail>>;
 
+export const deletePaper = papersMod.deletePaper as unknown as (
+  paperId: string,
+) => Promise<{ deleted: boolean; paper_id: string }>;
+
+export const deleteQuestion = papersMod.deleteQuestion as unknown as (
+  attemptId: string,
+) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
+
 /** Signed URLs for a stored page and its mask. */
 export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (
   paperId: string,
