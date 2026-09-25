@@ -13,15 +13,24 @@
 
 create table if not exists private.academic_share (
   id            uuid        primary key default gen_random_uuid(),
-  guardian_id   uuid        not null references public.guardian(id) on delete cascade,
-  student_id    uuid        not null references public.student(id) on delete cascade,
+  guardian_id   uuid        not null,
+  student_id    uuid        not null,
   resource_type text        not null check (resource_type in ('paper', 'question')),
-  paper_id      uuid        not null references public.paper(id) on delete cascade,
-  attempt_id    uuid        references public.student_attempt(id) on delete cascade,
+  paper_id      uuid        not null,
+  attempt_id    uuid,
   token_hash    bytea       not null unique,
   created_at    timestamptz not null default now(),
   expires_at    timestamptz not null,
   revoked_at    timestamptz,
+
+  -- Ownership is structural, not merely trusted to the minting function.
+  foreign key (student_id, guardian_id)
+    references public.student (id, guardian_id) on delete cascade,
+  foreign key (paper_id, student_id)
+    references public.paper (id, student_id) on delete cascade,
+  foreign key (attempt_id, student_id)
+    references public.student_attempt (id, student_id) on delete cascade,
+
   constraint academic_share_resource_shape check (
     (resource_type = 'paper' and attempt_id is null)
     or
@@ -30,10 +39,32 @@ create table if not exists private.academic_share (
   constraint academic_share_expiry_after_creation check (expires_at > created_at)
 );
 
+-- Cover every FK from its leading column(s), so deletion/cascade does not add
+-- fresh unindexed-FK debt to the production advisor.
+create index if not exists academic_share_student_guardian_idx
+  on private.academic_share (student_id, guardian_id);
+create index if not exists academic_share_paper_student_idx
+  on private.academic_share (paper_id, student_id);
+create index if not exists academic_share_attempt_student_idx
+  on private.academic_share (attempt_id, student_id);
+
 create index if not exists academic_share_guardian_resource_idx
   on private.academic_share (guardian_id, resource_type, paper_id, attempt_id);
 create index if not exists academic_share_active_expiry_idx
   on private.academic_share (expires_at)
+  where revoked_at is null;
+
+-- One raw capability is intentionally unrecoverable after minting, so there is
+-- never a valid reason to retain two unrevoked links for the same resource.
+-- Coalescing the paper-share NULL attempt gives paper and question shares the
+-- same concurrency guarantee without relying on NULL uniqueness semantics.
+create unique index if not exists academic_share_one_unrevoked_resource_idx
+  on private.academic_share (
+    guardian_id,
+    resource_type,
+    paper_id,
+    coalesce(attempt_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  )
   where revoked_at is null;
 
 revoke all on table private.academic_share from public, anon, authenticated;
@@ -110,8 +141,7 @@ begin
        or
        (p_resource_type = 'question' and attempt_id = v_attempt)
      )
-     and revoked_at is null
-     and expires_at > now();
+     and revoked_at is null;
 
   v_token := encode(gen_random_bytes(32), 'hex');
   v_expires := now() + make_interval(mins => p_expires_minutes);
