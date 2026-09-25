@@ -142,6 +142,29 @@ test("an existing active share can be stopped without creating a replacement", a
   expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("false");
 });
 
+test("failed revocation stays visible and keeps the share marked active", async () => {
+  fixture.active.mockResolvedValue({
+    share_id: "old-share",
+    resource_type: "paper",
+    expires_at: "2026-09-25T22:00:00Z",
+  });
+  fixture.revoke.mockResolvedValue(false);
+
+  mount();
+
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("true"));
+  await userEvent.click(trigger);
+
+  const dialog = await screen.findByRole("dialog", { name: "This paper is already shared" });
+  await userEvent.click(within(dialog).getByRole("button", { name: "Stop sharing" }));
+
+  expect(await within(dialog).findByRole("alert")).toBeTruthy();
+  expect(within(dialog).getByRole("alert").textContent).toContain("This share could not be stopped.");
+  expect(screen.getByRole("button", { name: "Share paper" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("dialog", { name: "This paper is already shared" })).toBeTruthy();
+});
+
 test("an existing active share can be explicitly replaced with a fresh link", async () => {
   fixture.active.mockResolvedValue({
     share_id: "old-share",
