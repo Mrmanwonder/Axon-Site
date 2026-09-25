@@ -6,7 +6,7 @@ import {
   presentAcademicShare,
   revokeAcademicShare,
 } from "./modules";
-import type { AcademicShareState } from "./modules";
+import type { AcademicShareState, CreatedAcademicShare } from "./modules";
 import { useParentMode } from "./useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
@@ -16,11 +16,13 @@ type ResourceType = "paper" | "question";
 /**
  * Guardian-owned share flow for saved academic work.
  *
- * Tapping Share first mints a fresh capability after Parent Mode. Only then do
- * we open a second sheet with a real "Share link" button. That second tap is
- * intentional: Web Share requires a transient user activation, which would be
- * lost if navigator.share() were called after the network round-trip that
- * creates the capability.
+ * A raw bearer token exists only at creation time. Axon stores only its hash,
+ * so an existing link can be revoked but cannot be reconstructed or silently
+ * re-shared later. Replacing it is therefore a distinct guardian action.
+ *
+ * Web Share needs a transient user activation. Capability creation necessarily
+ * takes a network round-trip, so a freshly-created link is presented in a
+ * second sheet with an explicit "Share link" / "Copy link" tap.
  */
 export function useAcademicShare({
   resourceType,
@@ -50,73 +52,123 @@ export function useAcademicShare({
     return () => { cancelled = true; };
   }, [resourceId, resourceType]);
 
+  const openCreatedShare = useCallback((created: CreatedAcademicShare, replaced: boolean) => {
+    setActive({
+      share_id: created.share_id,
+      resource_type: created.resource_type,
+      expires_at: created.expires_at,
+    });
+    const url = academicShareUrl(created.token);
+
+    // Parent Mode or a previous share-management sheet may dismiss itself after
+    // the guarded promise resolves. Queue this result sheet for the next task so
+    // that dismissal cannot immediately close the sheet we just opened.
+    setTimeout(() => {
+      const native = typeof navigator.share === "function";
+      openSheet({
+        title: `Share this ${resourceType}`,
+        body:
+          `${replaced ? "The previous link has been stopped and replaced. " : ""}` +
+          `Anyone with this link can read only this saved ${resourceType}. ` +
+          "It expires in 24 hours and does not include the student's profile, contact details, other papers or page-image URLs.",
+        choices: [
+          {
+            label: native ? "Share link" : "Copy link",
+            value: "send",
+            emphasis: "primary",
+          },
+          {
+            label: "Stop sharing",
+            value: "revoke",
+            emphasis: "secondary",
+          },
+        ],
+        onChoice: async (choice) => {
+          if (choice === "revoke") {
+            const stopped = await revokeAcademicShare(created.share_id);
+            if (stopped) {
+              setActive(null);
+              toast("Sharing stopped.");
+            }
+            return;
+          }
+          if (choice !== "send") return;
+
+          const outcome = await presentAcademicShare({
+            url,
+            title,
+            text: `A read-only ${resourceType} shared from Axon.`,
+            preferNative: true,
+          });
+          if (outcome === "copied") toast("Share link copied.");
+          if (outcome === "shared") toast("Share sheet opened.");
+        },
+      });
+    }, 0);
+  }, [openSheet, resourceType, title, toast]);
+
+  const createFreshShare = useCallback(async (replaced: boolean) => {
+    if (!resourceId) return;
+    try {
+      const created = await createAcademicShare({
+        resourceType,
+        resourceId,
+        expiresMinutes: 24 * 60,
+      });
+      openCreatedShare(created, replaced);
+    } catch (error) {
+      toast((error as Error).message || "The share link could not be created.", "warn");
+    }
+  }, [openCreatedShare, resourceId, resourceType, toast]);
+
   const requestShare = useCallback(() => {
     if (!resourceId) return;
-    const replacing = active != null;
 
-    guard(() => createAcademicShare({
-      resourceType,
-      resourceId,
-      expiresMinutes: 24 * 60,
-    })
-      .then((created) => {
-        setActive({
-          share_id: created.share_id,
-          resource_type: created.resource_type,
-          expires_at: created.expires_at,
-        });
-        const url = academicShareUrl(created.token);
+    guard(() => {
+      if (!active) return createFreshShare(false);
 
-        // Parent Mode's OTP sheet dismisses itself after the guarded promise
-        // resolves. Queue this result sheet for the next task so that dismissal
-        // cannot immediately close the sheet we just opened.
-        setTimeout(() => {
-          const native = typeof navigator.share === "function";
-          openSheet({
-            title: `Share this ${resourceType}`,
-            body:
-              `${replacing ? "A fresh link replaced the previous one. " : ""}` +
-              `Anyone with this link can read only this saved ${resourceType}. ` +
-              "It expires in 24 hours and does not include the student's profile, contact details, other papers or page-image URLs.",
-            choices: [
-              {
-                label: native ? "Share link" : "Copy link",
-                value: "send",
-                emphasis: "primary",
-              },
-              {
-                label: "Stop sharing",
-                value: "revoke",
-                emphasis: "secondary",
-              },
-            ],
-            onChoice: async (choice) => {
-              if (choice === "revoke") {
-                const stopped = await revokeAcademicShare(created.share_id);
-                if (stopped) {
-                  setActive(null);
-                  toast("Sharing stopped.");
-                }
-                return;
-              }
-              if (choice !== "send") return;
+      const expiry = new Date(active.expires_at).toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
 
-              const outcome = await presentAcademicShare({
-                url,
-                title,
-                text: `A read-only ${resourceType} shared from Axon.`,
-                preferNative: true,
-              });
-              if (outcome === "copied") toast("Share link copied.");
-              if (outcome === "shared") toast("Share sheet opened.");
-            },
-          });
-        }, 0);
-      })
-      .catch((error) => {
-        toast((error as Error).message || "The share link could not be created.", "warn");
-      }));
-  }, [active, guard, openSheet, resourceId, resourceType, title, toast]);
+      openSheet({
+        title: `This ${resourceType} is already shared`,
+        body:
+          `The current read-only link is active until ${expiry}. ` +
+          "Axon stores only the link's hash, so the original link cannot be shown again. " +
+          "You can replace it with a fresh 24-hour link or stop sharing immediately.",
+        choices: [
+          {
+            label: "Replace link",
+            value: "replace",
+            emphasis: "primary",
+          },
+          {
+            label: "Stop sharing",
+            value: "revoke",
+            emphasis: "secondary",
+          },
+        ],
+        onChoice: async (choice) => {
+          if (choice === "revoke") {
+            const stopped = await revokeAcademicShare(active.share_id);
+            if (stopped) {
+              setActive(null);
+              toast("Sharing stopped.");
+            }
+            return;
+          }
+          if (choice === "replace") {
+            await createFreshShare(true);
+          }
+        },
+      });
+    });
+  }, [active, createFreshShare, guard, openSheet, resourceId, resourceType, toast]);
 
   return { activeShare: active, requestShare };
 }
