@@ -49,6 +49,7 @@ export default function CameraLevel({ active }: { active: boolean }) {
 
     const onOrientation = (event: DeviceOrientationEvent) => {
       if (event.beta == null || event.gamma == null) return;
+      permissionResolved = true;
       latest = { beta: event.beta, gamma: event.gamma };
       schedule();
     };
