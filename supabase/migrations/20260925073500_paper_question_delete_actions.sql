@@ -126,8 +126,9 @@ revoke delete on public.question_region from public, anon, authenticated;
 --   1. the attempt belongs to the current guardian;
 --   2. Parent Mode is fresh.
 --
--- Direct table DELETEs remain protected by the policies above, so the RPC is
--- not a second/weaker path.
+-- Direct browser table DELETE is revoked above. The policies remain
+-- defence-in-depth for any future server role that is deliberately granted
+-- DELETE; this RPC is the only client-facing destructive path.
 
 create or replace function public.delete_question(p_attempt_id uuid)
 returns jsonb
