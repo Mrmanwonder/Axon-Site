@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -126,7 +126,7 @@ test("paper Delete is Parent-Mode gated, explains the consequence, stays single-
     "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
   );
 
-  const confirm = screen.getByRole("button", { name: "Delete paper" });
+  const confirm = within(dialog).getByRole("button", { name: "Delete paper" });
   for (let tap = 0; tap < 8; tap += 1) fireEvent.click(confirm);
   await waitFor(() => expect(fixture.deletePaper).toHaveBeenCalledTimes(1));
   expect(fixture.deletePaper).toHaveBeenCalledWith("paper-1");
@@ -152,7 +152,7 @@ test("question Delete is Parent-Mode gated, preserves the rest-of-paper conseque
     "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
   );
 
-  const confirm = screen.getByRole("button", { name: "Delete question" });
+  const confirm = within(dialog).getByRole("button", { name: "Delete question" });
   for (let tap = 0; tap < 8; tap += 1) fireEvent.click(confirm);
   await waitFor(() => expect(fixture.deleteQuestion).toHaveBeenCalledTimes(1));
   expect(fixture.deleteQuestion).toHaveBeenCalledWith("attempt-1");
@@ -172,9 +172,10 @@ test("failed deletion remains in the consequence sheet and does not navigate", a
 
   mount("/library/paper-1");
   await userEvent.click(await screen.findByRole("button", { name: "Delete paper" }));
-  await userEvent.click(screen.getByRole("button", { name: "Delete paper" }));
+  const dialog = await screen.findByRole("dialog", { name: "Delete this paper" });
+  await userEvent.click(within(dialog).getByRole("button", { name: "Delete paper" }));
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Deletion failed");
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("Deletion failed");
   expect(screen.getByTestId("location").textContent).toBe("/library/paper-1");
   expect(screen.getByRole("dialog", { name: "Delete this paper" })).toBeTruthy();
 });
