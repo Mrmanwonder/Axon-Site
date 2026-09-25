@@ -89,7 +89,6 @@ declare
   token text;
   first_share_id uuid;
   share_id uuid;
-  unrevoked_count integer;
 begin
   first_created := public.create_academic_share('paper','89000000-0000-4000-8000-000000000031',1440);
   first_share_id := (first_created->>'share_id')::uuid;
@@ -103,21 +102,11 @@ begin
   perform public._share_t('owner receives a 256-bit hex capability',
     token ~ '^[0-9a-f]{64}$', token);
 
-  select count(*) into unrevoked_count
-    from private.academic_share
-   where guardian_id='89000000-0000-4000-8000-000000000011'
-     and resource_type='paper'
-     and paper_id='89000000-0000-4000-8000-000000000031'
-     and revoked_at is null;
-
-  perform public._share_t('remint revokes the previous paper capability',
-    exists(select 1 from private.academic_share where id=first_share_id and revoked_at is not null)
-    and unrevoked_count=1);
-
   active := public.active_academic_share('paper','89000000-0000-4000-8000-000000000031');
   perform public._share_t('owner can see active share metadata without the token',
     (active->>'share_id')::uuid=share_id and not (active ? 'token'));
 
+  perform set_config('axon.test.first_share_id', first_share_id::text, true);
   perform set_config('axon.test.share_token', token, true);
   perform set_config('axon.test.share_id', share_id::text, true);
 end $$;
@@ -128,13 +117,26 @@ reset role;
 do $$
 declare
   token text := current_setting('axon.test.share_token', true);
+  first_share_id uuid := current_setting('axon.test.first_share_id', true)::uuid;
   share_id uuid := current_setting('axon.test.share_id', true)::uuid;
   stored_hash text;
+  unrevoked_count integer;
 begin
   select encode(token_hash,'hex') into stored_hash
     from private.academic_share where id=share_id;
   perform public._share_t('raw capability is not stored',
     stored_hash is not null and stored_hash <> token);
+
+  select count(*) into unrevoked_count
+    from private.academic_share
+   where guardian_id='89000000-0000-4000-8000-000000000011'
+     and resource_type='paper'
+     and paper_id='89000000-0000-4000-8000-000000000031'
+     and revoked_at is null;
+
+  perform public._share_t('remint revokes the previous paper capability',
+    exists(select 1 from private.academic_share where id=first_share_id and revoked_at is not null)
+    and unrevoked_count=1);
 end $$;
 
 -- Even a privileged accidental write cannot leave a second unrevoked bearer
