@@ -26,6 +26,15 @@ insert into public.guardian(id,auth_user_id,name,contact) values
 ('87000000-0000-4000-8000-000000000011','87000000-0000-4000-8000-000000000001','Guardian A','a@test.invalid'),
 ('87000000-0000-4000-8000-000000000012','87000000-0000-4000-8000-000000000002','Guardian B','b@test.invalid');
 
+insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
+select g.guardian_id::uuid, null, cp.purpose, true, 'v1.0', 'in_app_itemised'
+from (values
+  ('87000000-0000-4000-8000-000000000011'),
+  ('87000000-0000-4000-8000-000000000012')
+) as g(guardian_id)
+cross join public.consent_purpose cp
+where cp.is_required;
+
 insert into public.student(id,guardian_id,first_name,class_level,age_band) values
 ('87000000-0000-4000-8000-000000000021','87000000-0000-4000-8000-000000000011','A',10,'under_18'),
 ('87000000-0000-4000-8000-000000000022','87000000-0000-4000-8000-000000000012','B',10,'under_18');
