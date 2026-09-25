@@ -40,7 +40,8 @@ export default function ResourceActions({
 }: {
   resourceLabel: "paper" | "question";
   onShare?: () => void;
-  shareActive?: boolean;
+  /** null means the server state could not be established yet. */
+  shareActive?: boolean | null;
   onDelete?: () => void;
 }) {
   return (
@@ -49,9 +50,9 @@ export default function ResourceActions({
         <PressBox
           as="button"
           type="button"
-          className={"resourceaction" + (shareActive ? " active" : "")}
+          className={"resourceaction" + (shareActive === true ? " active" : shareActive === null ? " unknown" : "")}
           aria-label={`Share ${resourceLabel}`}
-          aria-pressed={shareActive}
+          aria-pressed={shareActive === null ? "mixed" : shareActive}
           onClick={onShare}
           data-interactive=""
         >
