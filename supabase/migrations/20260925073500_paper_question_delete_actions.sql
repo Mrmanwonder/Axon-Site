@@ -112,6 +112,12 @@ create policy question_region_delete_own on public.question_region for delete to
 comment on policy question_region_delete_own on public.question_region is
   'AXO-87. A committed question''s provenance/crop row may be removed only while Parent Mode is fresh.';
 
+-- The browser has no legitimate reason to delete either half independently.
+-- Keep the RLS policies as defence-in-depth if a future server role receives
+-- table DELETE, but remove the Data API capability from normal browser roles.
+revoke delete on public.student_attempt from public, anon, authenticated;
+revoke delete on public.question_region from public, anon, authenticated;
+
 -- ── one atomic student-facing operation ────────────────────────────────────
 -- SECURITY DEFINER is deliberate here. A Free account can still have old paper
 -- data outside its archive-read entitlement, and deletion must remain possible
@@ -133,8 +139,10 @@ declare
   v_guardian uuid := private.current_guardian_id();
   v_student  uuid;
   v_paper    uuid;
-  v_regions  integer := 0;
-  v_deleted  integer := 0;
+  v_regions        integer := 0;
+  v_deleted        integer := 0;
+  v_total_awarded  numeric(6,2);
+  v_total_available numeric(6,2);
 begin
   if v_guardian is null then
     raise exception 'not authenticated' using errcode = '42501';
@@ -178,11 +186,32 @@ begin
       using errcode = 'P0001';
   end if;
 
+  -- The paper summary is derived from the committed questions. Home, Library,
+  -- Insights and the public share view all read these columns, so leaving the
+  -- pre-delete aggregate behind would keep deleted work in trends and totals.
+  select sum(a.marks_awarded), sum(a.max_marks)
+    into v_total_awarded, v_total_available
+    from public.student_attempt a
+   where a.paper_id = v_paper
+     and a.student_id = v_student;
+
+  update public.paper p
+     set total_awarded = v_total_awarded,
+         total_available = v_total_available,
+         reconciled = case
+           when v_total_awarded is null or p.reported_total is null then null
+           else v_total_awarded = p.reported_total
+         end
+   where p.id = v_paper
+     and p.student_id = v_student;
+
   return jsonb_build_object(
     'deleted', true,
     'attempt_id', p_attempt_id,
     'paper_id', v_paper,
-    'regions_deleted', v_regions
+    'regions_deleted', v_regions,
+    'total_awarded', v_total_awarded,
+    'total_available', v_total_available
   );
 end;
 $$;
