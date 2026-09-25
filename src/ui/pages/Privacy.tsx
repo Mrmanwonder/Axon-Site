@@ -271,6 +271,16 @@ export default function Privacy() {
           Policy and implement any legally required opt-out or consent mechanism before the new practice
           begins.
         </p>
+        <p>
+          The guardian account holder may deliberately create a time-limited, revocable read-only link
+          to one saved paper or one saved question. Anyone who receives a valid link can view the
+          academic snapshot selected for that link until it expires, is revoked or the underlying work
+          is deleted. The shared view is designed not to include the guardian's or student's account
+          contact details, unrelated papers or profiles, internal model logs or signed private paper
+          image URLs. Because a recipient can copy or further disclose information they can see, the
+          guardian should share a link only with an intended recipient and should stop sharing if the
+          link is no longer needed or may have reached someone unintended.
+        </p>
       </section>
 
       <section aria-labelledby="privacy-cookies">
