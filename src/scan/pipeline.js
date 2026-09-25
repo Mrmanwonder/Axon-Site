@@ -18,6 +18,7 @@
 // left; a spinner tells them nothing, and a generic bar tells them something
 // false. There is no bar and no spinner anywhere in here.
 
+import { watchRun } from './run-watch.js';
 import { sb } from '../supabase.js';
 import { createPaper, tierForType, uploadScannedPage } from '../papers.js';
 import { processPage, makeProxy } from './device.js';
@@ -170,34 +171,18 @@ const MESSAGE_FOR_STATUS = {
   adjudicating: 'Checking the marks add up',
 };
 
-const REVIEW_POLL_MS = 1500;
-const REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
-
-/** Watch a run until it reaches a state the student needs to act on, or a refusal. */
+/** Watch server state; a foreground wait ending does not fail the run. */
 async function waitForReview(runId, say) {
-  const startedAt = Date.now();
-  let lastStatus = null;
-
-for (;;) {
-  const { data: run, error } = await sb
-  .from('extraction_run')
-  .select('status, status_reason')
-  .eq('id', runId)
-  .single();
-  if (error) throw error;
-
-  if (run.status !== lastStatus) {
-    lastStatus = run.status;
-    say(STAGE_FOR_STATUS[run.status] ?? 'structure', MESSAGE_FOR_STATUS[run.status] ?? 'Working through the paper');
-  }
-
-  if (['needs_review', 'rejected', 'failed', 'ready', 'committed'].includes(run.status)) return run;
-
-  if (Date.now() - startedAt > REVIEW_TIMEOUT_MS) {
-    throw new Error('This is taking longer than expected. Your pages are saved — check back on this paper shortly.');
-  }
-  await new Promise((resolve) => setTimeout(resolve, REVIEW_POLL_MS));
-}
+  return watchRun({
+    read: async () => {
+      const { data, error } = await sb.from('extraction_run')
+        .select('status, status_reason').eq('id', runId).single();
+      if (error) throw error;
+      return data;
+    },
+    onStatus: run => say(STAGE_FOR_STATUS[run.status] ?? 'structure',
+      MESSAGE_FOR_STATUS[run.status] ?? 'Working through the paper'),
+  });
 }
 
 /**
@@ -287,6 +272,10 @@ say('structure', `Finding the questions across ${total} page${total === 1 ? '' :
 // ── watch it move through triage, structure, content and reconciliation ──
 
 const run = await waitForReview(submission.run_id, say);
+
+if (run.processing) {
+  return { paperId, runId: submission.run_id, processing: true, status: run.status };
+}
 
 if (run.status === 'rejected' || run.status === 'failed') {
   return {
