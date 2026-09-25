@@ -86,10 +86,9 @@ export function useAcademicShare({
         onChoice: async (choice) => {
           if (choice === "revoke") {
             const stopped = await revokeAcademicShare(created.share_id);
-            if (stopped) {
-              setActive(null);
-              toast("Sharing stopped.");
-            }
+            if (!stopped) throw new Error("This share could not be stopped. Try again.");
+            setActive(null);
+            toast("Sharing stopped.");
             return;
           }
           if (choice !== "send") return;
@@ -156,10 +155,9 @@ export function useAcademicShare({
         onChoice: async (choice) => {
           if (choice === "revoke") {
             const stopped = await revokeAcademicShare(active.share_id);
-            if (stopped) {
-              setActive(null);
-              toast("Sharing stopped.");
-            }
+            if (!stopped) throw new Error("This share could not be stopped. Try again.");
+            setActive(null);
+            toast("Sharing stopped.");
             return;
           }
           if (choice === "replace") {
