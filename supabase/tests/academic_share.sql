@@ -87,7 +87,6 @@ declare
   active jsonb;
   token text;
   share_id uuid;
-  stored_hash text;
 begin
   created := public.create_academic_share('paper','89000000-0000-4000-8000-000000000031',1440);
   token := created->>'token';
@@ -96,18 +95,28 @@ begin
   perform public._share_t('owner receives a 256-bit hex capability',
     token ~ '^[0-9a-f]{64}$', token);
 
-  select encode(token_hash,'hex') into stored_hash
-    from private.academic_share where id=share_id;
-  perform public._share_t('raw capability is not stored',
-    stored_hash is not null and stored_hash <> token);
-
   active := public.active_academic_share('paper','89000000-0000-4000-8000-000000000031');
   perform public._share_t('owner can see active share metadata without the token',
     (active->>'share_id')::uuid=share_id and not (active ? 'token'));
 
   perform set_config('axon.test.share_token', token, true);
   perform set_config('axon.test.share_id', share_id::text, true);
-end $$;
+end $;
+
+-- Inspect the private registry only as the test/database owner. Authenticated
+-- clients are deliberately denied SELECT on private.academic_share.
+reset role;
+do $
+declare
+  token text := current_setting('axon.test.share_token', true);
+  share_id uuid := current_setting('axon.test.share_id', true)::uuid;
+  stored_hash text;
+begin
+  select encode(token_hash,'hex') into stored_hash
+    from private.academic_share where id=share_id;
+  perform public._share_t('raw capability is not stored',
+    stored_hash is not null and stored_hash <> token);
+end $;
 
 -- ── anonymous resolution returns only the selected academic snapshot ───────
 
