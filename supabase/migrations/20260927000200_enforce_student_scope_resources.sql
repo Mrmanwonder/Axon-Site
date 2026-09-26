@@ -536,7 +536,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, private, pg_temp
-as $
+as $$
 declare
   v_guardian uuid := private.current_guardian_id();
   v_student  uuid;
@@ -609,7 +609,7 @@ begin
     'total_available', v_total_available
   );
 end;
-$;
+$$;
 
 create or replace function private.create_academic_share(
   p_resource_type text,
@@ -620,7 +620,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, private, extensions, pg_temp
-as $
+as $$
 declare
   v_guardian uuid := private.current_guardian_id();
   v_student uuid;
@@ -698,14 +698,14 @@ begin
     'expires_at', v_expires
   );
 end;
-$;
+$$;
 
 create or replace function private.revoke_academic_share(p_share_id uuid)
 returns boolean
 language plpgsql
 security definer
 set search_path = public, private, pg_temp
-as $
+as $$
 declare
   v_guardian uuid := private.current_guardian_id();
   v_student uuid;
@@ -738,7 +738,7 @@ begin
   get diagnostics v_count = row_count;
   return v_count = 1;
 end;
-$;
+$$;
 
 revoke all on function private.delete_question(uuid) from public, anon;
 revoke all on function private.create_academic_share(text, uuid, integer) from public, anon;
