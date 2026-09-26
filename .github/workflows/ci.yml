@@ -48,7 +48,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.117.0
 
       # Boots the full local stack (Postgres + GoTrue, etc.) so the auth.users
       # rows every suite's fixtures insert into actually resolve, then applies
