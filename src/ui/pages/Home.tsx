@@ -42,6 +42,7 @@ function HomeLoading() {
 export default function Home() {
   const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
   const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
+  const { addPaper } = useIngestion();
 
   const navigate = useNavigate();
 
