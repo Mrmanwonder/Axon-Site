@@ -42,11 +42,18 @@ insert into public.student(id,guardian_id,first_name,class_level,age_band) value
 insert into public.paper(
   id,student_id,type,tier,date_taken,subject,
   reported_total,total_awarded,total_available,reconciled
-) values (
+) values
+(
   '87000000-0000-4000-8000-000000000031',
   '87000000-0000-4000-8000-000000000021',
   'unit_test','tier_1',current_date,'Physics',
   3,3,5,true
+),
+(
+  '87000000-0000-4000-8000-000000000032',
+  '87000000-0000-4000-8000-000000000021',
+  'unit_test','tier_1',current_date,'Chemistry',
+  null,null,null,null
 );
 
 insert into public.student_attempt(
@@ -72,43 +79,17 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000001', interval '4 hours'), true);
 
-do $$ begin
+do $ begin
   perform public.delete_question('87000000-0000-4000-8000-000000000041');
-  perform public._axo87_t('stale Parent Mode cannot call delete_question', false, 'delete succeeded');
-exception when insufficient_privilege then
-  perform public._axo87_t('stale Parent Mode cannot call delete_question', true);
-when others then
-  perform public._axo87_t('stale Parent Mode cannot call delete_question', false, sqlerrm);
-end $$;
+  perform public._axo87_t('authenticated owner can delete question without redundant fresh Parent Mode', true);
+exception when others then
+  perform public._axo87_t('authenticated owner can delete question without redundant fresh Parent Mode', false, sqlerrm);
+end $;
 
-select public._axo87_t('stale refusal leaves the question intact',
-  exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000041'));
+select public._axo87_t('owner deletion removes only the selected question',
+  not exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000041')
+  and exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000042'));
 
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000002', interval '5 seconds'), true);
-
-do $$ begin
-  perform public.delete_question('87000000-0000-4000-8000-000000000041');
-  perform public._axo87_t('fresh other guardian cannot delete the question', false, 'delete succeeded');
-exception when no_data_found then
-  perform public._axo87_t('fresh other guardian cannot delete the question', true);
-when others then
-  perform public._axo87_t('fresh other guardian cannot delete the question', sqlstate='P0002', sqlerrm);
-end $$;
-
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000001', interval '5 seconds'), true);
-
-select public._axo87_t(
-  'fresh owner can delete one question',
-  (public.delete_question('87000000-0000-4000-8000-000000000041')->>'deleted')::boolean
-);
-select public._axo87_t('deleted attempt is gone',
-  not exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000041'));
-select public._axo87_t('sibling question on same paper remains',
-  exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000042'));
 select public._axo87_t(
   'question deletion recomputes paper totals and reconciliation',
   exists(
@@ -120,6 +101,26 @@ select public._axo87_t(
        and reported_total=3
   )
 );
+
+select public._axo87_t(
+  'authenticated owner can delete paper without redundant fresh Parent Mode',
+  (public.delete_paper('87000000-0000-4000-8000-000000000032')->>'deleted')::boolean
+);
+select public._axo87_t('paper deletion removed the selected paper',
+  not exists(select 1 from public.paper where id='87000000-0000-4000-8000-000000000032'));
+
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000002', interval '5 seconds'), true);
+
+do $ begin
+  perform public.delete_question('87000000-0000-4000-8000-000000000042');
+  perform public._axo87_t('other guardian cannot delete the question', false, 'delete succeeded');
+exception when no_data_found then
+  perform public._axo87_t('other guardian cannot delete the question', true);
+when others then
+  perform public._axo87_t('other guardian cannot delete the question', sqlstate='P0002', sqlerrm);
+end $;
 
 reset role;
 
