@@ -1,0 +1,20 @@
+{
+  "privacy": {
+    "title": "Privacy Policy | Axon",
+    "description": "How Axon collects, uses, protects, retains and deletes account, student and scanned-paper data.",
+    "heading": "Privacy Policy",
+    "path": "/privacy"
+  },
+  "terms": {
+    "title": "Terms and Conditions | Axon",
+    "description": "The terms governing Axon accounts, study materials, AI-generated output, subscriptions and use of the service.",
+    "heading": "Terms and Conditions",
+    "path": "/terms"
+  },
+  "cookies": {
+    "title": "Cookie Policy | Axon",
+    "description": "How Axon uses necessary browser storage and optional PostHog analytics, and how to control those choices.",
+    "heading": "Cookie & Similar Technologies Policy",
+    "path": "/cookies"
+  }
+}

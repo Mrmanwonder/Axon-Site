@@ -4,7 +4,7 @@
   "description": "Axon — a multi-curriculum study companion for Cambridge, CBSE and IB Diploma students.",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-production-config.mjs && tsc -b && vite build && node scripts/build-offline-shell.mjs && node scripts/check-bundle-budget.mjs && node scripts/check-production-config.mjs --dist",
+    "build": "node scripts/check-production-config.mjs && tsc -b && vite build && node scripts/build-route-html.mjs && node scripts/build-offline-shell.mjs && node scripts/check-bundle-budget.mjs && node scripts/check-production-config.mjs --dist",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --test bench/*.test.mjs harness/*.test.mjs",

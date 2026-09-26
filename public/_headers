@@ -11,3 +11,18 @@
 
 /fonts/*
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/share
+  X-Robots-Tag: noindex, nofollow
+
+/library*
+  X-Robots-Tag: noindex, nofollow
+
+/scan*
+  X-Robots-Tag: noindex, nofollow
+
+/insights
+  X-Robots-Tag: noindex, nofollow
+
+/settings
+  X-Robots-Tag: noindex, nofollow

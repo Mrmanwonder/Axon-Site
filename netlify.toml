@@ -13,6 +13,26 @@
 # Real routing means real URLs, and a deep link to /library/<paper>/<question>
 # has to resolve on a cold load rather than 404 at the CDN before React runs.
 [[redirects]]
+  from = "/privacy"
+  to = "/privacy/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/terms"
+  to = "/terms/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/cookies"
+  to = "/cookies/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/share"
+  to = "/share/index.html"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
@@ -66,3 +86,38 @@
   [headers.values]
     Cache-Control = "public, max-age=3600"
     Content-Type = "application/xml; charset=utf-8"
+
+[[headers]]
+  for = "/share"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/library/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/library"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/scan/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/scan"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/insights"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/settings"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

@@ -2,30 +2,10 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import DocumentMeta from "../components/DocumentMeta";
 import { paths } from "../app/paths";
+import META from "./publicMetadata.json";
 
 type LegalKind = "privacy" | "terms" | "cookies";
 type Props = { kind: LegalKind; children: ReactNode };
-
-const META: Record<LegalKind, { title: string; description: string; heading: string; path: string }> = {
-  privacy: {
-    title: "Privacy Policy | Axon",
-    description: "How Axon collects, uses, protects, retains and deletes account, student and scanned-paper data.",
-    heading: "Privacy Policy",
-    path: paths.privacy,
-  },
-  terms: {
-    title: "Terms and Conditions | Axon",
-    description: "The terms governing Axon accounts, study materials, AI-generated output, subscriptions and use of the service.",
-    heading: "Terms and Conditions",
-    path: paths.terms,
-  },
-  cookies: {
-    title: "Cookie Policy | Axon",
-    description: "How Axon uses necessary browser storage and optional PostHog analytics, and how to control those choices.",
-    heading: "Cookie & Similar Technologies Policy",
-    path: paths.cookies,
-  },
-};
 
 export default function LegalPage({ kind, children }: Props) {
   const meta = META[kind];
