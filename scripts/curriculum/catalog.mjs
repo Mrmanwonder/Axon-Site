@@ -524,6 +524,13 @@ function isManualCbseInternal(row) {
   return group === "internal" || group === "internal assessment";
 }
 
+export function preservesVerifiedRegistryCode(provider, currentRow, sourceRow) {
+  return provider === "cbse"
+    && currentRow?.metadata?.registry_verified_code === true
+    && !!currentRow.external_code
+    && !sourceRow?.external_code;
+}
+
 function compare(provider, generated, current) {
   // CBSE's internal-assessment rows are preserved in Axon but are not exposed
   // consistently as normal subject-list entries in the first-party HTML.
@@ -572,6 +579,13 @@ function compare(provider, generated, current) {
         : ["display_name", "external_code"];
     const delta = fields.filter(function (field) {
       if (field === "display_name") return loose(old[field]) !== loose(row[field]);
+      if (field === "external_code" && preservesVerifiedRegistryCode(provider, old, row)) {
+        // A separately verified first-party registry/assessment source may
+        // enrich an offering with a code that the curriculum index omits.
+        // Preserve only explicitly provenance-marked enrichment; if the live
+        // catalog publishes a conflicting non-null code, this still drifts.
+        return false;
+      }
       return JSON.stringify(old[field] || null) !== JSON.stringify(row[field] || null);
     });
     if (provider === "ib" && loose(subjectGroup(old)) !== loose(subjectGroup(row))) {
