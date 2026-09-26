@@ -150,7 +150,7 @@ exception when others then
   perform public._t('authenticated owner can delete papers without fresh Parent Mode', false, sqlerrm);
 end $;
 
-do $$ declare n int; begin
+do $ declare n int; begin
   delete from public.student where id = 'eeeeeeee-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
   perform public._t('student mode cannot delete the student profile', n = 0,
