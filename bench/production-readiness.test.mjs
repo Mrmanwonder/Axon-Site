@@ -68,7 +68,7 @@ test('academic share route stays public, noindex and outside analytics', () => {
   const rootPosition = routes.indexOf('path: "/"');
   assert.ok(sharePosition >= 0 && sharePosition < rootPosition, 'share route must live outside authenticated Root');
   assert.match(page, /path="\/share"[\s\S]*noIndex/);
-  assert.match(main, /academicShareRoute = location\.pathname === "\/share"/);
+  assert.match(main, /academicShareRoute = isAcademicSharePath\(location\.pathname\)/);
   assert.match(main, /!academicShareRoute && getAnalyticsConsent\(\) === "granted"/);
   assert.match(main, /!academicShareRoute && <CookieConsent/);
   assert.doesNotMatch(sitemap, /\/share<\/loc>/);
