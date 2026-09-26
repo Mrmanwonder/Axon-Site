@@ -207,6 +207,140 @@ exception when check_violation then
   perform public._t('a named cause must say how many marks it accounts for', true);
 end; end $$;
 
+
+-- Tier-2 provenance is an immutable identity chain, not just a display string.
+-- The production seed supplies one reviewed CBSE assessment/document manifest;
+-- this test creates a synthetic canonical question against that manifest and
+-- then exercises only the explanation provenance constraints. Everything rolls
+-- back with the suite.
+do $$
+declare
+  v_identity uuid;
+  v_document uuid;
+  v_question uuid;
+  v_source text;
+  v_version text;
+begin
+  select sd.assessment_identity_id, sd.id, sd.source_url, sd.source_version
+    into v_identity, v_document, v_source, v_version
+  from public.scheme_document sd
+  where sd.assessment_identity_id is not null
+  order by sd.retrieved_at desc nulls last
+  limit 1;
+
+  if v_identity is null or v_document is null then
+    perform public._t('Tier 2 provenance fixture exists', false, 'no seeded scheme manifest');
+    return;
+  end if;
+
+  insert into public.canonical_question(
+    board, exam_year, subject, question_text, max_marks,
+    marking_scheme, scheme_source, scheme_version,
+    canonical_id, assessment_identity_id, question_label, scheme_document_id
+  )
+  values (
+    'CBSE', 2027, 'Physics',
+    'Synthetic constraint-test question about a measured force.', 2,
+    'Synthetic constraint-test marking evidence.', v_source, v_version,
+    'TEST:TIER2:PROVENANCE:Q1', v_identity, 'Q1', v_document
+  )
+  returning id into v_question;
+
+  begin
+    insert into public.region_explanation(
+      region_id, run_id, student_id, tier,
+      model_version, prompt_version, grounding_status,
+      assessment_identity_id, scheme_document_id, canonical_question_id
+    )
+    values (
+      'aaaaaaaa-0000-4000-8000-000000000024',
+      'aaaaaaaa-0000-4000-8000-000000000010',
+      'aaaaaaaa-0000-4000-8000-000000000002',
+      'tier_1', 'm', '1.0.0', 'complete',
+      v_identity, v_document, v_question
+    );
+    perform public._t('Tier 1 cannot carry immutable scheme evidence ids', false, 'insert succeeded');
+  exception when check_violation then
+    perform public._t('Tier 1 cannot carry immutable scheme evidence ids', true);
+  end;
+
+  begin
+    insert into public.region_explanation(
+      region_id, run_id, student_id, tier,
+      model_version, prompt_version, grounding_status,
+      scheme_source, scheme_version,
+      assessment_identity_id, scheme_document_id
+    )
+    values (
+      'aaaaaaaa-0000-4000-8000-000000000024',
+      'aaaaaaaa-0000-4000-8000-000000000010',
+      'aaaaaaaa-0000-4000-8000-000000000002',
+      'tier_2', 'm', '1.0.0', 'complete',
+      v_source, v_version,
+      v_identity, v_document
+    );
+    perform public._t('Tier 2 cannot persist a partial evidence chain', false, 'insert succeeded');
+  exception when check_violation then
+    perform public._t('Tier 2 cannot persist a partial evidence chain', true);
+  end;
+
+  begin
+    insert into public.region_explanation(
+      region_id, run_id, student_id, tier,
+      model_version, prompt_version, grounding_status,
+      scheme_source, scheme_version,
+      assessment_identity_id, scheme_document_id, canonical_question_id,
+      scheme_retrieval_mode
+    )
+    values (
+      'aaaaaaaa-0000-4000-8000-000000000024',
+      'aaaaaaaa-0000-4000-8000-000000000010',
+      'aaaaaaaa-0000-4000-8000-000000000002',
+      'tier_2', 'm', '1.0.0', 'complete',
+      v_source, v_version,
+      v_identity, v_document, v_question,
+      'cross_assessment_guess'
+    );
+    perform public._t('Tier 2 rejects an unknown retrieval mode', false, 'insert succeeded');
+  exception when check_violation then
+    perform public._t('Tier 2 rejects an unknown retrieval mode', true);
+  end;
+
+  insert into public.region_explanation(
+    region_id, run_id, student_id, tier,
+    body, model_version, prompt_version, grounding_status,
+    scheme_source, scheme_version,
+    assessment_identity_id, scheme_document_id, canonical_question_id,
+    scheme_retrieval_mode
+  )
+  values (
+    'aaaaaaaa-0000-4000-8000-000000000024',
+    'aaaaaaaa-0000-4000-8000-000000000010',
+    'aaaaaaaa-0000-4000-8000-000000000002',
+    'tier_2',
+    'Synthetic explanation used only to test immutable evidence provenance.',
+    'm', '1.0.0', 'complete',
+    v_source, v_version,
+    v_identity, v_document, v_question,
+    'exact_label'
+  );
+
+  perform public._t(
+    'Tier 2 persists the complete immutable evidence chain',
+    exists (
+      select 1
+      from public.region_explanation e
+      where e.region_id='aaaaaaaa-0000-4000-8000-000000000024'
+        and e.assessment_identity_id=v_identity
+        and e.scheme_document_id=v_document
+        and e.canonical_question_id=v_question
+        and e.scheme_retrieval_mode='exact_label'
+        and e.scheme_source=v_source
+        and e.scheme_version=v_version
+    )
+  );
+end $$;
+
 insert into public.region_explanation (region_id, run_id, student_id, tier, cause, marks_lost,
                                        body, do_this_next, concepts, model_version, prompt_version, grounding_status)
 values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-000000000010',
