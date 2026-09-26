@@ -198,14 +198,14 @@ exception when check_violation then
   perform public._t('a Tier 1 explanation cannot cite a scheme', true);
 end; end $$;
 
-do $ begin begin
+do $$ begin begin
   insert into public.region_explanation (region_id, run_id, student_id, tier, model_version, prompt_version, cause, grounding_status)
   values ('aaaaaaaa-0000-4000-8000-000000000021','aaaaaaaa-0000-4000-8000-000000000010',
           'aaaaaaaa-0000-4000-8000-000000000002','tier_1','m','1.0.0','keyword_miss','complete');
   perform public._t('a named cause must say how many marks it accounts for', false, 'insert succeeded');
 exception when check_violation then
   perform public._t('a named cause must say how many marks it accounts for', true);
-end; end $;
+end; end $$;
 
 
 -- Tier-2 provenance is an immutable identity chain, not just a display string.
@@ -213,7 +213,7 @@ end; end $;
 -- this test creates a synthetic canonical question against that manifest and
 -- then exercises only the explanation provenance constraints. Everything rolls
 -- back with the suite.
-do $
+do $$
 declare
   v_identity uuid;
   v_document uuid;
@@ -339,7 +339,7 @@ begin
         and e.scheme_version=v_version
     )
   );
-end $;
+end $$;
 
 insert into public.region_explanation (region_id, run_id, student_id, tier, cause, marks_lost,
                                        body, do_this_next, concepts, model_version, prompt_version, grounding_status)
