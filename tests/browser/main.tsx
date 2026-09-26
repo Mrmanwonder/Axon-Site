@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { SheetProvider, useSheetControls } from "../../src/ui/components/SheetProvider";
+import { ToastProvider } from "../../src/ui/components/ToastProvider";
 import { createMemoryRouter, MemoryRouter, RouterProvider, useNavigate, useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "../../src/ui/data/AppProvider";
 import Library from "../../src/ui/pages/Library";
@@ -43,5 +44,5 @@ if (params.get("view") === "route-errors") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : <Screen />}</main></SheetProvider></AppProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }

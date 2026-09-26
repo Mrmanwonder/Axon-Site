@@ -30,6 +30,7 @@ import * as entitlementsMod from "../../entitlements.js";
 import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
 import * as avatarMod from "../../avatar.js";
+import * as scanApiMod from "../../scan/functions.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -505,6 +506,18 @@ export type AcademicShareState = {
 
 export type CreatedAcademicShare = AcademicShareState & { token: string };
 
+export type SharedLearningFeedback = {
+  cause: string | null;
+  marks_lost: number | null;
+  explanation: string | null;
+  do_this_next: string | null;
+  command_word: string | null;
+  command_word_note: string | null;
+  loss_reasons: LossReason[];
+  corrected_answer: string | null;
+  corrected_answer_state: "available" | "withheld" | "unavailable";
+};
+
 export type SharedQuestionSnapshot = {
   question_label: string | null;
   question_text: string | null;
@@ -514,6 +527,7 @@ export type SharedQuestionSnapshot = {
   marks_source: "teacher_pen" | "official_scheme";
   teacher_remark: string | null;
   extraction_confidence: "confirmed" | "likely" | "unsure";
+  feedback: SharedLearningFeedback | null;
 };
 
 export type SharedAcademicSnapshot =
@@ -557,6 +571,19 @@ export const academicShareUrl = sharesMod.academicShareUrl as unknown as (token:
 export const presentAcademicShare = sharesMod.presentAcademicShare as unknown as (args: {
   url: string; title: string; text: string; preferNative?: boolean;
 }) => Promise<"shared" | "copied" | "cancelled">;
+
+export type RetryPaperResult = {
+  paper_id?: string;
+  run_id?: string;
+  retry: "started" | "already_in_progress" | "not_retryable" | "temporarily_unavailable";
+  queued?: boolean;
+  reason?: string;
+  status?: string;
+};
+
+export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
+  paperId: string,
+) => Promise<RetryPaperResult>;
 
 /** Signed URLs for a stored page and its mask. */
 export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (

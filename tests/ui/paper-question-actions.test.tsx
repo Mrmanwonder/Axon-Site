@@ -9,15 +9,16 @@ const fixture = vi.hoisted(() => ({
   readPaper: vi.fn(),
   deletePaper: vi.fn(),
   deleteQuestion: vi.fn(),
-  guard: vi.fn((action: () => void | Promise<void>) => action()),
+  removePaperFromLibrary: vi.fn(),
+  refreshLibrary: vi.fn(),
 }));
 
 vi.mock("../../src/ui/data/AppProvider", () => ({
-  useApp: () => ({ student: { id: "student-1", first_name: "Sam" } }),
-}));
-
-vi.mock("../../src/ui/data/useParentMode", () => ({
-  useParentMode: () => ({ guard: fixture.guard }),
+  useApp: () => ({
+    student: { id: "student-1", first_name: "Sam" },
+    removePaperFromLibrary: fixture.removePaperFromLibrary,
+    refreshLibrary: fixture.refreshLibrary,
+  }),
 }));
 
 vi.mock("../../src/ui/data/useAcademicShare", () => ({
@@ -115,7 +116,7 @@ beforeEach(() => {
   fixture.readPaper.mockResolvedValue({ data: paper, stale: false, offline: false });
 });
 
-test("paper Delete is Parent-Mode gated, explains the consequence, stays single-flight, then returns to Library", async () => {
+test("paper Delete uses the authenticated owner session, explains the consequence, stays single-flight, then returns to Library", async () => {
   const deletion = deferred<{ deleted: boolean; paper_id: string }>();
   fixture.deletePaper.mockReturnValue(deletion.promise);
 
@@ -124,7 +125,6 @@ test("paper Delete is Parent-Mode gated, explains the consequence, stays single-
   const trigger = await screen.findByRole("button", { name: "Delete paper" });
   await userEvent.click(trigger);
 
-  expect(fixture.guard).toHaveBeenCalledTimes(1);
   const dialog = await screen.findByRole("dialog", { name: "Delete this paper" });
   expect(dialog.textContent).toContain(
     "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
@@ -138,10 +138,12 @@ test("paper Delete is Parent-Mode gated, explains the consequence, stays single-
   await act(async () => deletion.resolve({ deleted: true, paper_id: "paper-1" }));
 
   await waitFor(() => expect(screen.getByTestId("location").textContent).toBe("/library"));
+  expect(fixture.removePaperFromLibrary).toHaveBeenCalledWith("paper-1");
+  expect(fixture.refreshLibrary).toHaveBeenCalledTimes(1);
   expect(await screen.findByText("Paper deleted.")).toBeTruthy();
 });
 
-test("question Delete is Parent-Mode gated, preserves the rest-of-paper consequence, and returns to the paper", async () => {
+test("question Delete uses the authenticated owner session, preserves the rest-of-paper consequence, and returns to the paper", async () => {
   const deletion = deferred<{ deleted: boolean; attempt_id: string; paper_id: string }>();
   fixture.deleteQuestion.mockReturnValue(deletion.promise);
 
@@ -150,7 +152,6 @@ test("question Delete is Parent-Mode gated, preserves the rest-of-paper conseque
   const trigger = await screen.findByRole("button", { name: "Delete question" });
   await userEvent.click(trigger);
 
-  expect(fixture.guard).toHaveBeenCalledTimes(1);
   const dialog = await screen.findByRole("dialog", { name: "Delete this question" });
   expect(dialog.textContent).toContain(
     "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",

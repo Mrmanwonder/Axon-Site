@@ -57,6 +57,10 @@
   .chev{width:7px;height:12px;opacity:.3;flex-shrink:0;}
   .lost{font-size:15.5px;font-weight:600;letter-spacing:-.02em;text-align:right;}
   .lost small{display:block;font-size:11px;font-weight:500;color:var(--label-3);margin-top:2px;}
+  .library-failed-row{cursor:default;}
+  .paper-retry{flex:0 0 auto;min-width:68px;height:34px;padding:0 13px;border-radius:10px;
+    background:var(--label);color:var(--bg);font-size:12.5px;font-weight:700;letter-spacing:-.01em;}
+  .paper-retry:disabled{opacity:.5;cursor:default;}
 
   .tier{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;}
   .tier.t2{background:rgba(48,209,88,.16);color:var(--green);}
@@ -1233,7 +1237,8 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
      Standalone by design: no app rail/tab bar, no student identity, no private
      image URLs. It uses the same surfaces/type rhythm as the authenticated app
      so the recipient sees Axon rather than a generic exported document. */
-  .shared-page{min-height:100dvh;background:var(--bg);color:var(--label);overflow:auto;}
+  .shared-page{position:fixed;inset:0;height:100dvh;background:var(--bg);color:var(--label);
+    overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;}
   .shared-shell{width:min(calc(100% - 2 * var(--gutter)),720px);margin:0 auto;
     padding:calc(var(--top-inset) + 18px) 0 calc(36px + var(--bot-inset));}
   .shared-header{height:44px;display:flex;align-items:center;justify-content:space-between;
@@ -1270,6 +1275,23 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
   .shared-field .v{font-size:15px;line-height:1.52;color:var(--label);}
   .shared-field .v.steps{white-space:pre-wrap;}
   .shared-field--meta .v{color:var(--label-2);font-size:13.5px;}
+  .shared-learning{margin:18px -18px -17px;border-top:.5px solid var(--hairline);
+    background:color-mix(in srgb,var(--surface-sunk) 58%,transparent);}
+  .shared-learning__section{padding:17px 18px;}
+  .shared-learning__section+.shared-learning__section{border-top:.5px solid var(--hairline);}
+  .shared-learning__eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.065em;
+    text-transform:uppercase;color:var(--label-3);margin-bottom:7px;}
+  .shared-learning h3{font-size:15.5px;line-height:1.25;letter-spacing:-.015em;margin:0 0 7px;}
+  .shared-learning__copy{font-size:14.5px;line-height:1.55;color:var(--label-2);}
+  .shared-learning__copy.steps{white-space:pre-wrap;color:var(--label);}
+  .shared-learning__reasons{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:7px;}
+  .shared-learning__reasons li{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;
+    line-height:1.45;color:var(--label-2);}
+  .shared-learning__reasons li>span{flex:0 0 auto;color:var(--label-3);font-size:12px;}
+  .shared-learning__note{margin-top:12px;padding:11px 12px;border-radius:12px;background:var(--surface);
+    font-size:13px;line-height:1.45;color:var(--label-2);}
+  .shared-learning__note strong{display:block;color:var(--label);margin-bottom:4px;}
+  .shared-learning__unavailable{margin:0;font-size:13.5px;line-height:1.5;color:var(--label-3);}
   .shared-state{margin-top:clamp(50px,15vh,140px);background:var(--surface);
     border:.5px solid var(--hairline);border-radius:var(--r-card);padding:22px;box-shadow:var(--card-shadow);}
   .shared-state h1{font-size:22px;letter-spacing:-.03em;margin:0 0 8px;}
@@ -1277,5 +1299,7 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
   .shared-footer{font-size:12px;line-height:1.5;color:var(--label-3);margin:22px 4px 0;}
   @media(max-width:420px){
     .shared-question{padding:15px 15px;}
+    .shared-learning{margin-left:-15px;margin-right:-15px;margin-bottom:-15px;}
+    .shared-learning__section{padding:15px;}
     .shared-score{padding:15px;}
   }

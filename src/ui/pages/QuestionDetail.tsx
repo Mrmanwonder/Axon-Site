@@ -35,7 +35,6 @@ import WorkedAnswer from "../components/WorkedAnswer";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
 import ResourceActions from "../components/ResourceActions";
-import { useParentMode } from "../data/useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
@@ -75,7 +74,6 @@ export default function QuestionDetail() {
   const { paperId, qId } = useParams();
   const { student } = useApp();
   const navigate = useNavigate();
-  const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
   const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
@@ -148,18 +146,16 @@ export default function QuestionDetail() {
 
   const requestDelete = () => {
     if (!paperId || !qId) return;
-    guard(() => {
-      openSheet({
-        title: "Delete this question",
-        body:
-          "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
-        primary: "Delete question",
-        onConfirm: async () => {
-          await deleteQuestion(qId);
-          toast("Question deleted.");
-          navigate(paths.paper(paperId), { replace: true });
-        },
-      });
+    openSheet({
+      title: "Delete this question",
+      body:
+        "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
+      primary: "Delete question",
+      onConfirm: async () => {
+        await deleteQuestion(qId);
+        toast("Question deleted.");
+        navigate(paths.paper(paperId), { replace: true });
+      },
     });
   };
 

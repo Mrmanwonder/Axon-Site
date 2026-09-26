@@ -23,7 +23,6 @@ import type { PaperDetail } from "../data/modules";
 import { numMark } from "../data/causes";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
-import { useParentMode } from "../data/useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
@@ -36,9 +35,8 @@ const CONF_LABEL: Record<string, string> = {
 
 export default function PaperOverview() {
   const { paperId } = useParams();
-  const { student } = useApp();
+  const { student, removePaperFromLibrary, refreshLibrary } = useApp();
   const navigate = useNavigate();
-  const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
   const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
@@ -80,18 +78,18 @@ export default function PaperOverview() {
 
   const requestDelete = () => {
     if (!paperId) return;
-    guard(() => {
-      openSheet({
-        title: "Delete this paper",
-        body:
-          "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
-        primary: "Delete paper",
-        onConfirm: async () => {
-          await deletePaper(paperId);
-          toast("Paper deleted.");
-          navigate(paths.library, { replace: true });
-        },
-      });
+    openSheet({
+      title: "Delete this paper",
+      body:
+        "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
+      primary: "Delete paper",
+      onConfirm: async () => {
+        await deletePaper(paperId);
+        removePaperFromLibrary(paperId);
+        void refreshLibrary();
+        toast("Paper deleted.");
+        navigate(paths.library, { replace: true });
+      },
     });
   };
 

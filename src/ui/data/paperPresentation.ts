@@ -17,6 +17,7 @@ export function paperPresentation(paper: Paper, progress: Loadable<Map<string, P
     stale, reason,
     destination: status || !committed ? paths.review(paper.id) : paths.paper(paper.id),
     canOpen: committed || (progress.state === "ready" && !stale),
+    canRetry: key === "failed" && progress.state === "ready" && !stale,
     tone: status?.tone ?? "wait",
   };
 }

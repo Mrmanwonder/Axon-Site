@@ -7,7 +7,6 @@ import {
   revokeAcademicShare,
 } from "./modules";
 import type { AcademicShareState, CreatedAcademicShare } from "./modules";
-import { useParentMode } from "./useParentMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 
@@ -35,7 +34,6 @@ export function useAcademicShare({
 }) {
   // undefined = status not established; null = established and not shared.
   const [active, setActive] = useState<AcademicShareState | null | undefined>(undefined);
-  const { guard } = useParentMode();
   const { openSheet } = useSheetControls();
   const toast = useToast();
 
@@ -62,9 +60,9 @@ export function useAcademicShare({
     });
     const url = academicShareUrl(created.token);
 
-    // Parent Mode or a previous share-management sheet may dismiss itself after
-    // the guarded promise resolves. Queue this result sheet for the next task so
-    // that dismissal cannot immediately close the sheet we just opened.
+    // A previous share-management sheet may dismiss itself after its async
+    // action resolves. Queue this result sheet for the next task so that
+    // dismissal cannot immediately close the sheet we just opened.
     setTimeout(() => {
       const native = typeof navigator.share === "function";
       openSheet({
@@ -125,7 +123,7 @@ export function useAcademicShare({
   const requestShare = useCallback(() => {
     if (!resourceId) return;
 
-    guard(async () => {
+    void (async () => {
       let current = active;
       if (current === undefined) {
         try {
@@ -181,8 +179,8 @@ export function useAcademicShare({
           }
         },
       });
-    });
-  }, [active, createFreshShare, guard, openSheet, resourceId, resourceType, toast]);
+    })();
+  }, [active, createFreshShare, openSheet, resourceId, resourceType, toast]);
 
   return {
     activeShare: active ?? null,

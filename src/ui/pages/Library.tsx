@@ -10,13 +10,14 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel } from "../data/modules";
+import { paperTypeLabel, retryFailedPaper } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import PageSkeleton from "../components/PageSkeleton";
+import { useToast } from "../components/ToastProvider";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
     exists. Decorative. */
@@ -63,6 +64,29 @@ export default function Library() {
   const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
 
   const navigate = useNavigate();
+  const toast = useToast();
+  const [retrying, setRetrying] = useState<Set<string>>(() => new Set());
+
+  const retryPaper = async (paperId: string) => {
+    if (retrying.has(paperId)) return;
+    setRetrying(current => new Set(current).add(paperId));
+    try {
+      const result = await retryFailedPaper(paperId);
+      if (result.retry === "started") toast("Retry started.");
+      else if (result.retry === "already_in_progress") toast("This paper is already being retried.");
+      else toast("This paper can’t be retried from its saved pages.", "warn");
+      await refreshLibrary();
+    } catch (error) {
+      toast((error as Error).message || "Retry could not start. Try again.", "warn");
+      await refreshLibrary();
+    } finally {
+      setRetrying(current => {
+        const next = new Set(current);
+        next.delete(paperId);
+        return next;
+      });
+    }
+  };
 
   const [query, setQuery] = useState("");
   const [subject, setSubject] = useState("all");
@@ -260,6 +284,24 @@ export default function Library() {
           );
 
           if (status) {
+            if (presentation.canRetry) {
+              const busy = retrying.has(p.id);
+              return (
+                <div className="row library-failed-row" key={p.id}>
+                  {meta}
+                  <PressBox
+                    as="button"
+                    type="button"
+                    className="paper-retry"
+                    disabled={busy}
+                    aria-busy={busy}
+                    onClick={() => void retryPaper(p.id)}
+                  >
+                    {busy ? "Retrying…" : "Retry"}
+                  </PressBox>
+                </div>
+              );
+            }
             return (
               <PressBox
                 key={p.id}

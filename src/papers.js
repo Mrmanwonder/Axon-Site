@@ -359,10 +359,10 @@ export async function readPaper(studentId, paperId) {
  * Permanently remove one saved paper.
  *
  * The database owns the destructive semantics: `delete_paper` runs as the
- * caller, so RLS requires a fresh Parent Mode session and the paper's deletion
- * triggers enqueue both R2 prefixes. The client only asks for that operation
- * and clears read caches after it succeeds so an offline copy cannot resurrect
- * something the guardian just removed.
+ * authenticated caller, so RLS verifies exact guardian ownership and the paper's
+ * deletion triggers enqueue both R2 prefixes. AXO-98 deliberately avoids a
+ * redundant Parent Mode prompt for this academic action. The client clears read
+ * caches after success so an offline copy cannot resurrect deleted work.
  */
 export async function deletePaper(paperId) {
   requireOnline('Deleting this paper');
@@ -378,7 +378,8 @@ export async function deletePaper(paperId) {
  * `delete_question` deletes the committed question_region and its
  * student_attempt atomically, then recomputes the paper summary. Browser roles
  * have no direct DELETE grant on either table; the RPC is the client-facing
- * authority boundary and itself requires current ownership + Parent Mode.
+ * authority boundary and verifies the authenticated guardian owns the attempt.
+ * AXO-98 deliberately avoids a redundant Parent Mode prompt for this action.
  */
 export async function deleteQuestion(attemptId) {
   requireOnline('Deleting this question');

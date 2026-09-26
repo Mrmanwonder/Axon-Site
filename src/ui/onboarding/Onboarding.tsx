@@ -214,7 +214,7 @@ export default function Onboarding() {
     if (existing.length) {
       const st = selectedProfile(g.id, existing);
       if (!st) { location.reload(); return; }
-      await finishOnboarding({ guardian: g, student: st });
+      await finishOnboarding({ guardian: g, student: st, destination: "home" });
       return;
     }
     go("consent");
@@ -815,7 +815,7 @@ export default function Onboarding() {
           <PressBox as="button" type="button" className="btn plain"
                     onClick={() => {
                       hapticTick();
-                      void finishOnboarding({ guardian: guardian!, student: student! });
+                      void finishOnboarding({ guardian: guardian!, student: student!, destination: "home" });
                     }}>
             Look around first
           </PressBox>
@@ -832,7 +832,7 @@ export default function Onboarding() {
   const isScheme = (t: { value: string }) => t.value === "pyq" || t.value === "sample_paper";
   const choose = (value: string) => {
     hapticFirm();
-    void finishOnboarding({ guardian: guardian!, student: student!, firstPaperType: value });
+    void finishOnboarding({ guardian: guardian!, student: student!, firstPaperType: value, destination: "scan" });
   };
   const paperTypes = paperTypesFor(student?.provider_key ?? curriculum.providerKey);
 

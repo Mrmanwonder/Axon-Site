@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DocumentMeta from "../components/DocumentMeta";
 import MathText from "../components/MathText";
-import type { SharedAcademicSnapshot, SharedQuestionSnapshot } from "../data/modules";
+import type { LossReason, SharedAcademicSnapshot, SharedQuestionSnapshot } from "../data/modules";
 import { resolveAcademicShare } from "../data/modules";
 
 const SHARE_TOKEN_SESSION_KEY = "axon.academic-share-token";
@@ -21,6 +21,22 @@ function typeLabel(type: string) {
 function mark(value: number | null | undefined) {
   if (value == null) return null;
   return Number.isInteger(Number(value)) ? String(Number(value)) : String(Number(value));
+}
+
+function causeLabel(value: string | null | undefined) {
+  if (!value) return "What went wrong";
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function LossReasonLine({ reason }: { reason: LossReason }) {
+  const copy = reason.note || reason.cause;
+  if (!copy) return null;
+  return (
+    <li>
+      <MathText text={copy} />
+      {reason.marks > 0 && <span>{mark(reason.marks)} mark{Number(reason.marks) === 1 ? "" : "s"}</span>}
+    </li>
+  );
 }
 
 function QuestionSnapshot({ question }: { question: SharedQuestionSnapshot }) {
@@ -67,6 +83,49 @@ function QuestionSnapshot({ question }: { question: SharedQuestionSnapshot }) {
           {question.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}
         </div>
       </div>
+
+      {question.feedback && (
+        <div className="shared-learning">
+          <section className="shared-learning__section">
+            <div className="shared-learning__eyebrow">What went wrong</div>
+            <h3>{causeLabel(question.feedback.cause)}</h3>
+            {question.feedback.explanation && (
+              <div className="shared-learning__copy">
+                <MathText text={question.feedback.explanation} />
+              </div>
+            )}
+            {question.feedback.loss_reasons.length > 0 && (
+              <ul className="shared-learning__reasons">
+                {question.feedback.loss_reasons.map((reason, index) => (
+                  <LossReasonLine key={index} reason={reason} />
+                ))}
+              </ul>
+            )}
+            {question.feedback.command_word && question.feedback.command_word_note && (
+              <div className="shared-learning__note">
+                <strong>{question.feedback.command_word}</strong>
+                <MathText text={question.feedback.command_word_note} />
+              </div>
+            )}
+          </section>
+
+          <section className="shared-learning__section">
+            <div className="shared-learning__eyebrow">Do this next time</div>
+            {question.feedback.do_this_next
+              ? <div className="shared-learning__copy"><MathText text={question.feedback.do_this_next} /></div>
+              : <p className="shared-learning__unavailable">No specific next-step advice was saved for this question.</p>}
+          </section>
+
+          <section className="shared-learning__section">
+            <div className="shared-learning__eyebrow">A better answer</div>
+            {question.feedback.corrected_answer_state === "available" && question.feedback.corrected_answer
+              ? <div className="shared-learning__copy steps"><MathText text={question.feedback.corrected_answer} /></div>
+              : question.feedback.corrected_answer_state === "withheld"
+                ? <p className="shared-learning__unavailable">Axon withheld corrected working because the saved evidence was not complete enough to show it safely.</p>
+                : <p className="shared-learning__unavailable">A grounded corrected answer was not saved for this question.</p>}
+          </section>
+        </div>
+      )}
     </article>
   );
 }
