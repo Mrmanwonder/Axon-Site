@@ -26,6 +26,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { paths } from "../app/paths";
 import type { ReactNode } from "react";
 import {
   sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
@@ -100,6 +101,7 @@ type AppValue = {
       previous map in place rather than substituting a guess. */
   progress: Map<string, ProgressRow>;
   refreshLibrary: () => Promise<void>;
+  removePaperFromLibrary: (paperId: string) => void;
 
   /** Persist the student's chosen avatar preset. Optimistic: the disc and the
       nav swatch repaint on the tap and revert together if the write fails —
@@ -117,7 +119,12 @@ type AppValue = {
   }) => Promise<void>;
 
   online: boolean;
-  finishOnboarding: (r: { guardian?: Guardian; student?: Student; firstPaperType?: string | null }) => Promise<void>;
+  finishOnboarding: (r: {
+    guardian?: Guardian;
+    student?: Student;
+    firstPaperType?: string | null;
+    destination?: "home" | "scan";
+  }) => Promise<void>;
   /** Set by onboarding step 8; consumed by the next ingest, then cleared. */
   takePendingPaperType: () => string | null;
   signOutNow: () => Promise<void>;
@@ -166,8 +173,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [student, setStudent] = useState<Student | null>(null);
   const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
   const [dataRevision, setDataRevision] = useState(0);
-  const { resource: papersResource, reload: reloadPapers } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id), () => getCached(`papers:${student!.id}`));
-  const { resource: progressResource, reload: reloadProgress } = useResource<Map<string, ProgressRow>>(student ? `${student.id}:${dataRevision}` : null, async () => ({ data: await paperProgress(student!.id) }));
+  const { resource: papersResource, reload: reloadPapers, updateData: updatePapersData } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id), () => getCached(`papers:${student!.id}`));
+  const { resource: progressResource, reload: reloadProgress, updateData: updateProgressData } = useResource<Map<string, ProgressRow>>(student ? `${student.id}:${dataRevision}` : null, async () => ({ data: await paperProgress(student!.id) }));
   const { resource: consentResource, reload: refreshConsent } = useResource<ConsentState>(guardian ? `${guardian.id}:${student?.id ?? ""}` : null, async () => ({ data: await readConsentState(guardian!.id, student?.id ?? null) }));
   const papersLoaded = papersResource.state !== "loading" || papersResource.data !== null;
   const papers = papersResource.data ?? [];
@@ -251,6 +258,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await Promise.all([reloadPapers(), reloadProgress()]);
   }, [reloadPapers, reloadProgress]);
 
+  const removePaperFromLibrary = useCallback((paperId: string) => {
+    updatePapersData(current => current.filter(paper => paper.id !== paperId));
+    updateProgressData(current => {
+      const next = new Map(current);
+      next.delete(paperId);
+      return next;
+    });
+  }, [updatePapersData, updateProgressData]);
+
 
   const avatarQueue = useRef<Promise<unknown>>(Promise.resolve());
   const avatarRevision = useRef(0);
@@ -322,11 +338,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   const finishOnboarding = useCallback(async (r: {
-    guardian?: Guardian; student?: Student; firstPaperType?: string | null;
+    guardian?: Guardian;
+    student?: Student;
+    firstPaperType?: string | null;
+    destination?: "home" | "scan";
   }) => {
     pendingPaperType.current = r.firstPaperType ?? null;
     if (r.guardian) setGuardian(r.guardian);
     if (r.student) { setStudent(r.student); setProfiles(previous => [...previous.filter(profile => profile.id !== r.student!.id), r.student!]); }
+    const destination = r.destination ?? (r.firstPaperType ? "scan" : "home");
+    navigateRef.current(destination === "scan" ? paths.scan : paths.home, { replace: true });
     setGate("ready");
   }, []);
 
@@ -453,13 +474,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent,
-    papers, papersLoaded, papersStale, papersError, progress, refreshLibrary,
+    papers, papersLoaded, papersStale, papersError, progress, refreshLibrary, removePaperFromLibrary,
     setAvatar, updateStudentProfile,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
     gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
     papersResource, progressResource, consentResource,
-    consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary,
+    consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary, removePaperFromLibrary,
     setAvatar, updateStudentProfile, online, finishOnboarding, takePendingPaperType, signOutNow,
 
   ]);
