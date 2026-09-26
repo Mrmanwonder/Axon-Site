@@ -1233,7 +1233,8 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
      Standalone by design: no app rail/tab bar, no student identity, no private
      image URLs. It uses the same surfaces/type rhythm as the authenticated app
      so the recipient sees Axon rather than a generic exported document. */
-  .shared-page{min-height:100dvh;background:var(--bg);color:var(--label);overflow:auto;}
+  .shared-page{position:fixed;inset:0;height:100dvh;background:var(--bg);color:var(--label);
+    overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;}
   .shared-shell{width:min(calc(100% - 2 * var(--gutter)),720px);margin:0 auto;
     padding:calc(var(--top-inset) + 18px) 0 calc(36px + var(--bot-inset));}
   .shared-header{height:44px;display:flex;align-items:center;justify-content:space-between;
