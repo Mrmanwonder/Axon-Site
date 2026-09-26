@@ -196,3 +196,56 @@ test("multi-profile offline boot never chooses a remembered sibling without serv
   expect(fixture.scopeState).not.toHaveBeenCalled();
   expect(fixture.setScope).not.toHaveBeenCalled();
 });
+
+
+test("rapid switches serialize server authority and only the newest choice can render", async () => {
+  const toB = deferred<{ active: boolean; student_id: string; remaining_seconds: number }>();
+  const toA = deferred<{ active: boolean; student_id: string; remaining_seconds: number }>();
+  fixture.setScope
+    .mockImplementationOnce(() => toB.promise)
+    .mockImplementationOnce(() => toA.promise);
+
+  function RapidProbe() {
+    const app = useApp();
+    return <>
+      <span data-testid="rapid-gate">{app.gate}</span>
+      <span data-testid="rapid-student">{app.student?.id ?? "none"}</span>
+      <button onClick={() => void app.selectStudent(B.id).catch(() => {})}>Rapid B</button>
+      <button onClick={() => void app.selectStudent(A.id).catch(() => {})}>Rapid A</button>
+    </>;
+  }
+
+  render(<MemoryRouter><AppProvider><RapidProbe /></AppProvider></MemoryRouter>);
+  await screen.findByText(A.id);
+
+  await userEvent.click(screen.getByRole("button", { name: "Rapid B" }));
+  await userEvent.click(screen.getByRole("button", { name: "Rapid A" }));
+  expect(screen.getByTestId("rapid-student").textContent).toBe("none");
+
+  await act(async () => toB.resolve({
+    active: true, student_id: B.id, remaining_seconds: 1800,
+  }));
+  await waitFor(() => expect(fixture.purge).toHaveBeenCalledWith(A.id));
+  expect(screen.getByTestId("rapid-student").textContent).toBe("none");
+
+  await act(async () => toA.resolve({
+    active: true, student_id: A.id, remaining_seconds: 1800,
+  }));
+  await waitFor(() => expect(screen.getByTestId("rapid-student").textContent).toBe(A.id));
+  expect(screen.queryByText(B.id)).toBeNull();
+  expect(fixture.setScope.mock.calls.map(([id]) => id)).toEqual([B.id, A.id]);
+});
+
+test("online recovery refreshes the same active student lease without changing UI identity", async () => {
+  mount();
+  await screen.findByText(A.id);
+  fixture.setScope.mockClear();
+
+  await act(async () => {
+    window.dispatchEvent(new Event("online"));
+  });
+
+  await waitFor(() => expect(fixture.setScope).toHaveBeenCalledWith(A.id));
+  expect(screen.getByTestId("student").textContent).toBe(A.id);
+  expect(screen.getByTestId("gate").textContent).toBe("ready");
+});
