@@ -54,6 +54,8 @@ test('production host configuration carries transport protections', () => {
   assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /worker-src 'self' blob: data:/);
+  assert.match(cloudflareHeaders, /\/share\/\*\s+X-Robots-Tag: noindex, nofollow/);
+  assert.match(netlify, /for = "\/share\/\*"[\s\S]*?X-Robots-Tag = "noindex, nofollow"/);
   assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
