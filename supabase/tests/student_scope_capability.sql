@@ -29,6 +29,12 @@ insert into public.guardian(id,auth_user_id,name,contact,verified_at,verificatio
  ('9aaaaaaa-0000-4000-8000-000000000001','91111111-1111-4111-8111-111111111111','Scope Guardian A','scope-a@test.invalid',now(),'stub','scope-a'),
  ('9bbbbbbb-0000-4000-8000-000000000001','92222222-2222-4222-8222-222222222222','Scope Guardian B','scope-b@test.invalid',now(),'stub','scope-b');
 
+insert into public.consent_event(guardian_id, student_id, purpose, granted, notice_version, method)
+select g.id, null, cp.purpose, true, 'v1.0', 'in_app_itemised'
+from public.guardian g
+cross join public.consent_purpose cp
+where cp.is_required;
+
 insert into public.student(id,guardian_id,first_name,class_level,age_band) values
  ('9aaaaaaa-0000-4000-8000-000000000002','9aaaaaaa-0000-4000-8000-000000000001','Alpha',11,'under_18'),
  ('9aaaaaaa-0000-4000-8000-000000000003','9aaaaaaa-0000-4000-8000-000000000001','Beta',12,'under_18'),
