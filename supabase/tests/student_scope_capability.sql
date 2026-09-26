@@ -35,6 +35,11 @@ from public.guardian g
 cross join public.consent_purpose cp
 where cp.is_required;
 
+update public.guardian
+set subscription_status = 'pro'::public.subscription_status,
+    subscription_plan = 'monthly'::public.subscription_plan
+where id = '9aaaaaaa-0000-4000-8000-000000000001';
+
 insert into public.student(id,guardian_id,first_name,class_level,age_band) values
  ('9aaaaaaa-0000-4000-8000-000000000002','9aaaaaaa-0000-4000-8000-000000000001','Alpha',11,'under_18'),
  ('9aaaaaaa-0000-4000-8000-000000000003','9aaaaaaa-0000-4000-8000-000000000001','Beta',12,'under_18'),
