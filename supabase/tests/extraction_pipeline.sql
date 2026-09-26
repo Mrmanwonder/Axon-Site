@@ -284,6 +284,28 @@ begin
     perform public._t('Tier 2 cannot persist a partial evidence chain', true);
   end;
 
+  begin
+    insert into public.region_explanation(
+      region_id, run_id, student_id, tier,
+      model_version, prompt_version, grounding_status,
+      scheme_source, scheme_version,
+      assessment_identity_id, scheme_document_id, canonical_question_id,
+      scheme_retrieval_mode
+    )
+    values (
+      'aaaaaaaa-0000-4000-8000-000000000024',
+      'aaaaaaaa-0000-4000-8000-000000000010',
+      'aaaaaaaa-0000-4000-8000-000000000002',
+      'tier_2', 'm', '1.0.0', 'complete',
+      v_source, v_version,
+      v_identity, v_document, v_question,
+      'cross_assessment_guess'
+    );
+    perform public._t('Tier 2 rejects an unknown retrieval mode', false, 'insert succeeded');
+  exception when check_violation then
+    perform public._t('Tier 2 rejects an unknown retrieval mode', true);
+  end;
+
   insert into public.region_explanation(
     region_id, run_id, student_id, tier,
     body, model_version, prompt_version, grounding_status,
