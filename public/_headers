@@ -15,6 +15,9 @@
 /share
   X-Robots-Tag: noindex, nofollow
 
+/share/*
+  X-Robots-Tag: noindex, nofollow
+
 /library*
   X-Robots-Tag: noindex, nofollow
 

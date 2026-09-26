@@ -54,6 +54,8 @@ test('production host configuration carries transport protections', () => {
   assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /worker-src 'self' blob: data:/);
+  assert.match(cloudflareHeaders, /\/share\/\*\s+X-Robots-Tag: noindex, nofollow/);
+  assert.match(netlify, /for = "\/share\/\*"[\s\S]*?X-Robots-Tag = "noindex, nofollow"/);
   assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(read('src/index.ts'), /url\.protocol !== 'https:'/);
 });
@@ -68,7 +70,7 @@ test('academic share route stays public, noindex and outside analytics', () => {
   const rootPosition = routes.indexOf('path: "/"');
   assert.ok(sharePosition >= 0 && sharePosition < rootPosition, 'share route must live outside authenticated Root');
   assert.match(page, /path="\/share"[\s\S]*noIndex/);
-  assert.match(main, /academicShareRoute = location\.pathname === "\/share"/);
+  assert.match(main, /academicShareRoute = isAcademicSharePath\(location\.pathname\)/);
   assert.match(main, /!academicShareRoute && getAnalyticsConsent\(\) === "granted"/);
   assert.match(main, /!academicShareRoute && <CookieConsent/);
   assert.doesNotMatch(sitemap, /\/share<\/loc>/);
