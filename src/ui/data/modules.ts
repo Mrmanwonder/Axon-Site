@@ -30,6 +30,7 @@ import * as entitlementsMod from "../../entitlements.js";
 import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
 import * as avatarMod from "../../avatar.js";
+import * as scanApiMod from "../../scan/functions.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -570,6 +571,19 @@ export const academicShareUrl = sharesMod.academicShareUrl as unknown as (token:
 export const presentAcademicShare = sharesMod.presentAcademicShare as unknown as (args: {
   url: string; title: string; text: string; preferNative?: boolean;
 }) => Promise<"shared" | "copied" | "cancelled">;
+
+export type RetryPaperResult = {
+  paper_id?: string;
+  run_id?: string;
+  retry: "started" | "already_in_progress" | "not_retryable" | "temporarily_unavailable";
+  queued?: boolean;
+  reason?: string;
+  status?: string;
+};
+
+export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
+  paperId: string,
+) => Promise<RetryPaperResult>;
 
 /** Signed URLs for a stored page and its mask. */
 export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (
