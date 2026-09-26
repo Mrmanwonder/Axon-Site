@@ -31,7 +31,17 @@ The supplied bytes are hashed and compared through the same normalized adapter.
 - Preserve source URL, source version, content SHA-256 and parser version.
 - Cambridge is keyed by exact syllabus code.
 - CBSE is scoped by stage and preserves official subject codes where surfaced.
-- IB is keyed by official subject code and preserves SL/HL and subject group.
+- IB preserves official subject code, SL/HL and subject group, but the official
+  "All DP subjects" PDF is an identity/transcript registry, not an active-only
+  picker source. It explicitly includes historic/discontinued courses.
+- The IB discontinued appendix is status evidence, not an automatic delete/retire
+  instruction. A retirement candidate must match both official code and normalized
+  subject identity; code-only matches are rejected because IB can reuse/repurpose
+  codes. Conflicts are emitted as manual-review metadata while the offering remains
+  unchanged until a current-status source resolves them.
+- Current school-based syllabus pages and current examiner instructions are reviewed
+  alongside the registry when status is ambiguous; no upstream contradiction may
+  silently rewrite student history.
 - These importers cover public curriculum catalogs only; restricted assessment
   papers and markschemes remain outside this pipeline unless Axon is authorized.
 
