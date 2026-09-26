@@ -56,7 +56,7 @@ export const legacyCurriculumForStudent = () => ({ providerKey: "cambridge", pro
 
 export const statusKeyForRun = () => null;
 export const PAPER_STATUS = {};
-export const retryFailedPaper = async () => ({ retry: "started", queued: true });
+export const retryFailedPaper = async () => ({ retry: "started", queued: true, run_id: "run-retry" });
 export const AVATAR_PRESETS = [{
   kind: "gradient",
   key: "dreamBloom",
