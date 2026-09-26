@@ -141,14 +141,14 @@ end $$;
 -- Now the control plane. Each of these is the raw statement the corresponding
 -- Settings row issues.
 
-do $$ declare n int; begin
+do $ declare n int; begin
   delete from public.paper where student_id = 'eeeeeeee-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
-  perform public._t('student mode cannot delete the papers', n = 0,
+  perform public._t('authenticated owner can delete papers without fresh Parent Mode', n = 3,
     format('%s rows deleted', n));
 exception when others then
-  perform public._t('student mode cannot delete the papers', true);
-end $$;
+  perform public._t('authenticated owner can delete papers without fresh Parent Mode', false, sqlerrm);
+end $;
 
 do $$ declare n int; begin
   delete from public.student where id = 'eeeeeeee-0000-4000-8000-000000000002';
@@ -226,14 +226,6 @@ exception when others then
 end $$;
 
 do $$ declare n int; begin
-  delete from public.paper where student_id = 'eeeeeeee-0000-4000-8000-000000000002';
-  get diagnostics n = row_count;
-  perform public._t('parent mode can delete the papers', n = 3, format('%s rows deleted', n));
-exception when others then
-  perform public._t('parent mode can delete the papers', false, sqlerrm);
-end $$;
-
-do $$ declare n int; begin
   delete from public.student where id = 'eeeeeeee-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
   perform public._t('parent mode can delete the student profile', n = 1, format('%s rows deleted', n));
@@ -260,8 +252,9 @@ reset role;
 -- ══════════════════════════════════════════════════════════════════════════
 -- Ownership still comes first
 -- ══════════════════════════════════════════════════════════════════════════
--- Fresh auth is an ADDITIONAL requirement, never a substitute for owning the
--- row. A freshly re-authenticated stranger must still reach nothing.
+-- Ownership remains mandatory even where AXO-98 intentionally removed the
+-- redundant fresh-auth requirement. A freshly re-authenticated stranger must
+-- still reach nothing.
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at) values
  ('00000000-0000-0000-0000-000000000000','f6666666-6666-4666-8666-666666666666','authenticated','authenticated','other@test.invalid','x',now(),now(),now());
