@@ -505,6 +505,18 @@ export type AcademicShareState = {
 
 export type CreatedAcademicShare = AcademicShareState & { token: string };
 
+export type SharedLearningFeedback = {
+  cause: string | null;
+  marks_lost: number | null;
+  explanation: string | null;
+  do_this_next: string | null;
+  command_word: string | null;
+  command_word_note: string | null;
+  loss_reasons: LossReason[];
+  corrected_answer: string | null;
+  corrected_answer_state: "available" | "withheld" | "unavailable";
+};
+
 export type SharedQuestionSnapshot = {
   question_label: string | null;
   question_text: string | null;
@@ -514,6 +526,7 @@ export type SharedQuestionSnapshot = {
   marks_source: "teacher_pen" | "official_scheme";
   teacher_remark: string | null;
   extraction_confidence: "confirmed" | "likely" | "unsure";
+  feedback: SharedLearningFeedback | null;
 };
 
 export type SharedAcademicSnapshot =
