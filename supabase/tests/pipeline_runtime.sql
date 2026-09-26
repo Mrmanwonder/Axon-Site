@@ -306,7 +306,7 @@ end; end $$;
 reset role;
 
 -- ── AXO-101 failed-paper resubmit is single-flight ─────────────────────────
-do $
+do $retry$
 declare
   v_initial jsonb;
   v_first_retry jsonb;
@@ -379,7 +379,7 @@ begin
   perform public._t('fresh retry resets page processing state',
     exists(select 1 from public.paper_page
       where paper_id=v_paper and structure_status='pending' and crop_status='pending'));
-end $;
+end $retry$;
 
 select count(*) as total, count(*) filter (where passed) as passed,
        count(*) filter (where not passed) as failed from public._r;
