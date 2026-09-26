@@ -11,7 +11,6 @@ const fixture = vi.hoisted(() => ({
   create: vi.fn(),
   revoke: vi.fn(),
   present: vi.fn(),
-  guard: vi.fn((action: () => void | Promise<void>) => action()),
 }));
 
 vi.mock("../../src/ui/data/modules", () => ({
@@ -22,9 +21,6 @@ vi.mock("../../src/ui/data/modules", () => ({
   presentAcademicShare: fixture.present,
 }));
 
-vi.mock("../../src/ui/data/useParentMode", () => ({
-  useParentMode: () => ({ guard: fixture.guard }),
-}));
 
 import { useAcademicShare } from "../../src/ui/data/useAcademicShare";
 
@@ -82,14 +78,13 @@ test("unknown share status stays visibly unknown and never mints until the serve
 
   await userEvent.click(trigger);
 
-  await waitFor(() => expect(fixture.guard).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(fixture.active).toHaveBeenCalledTimes(2));
   expect(fixture.create).not.toHaveBeenCalled();
   expect(await screen.findByText("We can’t check whether this paper is already shared right now.")).toBeTruthy();
   expect(trigger.getAttribute("aria-pressed")).toBe("mixed");
 });
 
-test("Share is Parent-Mode gated, mints a 24-hour capability, then uses a second explicit Share-link tap", async () => {
+test("Share uses the authenticated owner session, mints a 24-hour capability, then uses a second explicit Share-link tap", async () => {
   mount();
 
   const trigger = await screen.findByRole("button", { name: "Share paper" });
@@ -97,7 +92,6 @@ test("Share is Parent-Mode gated, mints a 24-hour capability, then uses a second
 
   await userEvent.click(trigger);
 
-  await waitFor(() => expect(fixture.guard).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(fixture.create).toHaveBeenCalledWith({
     resourceType: "paper",
     resourceId: "paper-1",
@@ -122,7 +116,7 @@ test("Share is Parent-Mode gated, mints a 24-hour capability, then uses a second
   expect(await screen.findByText("Share sheet opened.")).toBeTruthy();
 });
 
-test("the newly-created link can be revoked from the same guarded share flow", async () => {
+test("the newly-created link can be revoked from the same share flow", async () => {
   mount();
 
   await userEvent.click(await screen.findByRole("button", { name: "Share paper" }));
