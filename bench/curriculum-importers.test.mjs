@@ -6,6 +6,7 @@ import {
   parseCbseSkill,
   parseIbText,
   validateFixture,
+  preservesVerifiedRegistryCode,
 } from "../scripts/curriculum/catalog.mjs";
 
 test("Cambridge IGCSE parser preserves exact syllabus codes and variants", () => {
@@ -155,4 +156,32 @@ test("fixture validation rejects duplicate active identity and non-first-party p
   const errors = validateFixture("cambridge", fake);
   assert.ok(errors.some(error => error.includes("duplicate active offering identity")));
   assert.ok(errors.some(error => error.includes("non-first-party source URL")));
+});
+
+
+test("catalog drift preserves only provenance-verified CBSE code enrichment", () => {
+  const verified = {
+    external_code: "042",
+    metadata: { registry_verified_code: true },
+  };
+  assert.equal(
+    preservesVerifiedRegistryCode("cbse", verified, { external_code: null }),
+    true,
+  );
+  assert.equal(
+    preservesVerifiedRegistryCode("cbse", verified, { external_code: "043" }),
+    false,
+  );
+  assert.equal(
+    preservesVerifiedRegistryCode(
+      "cbse",
+      { external_code: "042", metadata: {} },
+      { external_code: null },
+    ),
+    false,
+  );
+  assert.equal(
+    preservesVerifiedRegistryCode("cambridge", verified, { external_code: null }),
+    false,
+  );
 });
