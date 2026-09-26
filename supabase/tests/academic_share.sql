@@ -50,6 +50,7 @@ insert into public.student_attempt(
   marks_awarded,max_marks,marks_source,teacher_remark,extraction_confidence
 ) values
 ('89000000-0000-4000-8000-000000000041','89000000-0000-4000-8000-000000000021','89000000-0000-4000-8000-000000000031','tier_1','Q1','What is two?','Two',2,3,'teacher_pen','Good setup','confirmed'),
+('89000000-0000-4000-8000-000000000043','89000000-0000-4000-8000-000000000021','89000000-0000-4000-8000-000000000031','tier_1','Q2','Rejected feedback fixture','An answer',0,1,'teacher_pen',null,'confirmed'),
 ('89000000-0000-4000-8000-000000000042','89000000-0000-4000-8000-000000000022','89000000-0000-4000-8000-000000000032','tier_1','Q9','Private sibling question','Private sibling answer',1,2,'teacher_pen',null,'confirmed');
 
 insert into public.mark_loss_event(
@@ -72,7 +73,7 @@ insert into public.mark_loss_event(
   confidence,grounding_status,student_rejected_at
 ) values (
   '89000000-0000-4000-8000-000000000052',
-  '89000000-0000-4000-8000-000000000041',
+  '89000000-0000-4000-8000-000000000043',
   '89000000-0000-4000-8000-000000000021',
   'presentation',1,
   'REJECTED DIAGNOSIS MUST NOT LEAK',
