@@ -24,7 +24,7 @@ The Supabase session proves the account owner. It may:
 
 - bootstrap the household;
 - enumerate owned student profiles so the guardian can choose one;
-- use Parent Mode for consent, deletion, billing and other sensitive actions;
+- use Parent Mode for consent, account/profile erasure, billing and other guardian-only controls;
 - establish or switch Student Mode after the required guardian confirmation.
 
 Guardian ownership alone must not remain sufficient for ordinary academic reads once
@@ -42,6 +42,11 @@ same active scope does not repeatedly challenge the parent.
 Parent Mode does not become a permanent bypass around Student Mode academic RLS.
 Parent-only management operations should use explicit guardian/Parent Mode functions
 instead of weakening ordinary paper, answer, insight or scan policies.
+
+AXO-98 deliberately keeps paper/question Share and Delete outside Parent Mode: those
+actions require the authenticated owning guardian session plus the explicit consequence
+sheet, while consent, billing, account/profile erasure and profile switching retain the
+stronger Parent Mode boundary.
 
 ### Student Mode
 
