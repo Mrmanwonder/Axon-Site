@@ -51,8 +51,17 @@ export function useResource<T>(key: string | null, read: () => Promise<{ data: T
     void reload();
     return () => { ++generation.current; };
   }, [reload]);
+  const updateData = useCallback((updater: (current: T) => T) => {
+    setEntry(previous => {
+      if (previous.key !== key || previous.resource.data === null) return previous;
+      return {
+        key: previous.key,
+        resource: { ...previous.resource, data: updater(previous.resource.data) } as Loadable<T>,
+      };
+    });
+  }, [key]);
   const resource: Loadable<T> = entry.key === key ? entry.resource : { state: "loading", data: null };
-  return { resource, reload };
+  return { resource, reload, updateData };
 }
 
 function successTime<T>(resource: Loadable<T>) {
