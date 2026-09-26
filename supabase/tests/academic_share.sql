@@ -52,19 +52,45 @@ insert into public.student_attempt(
 ('89000000-0000-4000-8000-000000000041','89000000-0000-4000-8000-000000000021','89000000-0000-4000-8000-000000000031','tier_1','Q1','What is two?','Two',2,3,'teacher_pen','Good setup','confirmed'),
 ('89000000-0000-4000-8000-000000000042','89000000-0000-4000-8000-000000000022','89000000-0000-4000-8000-000000000032','tier_1','Q9','Private sibling question','Private sibling answer',1,2,'teacher_pen',null,'confirmed');
 
--- ── creation is a guardian/Parent Mode operation ───────────────────────────
+insert into public.mark_loss_event(
+  id,attempt_id,student_id,cause,marks_lost,ai_explanation,do_this_next,
+  confidence,model_answer,grounding_status,model_answer_source,loss_reasons
+) values (
+  '89000000-0000-4000-8000-000000000051',
+  '89000000-0000-4000-8000-000000000041',
+  '89000000-0000-4000-8000-000000000021',
+  'presentation',1,
+  'The final statement did not make the required point explicit.',
+  'State the final point explicitly before moving on.',
+  'likely',
+  'Two, with the required reasoning stated explicitly.',
+  'complete','axon_method','[]'::jsonb
+);
+
+insert into public.mark_loss_event(
+  id,attempt_id,student_id,cause,marks_lost,ai_explanation,do_this_next,
+  confidence,grounding_status,student_rejected_at
+) values (
+  '89000000-0000-4000-8000-000000000052',
+  '89000000-0000-4000-8000-000000000041',
+  '89000000-0000-4000-8000-000000000021',
+  'presentation',1,
+  'REJECTED DIAGNOSIS MUST NOT LEAK',
+  'REJECTED NEXT STEP MUST NOT LEAK',
+  'likely','complete',now()
+);
+
+-- ── creation is an authenticated owning-guardian operation ────────────────
 
 set local role authenticated;
 select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '4 hours'), true);
 
-do $$ begin
+do $ begin
   perform public.create_academic_share('paper','89000000-0000-4000-8000-000000000031',1440);
-  perform public._share_t('stale Parent Mode cannot create a share', false, 'share creation succeeded');
-exception when insufficient_privilege then
-  perform public._share_t('stale Parent Mode cannot create a share', true);
-when others then
-  perform public._share_t('stale Parent Mode cannot create a share', false, sqlerrm);
-end $$;
+  perform public._share_t('authenticated owner can share without redundant fresh Parent Mode', true);
+exception when others then
+  perform public._share_t('authenticated owner can share without redundant fresh Parent Mode', false, sqlerrm);
+end $;
 
 reset role;
 set local role authenticated;
@@ -181,6 +207,16 @@ begin
     payload#>>'{paper,subject}'='Physics'
     and payload#>>'{questions,0,question_label}'='Q1'
     and payload#>>'{questions,0,student_answer}'='Two');
+
+  perform public._share_t('paper share carries accepted learning feedback',
+    payload#>>'{questions,0,feedback,explanation}'='The final statement did not make the required point explicit.'
+    and payload#>>'{questions,0,feedback,do_this_next}'='State the final point explicitly before moving on.'
+    and payload#>>'{questions,0,feedback,corrected_answer_state}'='available'
+    and payload#>>'{questions,0,feedback,corrected_answer}'='Two, with the required reasoning stated explicitly.');
+
+  perform public._share_t('paper share never includes a rejected diagnosis',
+    position('REJECTED DIAGNOSIS MUST NOT LEAK' in payload::text)=0
+    and position('REJECTED NEXT STEP MUST NOT LEAK' in payload::text)=0);
 
   perform public._share_t('paper share does not expose account identity or sibling work',
     position('Student Secret A' in payload::text)=0
