@@ -88,6 +88,19 @@ insert into storage.objects(bucket_id,name,owner) values
  ('papers','7aaaaaaa-0000-4000-8000-000000000002/7aaaaaaa-0000-4000-8000-000000000010/1.jpg','71111111-1111-4111-8111-111111111111'),
  ('papers','7aaaaaaa-0000-4000-8000-000000000003/7aaaaaaa-0000-4000-8000-000000000011/1.jpg','71111111-1111-4111-8111-111111111111');
 
+insert into private.academic_share(
+  id,guardian_id,student_id,resource_type,paper_id,attempt_id,token_hash,expires_at
+) values (
+  '7aaaaaaa-0000-4000-8000-000000000070',
+  '7aaaaaaa-0000-4000-8000-000000000001',
+  '7aaaaaaa-0000-4000-8000-000000000003',
+  'paper',
+  '7aaaaaaa-0000-4000-8000-000000000011',
+  null,
+  digest(repeat('b',64),'sha256'),
+  now()+interval '1 hour'
+);
+
 -- Establish Student A with fresh Parent Mode, then continue with the same signed
 -- auth session without the fresh-auth claim.
 set local role authenticated;
@@ -224,16 +237,72 @@ select public._sr_t(
      from public.get_cross_subject_signal())
 );
 
--- Destructive access is not Student Mode authority. Without fresh Parent Mode,
--- even an owned sibling delete is refused by RLS.
-do $$ begin
+-- AXO-95 academic actions do not require a redundant Parent Mode ceremony.
+-- Active Student Mode may Share/Delete its own resource, but not an owned sibling.
+
+do $ begin
+  begin
+    perform public.create_academic_share(
+      'paper','7aaaaaaa-0000-4000-8000-000000000011',60
+    );
+    perform public._sr_t('student scope cannot share sibling paper',false,'share succeeded');
+  exception when sqlstate '42501' then
+    perform public._sr_t('student scope cannot share sibling paper',true,sqlerrm);
+  end;
+end $;
+
+do $ begin
+  begin
+    perform public.revoke_academic_share('7aaaaaaa-0000-4000-8000-000000000070');
+    perform public._sr_t('student scope cannot revoke sibling share',false,'revoke succeeded');
+  exception when sqlstate '42501' then
+    perform public._sr_t('student scope cannot revoke sibling share',true,sqlerrm);
+  end;
+end $;
+
+do $ begin
+  begin
+    perform public.delete_question('7aaaaaaa-0000-4000-8000-000000000021');
+    perform public._sr_t('student scope cannot delete sibling question',false,'delete succeeded');
+  exception when sqlstate '42501' then
+    perform public._sr_t('student scope cannot delete sibling question',true,sqlerrm);
+  end;
+end $;
+
+do $ begin
   begin
     perform public.delete_paper('7aaaaaaa-0000-4000-8000-000000000011');
     perform public._sr_t('student scope cannot delete sibling paper',false,'delete succeeded');
   exception when others then
     perform public._sr_t('student scope cannot delete sibling paper',true,sqlstate);
   end;
-end $$;
+end $;
+
+do $
+declare created jsonb;
+begin
+  created := public.create_academic_share(
+    'paper','7aaaaaaa-0000-4000-8000-000000000010',60
+  );
+  perform public._sr_t(
+    'active student can create academic share without Parent Mode',
+    (created->>'share_id') is not null
+  );
+  perform public._sr_t(
+    'active student can revoke academic share without Parent Mode',
+    public.revoke_academic_share((created->>'share_id')::uuid)
+  );
+end $;
+
+select public._sr_t(
+  'active student can delete own question without Parent Mode',
+  (public.delete_question('7aaaaaaa-0000-4000-8000-000000000020')->>'deleted')::boolean
+);
+
+select public._sr_t(
+  'active student can delete own paper without Parent Mode',
+  (public.delete_paper('7aaaaaaa-0000-4000-8000-000000000010')->>'deleted')::boolean
+);
 
 reset role;
 
@@ -279,32 +348,35 @@ select public._sr_t(
 );
 
 select public._sr_t(
-  'paper destructive policy requires fresh Parent Mode',
+  'paper delete accepts Student Mode or stronger Parent Mode',
   exists (
     select 1 from pg_policies
      where schemaname='public'
        and tablename='paper'
-       and policyname='paper_delete_parent_mode'
+       and policyname='paper_delete_scope_or_parent'
+       and qual like '%student_scope_allows%'
        and qual like '%has_fresh_auth%'
   )
 );
 select public._sr_t(
-  'attempt destructive policy requires fresh Parent Mode',
+  'attempt delete accepts Student Mode or stronger Parent Mode',
   exists (
     select 1 from pg_policies
      where schemaname='public'
        and tablename='student_attempt'
-       and policyname='attempt_delete_parent_mode'
+       and policyname='attempt_delete_scope_or_parent'
+       and qual like '%student_scope_allows%'
        and qual like '%has_fresh_auth%'
   )
 );
 select public._sr_t(
-  'question-region destructive policy requires fresh Parent Mode',
+  'question-region delete accepts Student Mode or stronger Parent Mode',
   exists (
     select 1 from pg_policies
      where schemaname='public'
        and tablename='question_region'
-       and policyname='question_region_delete_parent_mode'
+       and policyname='question_region_delete_scope_or_parent'
+       and qual like '%student_scope_allows%'
        and qual like '%has_fresh_auth%'
   )
 );
@@ -318,13 +390,27 @@ select public._sr_t(
       and (coalesce(qual,'')||' '||coalesce(with_check,'')) like '%student_scope_owns_storage_prefix%')
 );
 select public._sr_t(
-  'storage destructive policy requires Parent Mode',
+  'storage delete accepts Student Mode or stronger Parent Mode',
   exists (
     select 1 from pg_policies
      where schemaname='storage'
        and tablename='objects'
-       and policyname='papers_delete_parent_mode'
+       and policyname='papers_delete_scope_or_parent'
+       and qual like '%student_scope_owns_storage_prefix%'
        and qual like '%has_fresh_auth%'
+  )
+);
+
+select public._sr_t(
+  'privileged academic action bodies enforce Student Mode or Parent Mode',
+  (
+    select count(*) = 3
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='private'
+      and p.proname in ('delete_question','create_academic_share','revoke_academic_share')
+      and pg_get_functiondef(p.oid) like '%student_scope_allows%'
+      and pg_get_functiondef(p.oid) like '%has_fresh_auth%'
   )
 );
 
