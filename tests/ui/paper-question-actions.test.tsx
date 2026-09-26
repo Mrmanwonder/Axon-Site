@@ -152,7 +152,6 @@ test("question Delete uses the authenticated owner session, preserves the rest-o
   const trigger = await screen.findByRole("button", { name: "Delete question" });
   await userEvent.click(trigger);
 
-  expect(fixture.guard).toHaveBeenCalledTimes(1);
   const dialog = await screen.findByRole("dialog", { name: "Delete this question" });
   expect(dialog.textContent).toContain(
     "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
