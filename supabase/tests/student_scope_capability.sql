@@ -182,7 +182,8 @@ reset role;
 
 -- ── expiry is authoritative server state ──────────────────────────────────
 update private.student_scope_session
-   set expires_at = now() - interval '1 second'
+   set issued_at = now() - interval '2 minutes',
+       expires_at = now() - interval '1 second'
  where guardian_id='9aaaaaaa-0000-4000-8000-000000000001'
    and auth_session_id='scope-session-a';
 
