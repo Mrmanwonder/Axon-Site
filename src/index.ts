@@ -24,11 +24,11 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'self'",
   "form-action 'self' https://*.supabase.co",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://*.posthog.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "font-src 'self'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
+  "connect-src 'self' https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
 ].join('; ')
@@ -42,15 +42,23 @@ export default {
       return Response.redirect(url, 301)
     }
 
-    // Try to serve the requested asset
-    let response = await env.ASSETS.fetch(request)
+    // Serve distinct source documents for the public routes. The default SPA
+    // shell has the root canonical until React runs, which crawlers and social
+    // previews may never do. The build generates these four static documents.
+    const publicDocuments = new Set(['/privacy', '/terms', '/cookies', '/share'])
+    const pathname = url.pathname.replace(/\/$/, '') || '/'
+    const documentPath = publicDocuments.has(pathname) && (request.method === 'GET' || request.method === 'HEAD')
+      ? `${pathname}/index.html`
+      : null
+    let response = documentPath
+      ? await env.ASSETS.fetch(new Request(new URL(documentPath, request.url).toString(), request))
+      : await env.ASSETS.fetch(request)
 
     // If the asset doesn't exist and it's a navigation request,
     // serve index.html for React Router client-side routing
     if (response.status === 404 && request.method === 'GET') {
-      const pathname = url.pathname
       // Don't redirect for API routes or hidden files
-      if (!pathname.startsWith('/api/') && !pathname.startsWith('/.')) {
+      if (!documentPath && !pathname.startsWith('/api/') && !pathname.startsWith('/.')) {
         response = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url).toString(), request))
       }
     }
@@ -62,6 +70,10 @@ export default {
     headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
     headers.set('Content-Security-Policy', CONTENT_SECURITY_POLICY)
+    if (headers.get('Content-Type')?.includes('text/html') && pathname !== '/' &&
+        !['/privacy', '/terms', '/cookies'].includes(pathname)) {
+      headers.set('X-Robots-Tag', 'noindex, nofollow')
+    }
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
   },
 }
