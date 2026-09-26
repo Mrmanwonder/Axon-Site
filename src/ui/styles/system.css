@@ -57,6 +57,10 @@
   .chev{width:7px;height:12px;opacity:.3;flex-shrink:0;}
   .lost{font-size:15.5px;font-weight:600;letter-spacing:-.02em;text-align:right;}
   .lost small{display:block;font-size:11px;font-weight:500;color:var(--label-3);margin-top:2px;}
+  .library-failed-row{cursor:default;}
+  .paper-retry{flex:0 0 auto;min-width:68px;height:34px;padding:0 13px;border-radius:10px;
+    background:var(--label);color:var(--bg);font-size:12.5px;font-weight:700;letter-spacing:-.01em;}
+  .paper-retry:disabled{opacity:.5;cursor:default;}
 
   .tier{font-size:11px;font-weight:600;padding:2.5px 7px;border-radius:6px;}
   .tier.t2{background:rgba(48,209,88,.16);color:var(--green);}
