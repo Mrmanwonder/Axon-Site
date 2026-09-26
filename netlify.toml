@@ -93,6 +93,11 @@
     X-Robots-Tag = "noindex, nofollow"
 
 [[headers]]
+  for = "/share/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
   for = "/library/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
