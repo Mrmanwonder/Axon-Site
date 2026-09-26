@@ -129,6 +129,83 @@ test("IB parser preserves code, transcript name, group and SL/HL flags", () => {
   assert.equal(rows.some(row => row.external_code === "999999"), false);
 });
 
+test("IB parser flags exact discontinued identity conflicts without retiring the current row", () => {
+  const mainHeader = ibHeader();
+  const discontinuedHeader = "SUBJECT CODE".padEnd(18)
+    + "NAME ON TRANSCRIPT".padEnd(30)
+    + "SUBJECT NAME FULL".padEnd(34)
+    + "SL".padEnd(8)
+    + "HL".padEnd(8)
+    + "COMMENTS".padEnd(52)
+    + "YEAR";
+  const discontinuedRow = function (code, transcript, fullName, comment, year) {
+    return code.padEnd(18)
+      + transcript.padEnd(30)
+      + fullName.padEnd(34)
+      + "Yes".padEnd(8)
+      + "".padEnd(8)
+      + comment.padEnd(52)
+      + String(year);
+  };
+
+  const text = [
+    "INDIVIDUALS AND SOCIETIES",
+    mainHeader,
+    ibRow("100128", "CL.GK.ROM.ST.", "CLASSICAL GREEK AND ROMAN STUDIES", true, false, "Individuals and societies"),
+    "DISCONTINUED SUBJECTS",
+    discontinuedHeader,
+    discontinuedRow("100128", "CL.GK.ROM.ST.", "CLASSICAL GREEK AND ROMAN STUDIES", "Discontinued", 2025),
+  ].join("\n");
+
+  const rows = parseIbText(text);
+  assert.equal(rows.length, 2);
+  for (const row of rows) {
+    assert.equal(row.availability, "active");
+    assert.equal(row.metadata.status_review?.identity_match, "code_and_name");
+    assert.equal(row.metadata.status_review?.action, "manual_review_required");
+    assert.equal(row.metadata.status_conflict, "main_registry_and_discontinued_appendix");
+  }
+});
+
+test("IB parser rejects code-only retirement when a subject code is repurposed", () => {
+  const mainHeader = ibHeader();
+  const discontinuedHeader = "SUBJECT CODE".padEnd(18)
+    + "NAME ON TRANSCRIPT".padEnd(30)
+    + "SUBJECT NAME FULL".padEnd(34)
+    + "SL".padEnd(8)
+    + "HL".padEnd(8)
+    + "COMMENTS".padEnd(52)
+    + "YEAR";
+  const discontinuedRow = function (code, transcript, fullName, comment, year) {
+    return code.padEnd(18)
+      + transcript.padEnd(30)
+      + fullName.padEnd(34)
+      + "Yes".padEnd(8)
+      + "".padEnd(8)
+      + comment.padEnd(52)
+      + String(year);
+  };
+
+  const text = [
+    "SCIENCES",
+    mainHeader,
+    ibRow("158711", "FOOD SCIENCE TECH.", "FOOD SCIENCE AND TECHNOLOGY", true, false, "Sciences"),
+    "DISCONTINUED SUBJECTS",
+    discontinuedHeader,
+    discontinuedRow("158711", "SCI.TECH.SOC.", "SCIENCE, TECHNOLOGY AND SOCIETY", "Discontinued", 2025),
+  ].join("\n");
+
+  const rows = parseIbText(text);
+  assert.equal(rows.length, 2);
+  for (const row of rows) {
+    assert.equal(row.display_name, "FOOD SCIENCE AND TECHNOLOGY");
+    assert.equal(row.availability, "active");
+    assert.equal(row.metadata.status_review?.identity_match, "code_only_rejected");
+    assert.equal(row.metadata.status_review?.historic_name, "SCIENCE, TECHNOLOGY AND SOCIETY");
+    assert.equal(row.metadata.status_conflict, "external_code_reused_or_repurposed");
+  }
+});
+
 test("committed normalized catalog fixtures pass structural and count guards", () => {
   assert.deepEqual(validateFixture("cambridge"), []);
   assert.deepEqual(validateFixture("cbse"), []);
