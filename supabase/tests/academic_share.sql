@@ -86,12 +86,12 @@ insert into public.mark_loss_event(
 set local role authenticated;
 select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '4 hours'), true);
 
-do $ begin
+do $share$ begin
   perform public.create_academic_share('paper','89000000-0000-4000-8000-000000000031',1440);
   perform public._share_t('authenticated owner can share without redundant fresh Parent Mode', true);
 exception when others then
   perform public._share_t('authenticated owner can share without redundant fresh Parent Mode', false, sqlerrm);
-end $;
+end $share$;
 
 reset role;
 set local role authenticated;
