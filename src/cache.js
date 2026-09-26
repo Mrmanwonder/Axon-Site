@@ -85,3 +85,12 @@ export async function readThrough(key, fetcher) {
  * signed in — so failures are swallowed here and only here.
  */
 export async function clearLocalData() { await LocalDataService.clearAll(); }
+
+/**
+ * Purge the outgoing student's drafts and the shared read cache before a
+ * sibling switch is committed to UI state.
+ */
+export async function clearStudentLocalData(studentId) {
+  if (!studentId) return;
+  await LocalDataService.clearStudent(studentId);
+}

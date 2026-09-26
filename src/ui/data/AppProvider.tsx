@@ -29,13 +29,14 @@ import { useNavigate } from "react-router-dom";
 import { paths } from "../app/paths";
 import type { ReactNode } from "react";
 import {
-  sb, currentSession, currentGuardian, signOut, onAuthChange, takeProviderError,
+  sb, currentSession, currentGuardian, studentScopeState, setStudentScope, clearStudentScope,
+  signOut, onAuthChange, takeProviderError,
   loadPrefs, savePrefs, readLocal,
   readConsentState, recordConsent, withdrawConsent,
   listPapers, paperProgress, watchLibrary,
 } from "./modules";
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
-import { getCached } from "../../cache.js";
+import { getCached, clearStudentLocalData } from "../../cache.js";
 
 
 /** What the boot sequence concluded about who this is.
@@ -49,7 +50,7 @@ import { getCached } from "../../cache.js";
     became a different fact rather than an admitted gap. A failed read is never
     an answer about who someone is. */
 import { useResource, isStale } from "./useResource";
-import { loadProfiles, selectedProfile } from "./profiles";
+import { loadProfiles } from "./profiles";
 import type { Loadable } from "./useResource";
 
 export type Gate = "loading" | "onboarding" | "ready" | "boot_error" | "choose_profile";
@@ -141,6 +142,24 @@ export function useApp(): AppValue {
 /** Applied to the root element so CSS owns the actual scaling — the same
     contract `applyPrefs` had, and the reason the pre-paint script in index.html
     can set these before React exists. */
+function rememberedStudentId(guardianId: string) {
+  try { return localStorage.getItem(`axon.active_student_id:${guardianId}`); }
+  catch { return null; }
+}
+
+function rememberStudent(guardianId: string, studentId: string) {
+  try { localStorage.setItem(`axon.active_student_id:${guardianId}`, studentId); }
+  catch { /* The server scope remains authoritative for this session. */ }
+}
+
+function scopeNeedsGuardian(error: unknown) {
+  return Boolean(
+    error && typeof error === "object"
+    && "hint" in error
+    && (error as { hint?: string }).hint === "parent_mode_required",
+  );
+}
+
 function applyPrefs(prefs: Prefs) {
   const root = document.documentElement;
   const resolved = prefs.theme === "system"
@@ -171,6 +190,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<Student[]>([]);
   const [profileStale, setProfileStale] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
+  const scopeQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const switchRevision = useRef(0);
   const [prefs, setPrefs] = useState<Prefs>(() => readLocal());
   const [dataRevision, setDataRevision] = useState(0);
   const { resource: papersResource, reload: reloadPapers, updateData: updatePapersData } = useResource<Paper[]>(student ? `${student.id}:${dataRevision}` : null, () => listPapers(student!.id), () => getCached(`papers:${student!.id}`));
@@ -293,9 +314,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const selectStudent = useCallback(async (id: string) => {
     const profile = profiles.find(item => item.id === id);
     if (!profile || !guardian) throw new Error("That profile is unavailable.");
-    try { localStorage.setItem(`axon.active_student_id:${guardian.id}`, id); } catch { /* This session still switches. */ }
-    setStudent(profile); setGate("ready");
-  }, [profiles, guardian]);
+
+    const request = ++switchRevision.current;
+    const previous = student;
+    // Stop student-keyed resources before changing server authority. The old
+    // profile must never keep fetching while the database already scopes the
+    // session to a different sibling.
+    setStudent(null);
+    setGate("loading");
+
+    const operation = scopeQueue.current.then(async () => {
+      const scope = await setStudentScope(id);
+      if (!scope?.active || scope.student_id !== id) {
+        throw new Error("Axon could not establish the selected student session.");
+      }
+      if (previous?.id && previous.id !== id) {
+        await clearStudentLocalData(previous.id);
+      }
+      return profile;
+    });
+    scopeQueue.current = operation.catch(() => {});
+
+    try {
+      const selected = await operation;
+      if (request !== switchRevision.current) return;
+      rememberStudent(guardian.id, selected.id);
+      setStudent(selected);
+      setGate("ready");
+    } catch (error) {
+      if (request === switchRevision.current) {
+        // If the server switched before local cleanup failed, try to restore the
+        // previous scope while the Parent Mode window used for this switch is
+        // still fresh. If that cannot be proven, show no student at all.
+        if (previous) {
+          try {
+            const restored = await setStudentScope(previous.id);
+            if (restored?.active && restored.student_id === previous.id) {
+              setStudent(previous);
+              setGate("ready");
+            } else {
+              setStudent(null);
+              setGate(profiles.length > 1 ? "choose_profile" : "boot_error");
+            }
+          } catch {
+            setStudent(null);
+            setGate(profiles.length > 1 ? "choose_profile" : "boot_error");
+          }
+        } else {
+          setStudent(null);
+          setGate(profiles.length > 1 ? "choose_profile" : "boot_error");
+        }
+      }
+      throw error;
+    }
+  }, [profiles, guardian, student]);
   const updateStudentProfile = useCallback(async (profile: {
     firstName: string;
     programmeKey: string;
@@ -344,12 +416,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     destination?: "home" | "scan";
   }) => {
     pendingPaperType.current = r.firstPaperType ?? null;
+    if (r.student) {
+      const scope = await setStudentScope(r.student.id);
+      if (!scope?.active || scope.student_id !== r.student.id) {
+        throw new Error("Axon could not start the new student session.");
+      }
+    }
     if (r.guardian) setGuardian(r.guardian);
-    if (r.student) { setStudent(r.student); setProfiles(previous => [...previous.filter(profile => profile.id !== r.student!.id), r.student!]); }
+    if (r.student) {
+      const guardianId = r.guardian?.id ?? guardian?.id;
+      if (guardianId) rememberStudent(guardianId, r.student.id);
+      setStudent(r.student);
+      setProfiles(previous => [...previous.filter(profile => profile.id !== r.student!.id), r.student!]);
+    }
     const destination = r.destination ?? (r.firstPaperType ? "scan" : "home");
     navigateRef.current(destination === "scan" ? paths.scan : paths.home, { replace: true });
     setGate("ready");
-  }, []);
+  }, [guardian?.id]);
 
   const signOutNow = useCallback(async () => {
     await signOut();
@@ -381,13 +464,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const profilesResult = await loadProfiles(g.id);
       if (cancelled) return;
-      setProfiles(profilesResult.data);
+      const owned = profilesResult.data;
+      setProfiles(owned);
       setProfileStale(profilesResult.stale);
-      if (!profilesResult.data.length) return setGate("onboarding");
-      const st = selectedProfile(g.id, profilesResult.data);
-      if (!st) return setGate("choose_profile");
+      if (!owned.length) return setGate("onboarding");
 
-      setStudent(st);
+      // One-profile households can still read already-cached work offline. With
+      // multiple profiles, localStorage is never enough authority to choose a
+      // sibling while the server cannot be reached.
+      if (navigator.onLine === false) {
+        if (owned.length === 1) {
+          setStudent(owned[0]);
+          return setGate("ready");
+        }
+        setStudent(null);
+        return setGate("choose_profile");
+      }
+
+      let scope = await studentScopeState();
+      if (cancelled) return;
+
+      let selected = scope.active
+        ? owned.find(profile => profile.id === scope.student_id) ?? null
+        : null;
+
+      if (owned.length === 1 && !selected) {
+        // The only possible profile cannot widen authority, so AXO-60 permits
+        // establishing it without an extra Parent Mode ceremony.
+        scope = await setStudentScope(owned[0].id);
+        if (cancelled) return;
+        selected = scope?.active && scope.student_id === owned[0].id ? owned[0] : null;
+      }
+
+      if (!selected) {
+        const remembered = rememberedStudentId(g.id);
+        if (remembered) await clearStudentLocalData(remembered);
+        if (scope.active) {
+          // The scope names no currently owned profile. Fail closed and revoke
+          // it rather than letting cached profile state paper over the mismatch.
+          try { await clearStudentScope(); } catch { /* Expiry remains the fallback. */ }
+        }
+        if (cancelled) return;
+        setStudent(null);
+        return setGate(owned.length > 1 ? "choose_profile" : "boot_error");
+      }
+
+      const remembered = rememberedStudentId(g.id);
+      if (remembered && remembered !== selected.id) {
+        await clearStudentLocalData(remembered);
+      }
+      rememberStudent(g.id, selected.id);
+      if (cancelled) return;
+      setStudent(selected);
       setGate("ready");
     })().catch((e) => {
       // NOT onboarding. Boot failing says nothing about whether this person has
@@ -402,6 +530,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     return () => { cancelled = true; };
   }, [bootAttempt]);
+
+  // Keep the 30-minute server Student Mode lease alive while the same profile
+  // remains active. Waking after expiry in a multi-profile household correctly
+  // falls back to profile choice because the server will require Parent Mode.
+  useEffect(() => {
+    if (!student) return;
+    let active = true;
+    const id = student.id;
+
+    const refreshScope = async () => {
+      if (!navigator.onLine) return;
+      try {
+        const scope = await setStudentScope(id);
+        if (!active) return;
+        if (!scope?.active || scope.student_id !== id) {
+          setStudent(null);
+          setGate(profiles.length > 1 ? "choose_profile" : "boot_error");
+        }
+      } catch (error) {
+        if (!active) return;
+        if (scopeNeedsGuardian(error)) {
+          setStudent(null);
+          setGate(profiles.length > 1 ? "choose_profile" : "boot_error");
+        } else {
+          // A network/server failure is not evidence that a sibling became
+          // authorized. Keep the already-selected local profile so its cached
+          // work remains readable; server RLS still denies any stale authority.
+          console.warn("Student scope refresh failed", error);
+        }
+      }
+    };
+
+    const timer = setInterval(() => { void refreshScope(); }, 15 * 60 * 1000);
+    const onWake = () => { if (document.visibilityState === "visible") void refreshScope(); };
+    const onOnline = () => { void refreshScope(); };
+    document.addEventListener("visibilitychange", onWake);
+    addEventListener("online", onOnline);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onWake);
+      removeEventListener("online", onOnline);
+    };
+  }, [student?.id, profiles.length]);
 
   // Server-side prefs and consent land once we know who this is.
   useEffect(() => {
