@@ -141,16 +141,16 @@ end $$;
 -- Now the control plane. Each of these is the raw statement the corresponding
 -- Settings row issues.
 
-do $ declare n int; begin
+do $$ declare n int; begin
   delete from public.paper where student_id = 'eeeeeeee-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
   perform public._t('authenticated owner can delete papers without fresh Parent Mode', n = 3,
     format('%s rows deleted', n));
 exception when others then
   perform public._t('authenticated owner can delete papers without fresh Parent Mode', false, sqlerrm);
-end $;
+end $$;
 
-do $ declare n int; begin
+do $$ declare n int; begin
   delete from public.student where id = 'eeeeeeee-0000-4000-8000-000000000002';
   get diagnostics n = row_count;
   perform public._t('student mode cannot delete the student profile', n = 0,
