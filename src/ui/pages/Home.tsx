@@ -31,7 +31,6 @@ import { paths } from "../app/paths";
 import { paperTypeLabel, statusKeyForRun } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
-import { useIngestion } from "../data/useIngestion";
 import { NoPapersArt } from "../components/EmptyArt";
 import PageSkeleton from "../components/PageSkeleton";
 
@@ -43,8 +42,6 @@ export default function Home() {
   const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
   const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
 
-
-  const { addPaper } = useIngestion();
   const navigate = useNavigate();
 
   const name = student?.first_name ?? guardian?.name ?? "there";
@@ -203,13 +200,6 @@ export default function Home() {
         <div className="subnote">Offline copy. New uploads need a connection.</div>
       )}
 
-      <PressBox as="button" type="button" className="scanbtn" onClick={addPaper}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 16V5M12 5 8 9M12 5l4 4" />
-          <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" />
-        </svg>
-        Just got a test back? Scan it now
-      </PressBox>
 
       <div className="card examcard">
         <div><div className="eyebrow">What&rsquo;s coming up</div><div className="t1">No exam date set</div><div className="t2">Axon won&rsquo;t guess your school calendar. Exam planning will appear here when dates can be saved.</div></div>
