@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/routes";
 import CookieConsent from "./components/CookieConsent";
+import { isAcademicSharePath } from "./lib/shareRoute";
 import { getAnalyticsConsent, initAnalytics } from "./lib/analytics";
 import "./styles/app.css";
 import "./styles/system.css";
@@ -10,7 +11,7 @@ import "./styles/shell.css";
 import "./styles/performance.css";
 import "./styles/cookie-consent.css";
 
-const academicShareRoute = location.pathname === "/share";
+const academicShareRoute = isAcademicSharePath(location.pathname);
 if (!academicShareRoute && getAnalyticsConsent() === "granted") initAnalytics();
 
 createRoot(document.getElementById("root")!).render(
