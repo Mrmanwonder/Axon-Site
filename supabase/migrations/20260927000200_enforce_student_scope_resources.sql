@@ -50,17 +50,21 @@ create policy paper_update_scope on public.paper
   using (private.student_scope_allows(student_id))
   with check (private.student_scope_allows(student_id));
 
--- A paper deletion is a guardian action, not a daily Student Mode action.
--- It is intentionally allowed across owned profiles only with fresh Parent Mode.
+-- AXO-95 removed the redundant Parent Mode prompt for academic actions.
+-- AXO-61 preserves that UX for the active student while keeping Parent Mode
+-- as the stronger guardian override across owned profiles.
 drop policy if exists paper_delete_own on public.paper;
-create policy paper_delete_parent_mode on public.paper
+create policy paper_delete_scope_or_parent on public.paper
   for delete to authenticated
   using (
-    private.has_fresh_auth()
-    and exists (
-      select 1 from public.student s
-       where s.id = paper.student_id
-         and s.guardian_id = private.current_guardian_id()
+    private.student_scope_allows(student_id)
+    or (
+      private.has_fresh_auth()
+      and exists (
+        select 1 from public.student s
+         where s.id = paper.student_id
+           and s.guardian_id = private.current_guardian_id()
+      )
     )
   );
 
@@ -116,14 +120,17 @@ create policy question_region_update_scope on public.question_region
   with check (private.student_scope_allows(student_id));
 
 drop policy if exists question_region_delete_own on public.question_region;
-create policy question_region_delete_parent_mode on public.question_region
+create policy question_region_delete_scope_or_parent on public.question_region
   for delete to authenticated
   using (
-    private.has_fresh_auth()
-    and exists (
-      select 1 from public.student s
-       where s.id = question_region.student_id
-         and s.guardian_id = private.current_guardian_id()
+    private.student_scope_allows(student_id)
+    or (
+      private.has_fresh_auth()
+      and exists (
+        select 1 from public.student s
+         where s.id = question_region.student_id
+           and s.guardian_id = private.current_guardian_id()
+      )
     )
   );
 
@@ -149,14 +156,17 @@ create policy attempt_update_scope on public.student_attempt
 -- attempt_archive_depth_gate remains restrictive and unchanged.
 
 drop policy if exists attempt_delete_own on public.student_attempt;
-create policy attempt_delete_parent_mode on public.student_attempt
+create policy attempt_delete_scope_or_parent on public.student_attempt
   for delete to authenticated
   using (
-    private.has_fresh_auth()
-    and exists (
-      select 1 from public.student s
-       where s.id = student_attempt.student_id
-         and s.guardian_id = private.current_guardian_id()
+    private.student_scope_allows(student_id)
+    or (
+      private.has_fresh_auth()
+      and exists (
+        select 1 from public.student s
+         where s.id = student_attempt.student_id
+           and s.guardian_id = private.current_guardian_id()
+      )
     )
   );
 
@@ -237,14 +247,20 @@ create policy papers_update_scope on storage.objects
     and private.student_scope_owns_storage_prefix(name)
   );
 
--- Destructive object cleanup stays a guardian/Parent Mode operation.
+-- Active Student Mode may clean up its own objects without a redundant
+-- re-auth prompt. Fresh Parent Mode remains the stronger guardian override.
 drop policy if exists papers_delete_own on storage.objects;
-create policy papers_delete_parent_mode on storage.objects
+create policy papers_delete_scope_or_parent on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'papers'
-    and private.has_fresh_auth()
-    and private.owns_storage_student_prefix(name)
+    and (
+      private.student_scope_owns_storage_prefix(name)
+      or (
+        private.has_fresh_auth()
+        and private.owns_storage_student_prefix(name)
+      )
+    )
   );
 
 -- ── Privileged / RPC paths: defend in depth against arbitrary student IDs ────
@@ -511,9 +527,228 @@ as $$
      and private.guardian_is_pro(private.current_guardian_id());
 $$;
 
+-- AXO-95 deliberately removed the extra Parent Mode ceremony from academic
+-- Share/Delete. AXO-61 adds Student Mode as the normal authority while keeping
+-- fresh Parent Mode as a stronger guardian override across owned profiles.
+
+create or replace function private.delete_question(p_attempt_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private, pg_temp
+as $
+declare
+  v_guardian uuid := private.current_guardian_id();
+  v_student  uuid;
+  v_paper    uuid;
+  v_regions integer := 0;
+  v_deleted integer := 0;
+  v_total_awarded numeric(6,2);
+  v_total_available numeric(6,2);
+begin
+  if v_guardian is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+
+  select a.student_id, a.paper_id
+    into v_student, v_paper
+    from public.student_attempt a
+    join public.student s on s.id = a.student_id
+   where a.id = p_attempt_id
+     and s.guardian_id = v_guardian;
+
+  if v_student is null then
+    raise exception 'no such question' using errcode = 'P0002';
+  end if;
+
+  if not private.student_scope_allows(v_student)
+     and not private.has_fresh_auth() then
+    raise exception 'active student scope or Parent Mode required'
+      using errcode = '42501', hint = 'student_scope_required';
+  end if;
+
+  delete from public.question_region
+   where committed_attempt_id = p_attempt_id
+     and student_id = v_student
+     and paper_id = v_paper;
+  get diagnostics v_regions = row_count;
+
+  delete from public.student_attempt
+   where id = p_attempt_id
+     and student_id = v_student
+     and paper_id = v_paper;
+  get diagnostics v_deleted = row_count;
+
+  if v_deleted <> 1 then
+    raise exception 'question deletion did not affect exactly one attempt'
+      using errcode = 'P0001';
+  end if;
+
+  select sum(a.marks_awarded), sum(a.max_marks)
+    into v_total_awarded, v_total_available
+    from public.student_attempt a
+   where a.paper_id = v_paper
+     and a.student_id = v_student;
+
+  update public.paper p
+     set total_awarded = v_total_awarded,
+         total_available = v_total_available,
+         reconciled = case
+           when v_total_awarded is null or p.reported_total is null then null
+           else v_total_awarded = p.reported_total
+         end
+   where p.id = v_paper
+     and p.student_id = v_student;
+
+  return jsonb_build_object(
+    'deleted', true,
+    'attempt_id', p_attempt_id,
+    'paper_id', v_paper,
+    'regions_deleted', v_regions,
+    'total_awarded', v_total_awarded,
+    'total_available', v_total_available
+  );
+end;
+$;
+
+create or replace function private.create_academic_share(
+  p_resource_type text,
+  p_resource_id uuid,
+  p_expires_minutes integer default 1440
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, private, extensions, pg_temp
+as $
+declare
+  v_guardian uuid := private.current_guardian_id();
+  v_student uuid;
+  v_paper uuid;
+  v_attempt uuid;
+  v_token text;
+  v_share uuid;
+  v_expires timestamptz;
+begin
+  if v_guardian is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+  if p_resource_type not in ('paper', 'question') then
+    raise exception 'unknown share resource' using errcode = '22023';
+  end if;
+  if p_expires_minutes < 5 or p_expires_minutes > 10080 then
+    raise exception 'share expiry must be between 5 minutes and 7 days'
+      using errcode = '22023';
+  end if;
+
+  if p_resource_type = 'paper' then
+    select p.student_id, p.id
+      into v_student, v_paper
+      from public.paper p
+      join public.student s on s.id = p.student_id
+     where p.id = p_resource_id
+       and s.guardian_id = v_guardian;
+  else
+    select a.student_id, a.paper_id, a.id
+      into v_student, v_paper, v_attempt
+      from public.student_attempt a
+      join public.student s on s.id = a.student_id
+     where a.id = p_resource_id
+       and s.guardian_id = v_guardian;
+  end if;
+
+  if v_student is null or v_paper is null then
+    raise exception 'no such resource' using errcode = 'P0002';
+  end if;
+
+  if not private.student_scope_allows(v_student)
+     and not private.has_fresh_auth() then
+    raise exception 'active student scope or Parent Mode required'
+      using errcode = '42501', hint = 'student_scope_required';
+  end if;
+
+  update private.academic_share
+     set revoked_at = now()
+   where guardian_id = v_guardian
+     and resource_type = p_resource_type
+     and paper_id = v_paper
+     and (
+       (p_resource_type = 'paper' and attempt_id is null)
+       or
+       (p_resource_type = 'question' and attempt_id = v_attempt)
+     )
+     and revoked_at is null;
+
+  v_token := encode(gen_random_bytes(32), 'hex');
+  v_expires := now() + make_interval(mins => p_expires_minutes);
+
+  insert into private.academic_share(
+    guardian_id, student_id, resource_type, paper_id, attempt_id,
+    token_hash, expires_at
+  ) values (
+    v_guardian, v_student, p_resource_type, v_paper, v_attempt,
+    digest(v_token, 'sha256'), v_expires
+  )
+  returning id into v_share;
+
+  return jsonb_build_object(
+    'share_id', v_share,
+    'resource_type', p_resource_type,
+    'token', v_token,
+    'expires_at', v_expires
+  );
+end;
+$;
+
+create or replace function private.revoke_academic_share(p_share_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, private, pg_temp
+as $
+declare
+  v_guardian uuid := private.current_guardian_id();
+  v_student uuid;
+  v_count integer;
+begin
+  if v_guardian is null then
+    raise exception 'not authenticated' using errcode = '42501';
+  end if;
+
+  select sh.student_id
+    into v_student
+    from private.academic_share sh
+   where sh.id = p_share_id
+     and sh.guardian_id = v_guardian;
+
+  if v_student is null then
+    return false;
+  end if;
+
+  if not private.student_scope_allows(v_student)
+     and not private.has_fresh_auth() then
+    raise exception 'active student scope or Parent Mode required'
+      using errcode = '42501', hint = 'student_scope_required';
+  end if;
+
+  update private.academic_share
+     set revoked_at = coalesce(revoked_at, now())
+   where id = p_share_id
+     and guardian_id = v_guardian;
+  get diagnostics v_count = row_count;
+  return v_count = 1;
+end;
+$;
+
+revoke all on function private.delete_question(uuid) from public, anon;
+revoke all on function private.create_academic_share(text, uuid, integer) from public, anon;
+revoke all on function private.revoke_academic_share(uuid) from public, anon;
+grant execute on function private.delete_question(uuid) to authenticated;
+grant execute on function private.create_academic_share(text, uuid, integer) to authenticated;
+grant execute on function private.revoke_academic_share(uuid) to authenticated;
+
 -- Share-state lookup is a daily UI read and must not reveal sibling resource
--- existence. Share creation/revocation remain stronger guardian/Parent Mode
--- flows and are intentionally not reduced to Student Mode.
+-- existence.
 create or replace function private.active_academic_share(
   p_resource_type text,
   p_resource_id uuid
