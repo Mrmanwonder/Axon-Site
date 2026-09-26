@@ -305,6 +305,82 @@ end; end $$;
 
 reset role;
 
+-- ── AXO-101 failed-paper resubmit is single-flight ─────────────────────────
+do $
+declare
+  v_initial jsonb;
+  v_first_retry jsonb;
+  v_second_retry jsonb;
+  v_paper uuid;
+  v_active_runs integer;
+  v_total_runs integer;
+begin
+  v_initial := public.submit_paper(
+    'aaaaaaaa-0000-4000-8000-000000000002', 'unit_test', 'tier_1',
+    '2026-08-02', 'Chemistry',
+    jsonb_build_array(jsonb_build_object(
+      'page_number', 1,
+      'r2_bucket', 'derived',
+      'r2_key', 's/retry/page/1.webp',
+      'preprocess_version', 'v2'
+    )),
+    '99999999-0000-4000-8000-000000000099'
+  );
+  v_paper := (v_initial->>'paper_id')::uuid;
+
+  update public.extraction_run
+     set status='failed', status_reason='test failure'
+   where id=(v_initial->>'run_id')::uuid;
+  update public.paper_page
+     set structure_status='failed', crop_status='failed'
+   where paper_id=v_paper;
+
+  v_first_retry := public.submit_paper(
+    'aaaaaaaa-0000-4000-8000-000000000002', 'unit_test', 'tier_1',
+    '2026-08-02', 'Chemistry',
+    jsonb_build_array(jsonb_build_object(
+      'page_number', 1,
+      'r2_bucket', 'derived',
+      'r2_key', 's/retry/page/1.webp',
+      'preprocess_version', 'v2'
+    )),
+    '99999999-0000-4000-8000-000000000100',
+    null, null, '1.0.0', v_paper
+  );
+
+  v_second_retry := public.submit_paper(
+    'aaaaaaaa-0000-4000-8000-000000000002', 'unit_test', 'tier_1',
+    '2026-08-02', 'Chemistry',
+    jsonb_build_array(jsonb_build_object(
+      'page_number', 1,
+      'r2_bucket', 'derived',
+      'r2_key', 's/retry/page/1.webp',
+      'preprocess_version', 'v2'
+    )),
+    '99999999-0000-4000-8000-000000000101',
+    null, null, '1.0.0', v_paper
+  );
+
+  select count(*) into v_active_runs
+    from public.extraction_run
+   where paper_id=v_paper and status not in ('failed','rejected');
+  select count(*) into v_total_runs
+    from public.extraction_run
+   where paper_id=v_paper;
+
+  perform public._t('failed retry creates exactly one fresh active run',
+    v_active_runs=1 and v_total_runs=2,
+    format('%s active / %s total runs', v_active_runs, v_total_runs));
+  perform public._t('two rapid retry submits converge on the same run',
+    v_first_retry->>'run_id'=v_second_retry->>'run_id');
+  perform public._t('only the first retry reports a fresh run',
+    (v_first_retry->>'run_created')::boolean
+    and not (v_second_retry->>'run_created')::boolean);
+  perform public._t('fresh retry resets page processing state',
+    exists(select 1 from public.paper_page
+      where paper_id=v_paper and structure_status='pending' and crop_status='pending'));
+end $;
+
 select count(*) as total, count(*) filter (where passed) as passed,
        count(*) filter (where not passed) as failed from public._r;
 select seq, name, passed, detail from public._r where not passed order by seq;
