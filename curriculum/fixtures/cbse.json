@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_from": "production-normalized-catalog",
-  "generated_at": "2026-09-23",
+  "generated_at": "2026-09-26",
   "provider": "cbse",
   "offerings": [
     {
@@ -1216,6 +1216,25 @@
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "History",
+      "source_version": "2026-27",
+      "levels_supported": [],
+      "external_code_kind": null
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "group": "elective"
+      },
+      "provider": "cbse",
+      "stage_key": "cbse_10",
+      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "availability": "active",
+      "display_name": "Home Science",
+      "external_code": null,
+      "language_code": null,
+      "programme_key": "cbse_secondary",
+      "canonical_name": "Home Science",
       "source_version": "2026-27",
       "levels_supported": [],
       "external_code_kind": null
@@ -2736,6 +2755,25 @@
       "language_code": null,
       "programme_key": "cbse_secondary",
       "canonical_name": "Hindi",
+      "source_version": "2026-27",
+      "levels_supported": [],
+      "external_code_kind": null
+    },
+    {
+      "aliases": [],
+      "variant": null,
+      "metadata": {
+        "group": "elective"
+      },
+      "provider": "cbse",
+      "stage_key": "cbse_9",
+      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
+      "availability": "active",
+      "display_name": "Home Science",
+      "external_code": null,
+      "language_code": null,
+      "programme_key": "cbse_secondary",
+      "canonical_name": "Home Science",
       "source_version": "2026-27",
       "levels_supported": [],
       "external_code_kind": null
@@ -7494,20 +7532,22 @@
       "aliases": [],
       "variant": null,
       "metadata": {
-        "group": "elective"
+        "group": "elective",
+        "registry_verified_code": true,
+        "registry_verification_run_id": "36221046663"
       },
       "provider": "cbse",
       "stage_key": "cbse_12",
       "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
       "availability": "active",
       "display_name": "Physics",
-      "external_code": null,
+      "external_code": "042",
       "language_code": null,
       "programme_key": "cbse_senior_secondary",
       "canonical_name": "Physics",
       "source_version": "2026-27",
       "levels_supported": [],
-      "external_code_kind": null
+      "external_code_kind": "cbse_subject_code"
     },
     {
       "aliases": [],
@@ -8021,44 +8061,6 @@
       "source_version": "2026-27",
       "levels_supported": [],
       "external_code_kind": "cbse_subject_code"
-    },
-    {
-      "aliases": [],
-      "variant": null,
-      "metadata": {
-        "group": "elective"
-      },
-      "provider": "cbse",
-      "stage_key": "cbse_9",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
-      "availability": "active",
-      "display_name": "Home Science",
-      "external_code": null,
-      "language_code": null,
-      "programme_key": "cbse_secondary",
-      "canonical_name": "Home Science",
-      "source_version": "2026-27",
-      "levels_supported": [],
-      "external_code_kind": null
-    },
-    {
-      "aliases": [],
-      "variant": null,
-      "metadata": {
-        "group": "elective"
-      },
-      "provider": "cbse",
-      "stage_key": "cbse_10",
-      "source_url": "https://cbseacademic.nic.in/curriculum_2027.html",
-      "availability": "active",
-      "display_name": "Home Science",
-      "external_code": null,
-      "language_code": null,
-      "programme_key": "cbse_secondary",
-      "canonical_name": "Home Science",
-      "source_version": "2026-27",
-      "levels_supported": [],
-      "external_code_kind": null
     }
   ]
 }
