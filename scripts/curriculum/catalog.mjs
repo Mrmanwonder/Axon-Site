@@ -420,6 +420,130 @@ function ibGroupKey(group) {
   return "interdisciplinary_special";
 }
 
+function parseIbDiscontinuedEntries(lines) {
+  const marker = lines.findIndex(function (line) {
+    return /^DISCONTINUED SUBJECTS/.test(line.trim());
+  });
+  if (marker < 0) return [];
+
+  let header = null;
+  const out = [];
+  for (let i = marker + 1; i < lines.length; i++) {
+    const raw = lines[i];
+    if (/SUBJECT CODE/.test(raw) && /NAME ON TRANSCRIPT/.test(raw) && /COMMENTS/.test(raw)) {
+      const fullStart = raw.indexOf("SUBJECT NAME FULL");
+      header = {
+        transcript: raw.indexOf("NAME ON TRANSCRIPT"),
+        full: fullStart,
+        sl: raw.indexOf("SL", fullStart + 1),
+        hl: raw.indexOf("HL", fullStart + 1),
+        comments: raw.indexOf("COMMENTS"),
+        year: raw.indexOf("YEAR")
+      };
+      continue;
+    }
+    if (!header) continue;
+
+    const codeMatch = /^\s*(\d{6})\s+/.exec(raw);
+    if (!codeMatch) continue;
+    const block = [raw];
+
+    while (i + 1 < lines.length) {
+      const next = lines[i + 1];
+      if (/^\s*\d{6}\s+/.test(next)) break;
+      if (/© International Baccalaureate|SUBJECT CODE|Page \d+\s*\/\s*\d+/.test(next)) {
+        i++;
+        continue;
+      }
+      if (!next.trim() && block.length) {
+        i++;
+        continue;
+      }
+      i++;
+      block.push(next);
+    }
+
+    const transcript = block
+      .map(function (line) { return line.slice(header.transcript, header.full).trim(); })
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const fullName = block
+      .map(function (line) { return line.slice(header.full, header.sl).trim(); })
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const comments = block
+      .map(function (line) {
+        const end = header.year > header.comments ? header.year : line.length;
+        return line.slice(header.comments, end).trim();
+      })
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const yearText = block
+      .map(function (line) { return header.year >= 0 ? line.slice(header.year).trim() : ""; })
+      .filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const yearMatch = /\b(20\d{2})\b/.exec(yearText || comments);
+    const display = fullName || transcript;
+    if (!display) continue;
+
+    out.push({
+      external_code: codeMatch[1],
+      transcript_name: transcript || display,
+      display_name: display,
+      comments: comments || null,
+      year: yearMatch ? Number(yearMatch[1]) : null
+    });
+  }
+  return out;
+}
+
+function ibNamesForIdentity(row) {
+  return [row.display_name, row.canonical_name, ...(row.aliases || [])]
+    .filter(Boolean)
+    .map(loose);
+}
+
+function attachIbStatusReview(baseRows, discontinuedRows) {
+  const byCode = new Map();
+  for (const row of baseRows) {
+    if (!byCode.has(row.external_code)) byCode.set(row.external_code, []);
+    byCode.get(row.external_code).push(row);
+  }
+
+  for (const historic of discontinuedRows) {
+    const candidates = byCode.get(historic.external_code) || [];
+    if (!candidates.length) continue;
+    const historicNames = [historic.display_name, historic.transcript_name]
+      .filter(Boolean)
+      .map(loose);
+
+    const exact = candidates.find(function (candidate) {
+      const names = ibNamesForIdentity(candidate);
+      return historicNames.some(function (name) { return names.includes(name); });
+    });
+
+    if (exact) {
+      exact.metadata.status_review = {
+        source_section: "discontinued_subjects",
+        identity_match: "code_and_name",
+        comments: historic.comments,
+        year: historic.year,
+        action: "manual_review_required"
+      };
+      exact.metadata.status_conflict = "main_registry_and_discontinued_appendix";
+      continue;
+    }
+
+    for (const candidate of candidates) {
+      candidate.metadata.status_review = {
+        source_section: "discontinued_subjects",
+        identity_match: "code_only_rejected",
+        historic_name: historic.display_name,
+        comments: historic.comments,
+        year: historic.year,
+        action: "manual_review_required"
+      };
+      candidate.metadata.status_conflict = "external_code_reused_or_repurposed";
+    }
+  }
+}
+
 export function parseIbText(text, source) {
   source = source || SOURCES.ibdp_subjects;
   const lines = text.split(/\r?\n/);
@@ -431,7 +555,7 @@ export function parseIbText(text, source) {
   let header = null;
   let section = null;
   let discontinued = false;
-  const rows = [];
+  const baseRows = [];
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
@@ -479,7 +603,7 @@ export function parseIbText(text, source) {
     const display = fullName || transcript;
     if (!display) continue;
 
-    const base = {
+    baseRows.push({
       canonical_name: display,
       display_name: display,
       external_code: codeMatch[1],
@@ -493,9 +617,16 @@ export function parseIbText(text, source) {
       metadata: {
         group: groupText || section || null,
         group_key: ibGroupKey(groupText || section || ""),
-        transcript_name: transcript || display
+        transcript_name: transcript || display,
+        source_semantics: "identity_registry_not_active_only"
       }
-    };
+    });
+  }
+
+  attachIbStatusReview(baseRows, parseIbDiscontinuedEntries(lines));
+
+  const rows = [];
+  for (const base of baseRows) {
     rows.push(Object.assign({}, base, { programme_key: "ibdp", stage_key: "ibdp_1" }));
     rows.push(Object.assign({}, base, { programme_key: "ibdp", stage_key: "ibdp_2" }));
   }
