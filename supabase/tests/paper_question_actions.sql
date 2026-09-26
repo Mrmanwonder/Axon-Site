@@ -79,12 +79,12 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000001', interval '4 hours'), true);
 
-do $ begin
+do $action$ begin
   perform public.delete_question('87000000-0000-4000-8000-000000000041');
   perform public._axo87_t('authenticated owner can delete question without redundant fresh Parent Mode', true);
 exception when others then
   perform public._axo87_t('authenticated owner can delete question without redundant fresh Parent Mode', false, sqlerrm);
-end $;
+end $action$;
 
 select public._axo87_t('owner deletion removes only the selected question',
   not exists(select 1 from public.student_attempt where id='87000000-0000-4000-8000-000000000041')
@@ -113,14 +113,14 @@ reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000002', interval '5 seconds'), true);
 
-do $ begin
+do $action$ begin
   perform public.delete_question('87000000-0000-4000-8000-000000000042');
   perform public._axo87_t('other guardian cannot delete the question', false, 'delete succeeded');
 exception when no_data_found then
   perform public._axo87_t('other guardian cannot delete the question', true);
 when others then
   perform public._axo87_t('other guardian cannot delete the question', sqlstate='P0002', sqlerrm);
-end $;
+end $action$;
 
 reset role;
 
