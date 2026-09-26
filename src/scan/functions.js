@@ -95,6 +95,9 @@ export const uploadComplete = (body) => post('/upload-complete', body);
  */
 export const submitPaper = (body) => post('/paper-submit', body);
 
+/** Retry a failed saved paper using the server-owned stored page keys. */
+export const retryFailedPaper = (paperId) => post('/paper-retry', { paper_id: paperId });
+
 /** Stage 8's gate: nothing is explained until every region has been through review. */
 export const reviewComplete = (body) => post('/review-complete', body);
 
