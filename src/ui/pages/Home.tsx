@@ -33,6 +33,7 @@ import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { NoPapersArt } from "../components/EmptyArt";
 import PageSkeleton from "../components/PageSkeleton";
+import { useIngestion } from "../data/useIngestion";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
