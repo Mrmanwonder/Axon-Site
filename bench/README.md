@@ -356,3 +356,17 @@ per cent. Those pixels are ink by luma alone (`RED.INK_LUMA_MAX`), so nothing
 downstream turns on it — and that test exists because the first version of this
 comment claimed the drift was "well under a thousandth" everywhere, and the
 measurement said otherwise.
+
+## Scanner reliability acceptance
+
+`scanner-reliability.mjs` validates observed device/scenario trials and reports
+acquisition p50/p95, timeouts, correct Auto capture rate and false captures without
+hiding failed trials. See [the physical protocol](../docs/qa/scanner-reliability.md)
+for required device coverage, trial format and the distinction between proposed
+budgets, synthetic automation and real-device acceptance.
+
+`tests/e2e/scanner-viewfinder.spec.ts` now runs the actual synthetic viewfinder in
+Chromium CI. `tests/ui/scanner-hardware.test.tsx` fault-injects stalled browser APIs
+and late completions against the production controller. The standalone
+`viewfinder.mjs` uses the repository's installed Playwright browser and validates
+that the intentionally removed preview stabilizer stays removed.
