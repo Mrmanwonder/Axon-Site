@@ -239,7 +239,8 @@ select public._t('optional purposes default to off',
 -- RLS: guardian A
 -- ══════════════════════════════════════════════════════════════════════════
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"rls-session-a"}';
+select public.set_student_scope('aaaaaaaa-0000-4000-8000-000000000002', 900);
 
 select public._t('A sees only its own guardian row', (select count(*) = 1 from public.guardian));
 select public._t('A sees only its own student',      (select count(*) = 1 from public.student));
@@ -344,7 +345,8 @@ reset role;
 -- RLS: guardian B — the mirror, so neither result is a fluke
 -- ══════════════════════════════════════════════════════════════════════════
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated","session_id":"rls-session-b"}';
+select public.set_student_scope('bbbbbbbb-0000-4000-8000-000000000002', 900);
 
 select public._t('B sees only its own student',
   (select count(*) = 1 from public.student)
