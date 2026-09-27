@@ -67,7 +67,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', public._axo87_claims('87000000-0000-4000-8000-000000000001', interval '5 seconds'), true);
 select public.set_student_scope('87000000-0000-4000-8000-000000000021',900);
 
-do $ begin
+do $$ begin
   delete from public.student_attempt
    where id='87000000-0000-4000-8000-000000000041';
   perform public._axo87_t('browser cannot bypass delete_question with direct table DELETE', false, 'delete succeeded');
