@@ -79,6 +79,25 @@ function mount() {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+const verifiedHit = {
+  paper_id: "verified",
+  rank: 12,
+  match_kind: "subject",
+  subject_state: "verified",
+  suggested_subject: null,
+  suggested_confidence: null,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   fixture.papers = [
@@ -167,4 +186,72 @@ test("private search input is inside an explicit PostHog no-capture boundary", (
   const boundary = input.closest(".ph-no-capture");
   expect(boundary).toBeTruthy();
   expect(boundary?.getAttribute("data-private-academic-search")).toBe("true");
+});
+
+
+test("last good matches remain visible while a newer search is loading", async () => {
+  const next = deferred<any[]>();
+  fixture.search.mockResolvedValueOnce([verifiedHit]).mockImplementationOnce(() => next.promise);
+
+  mount();
+  const input = screen.getByRole("searchbox", { name: "Search library" });
+  await userEvent.type(input, "force");
+
+  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+  await userEvent.type(input, "x");
+
+  expect(await screen.findByText("Searching…")).toBeTruthy();
+  expect(screen.getByText("Physics · Class test")).toBeTruthy();
+  expect(screen.queryByText("No matching papers")).toBeNull();
+
+  await next.resolve([
+    {
+      paper_id: "unknown",
+      rank: 0.7,
+      match_kind: "question_or_answer",
+      subject_state: "unknown",
+      suggested_subject: null,
+      suggested_confidence: null,
+    },
+  ]);
+
+  expect(await screen.findByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(screen.queryByText("Physics · Class test")).toBeNull();
+});
+
+test("failed refresh retains last good matches and offers retry", async () => {
+  fixture.search
+    .mockResolvedValueOnce([verifiedHit])
+    .mockRejectedValueOnce(new Error("private index offline"))
+    .mockResolvedValueOnce([verifiedHit]);
+
+  mount();
+  const input = screen.getByRole("searchbox", { name: "Search library" });
+  await userEvent.type(input, "force");
+  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+
+  await userEvent.type(input, "x");
+
+  expect(await screen.findByText(/Last available matches/)).toBeTruthy();
+  expect(screen.getByText("Physics · Class test")).toBeTruthy();
+  expect(screen.queryByText("No matching papers")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await waitFor(() => expect(fixture.search).toHaveBeenCalledTimes(3));
+  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+});
+
+test("no-results state appears only after a successful empty search", async () => {
+  const pending = deferred<any[]>();
+  fixture.search.mockImplementationOnce(() => pending.promise);
+
+  mount();
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), "definitely absent");
+
+  expect(await screen.findByText("Searching…")).toBeTruthy();
+  expect(screen.queryByText("No matching papers")).toBeNull();
+
+  await pending.resolve([]);
+  expect(await screen.findByText("No matching papers")).toBeTruthy();
+  expect(screen.getByText("Try changing the search or one of the filters.")).toBeTruthy();
 });
