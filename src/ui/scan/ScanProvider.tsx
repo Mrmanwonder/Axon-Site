@@ -90,7 +90,7 @@ type ScanModule = {
   resetScan: () => void;
 
   setScanContext: (ctx: unknown) => void;
-  attachSurface: (video: HTMLVideoElement | null, overlay: HTMLCanvasElement | null) => void;
+  attachSurface: (video: HTMLVideoElement | null, overlay: HTMLCanvasElement | null, options?: { autoCapture: boolean }) => void;
   detachSurface: () => void;
   initScanUI: (ctx: unknown, host: unknown) => Promise<void>;
   setPendingPaperType: (t: string | null) => void;
@@ -145,6 +145,8 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   locationRef.current = location;
   const activation = useRef(0);
   const visibleRef = useRef(false);
+  const screenVisibleRef = useRef(false);
+  const pageSuspendedRef = useRef(false);
   const cameraModule = useRef<typeof import("../../scan/camera.js") | null>(null);
 
   const toast = useToast();
@@ -170,6 +172,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const reviewOpen = reviewIdentity !== null && location.pathname === paths.review(reviewIdentity);
   const [submitting, setSubmitting] = useState(false);
   const [auto, setAuto] = useState(true);
+  const autoRef = useRef(true);
 
   const scanPromise = useRef<Promise<ScanModule> | null>(null);
   const scanReady = useRef<Promise<unknown> | null>(null);
@@ -255,7 +258,8 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   }, [toast, openSheet, gotoScan, navigate]);
 
 
-  const onScreenVisible = useCallback((visible: boolean) => {
+  const setCameraVisible = useCallback((visible: boolean, retry = false) => {
+    if (visibleRef.current === visible && !retry) return;
     const request = ++activation.current;
     visibleRef.current = visible;
     if (!visible) {
@@ -282,7 +286,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
 
         const [scan, stream] = await Promise.all([ensureScan(), cameraRequest]);
         if (request !== activation.current || !visibleRef.current) return;
-        scan.attachSurface(videoRef.current, overlayRef.current);
+        scan.attachSurface(videoRef.current, overlayRef.current, { autoCapture: autoRef.current });
         await scan.setScanVisible(true, stream);
       } catch {
         if (request !== activation.current) return;
@@ -297,9 +301,30 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     })();
   }, [ensureScan]);
 
+  const onScreenVisible = useCallback((visible: boolean) => {
+    screenVisibleRef.current = visible;
+    setCameraVisible(visible && !document.hidden && !pageSuspendedRef.current, visible);
+  }, [setCameraVisible]);
+
+  useEffect(() => {
+    const syncVisibility = () => {
+      setCameraVisible(screenVisibleRef.current && !document.hidden && !pageSuspendedRef.current);
+    };
+    const hidePage = () => { pageSuspendedRef.current = true; syncVisibility(); };
+    const showPage = () => { pageSuspendedRef.current = false; syncVisibility(); };
+    document.addEventListener("visibilitychange", syncVisibility);
+    window.addEventListener("pagehide", hidePage);
+    window.addEventListener("pageshow", showPage);
+    return () => {
+      document.removeEventListener("visibilitychange", syncVisibility);
+      window.removeEventListener("pagehide", hidePage);
+      window.removeEventListener("pageshow", showPage);
+    };
+  }, [setCameraVisible]);
 
   useEffect(() => () => {
     ++activation.current;
+    screenVisibleRef.current = false;
     visibleRef.current = false;
     cameraModule.current?.releaseCamera();
     modRef.current?.setScanVisible(false);
@@ -308,6 +333,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
 
   const shoot = useCallback(() => { modRef.current?.shoot(); }, []);
   const setAutoCapture = useCallback((on: boolean) => {
+    autoRef.current = on;
     setAuto(on);
     modRef.current?.setAutoCapture(on);
   }, []);
