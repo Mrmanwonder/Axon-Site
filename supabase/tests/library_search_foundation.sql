@@ -31,6 +31,7 @@ from public.subject_offering so
 where so.availability='active'
 order by so.id
 limit 1;
+grant select on table _axo49_catalog to authenticated;
 
 do $$ begin
   if not exists (select 1 from _axo49_catalog) then
