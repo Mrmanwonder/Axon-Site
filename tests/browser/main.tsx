@@ -12,6 +12,7 @@ import NotFound from "../../src/ui/pages/NotFound";
 import TabNav from "../../src/ui/shell/TabNav";
 import AnswerBlockView from "../../src/ui/components/AnswerBlock";
 import ReviewSheet from "../../src/ui/scan/ReviewSheet";
+import ProfileChooser from "../../src/ui/components/ProfileChooser";
 const params = new URLSearchParams(location.search);
 function DialogDemo() {
   const { openSheet } = useSheetControls();
@@ -29,6 +30,38 @@ function AnswerDemo() {
   />;
 }
 function Boom(): never { throw new Error("Intentional route failure"); }
+
+function StudentScopeHouseholdDemo() {
+  const { gate, student, papersResource, signOutNow } = useApp();
+
+  if (gate === "loading") return <p role="status">scope-loading</p>;
+  if (gate === "boot_error") return <p role="status">scope-boot-error</p>;
+  if (gate === "onboarding") {
+    return <>
+      <p role="status">signed-out</p>
+      <button type="button" onClick={() => {
+        localStorage.removeItem("axon.e2e.student-scope.signed-out");
+        location.reload();
+      }}>Sign in again</button>
+    </>;
+  }
+  if (gate === "choose_profile") {
+    return <>
+      <p role="status">choose-profile</p>
+      <ProfileChooser />
+    </>;
+  }
+
+  return <>
+    <p data-testid="active-student">{student?.id ?? "none"}</p>
+    <p data-testid="paper-state">
+      {papersResource.state}:{papersResource.data?.map(paper => paper.id).join(",") ?? "none"}
+    </p>
+    <ProfileChooser />
+    <button type="button" onClick={() => void signOutNow()}>Sign out test</button>
+  </>;
+}
+
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
@@ -44,5 +77,5 @@ if (params.get("view") === "route-errors") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }
