@@ -60,31 +60,33 @@ jobs:
           supabase db reset --local
 
       # Each file in supabase/tests/ is a self-contained, rolled-back suite
-      # that ends with `select count(*) ... as failed from public._r`. Run
-      # every one and fail the job if any suite reports failed > 0, instead
-      # of relying on someone reading the output by hand.
+      # that ends with `select count(*) ... as failed from public._r`. Execute
+      # each suite exactly once, stream that output, and fail the job if its
+      # captured assertion summary reports failed > 0.
       - name: Run SQL test suites
         run: |
-          set -e
+          set -uo pipefail
           DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
           status=0
           for f in supabase/tests/*.sql; do
-            echo "::group::$f (human-readable)"
-            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f" || true
-            echo "::endgroup::"
-
-            # Every suite's second-to-last statement is
-            # `select count(*) as total, ... as passed, ... as failed from public._r`,
-            # immediately before the failing-rows detail select and the closing
-            # `rollback;`. Re-run in a fresh transaction, unaligned/tuples-only, and
-            # read just that first line so pass/fail is judged by a number, not by
-            # scanning printed output.
-            counts="$(psql "$DB_URL" -t -A -F'|' -v ON_ERROR_STOP=1 -f "$f" | grep -E '^[0-9]+\|[0-9]+\|[0-9]+$' | head -n1)"
-            failed="$(echo "$counts" | cut -d'|' -f3)"
-            if [ -z "$failed" ] || [ "$failed" != "0" ]; then
-              echo "::error file=$f::${failed:-unparseable}} assertion(s) failed in $f (counts line: '$counts')"
+            log="$(mktemp)"
+            echo "::group::$f"
+            # One execution only. Unaligned/tuples-only output keeps assertion
+            # counts machine-parseable while still streaming planner, benchmark
+            # and failure-detail evidence into the Actions log.
+            if ! psql "$DB_URL" -t -A -F'|' -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tee "$log"; then
+              echo "::error file=$f::SQL execution failed"
               status=1
             fi
+            echo "::endgroup::"
+
+            counts="$(grep -E '^[0-9]+\|[0-9]+\|[0-9]+$' "$log" | head -n1 || true)"
+            failed="$(printf '%s' "$counts" | cut -d'|' -f3)"
+            if [ -z "$failed" ] || [ "$failed" != "0" ]; then
+              echo "::error file=$f::${failed:-unparseable} assertion(s) failed in $f (counts line: '$counts')"
+              status=1
+            fi
+            rm -f "$log"
           done
           exit $status
 
