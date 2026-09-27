@@ -39,6 +39,7 @@ scene.width = Math.round(W * SCALE); scene.height = Math.round(H * SCALE);
 const g = scene.getContext('2d');
 
 const params = new URLSearchParams(location.search);
+const scenario = params.get('scenario') ?? 'page';
 const shake = Number(params.get('shake') ?? 2);   // pixels of hand wobble
 // Real movement, on top of the wobble: the page swings across the frame and
 // back, the way it does while someone is framing a shot. Two pixels of shake
@@ -48,6 +49,8 @@ const shake = Number(params.get('shake') ?? 2);   // pixels of hand wobble
 // exactly here. `?sweep=N` is the amplitude in scene pixels.
 const sweep = Number(params.get('sweep') ?? 0);
 let t = 0;
+let drawing = true;
+let drawHandle = 0;
 
 function draw() {
   t++;
@@ -56,6 +59,7 @@ function draw() {
 
   g.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   g.fillStyle = '#2b2f36'; g.fillRect(0, 0, W, H);          // desk
+  if (scenario !== 'blank') {
   g.save();
   g.translate(W / 2 + jx, H / 2 + jy);
   g.rotate(0.03);
@@ -80,14 +84,15 @@ function draw() {
   g.fillStyle = '#c02226';                                   // marking
   for (let i = 0; i < 8; i++) g.fillRect(232, -400 + i * 106, 26, 34);
   g.restore();
-  requestAnimationFrame(draw);
+  }
+  if (drawing) drawHandle = requestAnimationFrame(draw);
 }
 draw();
 
 const stream = scene.captureStream(15);
 const log = document.getElementById('log');
 const events = [];
-const result = { live: false, states: [], shots: 0, firstShotMs: null, errors: [] };
+const result = { live: false, states: [], shots: 0, firstShotMs: null, firstLockMs: null, cameraReadyAt: null, errors: [] };
 window.__vf = result;
 
 const started = performance.now();
@@ -95,6 +100,7 @@ const capture = createCapture({
   video: document.getElementById('v'),
   overlay: document.getElementById('overlay'),
   onState: (s) => {
+    if (s.hasPage && result.cameraReadyAt !== null) result.firstLockMs ??= Math.round(performance.now() - result.cameraReadyAt);
     const line = `${Math.round(performance.now() - started)}ms  page=${s.hasPage ? 'yes' : 'no '}  ` +
       `steady=${s.steady ? 'yes' : 'no '}  edge=${s.pageLongEdge}  block=${s.blocking ?? '-'}  ${s.hint}`;
     events.push(line);
@@ -102,10 +108,6 @@ const capture = createCapture({
                          pageLongEdge: s.pageLongEdge, hint: s.hint,
                          at: Math.round(performance.now() - started),
                          trackState: s.trackState, trackConfidence: s.trackConfidence,
-                         // The stabiliser's live transform, so the harness can
-                         // check the video is actually being panned and that
-                         // the brackets are drawn through the same transform
-                         // rather than against it.
                          videoTransform: document.getElementById('v').style.transform });
     log.textContent = events.slice(-14).join('\n');
   },
@@ -119,6 +121,8 @@ const capture = createCapture({
   },
 });
 
+result.stop = () => { drawing = false; cancelAnimationFrame(drawHandle); capture.stop(); };
+
 // `?auto=0` for runs about the frames rather than the shutter — a shot
 // mid-run disarms the gate and changes what is being measured. See
 // bench/tracking-continuity.mjs.
@@ -126,6 +130,7 @@ if (params.get('auto') === '0') capture.setAutoCapture(false);
 
 try {
   await capture.start(stream);
+  result.cameraReadyAt = performance.now();
   result.live = true;
 } catch (e) {
   result.errors.push(e.message);
