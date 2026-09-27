@@ -88,7 +88,8 @@ insert into public.parent_progress_report (student_id, period_start, period_end,
 -- ══════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
+select public.set_student_scope('a0000000-0000-4000-8000-000000000002',900);
 
 select public._t('pro guardian: tier is pro',
   (select tier = 'pro' from public.get_entitlements()));
@@ -100,7 +101,8 @@ select public._t('pro guardian: unlimited student profiles',
 
 reset role;
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated","session_id":"entitlements-b"}';
+select public.set_student_scope('b0000000-0000-4000-8000-000000000002',900);
 
 select public._t('free guardian: tier is free',
   (select tier = 'free' from public.get_entitlements()));
@@ -118,7 +120,7 @@ reset role;
 
 do $$ begin
   set local role authenticated;
-  set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated"}';
+  set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated","session_id":"entitlements-b"}';
   begin
     insert into public.student (guardian_id, first_name, class_level, age_band)
     values ('b0000000-0000-4000-8000-000000000001','Second Kid',9,'under_18');
@@ -130,7 +132,7 @@ end $$;
 
 do $$ begin
   set local role authenticated;
-  set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+  set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
   begin
     insert into public.student (guardian_id, first_name, class_level, age_band)
     values ('a0000000-0000-4000-8000-000000000001','Second Kid',9,'under_18');
@@ -145,7 +147,7 @@ end $$;
 -- ══════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated","session_id":"entitlements-b"}';
 
 select public._t('free guardian: the old paper still appears in the library (count/date only)',
   (select count(*) = 1 from public.paper where id = 'b0000000-0000-4000-8000-000000000012'));
@@ -160,7 +162,7 @@ select public._t('free guardian: NOTHING is gated on the recent paper -- this is
 
 reset role;
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
 
 select public._t('pro guardian: old-paper attempt depth IS readable',
   (select count(*) = 1 from public.student_attempt where id = 'a0000000-0000-4000-8000-000000000021'));
@@ -174,7 +176,7 @@ reset role;
 -- ══════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"b2222222-2222-4222-8222-222222222222","role":"authenticated","session_id":"entitlements-b"}';
 
 select public._t('free guardian: single-subject insight is fully visible, identical to Pro',
   (select count(*) = 1 from public.pattern_insight
@@ -198,7 +200,7 @@ end; end $$;
 
 reset role;
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
 
 select public._t('pro guardian: cross-subject row IS visible, with its full specifics',
   (select subjects = array['Physics','Chemistry'] from public.pattern_insight
@@ -222,7 +224,7 @@ select public._t('past_due resolves to free the moment it is written',
   not private.guardian_is_pro('a0000000-0000-4000-8000-000000000001'));
 
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
 
 select public._t('past_due guardian: tier is free',
   (select tier = 'free' from public.get_entitlements()));
@@ -272,7 +274,7 @@ select public._t('a successful retry restores Pro immediately',
 -- ══════════════════════════════════════════════════════════════════════════
 
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
 
 select public._t('authenticated reads no stripe events',
   (select count(*) = 0 from public.stripe_event));
