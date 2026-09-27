@@ -189,7 +189,7 @@ export default function Library() {
         if (!cancelled) {
           setSearchState({
             state: "failed",
-            hits: [],
+            hits: previousHits,
             error: error instanceof Error ? error.message : "Search could not be completed.",
           });
         }
@@ -220,7 +220,7 @@ export default function Library() {
 
   const filteredPapers = useMemo(() => {
     if (normalizedQuery) {
-      if (searchState.state !== "ready") return [];
+      if (searchState.state === "idle") return [];
       const byId = new Map(papers.map((paper) => [paper.id, paper]));
       return searchState.hits
         .map((hit) => byId.get(hit.paper_id))
@@ -352,7 +352,10 @@ export default function Library() {
       {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
       {normalizedQuery && searchState.state === "failed" && (
         <div role="status" className="subnote">
-          Search couldn&rsquo;t reach the private index. <button onClick={() => setSearchRevision((value) => value + 1)}>Try again</button>
+          {searchState.hits.length
+            ? <>Last available matches. Search couldn&rsquo;t reach the private index. </>
+            : <>Search couldn&rsquo;t reach the private index. </>}
+          <button onClick={() => setSearchRevision((value) => value + 1)}>Try again</button>
         </div>
       )}
       <div className="list">
