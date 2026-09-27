@@ -152,6 +152,25 @@ select public._lsf_t(
   )
 );
 
+
+-- The snapshot is historical evidence. Later catalog copy edits must not rewrite
+-- what this paper was verified as at binding time.
+update public.subject_offering so
+   set display_name = so.display_name || ' — catalog drift fixture'
+  from _axo49_catalog c
+ where so.id=c.offering_id;
+
+select public._lsf_t(
+  'verified subject snapshot survives later catalog drift',
+  exists (
+    select 1
+    from public.paper p
+    cross join _axo49_catalog c
+    where p.id='49000000-0000-4000-8000-000000000020'
+      and p.subject_display_snapshot=c.display_name
+  )
+);
+
 insert into public.student_attempt(
   id,student_id,paper_id,paper_tier,question_label,question_text,student_answer,
   marks_awarded,max_marks,marks_source,extraction_confidence
@@ -243,21 +262,27 @@ do $$ begin
   end;
 end $$;
 
--- Even snapshot columns themselves are not trusted input: a caller touching
--- them gets the canonical catalog value recomputed by the trigger.
-update public.paper
-   set subject_display_snapshot='Forged subject'
- where id='49000000-0000-4000-8000-000000000020';
+-- Snapshot columns are not caller-writable either. Reject rather than
+-- refreshing from the now-drifted catalog, preserving historical stability.
+do $ begin
+  begin
+    update public.paper
+       set subject_display_snapshot='Forged subject'
+     where id='49000000-0000-4000-8000-000000000020';
+    perform public._lsf_t('Student Mode cannot forge canonical subject snapshot',false,'update succeeded');
+  exception when sqlstate '42501' then
+    perform public._lsf_t('Student Mode cannot forge canonical subject snapshot',true,sqlerrm);
+  end;
+end $;
 
 select public._lsf_t(
-  'caller cannot forge canonical subject snapshot',
+  'rejected snapshot forgery leaves historical value unchanged',
   exists (
     select 1
     from public.paper p
     cross join _axo49_catalog c
     where p.id='49000000-0000-4000-8000-000000000020'
       and p.subject_display_snapshot=c.display_name
-      and p.subject_display_snapshot<>'Forged subject'
   )
 );
 
