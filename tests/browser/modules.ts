@@ -1,32 +1,68 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
+const HOUSEHOLD = scenario === "student-scope-household";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
+let householdScope = HOUSEHOLD
+  ? (sessionStorage.getItem("axon.test.household.scope") ?? "student-a")
+  : null;
 export const sb = {
   from: (table: string) => ({
     select: () => ({
       eq: () => table === "student"
-        ? { order: async () => ({ data: [{ id: "student", first_name: "Sam", programme_id: null, stage_id: null }] }) }
+        ? { order: async () => ({ data: HOUSEHOLD
+          ? [
+              { id: "student-a", first_name: "Alpha", programme_id: null, stage_id: null },
+              { id: "student-b", first_name: "Beta", programme_id: null, stage_id: null },
+            ]
+          : [{ id: "student", first_name: "Sam", programme_id: null, stage_id: null }] }) }
         : Promise.resolve({ data: [{ subject: "physics" }] }),
       in: async () => ({
         data: table === "student_subject"
-          ? [{
-              student_id: "student",
-              subject: "physics",
-              subject_offering_id: null,
-              selected_level: null,
-              display_name_snapshot: null,
-              external_code_snapshot: null,
-            }]
+          ? (HOUSEHOLD
+            ? ["student-a", "student-b"].map(student_id => ({
+                student_id,
+                subject: "physics",
+                subject_offering_id: null,
+                selected_level: null,
+                display_name_snapshot: null,
+                external_code_snapshot: null,
+              }))
+            : [{
+                student_id: "student",
+                subject: "physics",
+                subject_offering_id: null,
+                selected_level: null,
+                display_name_snapshot: null,
+                external_code_snapshot: null,
+              }])
           : [],
         error: null,
       }),
     }),
   }),
 };
-export async function currentSession() { if (scenario === "auth-error") throw new Error("Auth unavailable"); return {}; }
+export async function currentSession() {
+  if (scenario === "auth-error") throw new Error("Auth unavailable");
+  if (HOUSEHOLD && sessionStorage.getItem("axon.test.household.signed-out") === "1") return null;
+  return {};
+}
 export const currentGuardian = async () => ({ id: "guardian" });
-export const studentScopeState = async () => ({ active: false, student_id: null, remaining_seconds: 0 });
-export const setStudentScope = async (studentId: string) => ({ active: true, student_id: studentId, remaining_seconds: 1800 });
-export const clearStudentScope = async () => true;
+export const studentScopeState = async () => HOUSEHOLD && householdScope
+  ? { active: true, student_id: householdScope, remaining_seconds: 1800 }
+  : { active: false, student_id: null, remaining_seconds: 0 };
+export const setStudentScope = async (studentId: string) => {
+  if (HOUSEHOLD) {
+    householdScope = studentId;
+    sessionStorage.setItem("axon.test.household.scope", studentId);
+  }
+  return { active: true, student_id: studentId, remaining_seconds: 1800 };
+};
+export const clearStudentScope = async () => {
+  if (HOUSEHOLD) {
+    householdScope = null;
+    sessionStorage.removeItem("axon.test.household.scope");
+  }
+  return true;
+};
 export const takeProviderError = () => null;
 export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
 export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
@@ -35,7 +71,13 @@ export const savePrefs = async () => readLocal();
 export async function readConsentState() { if (scenario === "consent-error") throw new Error("Ledger unavailable"); return {}; }
 export const recordConsent = async () => {};
 export const withdrawConsent = async () => {};
-export const signOut = async () => {};
+export const signOut = async () => {
+  if (!HOUSEHOLD) return;
+  await clearStudentScope();
+  const { LocalDataService } = await import("../../src/local-data.js");
+  await LocalDataService.clearAll();
+  sessionStorage.setItem("axon.test.household.signed-out", "1");
+};
 export async function listPapers() { await wait(); return { data: [], stale: false }; }
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
