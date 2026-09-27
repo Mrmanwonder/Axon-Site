@@ -81,6 +81,11 @@ insert into public.guardian(
   'AXO-49 Guardian','axo49@test.invalid',now(),'stub','axo49'
 );
 
+update public.guardian
+set subscription_status='pro'::public.subscription_status,
+    subscription_plan='monthly'::public.subscription_plan
+where id='49000000-0000-4000-8000-000000000010';
+
 insert into public.consent_event(
   guardian_id, student_id, purpose, granted, notice_version, method
 )
@@ -345,20 +350,21 @@ select public._lsf_t(
   )
 );
 
-do $$
-declare failures text;
-begin
-  select string_agg(name || coalesce(' ('||detail||')',''), E'\n')
-    into failures
-    from public._library_search_foundation_test
-   where not passed;
-  if failures is not null then
-    raise exception E'AXO-49 library search foundation failures:\n%', failures;
-  end if;
-end $$;
+select count(*) as total,
+       count(*) filter (where passed) as passed,
+       count(*) filter (where not passed) as failed
+from public._library_search_foundation_test;
 
 select seq,name,passed,detail
 from public._library_search_foundation_test
+where not passed
 order by seq;
+
+do $
+begin
+  if exists (select 1 from public._library_search_foundation_test where not passed) then
+    raise exception 'AXO-49 library search foundation tests failed';
+  end if;
+end $;
 
 rollback;
