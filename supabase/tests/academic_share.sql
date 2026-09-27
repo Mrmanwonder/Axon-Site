@@ -11,6 +11,7 @@ create or replace function public._share_claims(p_sub text, p_age interval)
 returns text language sql as $$
   select jsonb_build_object(
     'sub', p_sub, 'role', 'authenticated',
+    'session_id', 'academic-share-' || p_sub,
     'amr', jsonb_build_array(jsonb_build_object(
       'method','otp',
       'timestamp',floor(extract(epoch from (now() - p_age)))::bigint
@@ -85,6 +86,7 @@ insert into public.mark_loss_event(
 
 set local role authenticated;
 select set_config('request.jwt.claims', public._share_claims('89000000-0000-4000-8000-000000000001', interval '4 hours'), true);
+select public.set_student_scope('89000000-0000-4000-8000-000000000021',900);
 
 do $share$ begin
   perform public.create_academic_share('paper','89000000-0000-4000-8000-000000000031',1440);
