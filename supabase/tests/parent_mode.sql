@@ -37,6 +37,7 @@ returns text language sql as $$
   select jsonb_build_object(
     'sub', p_sub,
     'role', 'authenticated',
+    'session_id', 'parent-mode-' || p_sub,
     'amr', jsonb_build_array(jsonb_build_object(
       'method', 'otp',
       'timestamp', floor(extract(epoch from (now() - p_amr_age)))::bigint))
@@ -115,6 +116,7 @@ select public._t('and Parent Mode has expired, not merely wound down',
 reset role;
 set local role authenticated;
 select set_config('request.jwt.claims', public._claims('e5555555-5555-4555-8555-555555555555', interval '4 hours'), true);
+select public.set_student_scope('eeeeeeee-0000-4000-8000-000000000002',900);
 
 -- Everything the app is for still works. A boundary that stops a student
 -- studying has failed differently, not succeeded.
