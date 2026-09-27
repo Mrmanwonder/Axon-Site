@@ -353,7 +353,7 @@ export default function Library() {
       {normalizedQuery && searchState.state === "failed" && (
         <div role="status" className="subnote">
           {searchState.hits.length
-            ? <>Last available matches. Search couldn&rsquo;t refresh the private index. </>
+            ? <>Last available matches. Search couldn&rsquo;t reach the private index. </>
             : <>Search couldn&rsquo;t reach the private index. </>}
           <button onClick={() => setSearchRevision((value) => value + 1)}>Try again</button>
         </div>
