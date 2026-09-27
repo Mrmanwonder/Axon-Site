@@ -29,14 +29,20 @@ The SQL suite prints p50, p95 and max latency for every family so regressions ha
 
 ## Planner evidence
 
-The benchmark runs `ANALYZE` after loading the fixture and captures `EXPLAIN (FORMAT JSON)`. Acceptance requires:
+The benchmark runs `ANALYZE` after loading the fixture. **Real latency samples are always measured with normal planner settings.** On the 6,000-attempt rollback fixture PostgreSQL may legitimately prefer a fast sequential scan for a rare FTS term or the smaller single-column subject index; the measured p95 remains the user-facing performance gate.
 
-- `student_attempt_search_vector_gin` for private question/answer full-text lookup;
-- `paper_student_verified_subject_idx` for selective active-student canonical-subject filtering.
+Index viability is proven separately with `EXPLAIN (FORMAT JSON)` by disabling only the cheaper competing plan type:
+
+- with sequential scan disabled, private question/answer FTS must be satisfiable through `student_attempt_search_vector_gin`;
+- with explicit sort disabled, the active-student canonical-subject query must be satisfiable through `paper_student_verified_subject_idx`.
+
+This catches missing or unusable indexes without treating a cheaper cost-based planner choice as a regression.
 
 ## Index freshness
 
 `student_attempt.search_vector` is a PostgreSQL **generated stored column**. It changes in the same transaction as `question_text`, `question_label` or `student_answer`; there is no asynchronous indexing queue and therefore no honest separate "indexing…" product state to expose.
+
+The generated vector also normalizes common mathematical/symbol separators such as `/`, `=`, `+`, brackets and multiplication/division symbols into term boundaries. The same normalization is applied to FTS query parsing, so extracted text such as `alpha/beta` remains discoverable through a natural `alpha beta` search without exposing raw answer text.
 
 The benchmark updates an answer with a new unique token and immediately searches for it under Student Mode. The test must find the paper without a delay or reconciliation job.
 
