@@ -497,8 +497,10 @@ begin
 end;
 $$;
 
--- SECURITY DEFINER bypasses pattern_insight RLS, so repeat both the Student
--- Mode and Pro entitlement checks explicitly.
+-- SECURITY DEFINER bypasses pattern_insight RLS. Keep the existing
+-- existence-only teaser available on every tier, but constrain it to the one
+-- active Student Mode profile. Paid subjects/paper_ids/summary_text remain
+-- behind pattern_insight's Pro-only RLS.
 create or replace function public.get_cross_subject_signal()
 returns table(
   student_id uuid,
@@ -514,9 +516,12 @@ as $$
   select pi.student_id, pi.cause, pi.detected_at, pi.dismissed_at
     from public.pattern_insight pi
    where pi.scope = 'cross_subject'
-     and private.student_scope_allows(pi.student_id)
-     and private.guardian_is_pro(private.current_guardian_id());
+     and private.student_scope_allows(pi.student_id);
 $$;
+
+comment on function public.get_cross_subject_signal() is
+  'AXO-61. Existence-only cross-subject teaser remains available on every tier, but SECURITY DEFINER output is constrained to the active Student Mode profile. Paid pattern details remain behind pattern_insight Pro RLS.';
+
 
 -- AXO-95 deliberately removed the extra Parent Mode ceremony from academic
 -- Share/Delete. AXO-61 adds Student Mode as the normal authority while keeping
