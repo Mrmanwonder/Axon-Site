@@ -268,3 +268,24 @@ test("review mark radios follow native keyboard behavior and closed review is ab
   await expect(page.getByRole("region", { name: "Review paper" })).toHaveCount(0);
   await expect(page.getByText("Question 1")).toHaveCount(0);
 });
+
+
+test("Library search controls remain usable inside the mobile viewport", async ({ page }) => {
+  await page.goto("/tests/browser/index.html");
+  await expect(page.getByText("Nothing here yet")).toBeVisible();
+
+  const search = page.getByRole("searchbox", { name: "Search library" });
+  await expect(search).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filter by subject" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Filter by date" })).toBeVisible();
+
+  await search.fill("E=mc² + α/β");
+  await expect(search).toHaveValue("E=mc² + α/β");
+
+  const box = await search.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width + 1);
+});
