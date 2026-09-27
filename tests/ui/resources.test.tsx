@@ -38,6 +38,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   analyticsReadiness: mocks.analytics, lossByCause: async () => ({ data: {} }), needsCheck: async () => ({ data: { count: 0, papers: 0 } }), unreadablePages: async () => ({ data: [] }),
   paperTypeLabel: () => "Test paper", statusKeyForRun: () => "reading", PAPER_STATUS: { reading: { label: "Reading", tone: "wait" } },
   retryFailedPaper: vi.fn(),
+  searchLibrary: vi.fn().mockResolvedValue([]),
 }));
 const deferred = <T,>() => { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 function Status() { const app = useApp(); return <><span>{app.gate}</span><span>consent:{app.consentResource.state}</span><button onClick={() => void app.refreshLibrary()}>Refresh</button></>; }

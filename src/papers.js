@@ -321,7 +321,7 @@ export async function listPapers(studentId) {
     // not guess between them: an unqualified embed returns 300 PGRST201 and no
     // rows at all, so this whole read fails and the Library renders "No papers
     // yet" over a library that is not empty. Ownership is the one we mean.
-    .select('id,type,tier,date_taken,created_at,subject,reported_total,stated_maximum,total_awarded,total_available,reconciled,paper_page(count),' +
+    .select('id,type,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,reconciled,paper_page(count),' +
             'student_attempt!student_attempt_paper_id_student_id_fkey(count)')
     .eq('student_id', studentId)
     .order('date_taken', { ascending: false });
@@ -343,6 +343,39 @@ export async function searchLibraryAttempts(query, limit = 50) {
   const boundedLimit = Math.min(100, Math.max(1, Number.isFinite(limit) ? Math.trunc(limit) : 50));
   const { data, error } = await sb.rpc('search_library_attempts', {
     p_query: normalized,
+    p_limit: boundedLimit,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Coherent private Library search.
+ *
+ * The database owns ranking and every private-text match. The browser supplies
+ * filters and receives paper IDs plus non-sensitive match/subject state only;
+ * raw question and answer text never crosses this boundary as a search result.
+ */
+export async function searchLibrary({
+  query,
+  subjectOfferingId = null,
+  subjectState = 'all',
+  paperType = null,
+  tier = null,
+  dateFrom = null,
+  dateTo = null,
+  limit = 100,
+} = {}) {
+  const normalized = typeof query === 'string' ? query.trim() : '';
+  const boundedLimit = Math.min(250, Math.max(1, Number.isFinite(limit) ? Math.trunc(limit) : 100));
+  const { data, error } = await sb.rpc('search_library', {
+    p_query: normalized || null,
+    p_subject_offering_id: subjectOfferingId || null,
+    p_subject_state: subjectState || 'all',
+    p_paper_type: paperType || null,
+    p_tier: tier || null,
+    p_date_from: dateFrom || null,
+    p_date_to: dateTo || null,
     p_limit: boundedLimit,
   });
   if (error) throw error;
