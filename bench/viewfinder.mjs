@@ -13,36 +13,11 @@
 // nothing about whether it finds a page. bench/viewfinder.html paints a sheet on
 // a dark desk into a canvas and streams it, hand-shake included.
 //
-// Playwright is not a dependency of this repo — there is no package.json and
-// AGENTS.md keeps it that way. Use an install you already have:
-//
-//   python3 -m http.server 8765 &
-//   PLAYWRIGHT_HOME=/path/with/node_modules node bench/viewfinder.mjs [--shake 2]
-//
-// (NODE_PATH does not work here: it only ever applied to CommonJS require.)
+// Run against Vite (npm run dev) or a static server:
+//   node bench/viewfinder.mjs --url http://localhost:5173 --budget 12000
+// Uses this repository's installed Playwright browser.
 
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
-
-// A CJS entry imported by URL lands under `default`, so unwrap either shape.
-const unwrap = (mod) => mod?.chromium ? mod : mod?.default;
-
-async function loadPlaywright() {
-  try { return unwrap(await import('playwright')); } catch { /* not resolvable from here */ }
-  const home = process.env.PLAYWRIGHT_HOME;
-  if (home) {
-    try {
-      const resolve = createRequire(home.endsWith('/') ? home : `${home}/`);
-      return unwrap(await import(pathToFileURL(resolve.resolve('playwright')).href));
-    } catch { /* fall through to the message */ }
-  }
-  console.error('\nThis needs Playwright, which this repo deliberately does not vendor.');
-  console.error('Install it anywhere outside the repo and point PLAYWRIGHT_HOME at that folder:\n');
-  console.error('  npm i playwright');
-  console.error('  PLAYWRIGHT_HOME=$PWD node bench/viewfinder.mjs\n');
-  process.exit(2);
-}
-const { chromium } = await loadPlaywright();
+import { chromium } from '@playwright/test';
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -53,7 +28,7 @@ const base = flag('url', 'http://localhost:8765');
 const shake = flag('shake', '2');
 const budgetMs = Number(flag('budget', '6000'));
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 400, height: 900 } });
 const failures = [];
 page.on('pageerror', (e) => failures.push(`page error: ${e.message}`));
@@ -72,20 +47,12 @@ console.log(`auto-captured      ${r.shots > 0 ? `yes, at ${r.firstShotMs}ms` : '
 if (r.lastShot) console.log(`shot               ${r.lastShot.size}, quad ${r.lastShot.hasQuad ? 'kept' : 'MISSING'}`);
 if (r.lastShot) console.log(`capture overlay     ${r.lastShot.overlayPhase}`);
 
-// The preview stabiliser must actually be driving the video element, and it
-// must be driving it with a real transform rather than an identity one. A
-// stabiliser that silently does nothing looks exactly like a steady hand.
+// AXO-90 deliberately removed display stabilisation. Pixel/overlay mapping
+// must remain untransformed; the bench must not demand a removed feature.
 const transforms = r.states.map((s) => s.videoTransform).filter(Boolean);
-const panned = transforms.filter((t) => !/translate\(0(?:\.00)?px, ?0(?:\.00)?px\)/.test(t));
-console.log(`stabiliser        ${transforms.length ? transforms[transforms.length - 1] : 'NOT APPLIED'}`);
-console.log(`  panning         ${panned.length} of ${transforms.length} frames`);
-
 if (!r.live) failures.push('the camera never went live');
-if (r.states.length && !transforms.length) {
-  failures.push('the stabiliser never applied a transform to the video');
-}
-if (transforms.length && !transforms.some((t) => /scale\(1\.0[1-9]/.test(t))) {
-  failures.push('the stabiliser applied no overscan, so there is no margin to pan into');
+if (transforms.some((value) => value !== 'none')) {
+  failures.push('the camera preview unexpectedly applies a transform');
 }
 if (!found) failures.push('the detector never found the page');
 if (!r.states.some((s) => s.steady)) failures.push('the page was never called steady');
