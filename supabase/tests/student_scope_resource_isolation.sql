@@ -327,6 +327,16 @@ select public._sr_t(
   (public.delete_paper('7aaaaaaa-0000-4000-8000-000000000010')->>'deleted')::boolean
 );
 
+-- AXO-108 planner evidence. Under the authenticated role these policies should
+-- appear as InitPlans ($0/$1) rather than correlated per-row authority calls.
+explain (costs off)
+select id from public.paper
+where student_id='7aaaaaaa-0000-4000-8000-000000000002';
+
+explain (costs off)
+select id from public.student_attempt
+where student_id='7aaaaaaa-0000-4000-8000-000000000002';
+
 reset role;
 
 -- ── structural completeness: ordinary academic policies all use scope ───────
