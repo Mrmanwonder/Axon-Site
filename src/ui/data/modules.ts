@@ -80,7 +80,14 @@ export type Paper = {
   /** 'tier_1' (teacher's marks) or 'tier_2' (matched to an official scheme). */
   tier: string | null;
   date_taken: string;
+  /** Legacy/unverified display subject; never present as verified fact. */
   subject?: string | null;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  subject_identity_source?: string | null;
+  subject_identity_confidence?: string | null;
+  subject_verified_at?: string | null;
   total_awarded?: number | null;
   total_available?: number | null;
   stated_maximum?: number | null;
@@ -292,6 +299,28 @@ export const searchLibraryAttempts = papersMod.searchLibraryAttempts as (
   query: string,
   limit?: number,
 ) => Promise<LibraryAttemptSearchHit[]>;
+
+export type LibrarySearchHit = {
+  paper_id: string;
+  rank: number;
+  match_kind: "browse" | "subject" | "question_label" | "question_or_answer" | "assessment" | "paper_type" | "suggested_subject" | "metadata";
+  subject_state: "verified" | "suggested" | "unknown";
+  suggested_subject: string | null;
+  suggested_confidence: string | null;
+};
+export type LibrarySearchOptions = {
+  query?: string | null;
+  subjectOfferingId?: string | null;
+  subjectState?: "all" | "verified" | "suggested" | "unknown";
+  paperType?: string | null;
+  tier?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  limit?: number;
+};
+export const searchLibrary = papersMod.searchLibrary as (
+  options?: LibrarySearchOptions,
+) => Promise<LibrarySearchHit[]>;
 export const createPaper = papersMod.createPaper as (a: {
   studentId: string; type: string; dateTaken: string;
 }) => Promise<Paper>;
