@@ -70,8 +70,34 @@ declare
   v_display_name text;
   v_external_code text;
 begin
-  -- assessment_identity_id is a server-authored trust decision. Student Mode
-  -- may edit ordinary paper metadata, but cannot mint verified academic identity.
+  -- Canonical snapshot columns are derived data, never an input surface. Once
+  -- stored, they stay stable even if the curriculum catalog later changes.
+  if tg_op = 'INSERT' then
+    if new.subject_offering_id is not null
+       or new.subject_display_snapshot is not null
+       or new.subject_external_code_snapshot is not null
+       or new.subject_identity_source is not null
+       or new.subject_identity_confidence is not null
+       or new.subject_verified_at is not null then
+      raise exception 'verified subject snapshot is derived from assessment identity'
+        using errcode = '22023', hint = 'verified_subject_server_authored';
+    end if;
+  elsif new.subject_offering_id is distinct from old.subject_offering_id
+     or new.subject_display_snapshot is distinct from old.subject_display_snapshot
+     or new.subject_external_code_snapshot is distinct from old.subject_external_code_snapshot
+     or new.subject_identity_source is distinct from old.subject_identity_source
+     or new.subject_identity_confidence is distinct from old.subject_identity_confidence
+     or new.subject_verified_at is distinct from old.subject_verified_at then
+    if coalesce(auth.jwt() ->> 'role', '') in ('authenticated', 'anon') then
+      raise exception 'verified subject snapshot is server-authored'
+        using errcode = '42501', hint = 'verified_subject_server_authored';
+    end if;
+    raise exception 'verified subject snapshot is derived from assessment identity'
+      using errcode = '22023', hint = 'verified_subject_server_authored';
+  end if;
+
+  -- assessment_identity_id itself is also a server-authored trust decision.
+  -- Student Mode may edit ordinary paper metadata, but cannot mint or swap it.
   if coalesce(auth.jwt() ->> 'role', '') in ('authenticated', 'anon') then
     if tg_op = 'INSERT' and new.assessment_identity_id is not null then
       raise exception 'assessment identity is server-authored'
@@ -83,8 +109,21 @@ begin
     end if;
   end if;
 
-  -- Canonical snapshots are never caller-authored. Recompute or clear them on
-  -- every insert and every update that touches identity/snapshot fields.
+  -- Preserve an existing historical snapshot when the exact assessment identity
+  -- has not changed. The migration's self-assignment backfill reaches rows whose
+  -- identity predates this trigger because they do not yet have a snapshot.
+  if tg_op = 'UPDATE'
+     and new.assessment_identity_id is not distinct from old.assessment_identity_id
+     and (
+       old.subject_offering_id is not null
+       or old.subject_display_snapshot is not null
+       or old.subject_identity_source is not null
+       or old.subject_identity_confidence is not null
+       or old.subject_verified_at is not null
+     ) then
+    return new;
+  end if;
+
   new.subject_offering_id := null;
   new.subject_display_snapshot := null;
   new.subject_external_code_snapshot := null;
