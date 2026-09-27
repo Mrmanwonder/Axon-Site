@@ -5,8 +5,9 @@
 // re-measured before automatic capture is allowed to commit it.
 
 import { CAPTURE, CONDITIONING, ENHANCE, QUALITY } from './contract.js';
+import { withDeadline } from './deadline.js';
 import {
-  FALLBACK_CAPTURE_HEIGHT, FALLBACK_CAPTURE_WIDTH,
+  CAMERA_CONTROL_TIMEOUT_MS, FALLBACK_CAPTURE_HEIGHT, FALLBACK_CAPTURE_WIDTH,
   releaseCamera, requestCamera, requestContinuousFocus, requestFallbackCaptureResolution,
 } from './camera.js';
 import { detectQuad, easeQuad, scaleQuad } from './edges.js';
@@ -301,10 +302,20 @@ let nextDetectId = 1;
 let detectTimeouts = 0;
 const detectPending = new Map();
 
+function disableDetectWorker(worker) {
+  if (detectWorker !== worker) return;
+  detectWorker = false;
+  worker.terminate?.();
+  for (const finish of [...detectPending.values()]) finish(null);
+  detectPending.clear();
+  detectTimeouts = 0;
+}
+
 function ensureDetectWorker() {
   if (detectWorker !== null) return detectWorker;
   try {
     detectWorker = new Worker(new URL('./detect-worker.js', import.meta.url), { type: 'module' });
+    const worker = detectWorker;
     detectWorker.onmessage = (event) => {
       const { id, ...rest } = event.data;
       const resolve = detectPending.get(id);
@@ -319,10 +330,7 @@ function ensureDetectWorker() {
       });
       // A crashed worker is already a failed detection. Release every waiter
       // immediately instead of making the viewfinder sit through the timeout.
-      for (const finish of [...detectPending.values()]) finish(null);
-      detectPending.clear();
-      detectWorker = false;
-      detectTimeouts = 0;
+      disableDetectWorker(worker);
     };
   } catch {
     detectWorker = false;
@@ -349,15 +357,18 @@ function runDetectWorker(kind, bitmap, extra = null) {
       detectTimeouts++;
       finish(null);
       // A worker that repeatedly misses its deadline is not a worker path at
-      // all. Falling back to the 360px main-thread detector is preferable to a
+      // all. Falling back to the bounded main-thread detector is preferable to a
       // scanner that can search forever without ever publishing a page.
       if (detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
-        w.terminate?.();
-        detectWorker = false;
-        detectTimeouts = 0;
+        disableDetectWorker(w);
       }
     }, DETECT_TIMEOUT_MS);
-    w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
+    try {
+      w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
+    } catch {
+      bitmap.close?.();
+      disableDetectWorker(w);
+    }
   });
 }
 
@@ -376,6 +387,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let frameClock = null;
   let lastRenderedFrame = -1;
   let detectHandle = 0;
+  let autoRetryHandle = 0;
 
   let track = createTrack();
   let trackSize = null;
@@ -489,9 +501,22 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   let activation = 0;
-  async function start(adopt = null) {
+  let starting = null;
+  function start(adopt = null) {
+    if (starting) return starting;
+    if (running) return Promise.resolve();
     const generation = ++activation;
-    if (running) return;
+    const request = startActivation(adopt, generation).catch((error) => {
+      if (generation === activation) stop();
+      throw error;
+    }).finally(() => {
+      if (starting === request) starting = null;
+    });
+    starting = request;
+    return request;
+  }
+
+  async function startActivation(adopt, generation) {
     const resolved = adopt ? await adopt : await requestCamera();
     if (resolved instanceof Error) throw resolved;
     if (generation !== activation) {
@@ -508,15 +533,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', '');
     video.srcObject = stream;
-    await video.play();
+    await withDeadline(() => video.play(), 5000);
     if (generation !== activation) {
       resolved.getTracks().forEach((cameraTrack) => cameraTrack.stop());
       return;
     }
-    running = true;
     armed = true;
 
     cameraTrack = stream.getVideoTracks?.()[0] ?? null;
+    const setupTrack = cameraTrack;
     imageCapture = null;
     photoSettings = null;
     capturePath = 'canvas-grab';
@@ -525,7 +550,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (cameraTrack && typeof ImageCapture !== 'undefined') {
       try {
         const candidate = new ImageCapture(cameraTrack);
-        const caps = await candidate.getPhotoCapabilities();
+        const caps = await withDeadline(() => candidate.getPhotoCapabilities(), CAMERA_CONTROL_TIMEOUT_MS);
         if (generation !== activation) return;
         imageCapture = candidate;
         capturePath = 'image-capture';
@@ -540,21 +565,27 @@ export function createCapture({ video, overlay, onState, onShot }) {
           ...(targetH > 0 && targetH >= minH ? { imageHeight: targetH } : {}),
         };
       } catch {
+        if (generation !== activation) return;
         imageCapture = null;
         photoSettings = null;
         capturePath = 'canvas-grab';
       }
     }
 
-    if (cameraTrack && !imageCapture) await requestFallbackCaptureResolution(cameraTrack);
-    if (cameraTrack) await requestContinuousFocus(cameraTrack);
+    if (generation !== activation) return;
+    if (setupTrack && !imageCapture) await requestFallbackCaptureResolution(setupTrack);
+    if (generation !== activation) return;
+    if (setupTrack) await requestContinuousFocus(setupTrack);
+    if (generation !== activation) return;
 
+    running = true;
     loop();
-    detect();
+    detect(generation);
   }
 
   function stop() {
     ++activation;
+    starting = null;
     running = false;
     if (frameClock === 'video') video.cancelVideoFrameCallback?.(videoFrameHandle);
     else cancelAnimationFrame(rafHandle);
@@ -562,6 +593,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     frameClock = null;
     lastRenderedFrame = -1;
     clearTimeout(detectHandle);
+    clearTimeout(autoRetryHandle);
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
@@ -584,18 +616,21 @@ export function createCapture({ video, overlay, onState, onShot }) {
     capturePath = 'canvas-grab';
     nativeStillDemoted = false;
     processingHold = false;
+    shootInFlight = false;
     autoRetryAfter = 0;
     autoStableAnchor = null;
     autoStableSince = 0;
     autoCandidateSince = 0;
+    state = blankState();
+    overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height);
     releaseCamera();
   }
 
   // ── live search ──────────────────────────────────────────────────────────
-  async function detect() {
-    if (!running) return;
+  async function detect(generation) {
+    if (!running || generation !== activation) return;
     if (document.hidden) {
-      detectHandle = setTimeout(detect, DETECT_MAX_INTERVAL_MS);
+      detectHandle = setTimeout(() => detect(generation), DETECT_MAX_INTERVAL_MS);
       return;
     }
     const started = performance.now();
@@ -607,17 +642,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
       if (!workerAvailable
           || globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS
           || needsGlobal(track, started)) {
-        await step();
+        await step(generation);
       } else {
-        await measureStep(video.videoWidth, video.videoHeight);
+        await measureStep(video.videoWidth, video.videoHeight, generation);
       }
     } catch { /* one bad frame costs one cycle */ }
+    if (!running || generation !== activation) return;
     const cost = performance.now() - started;
     const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
-    detectHandle = setTimeout(detect, wait);
+    detectHandle = setTimeout(() => detect(generation), wait);
   }
 
-  async function step() {
+  async function step(generation) {
     const vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
     const crop = visibleSourceCrop(vw, vh);
@@ -635,8 +671,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const ph = proxySize.height;
     const workerUsed = !!ensureDetectWorker();
     const result = workerUsed
-      ? await searchOnWorker(pw, ph, vw, vh, crop)
+      ? await searchOnWorker(pw, ph, vw, vh, crop, generation)
       : searchOnMainThread(pw, ph, vw, vh, crop);
+    if (!running || generation !== activation) return;
     track.lastGlobalDetection = performance.now();
     finishStep(result, workerUsed, vw, vh);
   }
@@ -644,6 +681,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   async function trackStep() {
     if (trackInFlight || !running || document.hidden) return;
     if (!ensureDetectWorker()) return;
+    const generation = activation;
     const now = performance.now();
     if (now - lastTrackStartedAt < TRACK_INTERVAL_MS) return;
     lastTrackStartedAt = now;
@@ -658,24 +696,27 @@ export function createCapture({ video, overlay, onState, onShot }) {
     trackInFlight = true;
     try {
       const bitmap = await createImageBitmap(video, { resizeWidth: tw, resizeHeight: th });
+      if (!running || generation !== activation) { bitmap.close?.(); return; }
       const reply = await runDetectWorker('track', bitmap, { windows });
-      if (!running) return;
+      if (!running || generation !== activation) return;
       track = observe(track, reply?.observations ?? {}, performance.now(), { width: tw, height: th });
       publishFromTrack(tw, th, vw, vh, reply?.trackMs ?? 0);
     } catch {
       /* one bad frame costs one tracking cycle */
     } finally {
-      trackInFlight = false;
+      if (generation === activation) trackInFlight = false;
     }
   }
 
-  async function searchOnWorker(pw, ph, vw, vh, crop) {
+  async function searchOnWorker(pw, ph, vw, vh, crop, generation) {
     const proxyBitmap = await createImageBitmap(
       video,
       crop.x, crop.y, crop.width, crop.height,
       { resizeWidth: pw, resizeHeight: ph },
     );
+    if (generation !== activation) { proxyBitmap.close?.(); return null; }
     const search = await runDetectWorker('search', proxyBitmap, { minFill: LIVE_SEARCH_MIN_FILL });
+    if (generation !== activation) return null;
     if (!search?.found) {
       return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
     }
@@ -708,7 +749,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     return { sharpness: read?.sharpness ?? null, focusMs: read?.focusMs ?? 0 };
   }
 
-  async function measureStep(vw, vh) {
+  async function measureStep(vw, vh, generation) {
     const tracked = quadOf(track);
     if (!tracked || !trackSize || !ensureDetectWorker()) return;
     const proxySize = fitLongEdge(vw, vh, LIVE_PROXY_LONG_EDGE);
@@ -718,11 +759,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const size = quadSize(inVideo);
     const pageLongEdge = Math.round(Math.max(size.width, size.height));
     const bitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+    if (generation !== activation) { bitmap.close?.(); return; }
     const read = await runDetectWorker('measure', bitmap, { quad: inProxy });
-    if (!running || !read?.exposure) return;
+    if (!running || generation !== activation || !read?.exposure) return;
     const { sharpness: sharpnessScore, focusMs } =
       await focusOnWorker(video, inVideo, vw, vh, pageLongEdge);
-    if (!running) return;
+    if (!running || generation !== activation) return;
     measured = {
       glare: read.exposure.glare,
       clipping: read.exposure.clipping,
@@ -1000,14 +1042,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   // ── overlay ──────────────────────────────────────────────────────────────
   function scheduleLoop() {
+    const generation = activation;
+    const nextFrame = () => { if (generation === activation) loop(); };
     // Capture confirmation is clocked independently from the camera. Native
     // still capture can briefly stall preview frames; feedback must remain fast.
     if (!captureConfirmation && typeof video.requestVideoFrameCallback === 'function') {
       frameClock = 'video';
-      videoFrameHandle = video.requestVideoFrameCallback(loop);
+      videoFrameHandle = video.requestVideoFrameCallback(nextFrame);
     } else {
       frameClock = 'animation';
-      rafHandle = requestAnimationFrame(loop);
+      rafHandle = requestAnimationFrame(nextFrame);
     }
   }
 
@@ -1187,19 +1231,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   async function takePhotoAttempt(settings) {
-    if (!imageCapture) return { blob: null, timedOut: false };
-    const timeoutToken = Symbol('photo-timeout');
-    const result = await Promise.race([
-      imageCapture.takePhoto(settings).catch(() => null),
-      new Promise((resolve) => setTimeout(() => resolve(timeoutToken), NATIVE_PHOTO_TIMEOUT_MS)),
-    ]);
-    return result === timeoutToken
-      ? { blob: null, timedOut: true }
-      : { blob: result, timedOut: false };
+    const source = imageCapture;
+    if (!source) return { blob: null, timedOut: false };
+    try {
+      const blob = await withDeadline(() => source.takePhoto(settings), NATIVE_PHOTO_TIMEOUT_MS);
+      return { blob, timedOut: false };
+    } catch (error) {
+      return { blob: null, timedOut: error?.name === 'TimeoutError' };
+    }
   }
 
-  async function demoteNativeStill() {
-    if (nativeStillDemoted) return;
+  async function demoteNativeStill(generation) {
+    if (generation !== activation || nativeStillDemoted) return;
     nativeStillDemoted = true;
     imageCapture = null;
     photoSettings = null;
@@ -1207,55 +1250,72 @@ export function createCapture({ video, overlay, onState, onShot }) {
     // A browser that exposed ImageCapture but cannot actually complete a still
     // should not pay that stall on every shutter press. Promote the live stream
     // once so future canvas grabs retain useful document resolution.
-    if (cameraTrack) {
-      await requestFallbackCaptureResolution(cameraTrack);
-      await requestContinuousFocus(cameraTrack);
+    const fallbackTrack = cameraTrack;
+    if (fallbackTrack) {
+      await requestFallbackCaptureResolution(fallbackTrack);
+      if (generation !== activation) return;
+      await requestContinuousFocus(fallbackTrack);
     }
   }
 
-  async function takeNativePhoto() {
+  async function takeNativePhoto(generation) {
     if (!imageCapture) return null;
     if (Object.keys(photoSettings ?? {}).length) {
       const first = await takePhotoAttempt(photoSettings);
+      if (generation !== activation) return null;
       if (first.blob) return first.blob;
       if (first.timedOut) {
-        await demoteNativeStill();
+        await demoteNativeStill(generation);
         return null;
       }
       // Some camera stacks advertise dimensions they reject at capture time.
       // Retry with browser-chosen settings before abandoning the native still.
     }
     const second = await takePhotoAttempt(undefined);
+    if (generation !== activation) return null;
     if (second.timedOut) {
-      await demoteNativeStill();
+      await demoteNativeStill(generation);
       return null;
     }
-    if (!second.blob) await demoteNativeStill();
+    if (!second.blob) await demoteNativeStill(generation);
     return second.blob;
   }
 
-  async function grabStill() {
-    const nativeBlob = await takeNativePhoto();
+  async function grabStill(generation) {
+    const nativeBlob = await takeNativePhoto(generation);
+    if (!running || generation !== activation) return null;
     if (nativeBlob) {
-      return { bitmap: await createImageBitmap(nativeBlob), path: 'image-capture', original: nativeBlob };
+      try {
+        return { bitmap: await createImageBitmap(nativeBlob), path: 'image-capture', original: nativeBlob };
+      } catch {
+        // An exposed native still API can also return an undecodable image.
+        await demoteNativeStill(generation);
+      }
     }
 
+    if (!running || generation !== activation) return null;
     await waitForNextVideoFrame();
-    if (!running || !video.videoWidth) return null;
+    if (!running || generation !== activation || !video.videoWidth) return null;
 
     // Freeze exactly one decoded frame first. The old path performed an extra
     // draw before owning the frame, widening the preview/shutter race.
     const bitmap = await createImageBitmap(video);
+    if (!running || generation !== activation) { bitmap.close?.(); return null; }
     const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    canvas.getContext('2d').drawImage(bitmap, 0, 0);
-    const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-    // Release the only high-resolution canvas backing store immediately. The
-    // ImageBitmap remains the one live uncompressed source for conditioning.
-    canvas.width = 1;
-    canvas.height = 1;
-    return { bitmap, path: 'canvas-grab', original };
+    try {
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+      const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+      return { bitmap, path: 'canvas-grab', original };
+    } catch (error) {
+      bitmap.close?.();
+      throw error;
+    } finally {
+      // Only the accepted ImageBitmap remains at full resolution.
+      canvas.width = 1;
+      canvas.height = 1;
+    }
   }
 
   /** Re-detect and re-measure the actual pixels that will be stored. */
@@ -1347,10 +1407,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   function scheduleAutoRetry() {
+    const generation = activation;
+    clearTimeout(autoRetryHandle);
     autoRetryAfter = performance.now() + AUTO_RETRY_COOLDOWN_MS;
     armed = false;
-    setTimeout(() => {
-      if (!running || processingHold || shootInFlight) return;
+    autoRetryHandle = setTimeout(() => {
+      if (!running || generation !== activation || processingHold || shootInFlight) return;
       armed = true;
     }, AUTO_RETRY_COOLDOWN_MS);
   }
@@ -1366,6 +1428,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       : null;
     const shotActivation = activation;
     const tShotStart = performance.now();
+    let ownedBitmap = null;
 
     try {
       // Start feedback before the camera hardware is asked for the still.
@@ -1374,12 +1437,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // an application freeze.
       if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
 
-      const captured = await grabStill();
+      const captured = await grabStill(shotActivation);
       const grabMs = performance.now() - tShotStart;
       if (!captured) return null;
       const { bitmap, path, original } = captured;
+      ownedBitmap = bitmap;
       if (!running || shotActivation !== activation) {
-        bitmap.close?.();
         return null;
       }
 
@@ -1387,7 +1450,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
       const analysed = await analyseStill(bitmap);
       const analyseMs = performance.now() - tAnalyseStart;
       if (!running || shotActivation !== activation) {
-        bitmap.close?.();
         return null;
       }
 
@@ -1395,7 +1457,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // own captured-pixel gate rejects. Manual shutter remains sovereign.
       if (auto && analysed.gate.blocking) {
         publish({ ...analysed.gate, autoRejected: true });
-        bitmap.close?.();
         scheduleAutoRetry();
         console.debug('[scan:auto-rejected-still]', {
           transactionId,
@@ -1442,10 +1503,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // visibly locked before the press (started above).
       if (auto) beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
+      ownedBitmap = null; // ownership passes to the accepted shot
       armed = false;
       return shot;
     } finally {
-      shootInFlight = false;
+      ownedBitmap?.close?.();
+      if (shotActivation === activation) shootInFlight = false;
     }
   }
 
@@ -1459,6 +1522,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       const next = !!on;
       if (autoCapture === next) return;
       autoCapture = next;
+      clearTimeout(autoRetryHandle);
       armed = true;
       autoRetryAfter = 0;
       resetAutoTiming();
