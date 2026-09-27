@@ -251,8 +251,15 @@ select public._ls50_t(
 
 reset role;
 
-select name, passed, detail
+select
+  count(*) as total,
+  count(*) filter (where passed) as passed,
+  count(*) filter (where not passed) as failed
+from public._library_search_semantics_test;
+
+select seq, name, passed, detail
 from public._library_search_semantics_test
+where not passed
 order by seq;
 
 do $$
