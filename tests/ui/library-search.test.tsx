@@ -158,3 +158,13 @@ test("unverified legacy subject is visibly suggested and missing identity stays 
   expect(screen.getByText("Suggested: Mathematics · End-of-year exam")).toBeTruthy();
   expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
 });
+
+
+test("private search input is inside an explicit PostHog no-capture boundary", () => {
+  mount();
+
+  const input = screen.getByRole("searchbox", { name: "Search library" });
+  const boundary = input.closest(".ph-no-capture");
+  expect(boundary).toBeTruthy();
+  expect(boundary?.getAttribute("data-private-academic-search")).toBe("true");
+});
