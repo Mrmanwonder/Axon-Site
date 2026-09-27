@@ -97,6 +97,10 @@ select public._scope_t(
   private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
 );
 select public._scope_t(
+  'active-student initplan helper returns the same selected student',
+  private.current_student_scope_id() = '9aaaaaaa-0000-4000-8000-000000000002'::uuid
+);
+select public._scope_t(
   'owned sibling is outside the active scope',
   not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000003')
 );
@@ -154,6 +158,10 @@ select public._scope_t(
   'different auth session cannot reuse another session scope',
   not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
 );
+select public._scope_t(
+  'active-student initplan helper rejects a replayed auth session',
+  private.current_student_scope_id() is null
+);
 
 -- Missing session_id fails closed even for the owning guardian.
 select set_config(
@@ -167,6 +175,10 @@ select set_config(
 select public._scope_t(
   'missing signed session id fails closed',
   not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
+);
+select public._scope_t(
+  'active-student initplan helper fails closed without signed session id',
+  private.current_student_scope_id() is null
 );
 
 do $$ begin
@@ -201,6 +213,10 @@ select public._scope_t(
   'expired scope fails closed',
   not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
 );
+select public._scope_t(
+  'active-student initplan helper rejects expired scope',
+  private.current_student_scope_id() is null
+);
 
 -- A fresh parent can rotate the same signed session to sibling B. Once rotated,
 -- the previously captured A selection is stale authority and must not replay.
@@ -221,6 +237,10 @@ select public.set_student_scope('9aaaaaaa-0000-4000-8000-000000000003', 900);
 select public._scope_t(
   'rotated sibling B is now authorized',
   private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000003')
+);
+select public._scope_t(
+  'active-student initplan helper follows the rotated sibling',
+  private.current_student_scope_id() = '9aaaaaaa-0000-4000-8000-000000000003'::uuid
 );
 select public._scope_t(
   'old sibling A authority cannot replay after rotation',

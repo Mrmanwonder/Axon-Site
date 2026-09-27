@@ -327,32 +327,42 @@ select public._sr_t(
   (public.delete_paper('7aaaaaaa-0000-4000-8000-000000000010')->>'deleted')::boolean
 );
 
+-- AXO-108 planner evidence. Under the authenticated role these policies should
+-- appear as InitPlans ($0/$1) rather than correlated per-row authority calls.
+explain (costs off)
+select id from public.paper
+where student_id='7aaaaaaa-0000-4000-8000-000000000002';
+
+explain (costs off)
+select id from public.student_attempt
+where student_id='7aaaaaaa-0000-4000-8000-000000000002';
+
 reset role;
 
 -- ── structural completeness: ordinary academic policies all use scope ───────
-with required(tablename, policyname) as (
+with required(tablename, policyname, helper) as (
   values
-    ('attempt_concept','attempt_concept_all_scope'),
-    ('extraction_run','extraction_run_all_scope'),
-    ('mark_loss_event','loss_all_scope'),
-    ('page_unreadable','page_unreadable_all_scope'),
-    ('paper','paper_select_scope'),
-    ('paper','paper_insert_scope'),
-    ('paper','paper_update_scope'),
-    ('paper_page','paper_page_all_scope'),
-    ('parent_progress_report','report_select_scope_pro'),
-    ('pattern_insight','pattern_insight_insert_scope'),
-    ('pattern_insight','pattern_insight_select_scope'),
-    ('pattern_insight','pattern_insight_update_scope'),
-    ('question_region','question_region_select_scope'),
-    ('question_region','question_region_insert_scope'),
-    ('question_region','question_region_update_scope'),
-    ('region_explanation','region_explanation_all_scope'),
-    ('student_attempt','attempt_select_scope'),
-    ('student_attempt','attempt_insert_scope'),
-    ('student_attempt','attempt_update_scope'),
-    ('teacher_mark','teacher_mark_all_scope'),
-    ('upload','upload_all_scope')
+    ('attempt_concept','attempt_concept_all_scope','student_scope_allows'),
+    ('extraction_run','extraction_run_all_scope','student_scope_allows'),
+    ('mark_loss_event','loss_all_scope','student_scope_allows'),
+    ('page_unreadable','page_unreadable_all_scope','student_scope_allows'),
+    ('paper','paper_select_scope','current_student_scope_id'),
+    ('paper','paper_insert_scope','student_scope_allows'),
+    ('paper','paper_update_scope','student_scope_allows'),
+    ('paper_page','paper_page_all_scope','student_scope_allows'),
+    ('parent_progress_report','report_select_scope_pro','student_scope_allows'),
+    ('pattern_insight','pattern_insight_insert_scope','student_scope_allows'),
+    ('pattern_insight','pattern_insight_select_scope','student_scope_allows'),
+    ('pattern_insight','pattern_insight_update_scope','student_scope_allows'),
+    ('question_region','question_region_select_scope','student_scope_allows'),
+    ('question_region','question_region_insert_scope','student_scope_allows'),
+    ('question_region','question_region_update_scope','student_scope_allows'),
+    ('region_explanation','region_explanation_all_scope','student_scope_allows'),
+    ('student_attempt','attempt_select_scope','current_student_scope_id'),
+    ('student_attempt','attempt_insert_scope','student_scope_allows'),
+    ('student_attempt','attempt_update_scope','student_scope_allows'),
+    ('teacher_mark','teacher_mark_all_scope','student_scope_allows'),
+    ('upload','upload_all_scope','student_scope_allows')
 ), observed as (
   select tablename, policyname, coalesce(qual,'')||' '||coalesce(with_check,'') as expr
   from pg_policies
@@ -366,8 +376,63 @@ select public._sr_t(
       left join observed o
         on o.tablename=r.tablename and o.policyname=r.policyname
      where o.policyname is null
-        or o.expr not like '%student_scope_allows%'
+        or o.expr not like '%' || r.helper || '%'
   )
+);
+
+select public._sr_t(
+  'hot read policies use uncorrelated active-student helper',
+  (select count(*)=2
+     from pg_policies
+    where schemaname='public'
+      and (tablename,policyname) in (
+        ('paper','paper_select_scope'),
+        ('student_attempt','attempt_select_scope')
+      )
+      and coalesce(qual,'') like '%current_student_scope_id%')
+);
+
+select public._sr_t(
+  'attempt archive gate caches current guardian Pro entitlement',
+  exists (
+    select 1 from pg_policies
+     where schemaname='public'
+       and tablename='student_attempt'
+       and policyname='attempt_archive_depth_gate'
+       and permissive='RESTRICTIVE'
+       and coalesce(qual,'') like '%current_guardian_is_pro%'
+  )
+);
+
+select public._sr_t(
+  'read initplan helpers are private and executable only by authenticated client role',
+  (select count(*)=2
+     from information_schema.routine_privileges
+    where routine_schema='private'
+      and routine_name in ('current_student_scope_id','current_guardian_is_pro')
+      and grantee='authenticated'
+      and privilege_type='EXECUTE')
+  and not exists (
+    select 1
+      from information_schema.routine_privileges
+     where routine_schema='private'
+       and routine_name in ('current_student_scope_id','current_guardian_is_pro')
+       and grantee in ('anon','PUBLIC')
+  )
+);
+
+select public._sr_t(
+  'write policies keep the established per-row Student Mode authority helper',
+  (select count(*)=4
+     from pg_policies
+    where schemaname='public'
+      and (tablename,policyname) in (
+        ('paper','paper_insert_scope'),
+        ('paper','paper_update_scope'),
+        ('student_attempt','attempt_insert_scope'),
+        ('student_attempt','attempt_update_scope')
+      )
+      and (coalesce(qual,'')||' '||coalesce(with_check,'')) like '%student_scope_allows%')
 );
 
 select public._sr_t(
