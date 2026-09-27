@@ -88,6 +88,18 @@ insert into public.guardian(
   'AXO-51 Guardian B','axo51-b@test.invalid',now(),'stub','axo51-b'
  );
 
+insert into public.consent_event(
+  guardian_id, student_id, purpose, granted, notice_version, method
+)
+select g.guardian_id, null, cp.purpose, true, 'v1.0', 'in_app_itemised'
+from (
+  values
+    ('51000000-0000-4000-8000-000000000001'::uuid),
+    ('52000000-0000-4000-8000-000000000001'::uuid)
+) as g(guardian_id)
+cross join public.consent_purpose cp
+where cp.is_required;
+
 insert into public.student(id,guardian_id,first_name,class_level,age_band) values
  (
   '51000000-0000-4000-8000-000000000011',
