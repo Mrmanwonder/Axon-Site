@@ -269,7 +269,7 @@ end $$;
 
 -- Snapshot columns are not caller-writable either. Reject rather than
 -- refreshing from the now-drifted catalog, preserving historical stability.
-do $ begin
+do $$ begin
   begin
     update public.paper
        set subject_display_snapshot='Forged subject'
@@ -278,7 +278,7 @@ do $ begin
   exception when sqlstate '42501' then
     perform public._lsf_t('Student Mode cannot forge canonical subject snapshot',true,sqlerrm);
   end;
-end $;
+end $$;
 
 select public._lsf_t(
   'rejected snapshot forgery leaves historical value unchanged',
@@ -365,6 +365,6 @@ begin
   if exists (select 1 from public._library_search_foundation_test where not passed) then
     raise exception 'AXO-49 library search foundation tests failed';
   end if;
-end $;
+end $$;
 
 rollback;
