@@ -9,6 +9,9 @@
 //   2. a high-resolution live stream only on browsers (notably iOS Safari)
 //      where the video frame itself is the best still the web platform exposes.
 
+import { withDeadline } from './deadline.js';
+
+export const CAMERA_CONTROL_TIMEOUT_MS = 1200;
 export const TRACKING_WIDTH = 1280;
 export const TRACKING_HEIGHT = 720;
 // Practical 12MP ceiling from the architecture. Some phones advertise far
@@ -34,7 +37,7 @@ export async function requestContinuousFocus(track) {
   try {
     const caps = track?.getCapabilities?.();
     if (!caps?.focusMode?.includes('continuous')) return false;
-    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    await withDeadline(() => track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }), CAMERA_CONTROL_TIMEOUT_MS);
     return true;
   } catch {
     return false;
@@ -58,11 +61,11 @@ export async function requestFallbackCaptureResolution(track) {
       TRACKING_HEIGHT,
       Math.min(FALLBACK_CAPTURE_HEIGHT, Number(caps?.height?.max ?? FALLBACK_CAPTURE_HEIGHT)),
     );
-    await track.applyConstraints({
+    await withDeadline(() => track.applyConstraints({
       width: { ideal: width },
       height: { ideal: height },
       frameRate: { ideal: 30, max: 30 },
-    });
+    }), CAMERA_CONTROL_TIMEOUT_MS);
     return true;
   } catch {
     return false;
@@ -78,8 +81,15 @@ export function requestCamera() {
   if (!cameraSupported()) {
     return Promise.reject(Object.assign(new Error('no camera on this device'), { name: 'NotFoundError' }));
   }
-  pending ??= navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
-    .catch((error) => { pending = null; throw error; });
+  if (!pending) {
+    const request = navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
+      .catch((error) => {
+        // A released permission request can reject after a new visit starts.
+        if (pending === request) pending = null;
+        throw error;
+      });
+    pending = request;
+  }
   return pending;
 }
 
