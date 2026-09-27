@@ -295,11 +295,43 @@ export async function currentSession() {
   return data.session ?? null;
 }
 
+/**
+ * Server-authored Student Mode state for this exact signed auth session.
+ * Local profile preferences are never authority.
+ */
+export async function studentScopeState() {
+  const { data, error } = await sb.rpc('student_scope_state');
+  if (error) throw error;
+  return data ?? { active: false, student_id: null, remaining_seconds: 0 };
+}
+
+/**
+ * Establish or refresh the one active student for this signed auth session.
+ * Multi-profile first selection/switch is independently Parent Mode guarded by
+ * the database; refreshing the same live student does not re-prompt.
+ */
+export async function setStudentScope(studentId, ttlSeconds = 1800) {
+  const { data, error } = await sb.rpc('set_student_scope', {
+    p_student: studentId,
+    p_ttl_seconds: ttlSeconds,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/** Revoke Student Mode while the auth session still exists. */
+export async function clearStudentScope() {
+  const { data, error } = await sb.rpc('clear_student_scope');
+  if (error) throw error;
+  return Boolean(data);
+}
+
 export async function signOut() {
-  // Local schoolwork first, session second. A sibling signing in next on the
-  // same browser profile must not inherit the previous student's cached papers
-  // or scan drafts, and clearing after the session is gone is a race: the app
-  // reloads on sign-out, and a reload can beat an unawaited cleanup.
+  // Revoke server Student Mode while the signed session still exists, then
+  // clear retained schoolwork, then end authentication. Scope revocation is
+  // best-effort because auth-session termination still invalidates the caller,
+  // but local schoolwork cleanup remains ordered before the reload/sign-out.
+  try { await clearStudentScope(); } catch (error) { console.error("Student scope cleanup failed during sign-out", error); }
   try { await clearLocalData(); } catch (error) { console.error("Local cleanup failed during sign-out", error); sessionStorage.setItem("axon.cleanup-error", "Some local schoolwork could not be cleared. Close other Axon tabs and clear this device before sharing it."); }
   const { error } = await sb.auth.signOut();
   if (error) throw error;

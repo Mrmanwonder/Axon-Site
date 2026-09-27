@@ -24,6 +24,9 @@ export const sb = {
 };
 export async function currentSession() { if (scenario === "auth-error") throw new Error("Auth unavailable"); return {}; }
 export const currentGuardian = async () => ({ id: "guardian" });
+export const studentScopeState = async () => ({ active: false, student_id: null, remaining_seconds: 0 });
+export const setStudentScope = async (studentId: string) => ({ active: true, student_id: studentId, remaining_seconds: 1800 });
+export const clearStudentScope = async () => true;
 export const takeProviderError = () => null;
 export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
 export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
