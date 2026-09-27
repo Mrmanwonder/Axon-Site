@@ -61,7 +61,7 @@ function marksLost(paper: Record<string, unknown>): number | null {
 }
 
 export default function Library() {
-  const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
+  const { papers, papersError, papersResource, progressResource, refreshLibrary } = useApp();
 
   const navigate = useNavigate();
   const toast = useToast();
