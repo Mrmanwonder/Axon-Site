@@ -123,6 +123,19 @@ export type OnboardingResult = {
 export const sb = supabaseMod.sb as any;
 export const currentSession = supabaseMod.currentSession as () => Promise<unknown>;
 export const currentGuardian = supabaseMod.currentGuardian as () => Promise<Guardian | null>;
+export type StudentScopeState = {
+  active: boolean;
+  student_id: string | null;
+  expires_at?: string | null;
+  remaining_seconds: number;
+  reason?: string | null;
+};
+export const studentScopeState = supabaseMod.studentScopeState as () => Promise<StudentScopeState>;
+export const setStudentScope = supabaseMod.setStudentScope as (
+  studentId: string,
+  ttlSeconds?: number,
+) => Promise<StudentScopeState>;
+export const clearStudentScope = supabaseMod.clearStudentScope as () => Promise<boolean>;
 export const signOut = supabaseMod.signOut as () => Promise<void>;
 export const takeProviderError = supabaseMod.takeProviderError as () => ProviderError | null;
 /** Returns Supabase's `{ data: { subscription } }`, not an unsubscribe function —
