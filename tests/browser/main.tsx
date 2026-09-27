@@ -28,6 +28,18 @@ function AnswerDemo() {
     rawText="x + 1" recognition={true}
   />;
 }
+
+function StudentScopeHouseholdDemo() {
+  const { gate, student, selectStudent, signOutNow } = useApp();
+  return <section aria-label="Student scope household test">
+    <p data-testid="household-gate">{gate}</p>
+    <p data-testid="household-student">{student?.id ?? "none"}</p>
+    <button type="button" onClick={() => void selectStudent("student-a").catch(() => {})}>Switch A</button>
+    <button type="button" onClick={() => void selectStudent("student-b").catch(() => {})}>Switch B</button>
+    <button type="button" onClick={() => void signOutNow()}>Sign out household</button>
+  </section>;
+}
+
 function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
@@ -44,5 +56,5 @@ if (params.get("view") === "route-errors") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }

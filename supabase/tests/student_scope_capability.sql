@@ -202,6 +202,45 @@ select public._scope_t(
   not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
 );
 
+-- A fresh parent can rotate the same signed session to sibling B. Once rotated,
+-- the previously captured A selection is stale authority and must not replay.
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub','91111111-1111-4111-8111-111111111111',
+    'role','authenticated',
+    'session_id','scope-session-a',
+    'amr',jsonb_build_array(jsonb_build_object(
+      'method','oauth',
+      'timestamp',floor(extract(epoch from now()))::bigint
+    ))
+  )::text,
+  true
+);
+select public.set_student_scope('9aaaaaaa-0000-4000-8000-000000000003', 900);
+select public._scope_t(
+  'rotated sibling B is now authorized',
+  private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000003')
+);
+select public._scope_t(
+  'old sibling A authority cannot replay after rotation',
+  not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000002')
+);
+
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub','91111111-1111-4111-8111-111111111111',
+    'role','authenticated',
+    'session_id','scope-session-a-replay-after-rotation'
+  )::text,
+  true
+);
+select public._scope_t(
+  'rotated B scope cannot replay in another auth session',
+  not private.student_scope_allows('9aaaaaaa-0000-4000-8000-000000000003')
+);
+
 -- ── single-profile household can establish its only scope without reauth ──
 select set_config(
   'request.jwt.claims',
