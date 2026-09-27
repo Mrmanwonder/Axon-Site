@@ -330,6 +330,25 @@ export async function listPapers(studentId) {
   });
 }
 
+/**
+ * Private question/answer search primitive for the Library.
+ *
+ * There is deliberately no student-id argument: the database resolves the
+ * active Student Mode through student_attempt RLS. The RPC returns identifiers
+ * and rank only, never raw answer/question snippets.
+ */
+export async function searchLibraryAttempts(query, limit = 50) {
+  const normalized = typeof query === 'string' ? query.trim() : '';
+  if (!normalized) return [];
+  const boundedLimit = Math.min(100, Math.max(1, Number.isFinite(limit) ? Math.trunc(limit) : 50));
+  const { data, error } = await sb.rpc('search_library_attempts', {
+    p_query: normalized,
+    p_limit: boundedLimit,
+  });
+  if (error) throw error;
+  return data ?? [];
+}
+
 /** One paper with its attempts and losses — the analysis, cached for offline. */
 export async function readPaper(studentId, paperId) {
   return readThrough(`paper:${studentId}:${paperId}`, async () => {
