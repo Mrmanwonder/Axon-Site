@@ -360,7 +360,7 @@ from public._library_search_foundation_test
 where not passed
 order by seq;
 
-do $
+do $$
 begin
   if exists (select 1 from public._library_search_foundation_test where not passed) then
     raise exception 'AXO-49 library search foundation tests failed';
