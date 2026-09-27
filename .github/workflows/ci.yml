@@ -60,9 +60,9 @@ jobs:
           supabase db reset --local
 
       # Each file in supabase/tests/ is a self-contained, rolled-back suite
-      # that ends with `select count(*) ... as failed from public._r`. Run
-      # every one and fail the job if any suite reports failed > 0, instead
-      # of relying on someone reading the output by hand.
+      # that ends with `select count(*) ... as failed from public._r`. Execute
+      # each suite exactly once, stream that output, and fail the job if its
+      # captured assertion summary reports failed > 0.
       - name: Run SQL test suites
         run: |
           set -uo pipefail
