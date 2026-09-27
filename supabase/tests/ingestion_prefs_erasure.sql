@@ -99,7 +99,8 @@ insert into public.consent_event (guardian_id, student_id, purpose, granted, not
 
 -- ── RLS on the tables the UI added ─────────────────────────────────────────
 set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+set local "request.jwt.claims" = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"ingestion-a"}';
+select public.set_student_scope('aaaaaaaa-0000-4000-8000-000000000002',900);
 
 select public._t('A sees only its own paper_page rows',
   (select count(*) = 2 from public.paper_page)
