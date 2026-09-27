@@ -61,7 +61,7 @@ function marksLost(paper: Record<string, unknown>): number | null {
 }
 
 export default function Library() {
-  const { papers, papersStale, papersError, papersResource, progressResource, refreshLibrary } = useApp();
+  const { papers, papersError, papersResource, progressResource, refreshLibrary } = useApp();
 
   const navigate = useNavigate();
   const toast = useToast();
@@ -202,7 +202,7 @@ export default function Library() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
-          {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}{papersStale ? " · offline copy" : ""}
+          {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}
 
         </span>
         <AppDropdown
@@ -215,9 +215,7 @@ export default function Library() {
         />
       </div>
 
-      {papersResource.state === "loading" && papersResource.data !== null && <div role="status" className="subnote">Refreshing papers…</div>}
       {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
-      {progressResource.state !== "ready" && <div role="status">{progressResource.data !== null ? "Last-known paper status. Refresh before continuing a review." : progressResource.state === "failed" ? "Paper status unavailable." : "Checking paper status…"}</div>}
       <div className="list">
         {!papers.length && papersError && (
 
