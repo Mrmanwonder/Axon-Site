@@ -255,8 +255,8 @@ test("empty search result is distinct from an empty Library and keeps filters ed
 
   expect(await screen.findByText("No matching papers")).toBeTruthy();
   expect(screen.queryByText("Nothing here yet")).toBeNull();
-  expect(screen.getByRole("button", { name: "Filter by subject" })).not.toBeDisabled();
-  expect(screen.getByRole("button", { name: "Filter by date" })).not.toBeDisabled();
+  expect((screen.getByRole("button", { name: "Filter by subject" }) as HTMLButtonElement).disabled).toBe(false);
+  expect((screen.getByRole("button", { name: "Filter by date" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
 test("special-symbol queries are passed to the private RPC without client rewriting", async () => {
