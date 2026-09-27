@@ -37,7 +37,7 @@ select public._ls51_t(
 
 -- Exercise the denial rather than trusting catalog metadata alone.
 set local role anon;
-do $
+do $$
 begin
   begin
     perform 1
@@ -57,7 +57,7 @@ begin
         sqlerrm
       );
   end;
-end $;
+end $$;
 reset role;
 
 insert into auth.users(
