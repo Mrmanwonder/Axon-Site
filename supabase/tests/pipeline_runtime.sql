@@ -90,7 +90,7 @@ do $$ begin begin
   perform public._t('a submit with no pages is refused', false, 'call succeeded');
 exception when others then
   perform public._t('a submit with no pages is refused', true);
-end; end $;
+end; end $$;
 
 reset role;
 
