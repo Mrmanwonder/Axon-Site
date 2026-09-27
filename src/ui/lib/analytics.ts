@@ -1,5 +1,10 @@
 export type AnalyticsConsent = "granted" | "denied" | null;
 
+export type AnalyticsEvent = {
+  event?: string;
+  properties?: Record<string, unknown>;
+};
+
 type PostHogClient = {
   init: (key: string, options?: Record<string, unknown>) => void;
   capture?: (event: string, properties?: Record<string, unknown>) => void;
@@ -29,6 +34,38 @@ const STUB_METHODS = [
 ] as const;
 
 let state: "idle" | "loading" | "ready" = "idle";
+
+const PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS = new Set([
+  "$autocapture",
+  "$copy_autocapture",
+  "$rageclick",
+  "$dead_click",
+]);
+
+function eventPath(event: AnalyticsEvent): string | null {
+  const currentUrl = event.properties?.["$current_url"];
+  const candidate = typeof currentUrl === "string"
+    ? currentUrl
+    : (typeof window !== "undefined" ? window.location.href : null);
+  if (!candidate) return null;
+  try { return new URL(candidate, "https://axonstudy.online").pathname; }
+  catch { return null; }
+}
+
+/**
+ * Raw academic search terms and DOM-derived Library content are never product
+ * analytics. Pageviews remain useful/coarse, but all interaction/copy/dead-click
+ * autocapture for /library and its detail routes is dropped before ingestion.
+ */
+export function filterSensitiveAnalyticsEvent(event: AnalyticsEvent | null): AnalyticsEvent | null {
+  if (!event) return null;
+  const path = eventPath(event);
+  const privateLibrary = path === "/library" || Boolean(path?.startsWith("/library/"));
+  if (privateLibrary && event.event && PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS.has(event.event)) {
+    return null;
+  }
+  return event;
+}
 
 export function getAnalyticsConsent(): AnalyticsConsent {
   if (typeof window === "undefined") return null;
@@ -116,6 +153,7 @@ export function initAnalytics() {
     capture_pageview: "history_change",
     capture_pageleave: true,
     capture_exceptions: true,
+    before_send: filterSensitiveAnalyticsEvent,
     opt_out_capturing_by_default: true,
     session_recording: {
       maskAllInputs: true,
