@@ -309,7 +309,7 @@ export default function Library() {
         <h1>Library</h1>
       </div>
 
-      <div className="searchwrap">
+      <div className="searchwrap ph-no-capture" data-private-academic-search="true">
         <div className="search">
           <SearchIcon />
           <input
