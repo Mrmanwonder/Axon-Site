@@ -37,6 +37,7 @@ const S = {
   capture: null,
   surface: null,
   visible: false,
+  autoCapture: true,
   draft: null,
   thumbs: new Map(),
   placeholders: new Map(),
@@ -92,7 +93,7 @@ export function setScanContext(ctx) {
   S.ctx = ctx;
 }
 
-export function attachSurface(video, overlay) {
+export function attachSurface(video, overlay, { autoCapture = S.autoCapture } = {}) {
   if (S.surface === video && S.capture) return;
   detachSurface();
   if (!video || !S.ctx?.student) return;
@@ -109,6 +110,9 @@ export function attachSurface(video, overlay) {
       void takePage(shot, replacing);
     },
   });
+  S.autoCapture = !!autoCapture;
+  S.capture.setAutoCapture(S.autoCapture);
+  S.capture.setProcessing(S.pendingCaptures >= MAX_PENDING_CAPTURES);
 }
 
 export function detachSurface() {
@@ -122,8 +126,9 @@ export function shoot() {
 }
 
 export function setAutoCapture(on) {
+  S.autoCapture = !!on;
   tick();
-  S.capture?.setAutoCapture(on);
+  S.capture?.setAutoCapture(S.autoCapture);
 }
 
 export function setScanVisible(visible, camera = null) {

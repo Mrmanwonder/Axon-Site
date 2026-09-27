@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { useEffect } from "react";
 import { MemoryRouter, useNavigate, useLocation } from "react-router-dom";
 import { ScanProvider, useScan } from "../../src/ui/scan/ScanProvider";
@@ -10,12 +10,12 @@ vi.mock("../../src/ui/data/AppProvider", () => ({ useApp: () => ({ ...fixture.ap
 vi.mock("../../src/ui/components/ToastProvider", () => ({ useToast: () => fixture.toast }));
 vi.mock("../../src/ui/components/SheetProvider", () => ({ useSheetControls: () => ({ openSheet: fixture.sheet }) }));
 vi.mock("../../src/scan/camera.js", () => ({ cameraSupported: () => true, requestCamera: fixture.camera, releaseCamera: fixture.release }));
-vi.mock("../../src/scan/ui.js", () => ({ initScanUI: fixture.init, attachSurface: fixture.attach, detachSurface: fixture.detach, setScanVisible: fixture.visible, resetScan: vi.fn(), setScanContext: vi.fn(), setPendingPaperType: vi.fn() }));
+vi.mock("../../src/scan/ui.js", () => ({ initScanUI: fixture.init, attachSurface: fixture.attach, detachSurface: fixture.detach, setScanVisible: fixture.visible, resetScan: vi.fn(), setScanContext: vi.fn(), setPendingPaperType: vi.fn(), setAutoCapture: vi.fn() }));
 const deferred = () => { let resolve!: (value?: any) => void; const promise = new Promise<any>(yes => { resolve = yes; }); return { promise, resolve }; };
 function Controls() {
   const scan = useScan(); const navigate = useNavigate(); const location = useLocation();
   useEffect(() => { if (location.pathname !== "/scan") return; scan.onScreenVisible(true); return () => scan.onScreenVisible(false); }, [location.pathname, scan.onScreenVisible]);
-  return <><button onClick={() => navigate("/scan")}>Scan</button><button onClick={() => navigate("/settings")}>Settings</button><button onClick={() => void scan.ensureScan()}>Upload</button><button onClick={() => scan.onScreenVisible(true)}>Retry</button><video ref={scan.videoRef} /><canvas ref={scan.overlayRef} /><span>{scan.camera.phase}</span><span>{scan.reviewOpen ? "Review open" : "Review closed"}</span></>;
+  return <><button onClick={() => navigate("/scan")}>Scan</button><button onClick={() => navigate("/settings")}>Settings</button><button onClick={() => void scan.ensureScan()}>Upload</button><button onClick={() => scan.onScreenVisible(true)}>Retry</button><button onClick={() => scan.setAutoCapture(false)}>Auto off</button><video ref={scan.videoRef} /><canvas ref={scan.overlayRef} /><span>{scan.camera.phase}</span><span>{scan.reviewOpen ? "Review open" : "Review closed"}</span></>;
 }
 function App() { return <MemoryRouter><ScanProvider><Controls /></ScanProvider></MemoryRouter>; }
 beforeEach(() => { vi.clearAllMocks(); fixture.init.mockImplementation(async (_ctx, host) => { fixture.host = host; }); fixture.camera.mockResolvedValue({ getTracks: () => [] }); });
@@ -53,4 +53,82 @@ test("failed initialization cancels pending permission and retry gets a fresh ac
 });
 test("processing completion on Settings cannot open review", async () => {
   render(<App />); await userEvent.click(screen.getByText("Scan")); await waitFor(() => expect(fixture.attach).toHaveBeenCalled()); await userEvent.click(screen.getByText("Settings")); act(() => fixture.host.openReview()); expect(screen.getByText("Review closed")).toBeTruthy();
+});
+
+const setHidden = (hidden: boolean) => {
+  Object.defineProperty(document, "hidden", { configurable: true, value: hidden });
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+};
+afterEach(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); });
+
+test("background releases the camera and return reacquires exactly once", async () => {
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(1));
+  setHidden(true);
+  expect(fixture.release).toHaveBeenCalled();
+  expect(fixture.visible).toHaveBeenLastCalledWith(false);
+  expect(fixture.detach).toHaveBeenCalled();
+  setHidden(false);
+  act(() => window.dispatchEvent(new Event("pageshow")));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+  expect(fixture.camera).toHaveBeenCalledTimes(2);
+});
+
+test("entering Scan while hidden defers camera access until foreground", async () => {
+  setHidden(true);
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  expect(fixture.camera).not.toHaveBeenCalled();
+  setHidden(false);
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledOnce());
+});
+
+test("leaving Scan while hidden prevents foreground from restarting it", async () => {
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledOnce());
+  setHidden(true);
+  await userEvent.click(screen.getByText("Settings"));
+  setHidden(false);
+  act(() => window.dispatchEvent(new Event("pageshow")));
+  expect(fixture.camera).toHaveBeenCalledOnce();
+});
+
+test("permission arriving in the background is released and cannot attach", async () => {
+  const pending = deferred();
+  const stop = vi.fn();
+  fixture.camera.mockReturnValueOnce(pending.promise);
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  await waitFor(() => expect(fixture.camera).toHaveBeenCalledOnce());
+  setHidden(true);
+  await act(async () => pending.resolve({ getTracks: () => [{ stop }] }));
+  expect(stop).toHaveBeenCalledOnce();
+  expect(fixture.attach).not.toHaveBeenCalled();
+  setHidden(false);
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledOnce());
+});
+
+test("pagehide suspends until pageshow even if visibility reports visible first", async () => {
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledOnce());
+  act(() => window.dispatchEvent(new Event("pagehide")));
+  expect(fixture.visible).toHaveBeenLastCalledWith(false);
+  setHidden(false);
+  expect(fixture.camera).toHaveBeenCalledOnce();
+  act(() => window.dispatchEvent(new Event("pageshow")));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+});
+
+test("recreated camera surface uses the current Auto choice", async () => {
+  render(<App />);
+  await userEvent.click(screen.getByText("Scan"));
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledOnce());
+  await userEvent.click(screen.getByText("Auto off"));
+  setHidden(true);
+  setHidden(false);
+  await waitFor(() => expect(fixture.attach).toHaveBeenCalledTimes(2));
+  expect(fixture.attach).toHaveBeenLastCalledWith(expect.any(HTMLVideoElement), expect.any(HTMLCanvasElement), { autoCapture: false });
 });
