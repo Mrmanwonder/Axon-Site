@@ -256,7 +256,7 @@ end $$;
 -- is Pro, so scope alone should reduce the result to Student A.
 select public._sr_t(
   'cross-subject SECURITY DEFINER RPC returns only active student',
-  (select count(*)=1 and min(student_id)='7aaaaaaa-0000-4000-8000-000000000002'::uuid
+  (select count(*)=1 and min(student_id::text)='7aaaaaaa-0000-4000-8000-000000000002'
      from public.get_cross_subject_signal())
 );
 
