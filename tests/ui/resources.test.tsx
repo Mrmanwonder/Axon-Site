@@ -63,10 +63,11 @@ test("Home waits for papers even when analytics completed first", async () => {
   await waitFor(() => expect(mocks.analytics).toHaveBeenCalled()); expect(screen.queryByText("No papers yet")).toBeNull();
   await act(async () => read.resolve({ data: [], stale: false })); expect(await screen.findByText("No papers yet")).toBeTruthy();
 });
-test("failed progress refresh labels retained status and disables recovery", async () => {
+test("failed progress refresh disables recovery without surfacing sync status", async () => {
   mocks.papers.mockResolvedValue({ data: [{ id: "p", date_taken: "2026-01-01" }] }); mocks.progress.mockResolvedValue(new Map([["p", { status: "reading" }]])); mount(<Library />);
   await screen.findByText("Reading"); mocks.progress.mockRejectedValue(new Error("offline")); await userEvent.click(screen.getByText("Refresh"));
-  expect(await screen.findByText(/Last-known paper status/)).toBeTruthy(); expect(screen.getByRole("button", { name: /Test paper/ }).hasAttribute("disabled")).toBe(true);
+  await waitFor(() => expect(screen.getByRole("button", { name: /Test paper/ }).hasAttribute("disabled")).toBe(true));
+  expect(screen.queryByText(/Last-known paper status/)).toBeNull();
 });
 test("consent failures remain failures", async () => { mocks.consent.mockRejectedValue(new Error("offline")); mount(null); expect(await screen.findByText("consent:failed")).toBeTruthy(); });
 test("auth read error enters boot error", async () => { mocks.session.mockRejectedValue(new Error("auth unavailable")); mount(null); expect(await screen.findByText("boot_error")).toBeTruthy(); });
