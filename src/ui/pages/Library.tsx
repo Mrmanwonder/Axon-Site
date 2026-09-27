@@ -189,7 +189,7 @@ export default function Library() {
         if (!cancelled) {
           setSearchState({
             state: "failed",
-            hits: [],
+            hits: previousHits,
             error: error instanceof Error ? error.message : "Search could not be completed.",
           });
         }
@@ -220,7 +220,7 @@ export default function Library() {
 
   const filteredPapers = useMemo(() => {
     if (normalizedQuery) {
-      if (searchState.state !== "ready") return [];
+      if (searchState.state === "idle") return [];
       const byId = new Map(papers.map((paper) => [paper.id, paper]));
       return searchState.hits
         .map((hit) => byId.get(hit.paper_id))
