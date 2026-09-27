@@ -88,6 +88,14 @@ insert into public.guardian(
   'AXO-51 Guardian B','axo51-b@test.invalid',now(),'stub','axo51-b'
  );
 
+update public.guardian
+set subscription_status='pro'::public.subscription_status,
+    subscription_plan='monthly'::public.subscription_plan
+where id in (
+  '51000000-0000-4000-8000-000000000001',
+  '52000000-0000-4000-8000-000000000001'
+);
+
 insert into public.consent_event(
   guardian_id, student_id, purpose, granted, notice_version, method
 )
