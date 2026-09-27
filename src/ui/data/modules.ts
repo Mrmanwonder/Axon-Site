@@ -281,6 +281,17 @@ export const listPurposes = consentMod.listPurposes as () => Promise<
 export const listPapers = papersMod.listPapers as unknown as (
   studentId: string,
 ) => Promise<Cached<Paper[]>>;
+
+export type LibraryAttemptSearchHit = {
+  paper_id: string;
+  attempt_id: string;
+  question_label: string;
+  rank: number;
+};
+export const searchLibraryAttempts = papersMod.searchLibraryAttempts as (
+  query: string,
+  limit?: number,
+) => Promise<LibraryAttemptSearchHit[]>;
 export const createPaper = papersMod.createPaper as (a: {
   studentId: string; type: string; dateTaken: string;
 }) => Promise<Paper>;
