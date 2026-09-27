@@ -106,7 +106,7 @@ insert into public.paper(
 select
   ('52000000-0000-4000-8000-' || lpad(gs::text,12,'0'))::uuid,
   '52000000-0000-4000-8000-000000000011'::uuid,
-  case when gs % 3 = 0 then 'mid_term' else 'unit_test' end,
+  (case when gs % 3 = 0 then 'mid_term' else 'unit_test' end)::public.paper_type,
   'tier_1',
   date '2097-01-01' + ((gs - 1) % 365),
   case when gs > 50 then 'Suggested Mechanics' else 'Legacy text is not authority' end,
