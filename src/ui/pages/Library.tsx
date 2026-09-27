@@ -7,10 +7,11 @@
    prototype chips, while keeping the visual language of the reference.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, retryFailedPaper } from "../data/modules";
+import { paperTypeLabel, retryFailedPaper, searchLibrary } from "../data/modules";
+import type { LibrarySearchHit, Paper } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
@@ -43,6 +44,46 @@ function SearchIcon() {
 type CountRow = { count: number }[] | undefined;
 type DateFilter = "any" | "30" | "90" | "year";
 type SortMode = "recent" | "oldest" | "lost";
+type SearchState =
+  | { state: "idle"; hits: LibrarySearchHit[] }
+  | { state: "loading"; hits: LibrarySearchHit[] }
+  | { state: "ready"; hits: LibrarySearchHit[] }
+  | { state: "failed"; hits: LibrarySearchHit[]; error: string };
+
+const DAY_MS = 86_400_000;
+
+function dateBounds(filter: DateFilter) {
+  const now = new Date();
+  if (filter === "any") return { dateFrom: null, dateTo: null };
+  if (filter === "year") {
+    return {
+      dateFrom: `${now.getFullYear()}-01-01`,
+      dateTo: `${now.getFullYear()}-12-31`,
+    };
+  }
+  const days = filter === "30" ? 30 : 90;
+  const from = new Date(now.getTime() - days * DAY_MS);
+  return {
+    dateFrom: from.toISOString().slice(0, 10),
+    dateTo: now.toISOString().slice(0, 10),
+  };
+}
+
+function subjectPresentation(paper: Paper, hit?: LibrarySearchHit) {
+  if (
+    paper.subject_offering_id
+    && paper.subject_identity_confidence === "verified"
+    && paper.subject_display_snapshot
+  ) {
+    return { state: "verified" as const, label: paper.subject_display_snapshot };
+  }
+
+  const suggested = hit?.subject_state === "suggested"
+    ? hit.suggested_subject
+    : (typeof paper.subject === "string" && paper.subject.trim() ? paper.subject.trim() : null);
+  if (suggested) return { state: "suggested" as const, label: `Suggested: ${suggested}` };
+  return { state: "unknown" as const, label: "Subject unknown" };
+}
 
 function numeric(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -94,42 +135,118 @@ export default function Library() {
   const [type, setType] = useState("all");
   const [tier, setTier] = useState("any");
   const [sort, setSort] = useState<SortMode>("recent");
+  const [searchRevision, setSearchRevision] = useState(0);
+  const [searchState, setSearchState] = useState<SearchState>({ state: "idle", hits: [] });
+  const normalizedQuery = query.trim();
 
-  const subjects = useMemo(
-    () => [...new Set(papers.map((paper) => paper.subject).filter((value): value is string => typeof value === "string" && value.trim().length > 0))].sort(),
-    [papers],
-  );
+  const verifiedSubjects = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const paper of papers) {
+      if (!paper.subject_offering_id || !paper.subject_display_snapshot) continue;
+      const code = paper.subject_external_code_snapshot?.trim();
+      byId.set(
+        paper.subject_offering_id,
+        code ? `${paper.subject_display_snapshot} · ${code}` : paper.subject_display_snapshot,
+      );
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [papers]);
 
   const types = useMemo(
     () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a).localeCompare(paperTypeLabel(b))),
     [papers],
   );
 
-  const filteredPapers = useMemo(() => {
-    const now = new Date();
-    const normalizedQuery = query.trim().toLocaleLowerCase();
+  const selectedOfferingId = subject.startsWith("subject:") ? subject.slice("subject:".length) : null;
+  const selectedSubjectState = subject === "unknown"
+    ? "unknown"
+    : subject === "suggested"
+      ? "suggested"
+      : "all";
 
+  useEffect(() => {
+    if (!normalizedQuery) {
+      setSearchState({ state: "idle", hits: [] });
+      return;
+    }
+
+    let cancelled = false;
+    const previousHits = searchState.hits;
+    setSearchState({ state: "loading", hits: previousHits });
+    const timer = window.setTimeout(() => {
+      const bounds = dateBounds(dateFilter);
+      void searchLibrary({
+        query: normalizedQuery,
+        subjectOfferingId: selectedOfferingId,
+        subjectState: selectedSubjectState,
+        paperType: type === "all" ? null : type,
+        tier: tier === "any" ? null : tier,
+        ...bounds,
+        limit: 250,
+      }).then((hits) => {
+        if (!cancelled) setSearchState({ state: "ready", hits });
+      }).catch((error) => {
+        if (!cancelled) {
+          setSearchState({
+            state: "failed",
+            hits: [],
+            error: error instanceof Error ? error.message : "Search could not be completed.",
+          });
+        }
+      });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // searchState.hits is intentionally excluded: it is retained only while a
+    // newer request is pending and must never retrigger that request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    normalizedQuery,
+    selectedOfferingId,
+    selectedSubjectState,
+    type,
+    tier,
+    dateFilter,
+    searchRevision,
+  ]);
+
+  const hitByPaper = useMemo(
+    () => new Map(searchState.hits.map((hit) => [hit.paper_id, hit])),
+    [searchState.hits],
+  );
+
+  const filteredPapers = useMemo(() => {
+    if (normalizedQuery) {
+      if (searchState.state !== "ready") return [];
+      const byId = new Map(papers.map((paper) => [paper.id, paper]));
+      return searchState.hits
+        .map((hit) => byId.get(hit.paper_id))
+        .filter((paper): paper is Paper => Boolean(paper));
+    }
+
+    const now = new Date();
     const result = papers.filter((paper) => {
-      if (subject !== "all" && paper.subject !== subject) return false;
+      if (selectedOfferingId && paper.subject_offering_id !== selectedOfferingId) return false;
+      if (selectedSubjectState === "unknown" && (
+        paper.subject_offering_id
+        || (typeof paper.subject === "string" && paper.subject.trim())
+      )) return false;
+      if (selectedSubjectState === "suggested" && (
+        paper.subject_offering_id
+        || !(typeof paper.subject === "string" && paper.subject.trim())
+      )) return false;
       if (type !== "all" && paper.type !== type) return false;
       if (tier !== "any" && paper.tier !== tier) return false;
 
       const taken = new Date(paper.date_taken);
       if (!Number.isNaN(taken.getTime())) {
-        if (dateFilter === "30" && now.getTime() - taken.getTime() > 30 * 86_400_000) return false;
-        if (dateFilter === "90" && now.getTime() - taken.getTime() > 90 * 86_400_000) return false;
+        if (dateFilter === "30" && now.getTime() - taken.getTime() > 30 * DAY_MS) return false;
+        if (dateFilter === "90" && now.getTime() - taken.getTime() > 90 * DAY_MS) return false;
         if (dateFilter === "year" && taken.getFullYear() !== now.getFullYear()) return false;
       }
-
-      if (normalizedQuery) {
-        const searchable = [
-          paper.subject ?? "",
-          paperTypeLabel(paper.type),
-          new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-        ].join(" ").toLocaleLowerCase();
-        if (!searchable.includes(normalizedQuery)) return false;
-      }
-
       return true;
     });
 
@@ -143,11 +260,23 @@ export default function Library() {
       const bTime = new Date(b.date_taken).getTime();
       return sort === "oldest" ? aTime - bTime : bTime - aTime;
     });
-  }, [papers, query, subject, dateFilter, type, tier, sort]);
+  }, [
+    papers,
+    normalizedQuery,
+    searchState,
+    selectedOfferingId,
+    selectedSubjectState,
+    dateFilter,
+    type,
+    tier,
+    sort,
+  ]);
 
   const subjectOptions: AppDropdownOption[] = [
     { value: "all", label: "All subjects" },
-    ...subjects.map((item) => ({ value: item, label: item })),
+    ...verifiedSubjects.map(([id, label]) => ({ value: `subject:${id}`, label })),
+    { value: "suggested", label: "Suggested subject" },
+    { value: "unknown", label: "Subject unknown" },
   ];
   const dateOptions: AppDropdownOption[] = [
     { value: "any", label: "Any date" },
@@ -187,7 +316,7 @@ export default function Library() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search questions, chapters, concepts"
+            placeholder="Search papers, questions and answers"
             aria-label="Search library"
           />
         </div>
@@ -202,20 +331,30 @@ export default function Library() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
         <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
-          {papersResource.data !== null && <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>}
+          {papersResource.data !== null && searchState.state !== "loading" && (
+            <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>
+          )}
+          {normalizedQuery && searchState.state === "loading" && <>Searching…</>}
 
         </span>
-        <AppDropdown
-          ariaLabel="Sort library"
-          value={sort}
-          options={sortOptions}
-          onChange={(value) => setSort(value as SortMode)}
-          variant="sort"
-          align="right"
-        />
+        {normalizedQuery
+          ? <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>Best match</span>
+          : <AppDropdown
+              ariaLabel="Sort library"
+              value={sort}
+              options={sortOptions}
+              onChange={(value) => setSort(value as SortMode)}
+              variant="sort"
+              align="right"
+            />}
       </div>
 
       {papersError && <div role="status">{papersResource.data !== null ? "Last available papers. " : ""}<button onClick={() => void refreshLibrary()}>Retry library</button></div>}
+      {normalizedQuery && searchState.state === "failed" && (
+        <div role="status" className="subnote">
+          Search couldn&rsquo;t reach the private index. <button onClick={() => setSearchRevision((value) => value + 1)}>Try again</button>
+        </div>
+      )}
       <div className="list">
         {!papers.length && papersError && (
 
@@ -237,7 +376,7 @@ export default function Library() {
           </div>
         )}
 
-        {!!papers.length && !filteredPapers.length && (
+        {!!papers.length && !filteredPapers.length && searchState.state !== "loading" && searchState.state !== "failed" && (
           <div className="srow noicon">
             <div className="lbl">
               No matching papers
@@ -254,11 +393,12 @@ export default function Library() {
           const lost = marksLost(p as Record<string, unknown>);
           const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
+          const subjectInfo = subjectPresentation(p, hitByPaper.get(p.id));
           const meta = (
             <>
               <Thumb />
               <div className="b">
-                <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type)}</div>
+                <div className="t1">{subjectInfo.label} · {paperTypeLabel(p.type)}</div>
                 <div className="t2">
                   <span>{pages ? `${pages} page${pages === 1 ? "" : "s"}` : "Paper"}</span>
                   <span>·</span>
@@ -331,7 +471,7 @@ export default function Library() {
         })}
       </div>
 
-      <div className="subnote">Search matches paper subjects, types and dates.</div>
+      <div className="subnote">Search matches paper details, question labels and text, and your written answers. Suggested subjects are never treated as verified.</div>
     </>
   );
 }
