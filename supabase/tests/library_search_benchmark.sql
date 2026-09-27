@@ -97,8 +97,9 @@ insert into public.student(id,guardian_id,first_name,class_level,age_band) value
  ('52000000-0000-4000-8000-000000000011','52000000-0000-4000-8000-000000000010','Benchmark Active',11,'under_18'),
  ('52000000-0000-4000-8000-000000000012','52000000-0000-4000-8000-000000000010','Benchmark Sibling',11,'under_18');
 
--- 500 active papers. Half carry an exact canonical assessment identity; the
--- remainder retain only a visible legacy subject suggestion.
+-- 500 active papers. Ten percent carry an exact canonical assessment identity
+-- so the canonical-subject index remains realistically selective; the remainder
+-- retain only a visible legacy subject suggestion.
 insert into public.paper(
   id,student_id,type,tier,date_taken,subject,assessment_identity_id
 )
@@ -108,8 +109,8 @@ select
   case when gs % 3 = 0 then 'mid_term' else 'unit_test' end,
   'tier_1',
   date '2097-01-01' + ((gs - 1) % 365),
-  case when gs > 250 then 'Suggested Mechanics' else 'Legacy text is not authority' end,
-  case when gs <= 250 then '52000000-0000-4000-8000-000000000001'::uuid else null end
+  case when gs > 50 then 'Suggested Mechanics' else 'Legacy text is not authority' end,
+  case when gs <= 50 then '52000000-0000-4000-8000-000000000001'::uuid else null end
 from generate_series(1,500) gs;
 
 -- 100 sibling papers deliberately contain the same common vocabulary. Active
@@ -161,6 +162,9 @@ select
   repeat('Sibling private force answer that must never affect active results. ',6),
   1,2,'teacher_pen','confirmed'
 from generate_series(1,1000) gs;
+
+analyze public.paper;
+analyze public.student_attempt;
 
 select public._ls52_t(
   'fixture contains 500 active papers',
