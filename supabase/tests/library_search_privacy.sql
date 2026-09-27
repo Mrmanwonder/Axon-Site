@@ -14,13 +14,14 @@ create table public._library_search_privacy_test (
   detail text
 );
 grant all on public._library_search_privacy_test to authenticated;
-grant usage, select on sequence public._library_search_privacy_test_seq_seq to authenticated;
+grant insert, select on public._library_search_privacy_test to anon;
+grant usage, select on sequence public._library_search_privacy_test_seq_seq to authenticated, anon;
 
 create or replace function public._ls51_t(n text, p boolean, d text default null)
 returns void
 language sql
 as $$ insert into public._library_search_privacy_test(name, passed, detail) values (n, p, d); $$;
-grant execute on function public._ls51_t(text, boolean, text) to authenticated;
+grant execute on function public._ls51_t(text, boolean, text) to authenticated, anon;
 
 select public._ls51_t(
   'anonymous and PUBLIC have no search_library execute grant',
@@ -33,6 +34,31 @@ select public._ls51_t(
       and privilege_type='EXECUTE'
   )
 );
+
+-- Exercise the denial rather than trusting catalog metadata alone.
+set local role anon;
+do $
+begin
+  begin
+    perform 1
+    from public.search_library(
+      'axo51anonymousprobe', null, 'all', null, null, null, null, 10
+    );
+    perform public._ls51_t(
+      'anonymous direct search_library call is denied',
+      false,
+      'anonymous call unexpectedly succeeded'
+    );
+  exception
+    when insufficient_privilege then
+      perform public._ls51_t(
+        'anonymous direct search_library call is denied',
+        true,
+        sqlerrm
+      );
+  end;
+end $;
+reset role;
 
 insert into auth.users(
   instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,created_at,updated_at
