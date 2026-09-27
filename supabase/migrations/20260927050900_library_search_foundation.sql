@@ -72,7 +72,7 @@ declare
 begin
   -- assessment_identity_id is a server-authored trust decision. Student Mode
   -- may edit ordinary paper metadata, but cannot mint verified academic identity.
-  if current_user in ('authenticated', 'anon') then
+  if coalesce(auth.jwt() ->> 'role', '') in ('authenticated', 'anon') then
     if tg_op = 'INSERT' and new.assessment_identity_id is not null then
       raise exception 'assessment identity is server-authored'
         using errcode = '42501', hint = 'assessment_identity_server_authored';
@@ -147,17 +147,17 @@ where p.assessment_identity_id is not null;
 alter table public.student_attempt
   add column if not exists search_vector tsvector
   generated always as (
-    setweight(
+    pg_catalog.setweight(
       pg_catalog.to_tsvector('simple'::regconfig, coalesce(question_label, '')),
       'A'
     )
     ||
-    setweight(
+    pg_catalog.setweight(
       pg_catalog.to_tsvector('simple'::regconfig, coalesce(question_text, '')),
       'B'
     )
     ||
-    setweight(
+    pg_catalog.setweight(
       pg_catalog.to_tsvector('simple'::regconfig, coalesce(student_answer, '')),
       'C'
     )
