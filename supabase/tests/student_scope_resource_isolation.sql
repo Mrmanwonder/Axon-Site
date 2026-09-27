@@ -213,9 +213,9 @@ do $$ begin
   exception when sqlstate '42501' then
     perform public._sr_t('submit_paper rejects sibling student id before processing',true,sqlerrm);
   end;
-end $;
+end $$;
 
-do $ begin
+do $$ begin
   begin
     perform public.submit_paper(
       '7aaaaaaa-0000-4000-8000-000000000002',
@@ -234,9 +234,9 @@ do $ begin
   exception when sqlstate '42501' then
     perform public._sr_t('sibling idempotency key cannot become a paper oracle',true,sqlerrm);
   end;
-end $;
+end $$;
 
-do $ begin
+do $$ begin
   begin
     insert into storage.objects(bucket_id,name,owner)
     values (
