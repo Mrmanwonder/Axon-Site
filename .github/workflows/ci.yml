@@ -81,7 +81,6 @@ jobs:
             echo "::endgroup::"
 
             counts="$(grep -E '^[0-9]+\|[0-9]+\|[0-9]+
-
   # Nothing in this repository applies a migration to the live project — see
   # supabase/migrations/README.md. This job cannot apply one either (it has no
   # credentials, by design), so it does the next most useful thing: it makes a
