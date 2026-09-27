@@ -395,6 +395,37 @@ select public._sr_t(
 );
 
 select public._sr_t(
+  'read initplan helpers are private and executable only by authenticated client role',
+  (select count(*)=2
+     from information_schema.routine_privileges
+    where routine_schema='private'
+      and routine_name in ('current_student_scope_id','current_guardian_is_pro')
+      and grantee='authenticated'
+      and privilege_type='EXECUTE')
+  and not exists (
+    select 1
+      from information_schema.routine_privileges
+     where routine_schema='private'
+       and routine_name in ('current_student_scope_id','current_guardian_is_pro')
+       and grantee in ('anon','PUBLIC')
+  )
+);
+
+select public._sr_t(
+  'write policies keep the established per-row Student Mode authority helper',
+  (select count(*)=4
+     from pg_policies
+    where schemaname='public'
+      and (tablename,policyname) in (
+        ('paper','paper_insert_scope'),
+        ('paper','paper_update_scope'),
+        ('student_attempt','attempt_insert_scope'),
+        ('student_attempt','attempt_update_scope')
+      )
+      and (coalesce(qual,'')||' '||coalesce(with_check,'')) like '%student_scope_allows%')
+);
+
+select public._sr_t(
   'paper delete accepts Student Mode or stronger Parent Mode',
   exists (
     select 1 from pg_policies
