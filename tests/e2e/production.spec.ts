@@ -17,7 +17,7 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
   await page.evaluate(() => {
     const expires = Math.floor(Date.now() / 1000) + 86400;
     const encode = (value: object) => btoa(JSON.stringify(value)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-    localStorage.setItem('sb-dlgcqieyevoebefhcggi-auth-token', JSON.stringify({ access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: 'guardian', exp: expires, role: 'authenticated' })}.signature`, refresh_token: 'test-only', expires_at: expires, expires_in: 86400, token_type: 'bearer', user: { id: 'guardian', aud: 'authenticated', email: 'test@example.test', app_metadata: {}, user_metadata: {} } }));
+    localStorage.setItem('sb-dlgcqieyevoebefhcggi-auth-token', JSON.stringify({ access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: 'guardian', exp: expires, role: 'authenticated', session_id: 'production-e2e-session' })}.signature`, refresh_token: 'test-only', expires_at: expires, expires_in: 86400, token_type: 'bearer', user: { id: 'guardian', aud: 'authenticated', email: 'test@example.test', app_metadata: {}, user_metadata: {} } }));
     localStorage.setItem('axon.prefs.v1', JSON.stringify({ theme: 'dark', text_size: 'm', reduce_motion: true, always_show_reasoning: false }));
   });
 
@@ -25,6 +25,15 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
   // not just an app boot against hand-inserted IndexedDB records.
   await context.route('https://*.supabase.co/rest/v1/**', async route => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/rpc/student_scope_state')) {
+      return route.fulfill({ json: { active: false, student_id: null, remaining_seconds: 0, reason: 'no_active_scope' } });
+    }
+    if (url.pathname.endsWith('/rpc/set_student_scope')) {
+      return route.fulfill({ json: { active: true, student_id: student.id, remaining_seconds: 1800 } });
+    }
+    if (url.pathname.endsWith('/rpc/clear_student_scope')) {
+      return route.fulfill({ json: true });
+    }
     const table = url.pathname.split('/').pop();
     const data = table === 'guardian' ? { id: 'guardian', name: 'Parent', contact: 'test@example.test' }
       : table === 'student' ? [student]
