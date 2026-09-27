@@ -38,7 +38,12 @@ insert into public.student (id, guardian_id, first_name, class_level, age_band) 
 
 -- ── idempotent submit ──────────────────────────────────────────────────────
 
-do $$
+-- Production /paper-submit calls submit_paper through the guardian's user JWT.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"pipeline-student"}';
+select public.set_student_scope('aaaaaaaa-0000-4000-8000-000000000002',900);
+
+do $
 declare v_a jsonb; v_b jsonb; v_papers integer; v_pages integer; v_runs integer;
 begin
   v_a := public.submit_paper(
@@ -85,7 +90,9 @@ do $$ begin begin
   perform public._t('a submit with no pages is refused', false, 'call succeeded');
 exception when others then
   perform public._t('a submit with no pages is refused', true);
-end; end $$;
+end; end $;
+
+reset role;
 
 -- ── transitions ────────────────────────────────────────────────────────────
 
@@ -280,7 +287,7 @@ end $$;
 -- ── who may reach the queues ───────────────────────────────────────────────
 
 set local role authenticated;
-set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111"}';
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"pipeline-student"}';
 
 do $$ begin begin
   perform public.pgmq_send('axon_content', '{"run_id":"x"}'::jsonb);
@@ -306,6 +313,9 @@ end; end $$;
 reset role;
 
 -- ── AXO-101 failed-paper resubmit is single-flight ─────────────────────────
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"pipeline-student"}';
+
 do $retry$
 declare
   v_initial jsonb;
@@ -380,6 +390,8 @@ begin
     exists(select 1 from public.paper_page
       where paper_id=v_paper and structure_status='pending' and crop_status='pending'));
 end $retry$;
+
+reset role;
 
 select count(*) as total, count(*) filter (where passed) as passed,
        count(*) filter (where not passed) as failed from public._r;
