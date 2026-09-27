@@ -79,6 +79,13 @@ function mount() {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   fixture.papers = [
@@ -167,4 +174,98 @@ test("private search input is inside an explicit PostHog no-capture boundary", (
   const boundary = input.closest(".ph-no-capture");
   expect(boundary).toBeTruthy();
   expect(boundary?.getAttribute("data-private-academic-search")).toBe("true");
+});
+
+
+test("last-good results remain visible while a newer search is in flight", async () => {
+  const pending = deferred<any[]>();
+  fixture.search
+    .mockResolvedValueOnce([{
+      paper_id: "unknown",
+      rank: 0.8,
+      match_kind: "question_or_answer",
+      subject_state: "unknown",
+      suggested_subject: null,
+      suggested_confidence: null,
+    }])
+    .mockImplementationOnce(() => pending.promise);
+
+  mount();
+  const input = screen.getByRole("searchbox", { name: "Search library" });
+  await userEvent.type(input, "energy");
+  expect(await screen.findByText("Subject unknown · Mid-term")).toBeTruthy();
+
+  await userEvent.type(input, " transfer");
+  await waitFor(() => expect(fixture.search).toHaveBeenCalledTimes(2));
+  expect(screen.getByText("Searching…")).toBeTruthy();
+  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+
+  pending.resolve([{
+    paper_id: "verified",
+    rank: 1.2,
+    match_kind: "question_or_answer",
+    subject_state: "verified",
+    suggested_subject: null,
+    suggested_confidence: null,
+  }]);
+
+  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull());
+});
+
+test("failed search keeps last-good results and retry can replace them", async () => {
+  fixture.search
+    .mockResolvedValueOnce([{
+      paper_id: "unknown",
+      rank: 0.8,
+      match_kind: "question_or_answer",
+      subject_state: "unknown",
+      suggested_subject: null,
+      suggested_confidence: null,
+    }])
+    .mockRejectedValueOnce(new Error("index temporarily unavailable"))
+    .mockResolvedValueOnce([{
+      paper_id: "verified",
+      rank: 1.1,
+      match_kind: "question_or_answer",
+      subject_state: "verified",
+      suggested_subject: null,
+      suggested_confidence: null,
+    }]);
+
+  mount();
+  const input = screen.getByRole("searchbox", { name: "Search library" });
+  await userEvent.type(input, "momentum");
+  expect(await screen.findByText("Subject unknown · Mid-term")).toBeTruthy();
+
+  await userEvent.type(input, " conservation");
+  expect(await screen.findByText(/Search couldn’t reach the private index/)).toBeTruthy();
+  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull());
+});
+
+test("empty search result is distinct from an empty Library and keeps filters editable", async () => {
+  fixture.search.mockResolvedValueOnce([]);
+
+  mount();
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), "no-such-answer-token");
+
+  expect(await screen.findByText("No matching papers")).toBeTruthy();
+  expect(screen.queryByText("Nothing here yet")).toBeNull();
+  expect(screen.getByRole("button", { name: "Filter by subject" })).not.toBeDisabled();
+  expect(screen.getByRole("button", { name: "Filter by date" })).not.toBeDisabled();
+});
+
+test("special-symbol queries are passed to the private RPC without client rewriting", async () => {
+  fixture.search.mockResolvedValueOnce([]);
+  const query = "E=mc² + α/β";
+
+  mount();
+  await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), query);
+
+  await waitFor(() => expect(fixture.search).toHaveBeenCalled());
+  expect(fixture.search).toHaveBeenLastCalledWith(expect.objectContaining({ query }));
 });
