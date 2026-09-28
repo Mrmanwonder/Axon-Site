@@ -16,7 +16,7 @@ test('Library stays outside crawler-visible surfaces', () => {
 });
 
 test('private Library search returns only non-content metadata', () => {
-  const migration = read('supabase/migrations/20260927061000_library_search_semantics.sql');
+  const migration = read('supabase/migrations/20260927062924_library_search_semantics.sql');
   const start = migration.indexOf('create or replace function public.search_library(');
   assert.ok(start >= 0, 'search_library definition missing');
 
