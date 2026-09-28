@@ -11,6 +11,7 @@ const fixture = vi.hoisted(() => ({
   deleteQuestion: vi.fn(),
   removePaperFromLibrary: vi.fn(),
   refreshLibrary: vi.fn(),
+  getCached: vi.fn(),
 }));
 
 vi.mock("../../src/ui/data/AppProvider", () => ({
@@ -30,6 +31,10 @@ vi.mock("../../src/ui/data/modules", () => ({
   deletePaper: fixture.deletePaper,
   deleteQuestion: fixture.deleteQuestion,
   paperTypeLabel: () => "Class test",
+}));
+
+vi.mock("../../src/cache.js", () => ({
+  getCached: fixture.getCached,
 }));
 
 vi.mock("../../src/ui/components/Crop", () => ({
@@ -114,6 +119,28 @@ function mount(initial: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   fixture.readPaper.mockResolvedValue({ data: paper, stale: false, offline: false });
+  fixture.getCached.mockResolvedValue(null);
+});
+
+test("paper detail paints the student-keyed cached copy before a delayed live reconciliation", async () => {
+  const live = deferred<{ data: typeof paper; stale: boolean; offline: boolean }>();
+  const cachedPaper = { ...paper, subject: "Cached Physics" };
+  const livePaper = { ...paper, subject: "Live Physics" };
+  fixture.getCached.mockResolvedValue(cachedPaper);
+  fixture.readPaper.mockReturnValue(live.promise);
+
+  mount("/library/paper-1");
+
+  expect(await screen.findByText(/Cached Physics/)).toBeTruthy();
+  expect(screen.getByText(/offline copy/)).toBeTruthy();
+  expect(fixture.getCached).toHaveBeenCalledWith("paper:student-1:paper-1");
+  expect(fixture.readPaper).toHaveBeenCalledWith("student-1", "paper-1");
+
+  await act(async () => live.resolve({ data: livePaper, stale: false, offline: false }));
+
+  expect(await screen.findByText(/Live Physics/)).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText(/Cached Physics/)).toBeNull());
+  expect(screen.queryByText(/offline copy/)).toBeNull();
 });
 
 test("paper Delete uses the authenticated owner session, explains the consequence, stays single-flight, then returns to Library", async () => {
