@@ -13,7 +13,7 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
   // The fixture below deliberately uses an unsigned JWT while REST is mocked.
   // Keep its Realtime client local too so an E2E run cannot pollute production
   // with expected signature failures.
-  await page.routeWebSocket('wss://*.supabase.co/realtime/v1/websocket**', () => undefined);
+  await page.routeWebSocket('**/realtime/v1/websocket**', () => undefined);
 
   await page.goto(origin, { waitUntil: 'load' });
   await page.evaluate(() => navigator.serviceWorker.ready);
