@@ -219,7 +219,7 @@ async function coldAuthenticated(browser: Browser) {
   const page = await context.newPage();
   await page.goto(origin, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Physics · Class test/)).toBeVisible();
+  await expect(page.getByRole("link", { name: /Physics · Class test/ })).toBeVisible();
   const snapshot = await resourceSnapshot(page);
   const wallMs = Date.now() - started;
   await context.close();
@@ -234,8 +234,8 @@ async function populateWarmCache(context: BrowserContext, page: Page) {
   await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
   // readThrough awaits its IndexedDB write before exposing the live result, so
-  // this visible row is also the cache-population barrier for the warm samples.
-  await expect(page.getByText(/Physics/).first()).toBeVisible();
+  // this actual paper row is also the cache-population barrier for warm samples.
+  await expect(page.getByRole("button", { name: /Physics · Class test/ })).toBeVisible();
 }
 
 test.describe("production startup performance @performance", () => {
@@ -300,7 +300,7 @@ test.describe("production startup performance @performance", () => {
         dataDelayMs: WARM_DATA_DELAY_MS,
       });
       await page.goto(origin, { waitUntil: "domcontentloaded" });
-      await expect(page.getByText(/Physics · Class test/)).toBeVisible();
+      await expect(page.getByRole("link", { name: /Physics · Class test/ })).toBeVisible();
       homeSamples.push(Date.now() - started);
       expect(homeTrace.some(row => isDataRead(row.key) && row.doneAt === undefined)).toBe(true);
 
@@ -315,7 +315,7 @@ test.describe("production startup performance @performance", () => {
       });
       await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
-      await expect(page.getByText(/Physics/).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: /Physics · Class test/ })).toBeVisible();
       librarySamples.push(Date.now() - started);
       expect(libraryTrace.some(row => isDataRead(row.key) && row.doneAt === undefined)).toBe(true);
     }
