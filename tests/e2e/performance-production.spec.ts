@@ -155,13 +155,18 @@ async function installBackend(context: BrowserContext, options: BackendOptions) 
   await context.route("https://*.supabase.co/rest/v1/**", async (route: Route) => {
     const url = new URL(route.request().url());
     const key = endpointKey(url);
-    const row: TraceRow = { at: Date.now() - options.startedAt, key };
-    options.trace.push(row);
-    const delay = isDataRead(key)
-      ? (options.dataDelayMs ?? options.authorityDelayMs ?? 0)
-      : (options.authorityDelayMs ?? 0);
+    // Snapshot mutable measurement options at request start. Warm-cache samples
+    // update the controller between navigations while earlier delayed reads may
+    // still be settling.
+    const startedAt = options.startedAt;
+    const trace = options.trace;
+    const authorityDelayMs = options.authorityDelayMs ?? 0;
+    const dataDelayMs = options.dataDelayMs ?? authorityDelayMs;
+    const row: TraceRow = { at: Date.now() - startedAt, key };
+    trace.push(row);
+    const delay = isDataRead(key) ? dataDelayMs : authorityDelayMs;
     if (delay) await sleep(delay);
-    row.doneAt = Date.now() - options.startedAt;
+    row.doneAt = Date.now() - startedAt;
     try {
       await route.fulfill({
         status: 200,
@@ -235,11 +240,11 @@ async function coldAuthenticated(browser: Browser) {
   return { wallMs, trace, ...snapshot };
 }
 
-async function populateWarmCache(context: BrowserContext, page: Page) {
-  const trace: TraceRow[] = [];
-  const started = Date.now();
-  await context.unrouteAll({ behavior: "wait" });
-  await installBackend(context, { startedAt: started, trace, authorityDelayMs: 0 });
+async function populateWarmCache(page: Page, backend: BackendOptions) {
+  backend.startedAt = Date.now();
+  backend.trace = [];
+  backend.authorityDelayMs = 0;
+  backend.dataDelayMs = 0;
   await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
   // readThrough awaits its IndexedDB write before exposing the live result, so
@@ -298,34 +303,35 @@ test.describe("production startup performance @performance", () => {
     const context = await browser.newContext();
     await seedAuthenticatedContext(context);
     const page = await context.newPage();
-    await populateWarmCache(context, page);
+    const backend: BackendOptions = {
+      startedAt: Date.now(),
+      trace: [],
+      authorityDelayMs: 0,
+      dataDelayMs: 0,
+    };
+    await installBackend(context, backend);
+    await populateWarmCache(page, backend);
 
     const homeSamples: number[] = [];
     const librarySamples: number[] = [];
     for (let i = 0; i < SAMPLES; i += 1) {
       const homeTrace: TraceRow[] = [];
-      await context.unrouteAll({ behavior: "wait" });
       let started = Date.now();
-      await installBackend(context, {
-        startedAt: started,
-        trace: homeTrace,
-        authorityDelayMs: AUTHORITY_DELAY_MS,
-        dataDelayMs: WARM_DATA_DELAY_MS,
-      });
+      backend.startedAt = started;
+      backend.trace = homeTrace;
+      backend.authorityDelayMs = AUTHORITY_DELAY_MS;
+      backend.dataDelayMs = WARM_DATA_DELAY_MS;
       await page.goto(origin, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("link", { name: /Physics · Class test/ })).toBeVisible();
       homeSamples.push(Date.now() - started);
       expect(homeTrace.some(row => isDataRead(row.key) && row.doneAt === undefined)).toBe(true);
 
       const libraryTrace: TraceRow[] = [];
-      await context.unrouteAll({ behavior: "wait" });
       started = Date.now();
-      await installBackend(context, {
-        startedAt: started,
-        trace: libraryTrace,
-        authorityDelayMs: AUTHORITY_DELAY_MS,
-        dataDelayMs: WARM_DATA_DELAY_MS,
-      });
+      backend.startedAt = started;
+      backend.trace = libraryTrace;
+      backend.authorityDelayMs = AUTHORITY_DELAY_MS;
+      backend.dataDelayMs = WARM_DATA_DELAY_MS;
       await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
       await expect(page.getByRole("button", { name: /Physics · Class test/ })).toBeVisible();
@@ -336,14 +342,11 @@ test.describe("production startup performance @performance", () => {
     // Route latency is measured after the application is already warm and
     // authorized. The route component itself is lazy, so the first visit is the
     // meaningful upper-bound; subsequent navigation should only get cheaper.
-    await context.unrouteAll({ behavior: "wait" });
     const routeTrace: TraceRow[] = [];
-    await installBackend(context, {
-      startedAt: Date.now(),
-      trace: routeTrace,
-      authorityDelayMs: 0,
-      dataDelayMs: 0,
-    });
+    backend.startedAt = Date.now();
+    backend.trace = routeTrace;
+    backend.authorityDelayMs = 0;
+    backend.dataDelayMs = 0;
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
     const before = await page.evaluate(() => performance.now());
