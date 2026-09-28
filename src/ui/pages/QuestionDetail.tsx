@@ -19,11 +19,11 @@
    actually reporting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { deleteQuestion, readPaper, paperTypeLabel } from "../data/modules";
-import type { PaperDetail, StudentAttempt } from "../data/modules";
+import { deleteQuestion, paperTypeLabel } from "../data/modules";
+import type { StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
 import AnswerBlockView from "../components/AnswerBlock";
@@ -38,6 +38,7 @@ import ResourceActions from "../components/ResourceActions";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
+import { usePaperResource } from "../data/usePaperResource";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -82,19 +83,10 @@ export default function QuestionDetail() {
     title: "Shared question from Axon",
   });
 
-  const [paper, setPaper] = useState<PaperDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { paper, error } = usePaperResource(student?.id, paperId);
+  const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
   const [picked, setPicked] = useState<Segment | null>(null);
-
-  useEffect(() => {
-    if (!student || !paperId) return;
-    let cancelled = false;
-    readPaper(student.id, paperId)
-      .then(({ data }) => { if (!cancelled) setPaper(data); })
-      .catch((e) => { if (!cancelled) setLoadError(e.message || "That paper could not be opened."); });
-    return () => { cancelled = true; };
-  }, [student, paperId]);
 
   const attempt: StudentAttempt | undefined = paper?.student_attempt.find((a) => a.id === qId);
 
