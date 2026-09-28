@@ -60,9 +60,9 @@ export function useAcademicShare({
     });
     const url = academicShareUrl(created.token);
 
-    // A previous share-management sheet may dismiss itself after its async
-    // action resolves. Queue this result sheet for the next task so that
-    // dismissal cannot immediately close the sheet we just opened.
+    // A previous share-management sheet dismisses through a router transition
+    // after its async action resolves. Give that transition one frame to settle
+    // before opening the result sheet so its navigation cannot be overwritten.
     setTimeout(() => {
       const native = typeof navigator.share === "function";
       openSheet({
@@ -103,7 +103,7 @@ export function useAcademicShare({
           if (outcome === "shared") toast("Share sheet opened.");
         },
       });
-    }, 0);
+    }, 50);
   }, [openSheet, resourceType, title, toast]);
 
   const createFreshShare = useCallback(async (replaced: boolean) => {

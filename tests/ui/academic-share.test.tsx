@@ -198,6 +198,6 @@ test("an existing active share can be explicitly replaced with a fresh link", as
     expiresMinutes: 1440,
   }));
 
-  const fresh = await screen.findByRole("dialog", { name: "Share this paper" });
+  const fresh = await screen.findByRole("dialog", { name: "Share this paper" }, { timeout: 3000 });
   expect(fresh.textContent).toContain("The previous link has been stopped and replaced.");
 });

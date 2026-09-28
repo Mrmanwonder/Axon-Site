@@ -10,6 +10,11 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
   // remains covered by the rest of the interaction suite.
   test.skip(browserName !== 'chromium', 'Playwright does not support Service Worker testing outside Chromium.');
 
+  // The fixture below deliberately uses an unsigned JWT while REST is mocked.
+  // Keep its Realtime client local too so an E2E run cannot pollute production
+  // with expected signature failures.
+  await page.routeWebSocket('wss://*.supabase.co/realtime/v1/websocket**', () => undefined);
+
   await page.goto(origin, { waitUntil: 'load' });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
