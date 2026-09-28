@@ -306,7 +306,7 @@ reset role;
 -- for subject filtering. Those are valid cost-based choices, not regressions.
 -- Disable only the cheaper competing plan type here so CI still proves each
 -- intended index is valid and can satisfy its target access path.
-do $
+do $$
 declare
   plan json;
   offering uuid;
@@ -338,7 +338,7 @@ begin
     plan::text like '%paper_student_verified_subject_idx%',
     plan::text
   );
-end $;
+end $$;
 
 select
   label,
