@@ -162,11 +162,20 @@ async function installBackend(context: BrowserContext, options: BackendOptions) 
       : (options.authorityDelayMs ?? 0);
     if (delay) await sleep(delay);
     row.doneAt = Date.now() - options.startedAt;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(payloadFor(url)),
-    });
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(payloadFor(url)),
+      });
+    } catch (error) {
+      // Warm-cache assertions intentionally navigate while delayed background
+      // reads are still pending. Chromium may cancel one of those requests
+      // before the synthetic backend resumes; that cancellation is not a
+      // backend or rendering failure.
+      if (error instanceof Error && error.message.includes("Route is already handled")) return;
+      throw error;
+    }
   });
 }
 
