@@ -298,7 +298,7 @@ test.describe("production startup performance @performance", () => {
     // Five Home and five Library samples intentionally hold data reads open to
     // prove cached paint precedes live reconciliation. Keep the per-sample
     // latency budgets strict while allowing the complete benchmark matrix to run.
-    test.setTimeout(180_000);
+    test.setTimeout(120_000);
 
     const context = await browser.newContext();
     await seedAuthenticatedContext(context);
@@ -350,7 +350,7 @@ test.describe("production startup performance @performance", () => {
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
     const before = await page.evaluate(() => performance.now());
-    await page.getByRole("link", { name: "Library" }).click();
+    await page.getByRole("button", { name: /^Library/ }).click();
     await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
     const after = await page.evaluate(() => performance.now());
     const routeMs = Math.round(after - before);
