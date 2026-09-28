@@ -12,20 +12,19 @@
    a paper that has been saved.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { deletePaper, readPaper, paperTypeLabel } from "../data/modules";
-import type { PaperDetail } from "../data/modules";
+import { deletePaper, paperTypeLabel } from "../data/modules";
 import { numMark } from "../data/causes";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
+import { usePaperResource } from "../data/usePaperResource";
 
 const CONF_LABEL: Record<string, string> = {
   confirmed: "Confirmed",
@@ -45,18 +44,8 @@ export default function PaperOverview() {
     title: "Shared paper from Axon",
   });
 
-  const [paper, setPaper] = useState<PaperDetail | null>(null);
-  const [stale, setStale] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!student || !paperId) return;
-    let cancelled = false;
-    readPaper(student.id, paperId)
-      .then(({ data, stale: s }) => { if (!cancelled) { setPaper(data); setStale(!!s); } })
-      .catch((e) => { if (!cancelled) setLoadError(e.message || "That paper could not be opened."); });
-    return () => { cancelled = true; };
-  }, [student, paperId]);
+  const { paper, stale, error } = usePaperResource(student?.id, paperId);
+  const loadError = error?.message || (error ? "That paper could not be opened." : null);
 
   if (loadError) {
     return (
