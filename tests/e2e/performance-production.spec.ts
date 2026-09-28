@@ -175,7 +175,7 @@ async function resourceSnapshot(page: Page) {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     const resources = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
     const initial = resources.filter(entry =>
-      /\/assets\/.*\.(js|css)$|\/fonts\/.*\.woff2$/.test(new URL(entry.name).pathname)
+      /\/assets\/.*\.(js|css)$|\/fonts\/.*\.woff2$/.test(new URL(entry.name, location.href).pathname)
     );
     return {
       readyAt: Math.round(performance.now()),
@@ -184,7 +184,7 @@ async function resourceSnapshot(page: Page) {
       initialTransferBytes: Math.round(initial.reduce((sum, entry) => sum + (entry.transferSize || 0), 0)),
       initialDecodedBytes: Math.round(initial.reduce((sum, entry) => sum + (entry.decodedBodySize || 0), 0)),
       initialResources: initial.map(entry => ({
-        path: new URL(entry.name).pathname,
+        path: new URL(entry.name, location.href).pathname,
         start: Math.round(entry.startTime),
         duration: Math.round(entry.duration),
         transfer: entry.transferSize,
@@ -340,9 +340,9 @@ test.describe("production startup performance @performance", () => {
     const routeMs = Math.round(after - before);
     const routeResources = await page.evaluate((startedAt) =>
       (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
-        .filter(entry => entry.startTime >= startedAt && new URL(entry.name).pathname.endsWith(".js"))
+        .filter(entry => entry.startTime >= startedAt && new URL(entry.name, location.href).pathname.endsWith(".js"))
         .map(entry => ({
-          path: new URL(entry.name).pathname,
+          path: new URL(entry.name, location.href).pathname,
           start: Math.round(entry.startTime),
           duration: Math.round(entry.duration),
           transfer: entry.transferSize,
