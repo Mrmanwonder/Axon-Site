@@ -290,6 +290,10 @@ test.describe("production startup performance @performance", () => {
 
   test("records warm Home/Library cached paint and lazy Library route latency", async ({ browser, browserName }) => {
     test.skip(browserName !== "chromium", "Production performance baseline is pinned to Chromium.");
+    // Five Home and five Library samples intentionally hold data reads open to
+    // prove cached paint precedes live reconciliation. Keep the per-sample
+    // latency budgets strict while allowing the complete benchmark matrix to run.
+    test.setTimeout(90_000);
 
     const context = await browser.newContext();
     await seedAuthenticatedContext(context);
