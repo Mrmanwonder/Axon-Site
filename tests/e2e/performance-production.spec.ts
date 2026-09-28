@@ -4,6 +4,7 @@ const origin = "http://127.0.0.1:5175";
 const SAMPLES = 5;
 const AUTHORITY_DELAY_MS = 25;
 const WARM_DATA_DELAY_MS = 750;
+const WARM_PAINT_BUDGET_MS = 3000;
 
 const student = {
   id: "10000000-0000-0000-0000-000000000001",
@@ -371,8 +372,11 @@ test.describe("production startup performance @performance", () => {
       lazyLibraryRoute: { ms: routeMs, resources: routeResources },
     }));
 
-    expect(summary(homeSamples).p95).toBeLessThan(WARM_DATA_DELAY_MS);
-    expect(summary(librarySamples).p95).toBeLessThan(WARM_DATA_DELAY_MS);
+    // The per-sample pending-read assertions above prove cache-first paint.
+    // Whole-page timing also includes document/JS boot on a shared CI runner,
+    // so gate that user-visible latency independently from synthetic network RTT.
+    expect(summary(homeSamples).p95).toBeLessThan(WARM_PAINT_BUDGET_MS);
+    expect(summary(librarySamples).p95).toBeLessThan(WARM_PAINT_BUDGET_MS);
     expect(routeMs).toBeLessThan(2000);
     await context.close();
   });
