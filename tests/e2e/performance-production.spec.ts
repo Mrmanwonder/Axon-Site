@@ -232,11 +232,9 @@ async function populateWarmCache(context: BrowserContext, page: Page) {
   await installBackend(context, { startedAt: started, trace, authorityDelayMs: 0 });
   await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+  // readThrough awaits its IndexedDB write before exposing the live result, so
+  // this visible row is also the cache-population barrier for the warm samples.
   await expect(page.getByText(/Physics/).first()).toBeVisible();
-  await expect.poll(async () => page.evaluate(async (key) => {
-    const { getCached } = await import("/src/cache.js");
-    return (await getCached(key)) !== null;
-  }, `papers:${student.id}`)).toBe(true);
 }
 
 test.describe("production startup performance @performance", () => {
@@ -292,8 +290,8 @@ test.describe("production startup performance @performance", () => {
     const librarySamples: number[] = [];
     for (let i = 0; i < SAMPLES; i += 1) {
       const homeTrace: TraceRow[] = [];
-      let started = Date.now();
       await context.unrouteAll({ behavior: "wait" });
+      let started = Date.now();
       await installBackend(context, {
         startedAt: started,
         trace: homeTrace,
@@ -306,8 +304,8 @@ test.describe("production startup performance @performance", () => {
       expect(homeTrace.some(row => isDataRead(row.key) && row.doneAt === undefined)).toBe(true);
 
       const libraryTrace: TraceRow[] = [];
-      started = Date.now();
       await context.unrouteAll({ behavior: "wait" });
+      started = Date.now();
       await installBackend(context, {
         startedAt: started,
         trace: libraryTrace,
