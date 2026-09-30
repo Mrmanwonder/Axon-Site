@@ -57,7 +57,7 @@ export default function Scan() {
 
   const pendingPages = tray.filter((p) => p.pending).length;
   const unresolvedPages = tray.filter((p) =>
-    p.retakeRequested || (p.quality?.verdict === "fail" && !p.quality.accepted));
+    p.retakeRequested || p.geometryIssue || (p.quality?.verdict === "fail" && !p.quality.accepted));
   const warningPages = tray.filter((p) =>
     !p.pending && p.quality?.verdict === "warn").length;
   const firstRetake = unresolvedPages[0]?.page_number;
@@ -171,9 +171,9 @@ export default function Scan() {
                 key={p.page_number}
                 className="traypage"
                 disabled={submitting}
-                data-quality={p.quality?.verdict ?? "ok"}
+                data-quality={p.geometryIssue ? "fail" : (p.quality?.verdict ?? "ok")}
                 data-retake={p.retakeRequested ? "true" : undefined}
-                aria-label={`Page ${p.page_number}${p.retakeRequested ? ", retake requested" : ""}`}
+                aria-label={`Page ${p.page_number}${p.geometryIssue ? ", page edges unconfirmed" : ""}${p.retakeRequested ? ", retake requested" : ""}`}
                 onClick={() => { hapticTick(); trayHandlers.onPage?.(p.page_number); }}
               >
                 {p.thumb && <img src={p.thumb} alt="" />}
