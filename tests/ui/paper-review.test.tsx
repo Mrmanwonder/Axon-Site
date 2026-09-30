@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import PaperReview from "../../src/ui/pages/PaperReview";
@@ -156,6 +156,36 @@ test("server progress reaching reviewable state re-enters review without a local
   expect(await screen.findByText("Opening 2 parts that need your eyes…")).toBeTruthy();
   expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
+});
+
+test("a hanging review start becomes a retry state instead of an infinite skeleton", async () => {
+  vi.useFakeTimers();
+  try {
+    fixture.progress = new Map([[
+      "paper-1",
+      progress("needs_review", {
+        pages_done: 14,
+        questions_total: 12,
+        questions_done: 12,
+        questions_needing_you: 12,
+      }),
+    ]]);
+    fixture.ensureScan.mockReturnValue(new Promise(() => {}));
+
+    mount();
+
+    expect(screen.getByText("Opening 12 parts that need your eyes…")).toBeTruthy();
+    await act(async () => {
+      vi.advanceTimersByTime(10_001);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Axon found 12 parts that need your eyes, but the review could not open.")).toBeTruthy();
+    expect(screen.getByText("The review is taking too long to start. Try again.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("review-opening errors are visible instead of being hidden by the processing screen", async () => {
