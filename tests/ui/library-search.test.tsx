@@ -125,7 +125,7 @@ test("answer-only server match controls the visible result identity set", async 
   await waitFor(() => expect(fixture.search).toHaveBeenCalled());
   await waitFor(() => expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy());
   expect(screen.queryByText("Physics · Class test")).toBeNull();
-  expect(screen.queryByText("Suggested: Mathematics · End-of-year exam")).toBeNull();
+  expect(screen.queryByText("Mathematics · End-of-year exam")).toBeNull();
 
   expect(fixture.search).toHaveBeenLastCalledWith(expect.objectContaining({
     query: "private answer phrase",
@@ -164,7 +164,7 @@ test("unverified legacy subject is visibly suggested and missing identity stays 
   mount();
 
   expect(screen.getByText("Physics · Class test")).toBeTruthy();
-  expect(screen.getByText("Suggested: Mathematics · End-of-year exam")).toBeTruthy();
+  expect(screen.getByText("Mathematics · End-of-year exam")).toBeTruthy();
   expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
 });
 
@@ -190,7 +190,7 @@ test("triage-only subject suggestion appears before search and stays tentative",
 
   mount();
 
-  expect(screen.getByText("Suggested: English · Class test")).toBeTruthy();
+  expect(screen.getByText("English · Class test")).toBeTruthy();
   expect(screen.queryByText("Subject unknown · Class test")).toBeNull();
   expect(fixture.search).not.toHaveBeenCalled();
 });
@@ -221,13 +221,13 @@ test("default Suggested and Unknown filters use triage-derived subject state", a
 
   await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
   await userEvent.click(screen.getByRole("option", { name: "Suggested subject" }));
-  expect(screen.getByText("Suggested: English · Class test")).toBeTruthy();
+  expect(screen.getByText("English · Class test")).toBeTruthy();
   expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull();
 
   await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
   await userEvent.click(screen.getByRole("option", { name: "Subject unknown" }));
   expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
-  expect(screen.queryByText("Suggested: English · Class test")).toBeNull();
+  expect(screen.queryByText("English · Class test")).toBeNull();
 
   expect(fixture.search).not.toHaveBeenCalled();
 });

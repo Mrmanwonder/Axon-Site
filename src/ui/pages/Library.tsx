@@ -97,7 +97,7 @@ function subjectPresentation(paper: Paper, hit?: LibrarySearchHit, run?: Progres
     : null;
   const suggested = hitSuggestion ?? progressSuggestion ?? legacySuggestion;
 
-  if (suggested) return { state: "suggested" as const, label: `Suggested: ${suggested}` };
+  if (suggested) return { state: "suggested" as const, label: suggested };
   return { state: "unknown" as const, label: "Subject unknown" };
 }
 
