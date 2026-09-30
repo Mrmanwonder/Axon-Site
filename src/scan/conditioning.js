@@ -24,6 +24,7 @@ import { assessRescue, enhancePage, flattenPage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
 import { imageDataForContext } from './imagedata.js';
 import { scanError } from './errors.js';
+import { perceptualPageHash } from './similarity.js';
 
 /**
  * Pixels on the long edge a page of this size represents.
@@ -319,6 +320,7 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
   const { blob, type } = await encodeBest(toSurface(img));
   const maskBlob = await encodeMask(layers.mask);
   const thumbBlob = await encodeThumb(img);
+  const fingerprint = perceptualPageHash(img);
 
   return {
     blob,
@@ -328,6 +330,7 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
     height: img.height,
     quality,
     layers,
+    fingerprint,
     meta: {
       preprocess_version: CONDITIONING.PREPROCESS_VERSION,
       page_number: pageNumber,
@@ -392,6 +395,28 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       // show, per path, whether the live gate's read agrees with this page's
       // final score — see quality.live_gate below.
       capture_path: capturePath,
+      // Capture integrity is explicit and top-level in conditioning_meta so
+      // production evidence can distinguish a clean live lock, a rescued
+      // manual shot and an honest uncropped fallback.
+      quad_confidence_at_shutter: sourceKind === 'camera'
+        ? (liveGate?.quadConfidenceAtShutter ?? 'none')
+        : null,
+      rescue_redetect_attempted: sourceKind === 'camera'
+        ? !!liveGate?.rescueRedetectAttempted
+        : false,
+      rescue_redetect_succeeded: sourceKind === 'camera'
+        ? !!liveGate?.rescueRedetectSucceeded
+        : false,
+      geometry_confirmed: sourceKind === 'camera'
+        ? (liveGate?.geometryConfirmed ?? !!quad)
+        : true,
+      live_hint_sequence: sourceKind === 'camera' && Array.isArray(liveGate?.liveHintSequence)
+        ? liveGate.liveHintSequence.slice(0, 32).map((entry) => ({
+            at_ms: Math.max(0, Math.round(Number(entry?.at_ms) || 0)),
+            hint: String(entry?.hint ?? '').slice(0, 160),
+            blocking: entry?.blocking == null ? null : String(entry.blocking).slice(0, 32),
+          }))
+        : [],
       // The live gate's own read of this exact frame, at the moment the
       // shutter fired — for comparing against `quality` above, which is scored
       // on the conditioned image. The two are computed at different scales on

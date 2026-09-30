@@ -32,6 +32,8 @@ export type TrayPage = {
   pending?: boolean;
   /** Sticky until a replacement is durably stored. */
   retakeRequested?: boolean;
+  /** Geometry could not be confirmed; the tray must not look normally accepted. */
+  geometryIssue?: boolean;
 };
 
 export type ProgressModel = {

@@ -1,0 +1,37 @@
+{
+  "id": "scanner-warp-integrity-2026-09-29",
+  "source": "2026-09-29 observed iOS Safari capture session",
+  "tags": [
+    "detector-fails-to-lock",
+    "manual-capture-unlocked",
+    "background-bleed",
+    "warp-integrity",
+    "glare-guidance"
+  ],
+  "observed": {
+    "first_capture": "locked-and-clean",
+    "second_live_lock": "never-confirmed-for-about-19-seconds",
+    "second_capture": "manual",
+    "legacy_failure": "conditioned crop contained background outside true page edges"
+  },
+  "expected": {
+    "quad_confidence_at_shutter": ["provisional", "none"],
+    "rescue_redetect_attempted": true,
+    "unsafe_rescue_outcome": "no-perspective-warp",
+    "fallback": "keep-uncropped-still-and-require-explicit-student-decision",
+    "dominant_glare_hint": "lighting-specific"
+  },
+  "media": {
+    "status": "not-present-in-project-files-at-implementation-time",
+    "required_for_exact-visual-replay": [
+      "IMG_5105.MP4 frames from the 8-27s stuck window",
+      "two full-resolution reference photos",
+      "clean tray thumbnail",
+      "background-bled tray thumbnail"
+    ]
+  },
+  "automated_contract": [
+    "bench/capture.test.mjs",
+    "bench/similarity.test.mjs"
+  ]
+}

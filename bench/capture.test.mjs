@@ -15,8 +15,8 @@ import {
   LIVE_SEARCH_MIN_FILL, LIVE_PROXY_LONG_EDGE, LIVE_PROXY_RECOVERY_LONG_EDGE,
   PAPER_EVIDENCE_CONFIRMATIONS, PAPER_EVIDENCE_LOSS_MS, SEARCH_GUIDANCE,
   captureConfirmFrame, coverCropRect, fitLongEdge, isVerifiedQuad, liveGateVerdict,
-  resolveOverlayPhase, settledGuidance, settledPaperEvidence,
-  settledScannerGuidance, shouldAutoCapture,
+  rescueQuadAccepted, resolveOverlayPhase, settledGuidance, settledPaperEvidence,
+  settledScannerGuidance, shouldAutoCapture, shutterQuadConfidence,
 } from '../src/scan/capture.js';
 import { easeQuad, isPageShaped } from '../src/scan/edges.js';
 import { CAPTURE, CONDITIONING, QUALITY } from '../src/scan/contract.js';
@@ -325,6 +325,27 @@ test('a tentative rectangle stays on calm searching guidance', () => {
   assert.equal(shown.blocking, null);
 });
 
+test('a plausible candidate names glare before independent paper confirmation', () => {
+  const candidate = settledPaperEvidence(null, {
+    globalConfirmations: PAPER_EVIDENCE_CONFIRMATIONS - 1,
+    geometryReady: true,
+    observedGeometry: true,
+  }, 1000);
+  const glare = liveGateVerdict({ ...clean, glare: QUALITY.GLARE_FAIL + 0.01 });
+  const shown = settledScannerGuidance(null, glare, candidate, 1000, { candidatePresent: true });
+
+  assert.equal(candidate.confirmed, false);
+  assert.equal(shown.blocking, 'glare');
+  assert.match(shown.hint, /glare|light/i);
+});
+
+test('a genuinely unframed view does not turn into a lighting hint', () => {
+  const glare = liveGateVerdict({ ...clean, glare: QUALITY.GLARE_FAIL + 0.01 });
+  const shown = settledScannerGuidance(null, glare, null, 1000, { candidatePresent: false });
+  assert.equal(shown.hint, SEARCH_GUIDANCE.hint);
+  assert.equal(shown.blocking, null);
+});
+
 test('alternating false candidates and misses never flip into locking guidance', () => {
   let evidence = null;
   let guidance = null;
@@ -420,6 +441,22 @@ test('capture confirmation requires a real four-point verified quad', () => {
   assert.equal(isVerifiedQuad(null), false);
   assert.equal(isVerifiedQuad(page().slice(0, 3)), false);
   assert.equal(isVerifiedQuad([...page().slice(0, 3), { x: NaN, y: 4 }]), false);
+});
+
+test('shutter geometry confidence distinguishes live lock, candidate and no quad', () => {
+  assert.equal(shutterQuadConfidence({ locked: true, hasCandidate: true }), 'locked');
+  assert.equal(shutterQuadConfidence({ locked: false, hasCandidate: true }), 'provisional');
+  assert.equal(shutterQuadConfidence({ locked: false, hasCandidate: false }), 'none');
+});
+
+test('manual rescue accepts a new quad only when independent geometry agrees', () => {
+  const primary = page();
+  const close = primary.map((p) => ({ x: p.x + 2, y: p.y + 2 }));
+  const wrong = primary.map((p) => ({ x: p.x + 40, y: p.y }));
+  assert.equal(rescueQuadAccepted(primary, close, W, H), true);
+  assert.equal(rescueQuadAccepted(primary, wrong, W, H), false);
+  assert.equal(rescueQuadAccepted(null, close, W, H), true);
+  assert.equal(rescueQuadAccepted(primary, null, W, H), false);
 });
 
 // ── the brackets: deadzone and adaptive damping ────────────────────────────

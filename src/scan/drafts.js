@@ -105,6 +105,10 @@ export async function addPage(draft, page) {
     width: page.width,
     height: page.height,
     quality: page.quality,
+    // Local-only perceptual signature used to catch an accidental re-scan of
+    // the same physical page. It is deliberately outside conditioning_meta, so
+    // ingest never uploads it to the server.
+    fingerprint: page.fingerprint ?? null,
     meta: page.meta,
     source_kind: page.source_kind ?? null,
     teacher_marks: page.teacher_marks ?? [],
