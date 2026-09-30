@@ -9,6 +9,7 @@ const fixture = vi.hoisted(() => ({
   search: vi.fn(),
   refresh: vi.fn(),
   papers: [] as any[],
+  progress: new Map<string, any>(),
 }));
 
 vi.mock("../../src/ui/data/AppProvider", () => ({
@@ -23,7 +24,7 @@ vi.mock("../../src/ui/data/AppProvider", () => ({
     },
     progressResource: {
       state: "ready",
-      data: new Map(),
+      data: fixture.progress,
       source: "live",
       fetchedAt: Date.now(),
     },
@@ -101,6 +102,7 @@ beforeEach(() => {
     paper({ id: "unknown", type: "mid_term" }),
     paper({ id: "suggested", type: "final_exam", subject: "Mathematics" }),
   ];
+  fixture.progress = new Map();
   fixture.search.mockResolvedValue([]);
   fixture.refresh.mockResolvedValue(undefined);
 });
@@ -164,6 +166,70 @@ test("unverified legacy subject is visibly suggested and missing identity stays 
   expect(screen.getByText("Physics · Class test")).toBeTruthy();
   expect(screen.getByText("Suggested: Mathematics · End-of-year exam")).toBeTruthy();
   expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+});
+
+
+test("triage-only subject suggestion appears before search and stays tentative", () => {
+  fixture.papers = [paper({ id: "triage-only" })];
+  fixture.progress = new Map([[
+    "triage-only",
+    {
+      paper_id: "triage-only",
+      status: "committed",
+      status_reason: null,
+      started_at: "2026-09-01T00:00:00Z",
+      pages_total: 1,
+      pages_done: 1,
+      questions_total: 1,
+      questions_done: 1,
+      questions_needing_you: 0,
+      suggested_subject: "English",
+      suggested_confidence: "low",
+    },
+  ]]);
+
+  mount();
+
+  expect(screen.getByText("Suggested: English · Class test")).toBeTruthy();
+  expect(screen.queryByText("Subject unknown · Class test")).toBeNull();
+  expect(fixture.search).not.toHaveBeenCalled();
+});
+
+test("default Suggested and Unknown filters use triage-derived subject state", async () => {
+  fixture.papers = [
+    paper({ id: "triage-only" }),
+    paper({ id: "still-unknown", type: "mid_term" }),
+  ];
+  fixture.progress = new Map([[
+    "triage-only",
+    {
+      paper_id: "triage-only",
+      status: "committed",
+      status_reason: null,
+      started_at: "2026-09-01T00:00:00Z",
+      pages_total: 1,
+      pages_done: 1,
+      questions_total: 1,
+      questions_done: 1,
+      questions_needing_you: 0,
+      suggested_subject: "English",
+      suggested_confidence: "high",
+    },
+  ]]);
+
+  mount();
+
+  await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
+  await userEvent.click(screen.getByRole("option", { name: "Suggested subject" }));
+  expect(screen.getByText("Suggested: English · Class test")).toBeTruthy();
+  expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
+  await userEvent.click(screen.getByRole("option", { name: "Subject unknown" }));
+  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(screen.queryByText("Suggested: English · Class test")).toBeNull();
+
+  expect(fixture.search).not.toHaveBeenCalled();
 });
 
 

@@ -224,6 +224,16 @@ select public._ls50_t(
 );
 
 select public._ls50_t(
+  'paper progress exposes the same safe triage subject suggestion for default Library browsing',
+  exists (
+    select 1 from public.paper_progress
+    where paper_id='50000000-0000-4000-8000-000000000021'
+      and suggested_subject='Tentative Mechanics'
+      and suggested_confidence='low'
+  )
+);
+
+select public._ls50_t(
   'unknown subject is a first-class state',
   exists (
     select 1 from public.search_library(
