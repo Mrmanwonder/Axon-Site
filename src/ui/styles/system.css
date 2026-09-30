@@ -471,6 +471,90 @@
   .skel{height:11px;border-radius:5px;background:linear-gradient(90deg,var(--surface-sunk) 25%,rgba(140,140,150,.16) 50%,var(--surface-sunk) 75%);background-size:200% 100%;animation:sk 1.5s linear infinite;}
   @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
+  /* ── live paper processing ────────────────────────────────────────────────
+     The review route can be opened while Cloudflare is still working through a
+     paper. This is deliberately a document visual rather than an "AI" orb: the
+     motion describes the real work — scanning lines, locating structure and
+     connecting evidence — while the task list below names the pipeline stages.
+     No percentage is shown because the stages do not have linear cost. */
+  .paperwork{width:min(100%,680px);margin:0 auto;padding:clamp(12px,3vh,28px) 0 calc(28px + var(--bot-inset));}
+  .paperwork-hero{text-align:center;padding:6px var(--text-gutter) 20px;}
+  .paperwork-eyebrow{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.075em;
+    color:var(--label-3);margin-top:4px;}
+  .paperwork-hero h1{margin:8px auto 0;max-width:24ch;font-size:clamp(24px,6vw,34px);line-height:1.08;
+    font-weight:700;letter-spacing:-.038em;text-wrap:balance;}
+  .paperwork-hero p{max-width:34ch;margin:10px auto 0;font-size:13.5px;line-height:1.5;color:var(--label-3);}
+
+  .paperwork-visual{height:190px;position:relative;display:grid;place-items:center;overflow:hidden;
+    margin:0 auto 8px;max-width:360px;}
+  .paperwork-glow{position:absolute;width:178px;height:178px;border-radius:999px;
+    background:radial-gradient(circle,color-mix(in srgb,var(--blue) 17%,transparent),transparent 67%);
+    animation:paperworkGlow 3.6s ease-in-out infinite;}
+  .paperwork-links{position:absolute;width:240px;height:170px;overflow:visible;fill:none;
+    stroke:color-mix(in srgb,var(--blue) 38%,var(--label-3));stroke-width:1.2;stroke-linecap:round;
+    stroke-dasharray:3 7;opacity:.42;animation:paperworkDash 7s linear infinite;}
+  .paperwork-sheet{position:relative;width:112px;height:142px;border-radius:15px;
+    background:linear-gradient(145deg,color-mix(in srgb,var(--surface) 92%,var(--blue) 8%),var(--surface));
+    border:.5px solid color-mix(in srgb,var(--hairline) 72%,var(--blue) 28%);
+    box-shadow:0 18px 50px color-mix(in srgb,var(--blue) 10%,transparent);
+    transform:rotate(-2deg);animation:paperworkFloat 3.8s ease-in-out infinite;overflow:hidden;}
+  .paperwork-sheet::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.055) 48%,transparent 61%);
+    transform:translateX(-120%);animation:paperworkSheen 4.2s ease-in-out infinite;}
+  .paperwork-line{position:absolute;left:18px;height:4px;border-radius:3px;background:var(--label-3);opacity:.28;}
+  .paperwork-line.l1{top:27px;width:65px}.paperwork-line.l2{top:43px;width:76px}.paperwork-line.l3{top:59px;width:54px}
+  .paperwork-mark{position:absolute;width:14px;height:8px;border-left:2px solid var(--green);
+    border-bottom:2px solid var(--green);transform:rotate(-45deg);opacity:.85;}
+  .paperwork-mark.m1{left:24px;top:85px}.paperwork-mark.m2{right:25px;top:107px}
+  .paperwork-beam{position:absolute;left:10px;right:10px;height:28px;top:-32px;
+    background:linear-gradient(180deg,transparent,color-mix(in srgb,var(--blue) 18%,transparent),transparent);
+    border-bottom:1px solid color-mix(in srgb,var(--blue) 55%,transparent);
+    animation:paperworkScan 2.3s cubic-bezier(.45,0,.55,1) infinite;}
+  .paperwork-node{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--blue);
+    box-shadow:0 0 0 5px color-mix(in srgb,var(--blue) 11%,transparent);
+    animation:paperworkNode 2.4s ease-in-out infinite;}
+  .paperwork-node.n1{left:42px;top:49px;animation-delay:-.25s}
+  .paperwork-node.n2{right:39px;top:42px;animation-delay:-1.1s}
+  .paperwork-node.n3{left:48px;bottom:47px;animation-delay:-1.7s}
+  .paperwork-node.n4{right:45px;bottom:43px;animation-delay:-.7s}
+
+  .paperwork-tasks{padding:8px 18px;}
+  .paperwork-task{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;font-size:14px;
+    color:var(--label-3);}
+  .paperwork-task+.paperwork-task::before{content:"";position:absolute;left:8px;top:-12px;width:.5px;height:24px;
+    background:var(--hairline);}
+  .paperwork-task.done{color:var(--label-2)}.paperwork-task.now{color:var(--label);font-weight:600;}
+  .paperwork-state{position:relative;width:17px;height:17px;border-radius:50%;flex:0 0 auto;
+    border:1.5px solid var(--hairline);background:var(--surface);}
+  .paperwork-state.done{background:var(--green);border-color:var(--green);display:grid;place-items:center;}
+  .paperwork-state.done svg{width:10px;height:10px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
+  .paperwork-state.now{border:2px solid var(--blue);background:var(--surface);}
+  .paperwork-state.now::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--blue);
+    animation:paperworkCurrent 1.4s ease-in-out infinite;}
+  .paperwork-note{margin:14px calc(var(--text-gutter) + 2px) 0;font-size:12.5px;line-height:1.5;color:var(--label-3);
+    text-align:center;}
+  .paperwork-back{display:flex;width:max-content;margin:15px auto 0;}
+
+  @keyframes paperworkFloat{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-6px) rotate(-1deg)}}
+  @keyframes paperworkScan{0%{transform:translateY(0);opacity:0}15%{opacity:1}82%{opacity:1}100%{transform:translateY(170px);opacity:0}}
+  @keyframes paperworkNode{0%,100%{transform:scale(.84);opacity:.46}50%{transform:scale(1.16);opacity:1}}
+  @keyframes paperworkGlow{0%,100%{transform:scale(.93);opacity:.55}50%{transform:scale(1.08);opacity:1}}
+  @keyframes paperworkDash{to{stroke-dashoffset:-40}}
+  @keyframes paperworkSheen{0%,35%{transform:translateX(-120%)}70%,100%{transform:translateX(120%)}}
+  @keyframes paperworkCurrent{0%,100%{transform:scale(.65);opacity:.55}50%{transform:scale(1);opacity:1}}
+
+  [data-motion="reduce"] .paperwork-glow,
+  [data-motion="reduce"] .paperwork-links,
+  [data-motion="reduce"] .paperwork-sheet,
+  [data-motion="reduce"] .paperwork-sheet::after,
+  [data-motion="reduce"] .paperwork-beam,
+  [data-motion="reduce"] .paperwork-node,
+  [data-motion="reduce"] .paperwork-state.now::after{animation:none!important;}
+  @media(prefers-reduced-motion:reduce){
+    .paperwork-glow,.paperwork-links,.paperwork-sheet,.paperwork-sheet::after,.paperwork-beam,
+    .paperwork-node,.paperwork-state.now::after{animation:none!important;}
+  }
+
   /* ── Home-only: insight card / attention / scan cta ── */
   .insight{margin-top:18px;padding:clamp(17px,4.6vw,22px) clamp(17px,4.6vw,22px) 6px;}
   .chips{display:flex;gap:7px;margin-bottom:12px;}

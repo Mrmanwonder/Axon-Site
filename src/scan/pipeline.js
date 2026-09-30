@@ -307,15 +307,20 @@ return { paperId, runId: submission.run_id, refused: false, regions: regions ?? 
  * looked up fresh rather than persisted, so it is never stale.
  */
 export async function currentRunForPaper(paperId) {
+  // Re-entry must use the same server truth the Library uses. A retry can be
+  // started on another device and has no local draft, so looking up a raw run
+  // here while Library reads paper_progress can make the same paper appear
+  // "Reading" in one surface and "gone" in the next. paper_progress is already
+  // the student-scoped, current-run projection used by Library.
   const { data, error } = await sb
-    .from('extraction_run')
-    .select('id, status, status_reason')
+    .from('paper_progress')
+    .select('run_id, status, status_reason, started_at')
     .eq('paper_id', paperId)
     .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  return data ? { ...data, id: data.run_id } : null;
 }
 
 /** A run's regions, for `watchExplanations` — used when re-entering review
