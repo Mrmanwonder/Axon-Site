@@ -123,6 +123,7 @@ const page = {
   width: processed.width,
   height: processed.height,
   quality: processed.quality,
+  fingerprint: processed.fingerprint ?? null,
   meta: { ...processed.meta, coverage: processed.coverage, capture_timing: captureTiming },
   teacher_marks: processed.teacher_marks,
   margin_band: processed.margin_band,
