@@ -757,22 +757,40 @@ async function openReview(runId, intent = null) {
   host.openReview(S.review?.paper?.id, intent);
 }
 
-export async function resumeDraftReview(draftId) {
+const LEGACY_DRAFT_LOOKUP_MS = 1200;
+
+function readDraftWithin(id, ms = LEGACY_DRAFT_LOOKUP_MS) {
+  return Promise.race([
+    Promise.resolve(readDraft(id)).catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+export async function resumeDraftReview(routeId) {
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   if (!studentId) return { state: 'gone' };
 
-  // The route may be a local draft id (legacy/direct scanner flow) or the
-  // canonical paper id (Library/retry/cross-device flow). Read the exact draft
-  // if it exists, but never enumerate IndexedDB before consulting server state:
-  // listDrafts() can be slow or blocked and review itself does not require the
-  // original local pages.
-  let draft = await readDraft(draftId).catch(() => null);
-  if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
-  const paperId = draft?.paper_id ?? draftId;
+  // Library and retry routes use the canonical paper id. Consult server truth
+  // first, before touching IndexedDB at all. A blocked local draft database must
+  // never hold a server-ready review behind a skeleton loader.
+  let paperId = routeId;
+  let draft = null;
+  let run = await currentRunForPaper(paperId);
+  if (epoch !== S.epoch) return { state: 'gone' };
 
-  const run = await currentRunForPaper(paperId);
-  if (epoch !== S.epoch || !run) return { state: 'gone' };
+  // Legacy scanner URLs used a local draft id. Only if the route id is not a
+  // server paper do we ask IndexedDB to translate it — and even that fallback
+  // has a finite deadline so broken local storage cannot create an infinite
+  // loading state.
+  if (!run) {
+    draft = await readDraftWithin(routeId);
+    if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
+    if (!draft?.paper_id) return { state: 'gone' };
+    paperId = draft.paper_id;
+    run = await currentRunForPaper(paperId);
+    if (epoch !== S.epoch || !run) return { state: 'gone' };
+  }
 
   // Recover an on-device draft opportunistically so "Rescan this page" becomes
   // available when possible, but do not make the actual review wait for it.
