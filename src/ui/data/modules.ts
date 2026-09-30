@@ -357,6 +357,9 @@ export type ProgressRow = {
   questions_total: number;
   questions_done: number;
   questions_needing_you: number;
+  /** Latest triage-only display suggestion. Never canonical/verified identity. */
+  suggested_subject?: string | null;
+  suggested_confidence?: string | null;
 };
 
 /** One row per paper — the current (most recent) run's live status. Not
