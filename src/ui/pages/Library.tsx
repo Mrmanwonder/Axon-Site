@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, retryFailedPaper, searchLibrary } from "../data/modules";
-import type { LibrarySearchHit, Paper } from "../data/modules";
+import type { LibrarySearchHit, Paper, ProgressRow } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
@@ -69,7 +69,7 @@ function dateBounds(filter: DateFilter) {
   };
 }
 
-function subjectPresentation(paper: Paper, hit?: LibrarySearchHit) {
+function subjectPresentation(paper: Paper, hit?: LibrarySearchHit, run?: ProgressRow) {
   if (
     paper.subject_offering_id
     && paper.subject_identity_confidence === "verified"
@@ -78,9 +78,25 @@ function subjectPresentation(paper: Paper, hit?: LibrarySearchHit) {
     return { state: "verified" as const, label: paper.subject_display_snapshot };
   }
 
-  const suggested = hit?.subject_state === "suggested"
-    ? hit.suggested_subject
-    : (typeof paper.subject === "string" && paper.subject.trim() ? paper.subject.trim() : null);
+  // A search hit is fresh server-authored subject state. Respect an explicit
+  // unknown rather than reviving an older progress suggestion underneath it.
+  if (hit?.subject_state === "unknown") {
+    return { state: "unknown" as const, label: "Subject unknown" };
+  }
+
+  const hitSuggestion = hit?.subject_state === "suggested"
+    && typeof hit.suggested_subject === "string"
+    && hit.suggested_subject.trim()
+    ? hit.suggested_subject.trim()
+    : null;
+  const progressSuggestion = typeof run?.suggested_subject === "string" && run.suggested_subject.trim()
+    ? run.suggested_subject.trim()
+    : null;
+  const legacySuggestion = typeof paper.subject === "string" && paper.subject.trim()
+    ? paper.subject.trim()
+    : null;
+  const suggested = hitSuggestion ?? progressSuggestion ?? legacySuggestion;
+
   if (suggested) return { state: "suggested" as const, label: `Suggested: ${suggested}` };
   return { state: "unknown" as const, label: "Subject unknown" };
 }
@@ -230,14 +246,13 @@ export default function Library() {
     const now = new Date();
     const result = papers.filter((paper) => {
       if (selectedOfferingId && paper.subject_offering_id !== selectedOfferingId) return false;
-      if (selectedSubjectState === "unknown" && (
-        paper.subject_offering_id
-        || (typeof paper.subject === "string" && paper.subject.trim())
-      )) return false;
-      if (selectedSubjectState === "suggested" && (
-        paper.subject_offering_id
-        || !(typeof paper.subject === "string" && paper.subject.trim())
-      )) return false;
+      const subjectInfo = subjectPresentation(
+        paper,
+        undefined,
+        progressResource.data?.get(paper.id),
+      );
+      if (selectedSubjectState === "unknown" && subjectInfo.state !== "unknown") return false;
+      if (selectedSubjectState === "suggested" && subjectInfo.state !== "suggested") return false;
       if (type !== "all" && paper.type !== type) return false;
       if (tier !== "any" && paper.tier !== tier) return false;
 
@@ -266,6 +281,7 @@ export default function Library() {
     searchState,
     selectedOfferingId,
     selectedSubjectState,
+    progressResource.data,
     dateFilter,
     type,
     tier,
@@ -396,7 +412,11 @@ export default function Library() {
           const lost = marksLost(p as Record<string, unknown>);
           const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 
-          const subjectInfo = subjectPresentation(p, hitByPaper.get(p.id));
+          const subjectInfo = subjectPresentation(
+            p,
+            hitByPaper.get(p.id),
+            progressResource.data?.get(p.id),
+          );
           const meta = (
             <>
               <Thumb />
