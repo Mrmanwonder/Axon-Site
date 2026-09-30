@@ -761,13 +761,28 @@ export async function resumeDraftReview(draftId) {
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   if (!studentId) return { state: 'gone' };
-  let draft = await readDraft(draftId);
+
+  // The route may be a local draft id (legacy/direct scanner flow) or the
+  // canonical paper id (Library/retry/cross-device flow). Read the exact draft
+  // if it exists, but never enumerate IndexedDB before consulting server state:
+  // listDrafts() can be slow or blocked and review itself does not require the
+  // original local pages.
+  let draft = await readDraft(draftId).catch(() => null);
   if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
   const paperId = draft?.paper_id ?? draftId;
-  draft ??= (await listDrafts(studentId)).find(item => item.paper_id === paperId) ?? null;
-  if (epoch !== S.epoch) return { state: 'gone' };
+
   const run = await currentRunForPaper(paperId);
   if (epoch !== S.epoch || !run) return { state: 'gone' };
+
+  // Recover an on-device draft opportunistically so "Rescan this page" becomes
+  // available when possible, but do not make the actual review wait for it.
+  if (!draft) {
+    void listDrafts(studentId).then((drafts) => {
+      if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+      const local = drafts.find((item) => item.paper_id === paperId) ?? null;
+      if (local) S.draft = local;
+    }).catch((error) => console.warn('[scan] local draft lookup failed during review', error));
+  }
 
   if (run.status === 'committed') return { state: 'committed', paperId };
 
@@ -778,7 +793,7 @@ export async function resumeDraftReview(draftId) {
 
   const regions = await regionsForRun(run.id);
   if (epoch !== S.epoch) return { state: 'gone' };
-  S.draft = draft;
+  S.draft = draft ?? S.draft;
   S.regions = regions;
   await openReview(run.id);
   // The SQL gate is idempotent too, but do not make a duplicate request when a
