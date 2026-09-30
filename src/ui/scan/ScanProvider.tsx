@@ -131,6 +131,13 @@ type ScanValue = {
 
 const Ctx = createContext<ScanValue | null>(null);
 
+function reviewIdentityFromPath(pathname: string) {
+  const prefix = "/scan/review/";
+  if (!pathname.startsWith(prefix)) return null;
+  const identity = pathname.slice(prefix.length).split("/")[0];
+  return identity || null;
+}
+
 export function useScan(): ScanValue {
   const v = useContext(Ctx);
   if (!v) throw new Error("useScan called outside ScanProvider");
@@ -233,8 +240,16 @@ export function ScanProvider({ children }: { children: ReactNode }) {
         renderProgress: (m: ProgressModel) => setProgress(m),
         openSheet: (cfg: SheetConfig) => openSheet(cfg),
         openReview: (paperId: string, intent: string | null) => {
-          if (locationRef.current.pathname === paths.review(paperId)) setReviewIdentity(paperId);
-          else if (visibleRef.current && intent === locationRef.current.key) {
+          // Re-entry can arrive through a canonical paper-id route or a legacy
+          // draft-id route. If the user is already on a review route, bind the
+          // overlay to that route identity instead of requiring it to equal the
+          // canonical paper id returned by the freshly loaded review model.
+          const routeIdentity = reviewIdentityFromPath(locationRef.current.pathname);
+          if (routeIdentity) {
+            setReviewIdentity(routeIdentity);
+            return;
+          }
+          if (paperId && visibleRef.current && intent === locationRef.current.key) {
             setReviewIdentity(paperId);
             navigate(paths.review(paperId));
           }
@@ -242,6 +257,12 @@ export function ScanProvider({ children }: { children: ReactNode }) {
         renderReview: (m: ReviewModel, h: ReviewHandlers) => {
           setReview(m);
           setReviewHandlers(() => h);
+          // The review model is already loaded at this point. On a direct
+          // /scan/review/:id entry, make it visible immediately; do not wait for
+          // a second route-identity handshake that can strand the actual cards
+          // behind the processing screen.
+          const routeIdentity = reviewIdentityFromPath(locationRef.current.pathname);
+          if (routeIdentity) setReviewIdentity(routeIdentity);
         },
         closeReview: (paperId?: string) => { if (locationRef.current.pathname.startsWith("/scan/review/")) navigate(paperId ? paths.paper(paperId) : paths.scan, { replace: true }); },
         goto: gotoScan,
