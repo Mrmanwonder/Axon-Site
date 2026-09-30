@@ -115,10 +115,11 @@ test("leaving a student context during explanations cannot commit or navigate th
   expect(closeReview).not.toHaveBeenCalled();
 });
 
-test("review re-entry does not wait for a hanging local draft list", async () => {
+test("canonical paper review does not wait for hanging IndexedDB reads", async () => {
   const pendingDrafts = deferred<any[]>();
+  const pendingExactDraft = deferred<any>();
   fixture.listDrafts.mockReturnValue(pendingDrafts.promise);
-  fixture.readDraft.mockResolvedValue(null);
+  fixture.readDraft.mockReturnValue(pendingExactDraft.promise);
   fixture.currentRunForPaper.mockResolvedValue({ id: "run", status: "needs_review" });
   fixture.regionsForRun.mockResolvedValue([{ id: "q1", order_index: 0, question_label: "1" }]);
   fixture.loadReview.mockResolvedValue({
@@ -136,11 +137,41 @@ test("review re-entry does not wait for a hanging local draft list", async () =>
 
   await waitFor(() => expect(fixture.currentRunForPaper).toHaveBeenCalledWith("paper"));
   await expect(reopening).resolves.toEqual({ state: "reviewing" });
+  expect(fixture.readDraft).not.toHaveBeenCalledWith("paper");
   expect(fixture.regionsForRun).toHaveBeenCalledWith("run");
   expect(fixture.loadReview).toHaveBeenCalledWith("run");
   expect(open).toHaveBeenCalledWith("paper", null);
 
   pendingDrafts.resolve([]);
+  pendingExactDraft.resolve(null);
+});
+
+test("legacy draft-id review falls back to the local paper id only after server miss", async () => {
+  fixture.listDrafts.mockResolvedValue([]);
+  fixture.readDraft.mockResolvedValue({
+    id: "legacy-draft",
+    student_id: "student",
+    paper_id: "paper",
+    pages: [],
+  });
+  fixture.currentRunForPaper
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce({ id: "run", status: "needs_review" });
+  fixture.regionsForRun.mockResolvedValue([{ id: "q1", order_index: 0, question_label: "1" }]);
+  fixture.loadReview.mockResolvedValue({
+    paper: { id: "paper", type: "unit_test" },
+    outstanding: 1,
+    cleanUnconfirmed: [],
+    questions: [],
+  });
+
+  const open = vi.fn();
+  initScanUI({ student: { id: "student" } }, { renderReview: vi.fn(), openReview: open });
+
+  await expect(resumeDraftReview("legacy-draft")).resolves.toEqual({ state: "reviewing" });
+  expect(fixture.currentRunForPaper.mock.calls.map(([id]) => id)).toEqual(["legacy-draft", "paper"]);
+  expect(fixture.readDraft).toHaveBeenCalledWith("legacy-draft");
+  expect(open).toHaveBeenCalledWith("paper", null);
 });
 
 test("review re-entry cannot restore a previous student's work after switching profiles", async () => {
