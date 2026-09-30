@@ -33,6 +33,17 @@ const WORK_TASKS: WorkTask[] = [
 
 const TERMINAL = new Set(["failed", "rejected", "committed"]);
 const REVIEWABLE = new Set(["needs_review", "explaining", "ready"]);
+const REVIEW_OPEN_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(promise: Promise<T>, message: string, ms = REVIEW_OPEN_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => { window.clearTimeout(timer); resolve(value); },
+      (error) => { window.clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 function taskIndex(status?: string | null) {
   const index = WORK_TASKS.findIndex((task) => task.statuses.includes(status ?? ""));
@@ -167,9 +178,15 @@ export default function PaperReview() {
     (async () => {
       try {
         setError(null);
-        const scan = await ensureScan();
+        const scan = await withTimeout(
+          ensureScan(),
+          "The review is taking too long to start. Try again.",
+        );
         if (cancelled) return;
-        const next = await scan.resumeDraftReview(draftId);
+        const next = await withTimeout(
+          scan.resumeDraftReview(draftId),
+          "The review data is taking too long to load. Try again.",
+        );
         if (cancelled) return;
 
         // If Library already proves a live run exists, a second surface is not
