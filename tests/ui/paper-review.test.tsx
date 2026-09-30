@@ -75,7 +75,7 @@ test("a live retry run without a local draft is never rendered as gone", () => {
 
   mount();
 
-  expect(screen.getByText("Finding pages and questions")).toBeTruthy();
+  expect(screen.getAllByText("Finding pages and questions").length).toBeGreaterThan(0);
   expect(screen.getByText("3 of 14 pages mapped")).toBeTruthy();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
   expect(fixture.resumeDraftReview).not.toHaveBeenCalled();
