@@ -115,6 +115,34 @@ test("leaving a student context during explanations cannot commit or navigate th
   expect(closeReview).not.toHaveBeenCalled();
 });
 
+test("review re-entry does not wait for a hanging local draft list", async () => {
+  const pendingDrafts = deferred<any[]>();
+  fixture.listDrafts.mockReturnValue(pendingDrafts.promise);
+  fixture.readDraft.mockResolvedValue(null);
+  fixture.currentRunForPaper.mockResolvedValue({ id: "run", status: "needs_review" });
+  fixture.regionsForRun.mockResolvedValue([{ id: "q1", order_index: 0, question_label: "1" }]);
+  fixture.loadReview.mockResolvedValue({
+    paper: { id: "paper", type: "unit_test" },
+    outstanding: 1,
+    cleanUnconfirmed: [],
+    questions: [],
+  });
+
+  const renderReview = vi.fn();
+  const open = vi.fn();
+  initScanUI({ student: { id: "student" } }, { renderReview, openReview: open });
+
+  const reopening = resumeDraftReview("paper");
+
+  await waitFor(() => expect(fixture.currentRunForPaper).toHaveBeenCalledWith("paper"));
+  await expect(reopening).resolves.toEqual({ state: "reviewing" });
+  expect(fixture.regionsForRun).toHaveBeenCalledWith("run");
+  expect(fixture.loadReview).toHaveBeenCalledWith("run");
+  expect(open).toHaveBeenCalledWith("paper", null);
+
+  pendingDrafts.resolve([]);
+});
+
 test("review re-entry cannot restore a previous student's work after switching profiles", async () => {
   await reviewFixture();
   fixture.readDraft.mockResolvedValue(null);
