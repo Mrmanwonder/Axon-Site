@@ -69,13 +69,20 @@ const toast = (m, tone) => host.toast(m, tone);
 const tick = () => host.tick();
 const firm = () => host.firm();
 
-export async function initScanUI(ctx, surfaces = {}) {
+export function initScanUI(ctx, surfaces = {}) {
   setScanContext(ctx);
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
-  await restoreDraft();
-  await paintDrafts();
+  // Review re-entry is server state and must not wait for IndexedDB. On some
+  // browsers a blocked/slow local draft store can leave listDrafts() pending
+  // indefinitely; before this change that also kept ensureScan() pending, so a
+  // paper already at needs_review never even attempted its server review reads.
+  // Bind the host/context synchronously and hydrate scanner-only draft surfaces
+  // in the background. Epoch checks inside both functions prevent stale student
+  // data from painting after a profile switch.
+  void restoreDraft().catch((error) => console.warn('[scan] draft restore failed', error));
+  void paintDrafts().catch((error) => console.warn('[scan] draft list refresh failed', error));
 }
 
 export function resetScan() {
