@@ -9,6 +9,7 @@ const fixture = vi.hoisted(() => ({
   resumeDraftReview: vi.fn(),
   ensureScan: vi.fn(),
   reviewOpen: false,
+  fetchedAt: 1,
 }));
 
 vi.mock("../../src/ui/data/AppProvider", () => ({
@@ -18,7 +19,7 @@ vi.mock("../../src/ui/data/AppProvider", () => ({
       state: "ready",
       data: fixture.progress,
       source: "live",
-      fetchedAt: Date.now(),
+      fetchedAt: fixture.fetchedAt,
     },
     refreshLibrary: fixture.refreshLibrary,
   }),
@@ -60,6 +61,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fixture.progress = new Map();
   fixture.reviewOpen = false;
+  fixture.fetchedAt = 1;
   fixture.refreshLibrary.mockResolvedValue(undefined);
   fixture.resumeDraftReview.mockResolvedValue({ state: "gone" });
   fixture.ensureScan.mockResolvedValue({ resumeDraftReview: fixture.resumeDraftReview });
@@ -96,6 +98,43 @@ test("processing view names the current work and uses real question counts", () 
   expect(screen.getByText("Checking this is a marked paper")).toBeTruthy();
   expect(screen.getByText("Checking totals and uncertain marks")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Back to Library" })).toBeTruthy();
+});
+
+test("processing state hands off to review when a fresh progress read becomes reviewable", async () => {
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("content", {
+      pages_done: 14,
+      questions_total: 12,
+      questions_done: 5,
+    }),
+  ]]);
+  fixture.resumeDraftReview.mockResolvedValue({ state: "reviewing" });
+
+  const view = mount();
+  expect(screen.getByText("5 of 12 questions read")).toBeTruthy();
+  expect(fixture.resumeDraftReview).not.toHaveBeenCalled();
+
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("needs_review", {
+      pages_done: 14,
+      questions_total: 12,
+      questions_done: 12,
+      questions_needing_you: 2,
+    }),
+  ]]);
+  fixture.fetchedAt = 2;
+  view.rerender(
+    <MemoryRouter initialEntries={["/scan/review/paper-1"]}>
+      <Routes>
+        <Route path="/scan/review/:draftId" element={<PaperReview />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1"));
+  expect(await screen.findByText("Opening review…")).toBeTruthy();
 });
 
 test("server progress reaching reviewable state re-enters review without a local draft", async () => {
