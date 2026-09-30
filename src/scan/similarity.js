@@ -101,7 +101,7 @@ export function closestDuplicatePage(pages, fingerprint, {
   let best = null;
   for (const page of pages ?? []) {
     if (page?.page_number === excludePageNumber) continue;
-    const candidate = page?.meta?.page_fingerprint;
+    const candidate = page?.fingerprint ?? page?.meta?.page_fingerprint;
     const distance = hashDistance(fingerprint, candidate);
     if (!Number.isFinite(distance) || distance > maxDistance) continue;
     if (!best || distance < best.distance) {
