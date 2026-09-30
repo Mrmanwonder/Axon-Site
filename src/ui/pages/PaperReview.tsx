@@ -190,7 +190,7 @@ export default function PaperReview() {
     })();
 
     return () => { cancelled = true; };
-  }, [draftId, student?.id, ensureScan, run?.status, run?.status_reason, progressResource.fetchedAt]);
+  }, [draftId, student?.id, ensureScan, run?.status, run?.status_reason, progressResource.state === "ready" ? progressResource.fetchedAt : progressResource.lastSuccessAt]);
 
   // Realtime is the fast path. Polling is the recovery path for a socket that
   // dropped while the app was backgrounded, and means a processing screen can
