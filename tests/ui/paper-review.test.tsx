@@ -134,7 +134,8 @@ test("processing state hands off to review when a fresh progress read becomes re
   );
 
   await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1"));
-  expect(await screen.findByText("Opening review…")).toBeTruthy();
+  expect(await screen.findByText("Opening 2 parts that need your eyes…")).toBeTruthy();
+  expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
 });
 
 test("server progress reaching reviewable state re-enters review without a local draft", async () => {
@@ -152,8 +153,29 @@ test("server progress reaching reviewable state re-enters review without a local
   mount();
 
   await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1"));
-  expect(await screen.findByText("Opening review…")).toBeTruthy();
+  expect(await screen.findByText("Opening 2 parts that need your eyes…")).toBeTruthy();
+  expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
+});
+
+test("review-opening errors are visible instead of being hidden by the processing screen", async () => {
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("needs_review", {
+      pages_done: 14,
+      questions_total: 12,
+      questions_done: 12,
+      questions_needing_you: 12,
+    }),
+  ]]);
+  fixture.ensureScan.mockRejectedValue(new Error("Review data unavailable"));
+
+  mount();
+
+  expect(await screen.findByText("Axon found 12 parts that need your eyes, but the review could not open.")).toBeTruthy();
+  expect(screen.getByText("Review data unavailable")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
 });
 
 test("truly missing paper still reports a missing review instead of pretending to process", async () => {

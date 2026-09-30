@@ -29,9 +29,6 @@ const WORK_TASKS: WorkTask[] = [
   { key: "content", label: "Reading answers and teacher marks", statuses: ["content"] },
   { key: "attribution", label: "Matching marks to questions", statuses: ["attribution"] },
   { key: "reconcile", label: "Checking totals and uncertain marks", statuses: ["reconciliation", "adjudicating"] },
-  { key: "review", label: "Preparing the parts that need your eyes", statuses: ["needs_review"] },
-  { key: "explain", label: "Working out where marks were lost", statuses: ["explaining"] },
-  { key: "ready", label: "Finishing your paper", statuses: ["ready"] },
 ];
 
 const TERMINAL = new Set(["failed", "rejected", "committed"]);
@@ -138,6 +135,7 @@ export default function PaperReview() {
 
   const [result, setResult] = useState<ResumeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
 
   const run = draftId ? progressResource.data?.get(draftId) : undefined;
   useEffect(() => {
@@ -168,6 +166,7 @@ export default function PaperReview() {
 
     (async () => {
       try {
+        setError(null);
         const scan = await ensureScan();
         if (cancelled) return;
         const next = await scan.resumeDraftReview(draftId);
@@ -185,18 +184,21 @@ export default function PaperReview() {
         setResult(next);
         setError(null);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "That paper could not be reopened.");
+        if (!cancelled) {
+          setResult(null);
+          setError(e instanceof Error ? e.message : "That paper could not be reopened.");
+        }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [draftId, student?.id, ensureScan, run?.status, run?.status_reason, progressResource.state === "ready" ? progressResource.fetchedAt : progressResource.lastSuccessAt]);
+  }, [draftId, student?.id, ensureScan, run?.status, run?.status_reason, progressResource.state === "ready" ? progressResource.fetchedAt : progressResource.lastSuccessAt, retryToken]);
 
   // Realtime is the fast path. Polling is the recovery path for a socket that
   // dropped while the app was backgrounded, and means a processing screen can
   // naturally turn into Review without the student closing and reopening it.
   useEffect(() => {
-    if (!draftId || !student || reviewOpen || !run || TERMINAL.has(run.status)) return;
+    if (!draftId || !student || reviewOpen || !run || TERMINAL.has(run.status) || REVIEWABLE.has(run.status)) return;
     let active = true;
     const refresh = () => {
       if (!active || document.visibilityState === "hidden") return;
@@ -216,21 +218,44 @@ export default function PaperReview() {
 
   if (reviewOpen) return null;
 
-  const liveProcessing = Boolean(run && !TERMINAL.has(run.status) && !REVIEWABLE.has(run.status));
-  const liveReviewHandoff = Boolean(run && REVIEWABLE.has(run.status) && result?.state !== "reviewing");
-
-  if (liveProcessing || liveReviewHandoff || result?.state === "processing") {
-    return <ProcessingState run={run} />;
-  }
-
   if (error) {
+    const needing = Number(run?.questions_needing_you ?? 0);
     return (
       <div style={{ padding: "16px var(--text-gutter)" }}>
-        <p className="subnote">{error}</p>
-        <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex", marginTop: 12 }}>
+        <p className="subnote">
+          {needing > 0
+            ? `Axon found ${needing} part${needing === 1 ? "" : "s"} that need your eyes, but the review could not open.`
+            : "The review could not open."}
+        </p>
+        <p className="subnote" style={{ marginTop: 8 }}>{error}</p>
+        <button
+          type="button"
+          className="btn primary"
+          style={{ marginTop: 14 }}
+          onClick={() => setRetryToken((value) => value + 1)}
+        >
+          Try again
+        </button>
+        <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex", marginTop: 10 }}>
           Back to Library
         </Link>
       </div>
+    );
+  }
+
+  const liveProcessing = Boolean(run && !TERMINAL.has(run.status) && !REVIEWABLE.has(run.status));
+  if (liveProcessing || (result?.state === "processing" && !REVIEWABLE.has(run?.status ?? ""))) {
+    return <ProcessingState run={run} />;
+  }
+
+  if (run && REVIEWABLE.has(run.status)) {
+    return (
+      <PageSkeleton
+        variant="review"
+        label={run.questions_needing_you > 0
+          ? `Opening ${run.questions_needing_you} part${run.questions_needing_you === 1 ? "" : "s"} that need your eyes…`
+          : "Opening review…"}
+      />
     );
   }
 

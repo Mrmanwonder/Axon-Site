@@ -18,6 +18,14 @@ function Controls() {
   return <><button onClick={() => navigate("/scan")}>Scan</button><button onClick={() => navigate("/settings")}>Settings</button><button onClick={() => void scan.ensureScan()}>Upload</button><button onClick={() => scan.onScreenVisible(true)}>Retry</button><button onClick={() => scan.setAutoCapture(false)}>Auto off</button><video ref={scan.videoRef} /><canvas ref={scan.overlayRef} /><span>{scan.camera.phase}</span><span>{scan.reviewOpen ? "Review open" : "Review closed"}</span></>;
 }
 function App() { return <MemoryRouter><ScanProvider><Controls /></ScanProvider></MemoryRouter>; }
+function ReviewControls() {
+  const scan = useScan();
+  useEffect(() => { void scan.ensureScan(); }, [scan.ensureScan]);
+  return <span>{scan.reviewOpen ? "Review open" : "Review closed"}</span>;
+}
+function ReviewApp({ path = "/scan/review/legacy-draft" }: { path?: string }) {
+  return <MemoryRouter initialEntries={[path]}><ScanProvider><ReviewControls /></ScanProvider></MemoryRouter>;
+}
 beforeEach(() => { vi.clearAllMocks(); fixture.init.mockImplementation(async (_ctx, host) => { fixture.host = host; }); fixture.camera.mockResolvedValue({ getTracks: () => [] }); });
 test("leaving before initialization resolves never attaches a camera", async () => {
   const pending = deferred(); fixture.init.mockReturnValue(pending.promise); render(<App />); await userEvent.click(screen.getByText("Scan")); await waitFor(() => expect(fixture.init).toHaveBeenCalled()); await userEvent.click(screen.getByText("Settings")); await act(async () => pending.resolve()); expect(fixture.attach).not.toHaveBeenCalled(); expect(fixture.visible).not.toHaveBeenCalledWith(true, expect.anything());
@@ -53,6 +61,21 @@ test("failed initialization cancels pending permission and retry gets a fresh ac
 });
 test("processing completion on Settings cannot open review", async () => {
   render(<App />); await userEvent.click(screen.getByText("Scan")); await waitFor(() => expect(fixture.attach).toHaveBeenCalled()); await userEvent.click(screen.getByText("Settings")); act(() => fixture.host.openReview()); expect(screen.getByText("Review closed")).toBeTruthy();
+});
+
+test("a loaded review opens on the current review route even when its canonical paper id differs", async () => {
+  render(<ReviewApp />);
+  await waitFor(() => expect(fixture.init).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("Review closed")).toBeTruthy();
+
+  act(() => fixture.host.renderReview(
+    { title: "Review", questions: [], outstanding: 1, cleanCount: 0, saving: false, saveLabel: "1 left to check" },
+    { onMark: vi.fn(), onAction: vi.fn(), onConfirmClean: vi.fn(), onSave: vi.fn() },
+  ));
+
+  expect(await screen.findByText("Review open")).toBeTruthy();
+  act(() => fixture.host.openReview("canonical-paper", null));
+  expect(screen.getByText("Review open")).toBeTruthy();
 });
 
 const setHidden = (hidden: boolean) => {
