@@ -61,13 +61,9 @@ test('closest duplicate returns the prior page and can exclude the capture itsel
   const fingerprint = perceptualPageHash(pageFixture(0));
   const other = perceptualPageHash(pageFixture(1));
   const pages = [
-    { page_number: 1, fingerprint: null, meta: {} },
-    { page_number: 2, fingerprint: null, meta: {} },
+    { page_number: 1, fingerprint },
+    { page_number: 2, fingerprint: other },
   ];
-  // The helper reads the local draft field through meta only when present in
-  // older fixtures; production callers pass the normalized shape below.
-  pages[0].meta.page_fingerprint = fingerprint;
-  pages[1].meta.page_fingerprint = other;
   const match = closestDuplicatePage(pages, fingerprint);
   assert.equal(match?.pageNumber, 1);
   assert.equal(match?.distance, 0);
