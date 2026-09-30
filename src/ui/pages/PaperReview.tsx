@@ -8,7 +8,7 @@
    the existing ReviewSheet over this route.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { ResumeReviewResult } from "../scan/ScanProvider";
@@ -134,17 +134,12 @@ function ProcessingState({ run }: { run?: ProgressRow }) {
 export default function PaperReview() {
   const { draftId } = useParams();
   const { ensureScan, reviewOpen } = useScan();
-  const { student, papers, progressResource, refreshLibrary } = useApp();
+  const { student, progressResource, refreshLibrary } = useApp();
 
   const [result, setResult] = useState<ResumeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const run = draftId ? progressResource.data?.get(draftId) : undefined;
-  const paper = useMemo(
-    () => (draftId ? papers.find((item) => item.id === draftId) ?? null : null),
-    [draftId, papers],
-  );
-
   useEffect(() => {
     if (!draftId || !student) return;
     let cancelled = false;
@@ -267,13 +262,6 @@ export default function PaperReview() {
         </Link>
       </div>
     );
-  }
-
-  // If the paper still exists but no live run has reached the client yet, do
-  // not call it deleted. This is especially important immediately after Retry,
-  // where the new run can arrive a moment after the paper row.
-  if (result.state === "gone" && paper) {
-    return <ProcessingState run={run} />;
   }
 
   return (
