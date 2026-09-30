@@ -28,6 +28,8 @@ export type SheetConfig = {
   primary?: string;
   onConfirm?: (value: string) => void | Promise<void>;
   onChoice?: (value: string) => void | Promise<void>;
+  /** Optional synchronous cancellation hook for callers waiting on a choice. */
+  onCancel?: () => void;
 };
 
 type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => void };
@@ -72,7 +74,11 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     setInputValue(""); setError(null); setCompleted(null);
     navigate({ pathname: current.pathname, search: `?${params}`, hash: current.hash }, { replace: replacing });
   }, [navigate]);
-  const closeSheet = useCallback(() => { if (!flight.current) navigate(-1); }, [navigate]);
+  const closeSheet = useCallback(() => {
+    if (flight.current) return;
+    try { entry?.cfg.onCancel?.(); } catch { /* cancellation must still dismiss */ }
+    navigate(-1);
+  }, [entry, navigate]);
   useEffect(() => {
     if (completed && token === completed && entry) navigate(entry.base, { replace: true });
   }, [completed, token, entry, navigate]);
