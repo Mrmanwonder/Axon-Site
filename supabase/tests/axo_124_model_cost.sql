@@ -121,6 +121,23 @@ values ('aaaaaaaa-0000-4000-8000-000000000010','adjudicate','gemini-3.8-flash','
 select public._t('gemini-3.8-flash input doubles to $1.50 per 1M from 2027-01-01',
   (select cost_usd = 1.500000 from public.model_call order by id desc limit 1));
 
+-- ── service tiers price separately: flex is half of standard ───────────────
+
+insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
+                               input_tokens, billed_output_tokens, service_tier)
+values ('aaaaaaaa-0000-4000-8000-000000000010','explain','gemini-3.1-flash-lite','gemini-3.1-flash-lite','t.v1', true,
+        10000, 2000, 'flex');
+select public._t('a flex-tier call is priced at half the standard rate',
+  (select cost_usd = 0.002750 and cost_basis = 'price_table' from public.model_call order by id desc limit 1),
+  (select cost_usd::text from public.model_call order by id desc limit 1));
+
+insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
+                               input_tokens, billed_output_tokens, service_tier)
+values ('aaaaaaaa-0000-4000-8000-000000000010','explain','gemini-3.1-pro-preview','gemini-3.1-pro-preview','t.v1', true,
+        1000000, 0, 'flex');
+select public._t('a model with no price for the tier is unpriced, not borrowed from standard',
+  (select cost_usd is null and cost_basis = 'unpriced' from public.model_call order by id desc limit 1));
+
 -- ── the run total is the sum of its calls ──────────────────────────────────
 
 select public._t('extraction_run.cost_usd equals the sum of its calls',

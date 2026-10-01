@@ -13,6 +13,8 @@
 
 create table if not exists public.model_price (
   model                 text          not null,
+  -- standard, flex (service_tier = 'flex', 50% off, best effort) or batch (Batch API, 50% off).
+  tier                  text          not null default 'standard' check (tier in ('standard', 'flex', 'batch')),
   effective_from        date          not null,
   input_per_mtok        numeric(10,4) not null check (input_per_mtok >= 0),
   output_per_mtok       numeric(10,4) not null check (output_per_mtok >= 0),
@@ -20,7 +22,7 @@ create table if not exists public.model_price (
   -- until the cached rate is confirmed.
   cached_input_per_mtok numeric(10,4) check (cached_input_per_mtok >= 0),
   source                text          not null,
-  primary key (model, effective_from)
+  primary key (model, tier, effective_from)
 );
 
 create table if not exists public.fx_rate (
@@ -38,19 +40,30 @@ revoke all on public.model_price from anon, authenticated;
 revoke all on public.fx_rate     from anon, authenticated;
 
 comment on table public.model_price is
-  'Versioned per-1M-token prices, standard paid tier. The row in force for a call is the latest effective_from on or before the call date. Service role only.';
+  'Versioned per-1M-token prices per service tier. The row in force for a call is the latest effective_from on or before the call date for its model and tier. Service role only.';
 comment on table public.fx_rate is
   'USD to INR rate used to derive extraction_run.cost_paise. No row means cost_paise is left untouched; cost_usd is always kept. Owner-supplied. Service role only.';
 
--- Prices from AXO-125 (standard paid tier, per 1M tokens), valid through 2026-12-31.
--- gemini-3.8-flash doubles on 2027-01-01. cached_input is left NULL until confirmed.
-insert into public.model_price (model, effective_from, input_per_mtok, output_per_mtok, cached_input_per_mtok, source) values
-  ('gemini-3.1-flash-lite', '2026-10-01', 0.2500, 1.5000, null, 'AXO-125 routing table, standard paid tier, valid through 2026-12-31'),
-  ('gemini-3.8-flash',      '2026-10-01', 0.7500, 3.7500, null, 'AXO-125 routing table, standard paid tier, valid through 2026-12-31'),
-  ('gemini-3.8-flash',      '2027-01-01', 1.5000, 7.5000, null, 'AXO-125: announced doubling on 2027-01-01')
+-- Prices per 1M tokens (paid tier). Flex and Batch are 50% of standard. A tier with no row
+-- for a model stays unpriced rather than being guessed. cached_input is left NULL until the
+-- cached rate is confirmed (cached tokens then bill at the full input rate, an overestimate).
+-- gemini-3.8-flash doubles on 2027-01-01. gemini-3.1-pro-preview is an offline eval judge only.
+insert into public.model_price (model, tier, effective_from, input_per_mtok, output_per_mtok, cached_input_per_mtok, source) values
+  ('gemini-3.1-flash-lite',   'standard', '2026-10-01', 0.2500,  1.5000, null, 'AXO-125, standard paid tier, valid through 2026-12-31'),
+  ('gemini-3.1-flash-lite',   'flex',     '2026-10-01', 0.1250,  0.7500, null, 'AXO-125, flex = 50% of standard'),
+  ('gemini-3.1-flash-lite',   'batch',    '2026-10-01', 0.1250,  0.7500, null, 'AXO-125, batch = 50% of standard'),
+  ('gemini-3.8-flash',        'standard', '2026-10-01', 0.7500,  3.7500, null, 'AXO-125, standard paid tier, valid through 2026-12-31'),
+  ('gemini-3.8-flash',        'flex',     '2026-10-01', 0.3750,  1.8750, null, 'AXO-125, flex = 50% of standard'),
+  ('gemini-3.8-flash',        'batch',    '2026-10-01', 0.3750,  1.8750, null, 'AXO-125, batch = 50% of standard'),
+  ('gemini-3.8-flash',        'standard', '2027-01-01', 1.5000,  7.5000, null, 'AXO-125: announced doubling on 2027-01-01'),
+  ('gemini-3.8-flash',        'flex',     '2027-01-01', 0.7500,  3.7500, null, 'flex = 50% of the 2027 standard price'),
+  ('gemini-3.8-flash',        'batch',    '2027-01-01', 0.7500,  3.7500, null, 'batch = 50% of the 2027 standard price'),
+  ('gemini-3.1-pro-preview',  'standard', '2026-10-01', 2.0000, 12.0000, null, 'AXO-125: offline eval judge only, preview pricing'),
+  ('gemini-3.1-pro-preview',  'batch',    '2026-10-01', 1.0000,  6.0000, null, 'AXO-125: batch = 50% of standard')
 on conflict do nothing;
 
 alter table public.model_call
+  add column if not exists service_tier         text not null default 'standard' check (service_tier in ('standard', 'flex', 'batch')),
   add column if not exists cached_tokens        integer,
   add column if not exists billed_output_tokens integer,
   add column if not exists cost_basis           text
@@ -59,6 +72,8 @@ alter table public.model_call
 alter table public.extraction_run
   add column if not exists cost_usd numeric(12,6) not null default 0 check (cost_usd >= 0);
 
+comment on column public.model_call.service_tier is
+  'The provider service tier the call was made on; selects the model_price row.';
 comment on column public.model_call.cached_tokens is
   'Prompt tokens served from the provider cache (implicit prefix caching), when reported.';
 comment on column public.model_call.billed_output_tokens is
@@ -69,7 +84,7 @@ comment on column public.extraction_run.cost_usd is
   'Sum of model_call.cost_usd for this run. cost_paise is derived from it when an fx_rate row exists.';
 
 create or replace function private.model_call_cost_usd(
-  p_model text, p_input integer, p_cached integer, p_output integer, p_at timestamptz)
+  p_model text, p_tier text, p_input integer, p_cached integer, p_output integer, p_at timestamptz)
 returns numeric
 language sql stable set search_path = ''
 as $$
@@ -78,6 +93,7 @@ as $$
          + coalesce(p_output, 0) * mp.output_per_mtok) / 1000000.0)::numeric(12,6)
   from public.model_price mp
   where mp.model = p_model
+    and mp.tier = coalesce(p_tier, 'standard')
     and mp.effective_from <= (p_at at time zone 'utc')::date
   order by mp.effective_from desc
   limit 1
@@ -104,7 +120,7 @@ begin
   end if;
 
   new.cost_usd := private.model_call_cost_usd(
-    new.model_id, new.input_tokens, new.cached_tokens,
+    new.model_id, new.service_tier, new.input_tokens, new.cached_tokens,
     coalesce(new.billed_output_tokens, coalesce(new.output_tokens, 0) + coalesce(new.reasoning_tokens, 0)),
     new.created_at);
   new.cost_basis := case when new.cost_usd is null then 'unpriced' else 'price_table' end;
@@ -138,7 +154,7 @@ begin
 end;
 $$;
 
-revoke all on function private.model_call_cost_usd(text, integer, integer, integer, timestamptz) from public, anon, authenticated;
+revoke all on function private.model_call_cost_usd(text, text, integer, integer, integer, timestamptz) from public, anon, authenticated;
 revoke all on function private.model_call_price()       from public, anon, authenticated;
 revoke all on function private.model_call_rollup_cost() from public, anon, authenticated;
 
