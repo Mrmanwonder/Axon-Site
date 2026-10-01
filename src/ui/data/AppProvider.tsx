@@ -198,8 +198,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { resource: progressResource, reload: reloadProgress, updateData: updateProgressData } = useResource<Map<string, ProgressRow>>(student ? `${student.id}:${dataRevision}` : null, async () => ({ data: await paperProgress(student!.id) }));
   const { resource: consentResource, reload: refreshConsent } = useResource<ConsentState>(guardian ? `${guardian.id}:${student?.id ?? ""}` : null, async () => ({ data: await readConsentState(guardian!.id, student?.id ?? null) }));
   const papersLoaded = papersResource.state !== "loading" || papersResource.data !== null;
-  const papers = papersResource.data ?? [];
-  const progress = progressResource.data ?? new Map<string, ProgressRow>();
+  // Papers the guardian has deleted this session, per student. An optimistic
+  // removal only edits the data already in memory, so a Library or progress read
+  // that was issued before the delete finished and resolves after it would put the
+  // paper straight back. Every read result is filtered through these tombstones.
+  // Paper ids are never reused, so an entry can only ever hide a deleted paper.
+  const removedPaperIds = useRef(new Map<string, Set<string>>());
+  const [removedRevision, setRemovedRevision] = useState(0);
+  const removed = student ? removedPaperIds.current.get(student.id) : undefined;
+  const papers = useMemo(
+    () => (papersResource.data ?? []).filter(paper => !removed?.has(paper.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [papersResource.data, removed, removedRevision],
+  );
+  const progress = useMemo(() => {
+    const rows = progressResource.data ?? new Map<string, ProgressRow>();
+    if (!removed?.size) return rows;
+    return new Map([...rows].filter(([paperId]) => !removed.has(paperId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressResource.data, removed, removedRevision]);
   const consent = consentResource.data ?? {};
   const papersStale = isStale(papersResource);
   const papersError = papersResource.state === "failed" ? papersResource.error.message : null;
@@ -211,7 +228,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const detail = (event as CustomEvent).detail;
       if (detail.action === "purge") {
         setDataRevision(value => value + 1);
-        if (detail.studentId === null) { setStudent(null); setProfiles([]); setGuardian(null); setGate("loading"); }
+        if (detail.studentId === null) {
+          removedPaperIds.current.clear();
+          setStudent(null); setProfiles([]); setGuardian(null); setGate("loading");
+        }
       }
       if (detail.action === "complete" && detail.studentId === student?.id) void refreshLibrary();
     };
@@ -280,13 +300,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [reloadPapers, reloadProgress]);
 
   const removePaperFromLibrary = useCallback((paperId: string) => {
+    if (student) {
+      const ids = removedPaperIds.current.get(student.id) ?? new Set<string>();
+      ids.add(paperId);
+      removedPaperIds.current.set(student.id, ids);
+      setRemovedRevision(value => value + 1);
+    }
     updatePapersData(current => current.filter(paper => paper.id !== paperId));
     updateProgressData(current => {
       const next = new Map(current);
       next.delete(paperId);
       return next;
     });
-  }, [updatePapersData, updateProgressData]);
+  }, [student, updatePapersData, updateProgressData]);
 
 
   const avatarQueue = useRef<Promise<unknown>>(Promise.resolve());
