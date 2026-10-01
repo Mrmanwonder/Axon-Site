@@ -44,9 +44,9 @@ values
  ('aaaaaaaa-0000-4000-8000-0000000000c1','aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-0000000000a1','tier_1','Q1','State it.','x', 1, 3, 'teacher_pen','likely', now()),
  ('aaaaaaaa-0000-4000-8000-0000000000c2','aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-0000000000a1','tier_1','Q2','State it.','x', 1, 3, 'teacher_pen','likely', now());
 
-insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, ai_explanation, confidence) values
- ('aaaaaaaa-0000-4000-8000-0000000000d1','aaaaaaaa-0000-4000-8000-0000000000c1','aaaaaaaa-0000-4000-8000-000000000002','procedural_slip', 2, 'e1', 'likely'),
- ('aaaaaaaa-0000-4000-8000-0000000000d2','aaaaaaaa-0000-4000-8000-0000000000c2','aaaaaaaa-0000-4000-8000-000000000002','conceptual_gap', 2, 'e2', 'likely');
+insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, ai_explanation, confidence, grounding_status) values
+ ('aaaaaaaa-0000-4000-8000-0000000000d1','aaaaaaaa-0000-4000-8000-0000000000c1','aaaaaaaa-0000-4000-8000-000000000002','procedural_slip', 2, 'e1', 'likely', 'complete'),
+ ('aaaaaaaa-0000-4000-8000-0000000000d2','aaaaaaaa-0000-4000-8000-0000000000c2','aaaaaaaa-0000-4000-8000-000000000002','conceptual_gap', 2, 'e2', 'likely', 'complete');
 
 -- ── privacy by construction ────────────────────────────────────────────────
 
@@ -80,8 +80,8 @@ select public._t('with consent: a confirmed cause is recorded with its cause and
 insert into public.student_attempt (id, student_id, paper_id, paper_tier, question_label, question_text, student_answer,
     marks_awarded, max_marks, marks_source, extraction_confidence, student_confirmed_at)
 values ('aaaaaaaa-0000-4000-8000-0000000000c3','aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-0000000000a1','tier_1','Q3','State it.','x', 0, 2, 'teacher_pen','likely', now());
-insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, ai_explanation, confidence) values
- ('aaaaaaaa-0000-4000-8000-0000000000d3','aaaaaaaa-0000-4000-8000-0000000000c3','aaaaaaaa-0000-4000-8000-000000000002','keyword_miss', 2, 'e3', 'likely');
+insert into public.mark_loss_event (id, attempt_id, student_id, cause, marks_lost, ai_explanation, confidence, grounding_status) values
+ ('aaaaaaaa-0000-4000-8000-0000000000d3','aaaaaaaa-0000-4000-8000-0000000000c3','aaaaaaaa-0000-4000-8000-000000000002','keyword_miss', 2, 'e3', 'likely', 'complete');
 update public.mark_loss_event set student_rejected_at = now() where id = 'aaaaaaaa-0000-4000-8000-0000000000d3';
 select public._t('with consent: "not why I lost it" is recorded as cause_rejected',
   (select count(*) = 1 from learning.signal where kind = 'cause_rejected' and cause = 'keyword_miss'));
