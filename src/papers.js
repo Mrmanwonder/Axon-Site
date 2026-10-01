@@ -295,7 +295,7 @@ export function statusKeyForRun(rawStatus) {
 export async function paperProgress(studentId) {
   const { data, error } = await sb
     .from('paper_progress')
-    .select('paper_id,status,status_reason,started_at,pages_total,pages_done,questions_total,questions_done,questions_needing_you,suggested_subject,suggested_confidence')
+    .select('paper_id,status,status_reason,started_at,pages_total,pages_done,questions_total,questions_done,questions_needing_you,suggested_subject,suggested_confidence,parts_total,unassigned_parts,raw_region_count')
     .eq('student_id', studentId)
     .order('started_at', { ascending: false });
   if (error) throw error;

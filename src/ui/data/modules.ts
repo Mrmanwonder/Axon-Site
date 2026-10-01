@@ -354,9 +354,17 @@ export type ProgressRow = {
   started_at: string;
   pages_total: number;
   pages_done: number;
+  /** AXO-122: distinct top-level questions. Not a region count — use parts_total for "parts". */
   questions_total: number;
+  /** Per-region counts: parts, not questions. */
   questions_done: number;
   questions_needing_you: number;
+  /** Reviewable regions (labeled, or unlabeled with evidence). */
+  parts_total?: number;
+  /** Parts whose parent question could not be determined. */
+  unassigned_parts?: number;
+  /** Every region row, for diagnostics only. */
+  raw_region_count?: number;
   /** Latest triage-only display suggestion. Never canonical/verified identity. */
   suggested_subject?: string | null;
   suggested_confidence?: string | null;

@@ -1,0 +1,79 @@
+{
+  "contract": "AXO-122. questions_total = distinct top-level question numbers; parts_total = reviewable regions; unassigned_parts = parts whose parent question cannot be determined; raw_region_count = every region row. Regions are read in page-then-position order, not order_index. A bare part ((c), a, (ii)) inherits the preceding region's top-level number only when that region is on the same or the previous page and the part is not already taken under it. An unlabeled region is a part only if it carries evidence (a mark, an answer or question text); it is then unassigned.",
+  "cases": [
+    {
+      "name": "run 89c8d7a9 label sequence",
+      "regions": [
+        { "order_index": 0, "label": "(c)", "page": 8, "y": 252, "evidence": true },
+        { "order_index": 1, "label": "(d)", "page": 8, "y": 967, "evidence": true },
+        { "order_index": 2, "label": "a", "page": 12, "y": 235, "evidence": true },
+        { "order_index": 3, "label": "b", "page": 12, "y": 1044, "evidence": true },
+        { "order_index": 4, "label": "5(a)", "page": 7, "y": 358, "evidence": true },
+        { "order_index": 5, "label": "5(b)", "page": 7, "y": 1493, "evidence": true },
+        { "order_index": 6, "label": "4(a)", "page": 5, "y": 72, "evidence": true },
+        { "order_index": 7, "label": "1", "page": 1, "y": 120, "evidence": true },
+        { "order_index": 8, "label": "1b", "page": 1, "y": 1164, "evidence": true },
+        { "order_index": 9, "label": "3", "page": 3, "y": 715, "evidence": true },
+        { "order_index": 10, "label": "6a", "page": 9, "y": 77, "evidence": true },
+        { "order_index": 11, "label": null, "page": 14, "y": 158, "evidence": true }
+      ],
+      "expected": { "questions_total": 5, "parts_total": 12, "unassigned_parts": 3, "raw_region_count": 12 }
+    },
+    {
+      "name": "numbered parts across pages",
+      "regions": [
+        { "order_index": 0, "label": "1(a)", "page": 1, "y": 100, "evidence": true },
+        { "order_index": 1, "label": "1(b)", "page": 1, "y": 600, "evidence": true },
+        { "order_index": 2, "label": "2(a)", "page": 2, "y": 100, "evidence": true },
+        { "order_index": 3, "label": "2(b)", "page": 2, "y": 600, "evidence": true }
+      ],
+      "expected": { "questions_total": 2, "parts_total": 4, "unassigned_parts": 0, "raw_region_count": 4 }
+    },
+    {
+      "name": "order_index scrambled against reading order gives the same answer",
+      "regions": [
+        { "order_index": 3, "label": "1(a)", "page": 1, "y": 100, "evidence": true },
+        { "order_index": 2, "label": "1(b)", "page": 1, "y": 600, "evidence": true },
+        { "order_index": 1, "label": "2(a)", "page": 2, "y": 100, "evidence": true },
+        { "order_index": 0, "label": "2(b)", "page": 2, "y": 600, "evidence": true }
+      ],
+      "expected": { "questions_total": 2, "parts_total": 4, "unassigned_parts": 0, "raw_region_count": 4 }
+    },
+    {
+      "name": "an unlabeled structural region with no evidence is excluded from both totals",
+      "regions": [
+        { "order_index": 0, "label": "1", "page": 1, "y": 100, "evidence": true },
+        { "order_index": 1, "label": null, "page": 1, "y": 700, "evidence": false }
+      ],
+      "expected": { "questions_total": 1, "parts_total": 1, "unassigned_parts": 0, "raw_region_count": 2 }
+    },
+    {
+      "name": "an unlabeled region carrying a mark is a part that needs placing",
+      "regions": [
+        { "order_index": 0, "label": null, "page": 3, "y": 100, "evidence": true }
+      ],
+      "expected": { "questions_total": 0, "parts_total": 1, "unassigned_parts": 1, "raw_region_count": 1 }
+    },
+    {
+      "name": "a bare part that would duplicate a taken part is not merged",
+      "regions": [
+        { "order_index": 0, "label": "3a", "page": 1, "y": 100, "evidence": true },
+        { "order_index": 1, "label": "a", "page": 1, "y": 500, "evidence": true }
+      ],
+      "expected": { "questions_total": 1, "parts_total": 2, "unassigned_parts": 1, "raw_region_count": 2 }
+    },
+    {
+      "name": "a bare roman sub-part inherits the preceding question",
+      "regions": [
+        { "order_index": 0, "label": "2(a)", "page": 1, "y": 100, "evidence": true },
+        { "order_index": 1, "label": "(ii)", "page": 1, "y": 500, "evidence": true }
+      ],
+      "expected": { "questions_total": 1, "parts_total": 2, "unassigned_parts": 0, "raw_region_count": 2 }
+    },
+    {
+      "name": "no regions",
+      "regions": [],
+      "expected": { "questions_total": 0, "parts_total": 0, "unassigned_parts": 0, "raw_region_count": 0 }
+    }
+  ]
+}

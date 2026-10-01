@@ -99,7 +99,7 @@ export default function PaperOverview() {
       {marksRows.length > 0 && (
         <div className="card" style={{ padding: "16px 18px", marginTop: 4 }}>
           <div className="t1" style={{ fontSize: 15, color: "var(--label-2)" }}>
-            {marksRows.length} of {attempts.length} question{attempts.length === 1 ? "" : "s"} marked
+            {marksRows.length} of {attempts.length} part{attempts.length === 1 ? "" : "s"} marked
           </div>
           <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginTop: 4 }}>
             {numMark(sumAwarded)}<span style={{ color: "var(--label-3)", fontWeight: 500 }}>/{numMark(sumAvailable)}</span>

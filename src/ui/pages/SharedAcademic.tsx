@@ -258,7 +258,7 @@ export default function SharedAcademic() {
               </section>
             )}
             <div className="shared-section-title">
-              {snapshot.questions.length} question{snapshot.questions.length === 1 ? "" : "s"}
+              {snapshot.questions.length} part{snapshot.questions.length === 1 ? "" : "s"}
             </div>
             <div className="shared-question-list">
               {snapshot.questions.length
