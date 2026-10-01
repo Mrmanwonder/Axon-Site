@@ -69,7 +69,6 @@ console.log("snapshot (/s/) requests:", all.filter((x) => x.path === "/s/").leng
 for (const [k, v] of Object.entries(SECRETS)) console.log(`leak check ${k}:`, v, "=>", expanded.includes(v) ? "LEAKED" : "not present");
 const hasEditedPlain = expanded.includes(" edited");
 console.log("mutation text ' edited' visible in payload:", hasEditedPlain);
-fs.writeFileSync((process.env.PH_STATIC_DIR || ".") + "/payload.txt", expanded);
 console.log("positive control — synthetic node (id=synth) decoded from snapshot/mutation:", /"id":"synth"/.test(expanded));
 const i = expanded.indexOf('"id":"synth"'); if (i >= 0) console.log("excerpt:", expanded.slice(Math.max(0,i-60), i+700).replace(/\s+/g," "));
 
