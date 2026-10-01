@@ -6,7 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 // AXO-105: the anonymous share resolver may only serialize an explicit
 // allowlist of loss_reasons fields. This runs the migration's own function.
 async function load() {
-  const sql = await readFile(new URL('../../supabase/migrations/20261001180000_axo_105_share_loss_reasons_allowlist.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../supabase/migrations/20261001173510_axo_105_share_loss_reasons_allowlist.sql', import.meta.url), 'utf8');
   const start = sql.indexOf('create or replace function private.share_loss_reasons');
   const end = sql.indexOf('revoke all on function private.share_loss_reasons');
   assert.ok(start > 0 && end > start, 'allowlist function present in migration');
