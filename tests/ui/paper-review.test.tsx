@@ -81,12 +81,13 @@ test("a live retry run without a local draft is never rendered as gone", () => {
   expect(fixture.resumeDraftReview).not.toHaveBeenCalled();
 });
 
-test("processing view names the current work and uses real question counts", () => {
+test("processing view names the current work and counts parts as parts and questions as questions", () => {
   fixture.progress = new Map([[
     "paper-1",
     progress("content", {
       pages_done: 14,
-      questions_total: 12,
+      questions_total: 5,
+      parts_total: 12,
       questions_done: 5,
     }),
   ]]);
@@ -94,10 +95,27 @@ test("processing view names the current work and uses real question counts", () 
   mount();
 
   expect(screen.getAllByText("Reading answers and teacher marks").length).toBeGreaterThan(0);
-  expect(screen.getByText("5 of 12 questions read")).toBeTruthy();
+  expect(screen.getByText("5 of 12 parts read")).toBeTruthy();
   expect(screen.getByText("Checking this is a marked paper")).toBeTruthy();
   expect(screen.getByText("Checking totals and uncertain marks")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Back to Library" })).toBeTruthy();
+});
+
+test("checking copy names questions and parts separately, and falls back to parts alone", () => {
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("reconciliation", { pages_done: 14, questions_total: 5, parts_total: 12, questions_done: 12 }),
+  ]]);
+  const view = mount();
+  expect(screen.getByText("5 questions (12 parts) being checked together")).toBeTruthy();
+  view.unmount();
+
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("reconciliation", { pages_done: 14, questions_total: 0, parts_total: 1, questions_done: 1 }),
+  ]]);
+  mount();
+  expect(screen.getByText("1 part being checked together")).toBeTruthy();
 });
 
 test("processing state hands off to review when a fresh progress read becomes reviewable", async () => {
@@ -105,14 +123,15 @@ test("processing state hands off to review when a fresh progress read becomes re
     "paper-1",
     progress("content", {
       pages_done: 14,
-      questions_total: 12,
+      questions_total: 5,
+      parts_total: 12,
       questions_done: 5,
     }),
   ]]);
   fixture.resumeDraftReview.mockResolvedValue({ state: "reviewing" });
 
   const view = mount();
-  expect(screen.getByText("5 of 12 questions read")).toBeTruthy();
+  expect(screen.getByText("5 of 12 parts read")).toBeTruthy();
   expect(fixture.resumeDraftReview).not.toHaveBeenCalled();
 
   fixture.progress = new Map([[

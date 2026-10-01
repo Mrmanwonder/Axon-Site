@@ -55,16 +55,22 @@ function liveDetail(run?: ProgressRow) {
   const pagesTotal = Number(run.pages_total ?? 0);
   const pagesDone = Number(run.pages_done ?? 0);
   const questionsTotal = Number(run.questions_total ?? 0);
-  const questionsDone = Number(run.questions_done ?? 0);
+  // questions_done counts regions, which are parts. Compare it with the part
+  // total, never with the logical question total (AXO-122).
+  const partsTotal = Number(run.parts_total ?? run.questions_total ?? 0);
+  const partsDone = Number(run.questions_done ?? 0);
 
   if (["structure", "cropping"].includes(run.status) && pagesTotal > 0) {
     return `${Math.min(pagesDone, pagesTotal)} of ${pagesTotal} pages mapped`;
   }
-  if (["content", "attribution"].includes(run.status) && questionsTotal > 0) {
-    return `${Math.min(questionsDone, questionsTotal)} of ${questionsTotal} questions read`;
+  if (["content", "attribution"].includes(run.status) && partsTotal > 0) {
+    return `${Math.min(partsDone, partsTotal)} of ${partsTotal} part${partsTotal === 1 ? "" : "s"} read`;
   }
-  if (["reconciliation", "adjudicating"].includes(run.status) && questionsTotal > 0) {
-    return `${questionsTotal} question${questionsTotal === 1 ? "" : "s"} being checked together`;
+  if (["reconciliation", "adjudicating"].includes(run.status) && partsTotal > 0) {
+    const parts = `${partsTotal} part${partsTotal === 1 ? "" : "s"}`;
+    return questionsTotal > 0
+      ? `${questionsTotal} question${questionsTotal === 1 ? "" : "s"} (${parts}) being checked together`
+      : `${parts} being checked together`;
   }
   if (["queued", "triaging"].includes(run.status) && pagesTotal > 0) {
     return `${pagesTotal} page${pagesTotal === 1 ? "" : "s"} safely uploaded`;
