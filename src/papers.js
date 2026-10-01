@@ -552,7 +552,9 @@ export async function analyticsReadiness(studentId) {
  * existed, which is to say the reads still happen, just not unprompted.
  */
 export function watchLibrary(studentId, onChange) {
-  if (!studentId) return () => {};
+  if (!studentId || globalThis.__AXON_E2E_DISABLE_REALTIME__ === 'production-fixture') {
+    return () => {};
+  }
 
   const channel = sb.channel(`library:${studentId}`);
   for (const table of ['paper', 'paper_page', 'student_attempt', 'extraction_run']) {

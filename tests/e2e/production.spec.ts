@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 const origin = 'http://127.0.0.1:5175';
-const student = { id: '10000000-0000-0000-0000-000000000001', first_name: 'Sam', guardian_id: 'guardian', class_level: 11, board: 'CAIE', subjects: ['Physics'] };
+const runMarker = process.env.GITHUB_RUN_ID
+  ? `production-e2e-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? '1'}`
+  : `production-e2e-local-${Date.now()}`;
+const student = { id: '10000000-0000-0000-0000-000000000001', first_name: 'Sam', guardian_id: runMarker, class_level: 11, board: 'CAIE', subjects: ['Physics'] };
 const paper = { id: '20000000-0000-0000-0000-000000000001', type: 'unit_test', tier: 'tier_1', date_taken: '2026-09-12', paper_page: [{ count: 1 }], student_attempt: [{ count: 1 }] };
 const detail = { ...paper, paper_page: [], page_unreadable: [], question_region: [], student_attempt: [{ id: 'q', question_label: '1', marks_awarded: 2, max_marks: 3, mark_loss_event: [], extraction_confidence: 'confirmed' }] };
 
@@ -10,21 +13,28 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
   // remains covered by the rest of the interaction suite.
   test.skip(browserName !== 'chromium', 'Playwright does not support Service Worker testing outside Chromium.');
 
-  // The fixture below deliberately uses an unsigned JWT while REST is mocked.
-  // Keep its Realtime client local too so an E2E run cannot pollute production
-  // with expected signature failures.
-  await page.routeWebSocket('**/realtime/v1/websocket**', () => undefined);
+  // This fixture deliberately uses an unsigned JWT while REST is mocked. Mark
+  // the page before application boot so watchLibrary does not create Realtime
+  // at all; Playwright WebSocket interception is not a reliable boundary when
+  // the production Service Worker owns the request.
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis, '__AXON_E2E_DISABLE_REALTIME__', {
+      value: 'production-fixture',
+      configurable: false,
+      writable: false,
+    });
+  });
 
   await page.goto(origin, { waitUntil: 'load' });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
-  await page.evaluate(() => {
+  await page.evaluate(marker => {
     const expires = Math.floor(Date.now() / 1000) + 86400;
     const encode = (value: object) => btoa(JSON.stringify(value)).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-    localStorage.setItem('sb-dlgcqieyevoebefhcggi-auth-token', JSON.stringify({ access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: 'guardian', exp: expires, role: 'authenticated', session_id: 'production-e2e-session' })}.signature`, refresh_token: 'test-only', expires_at: expires, expires_in: 86400, token_type: 'bearer', user: { id: 'guardian', aud: 'authenticated', email: 'test@example.test', app_metadata: {}, user_metadata: {} } }));
+    localStorage.setItem('sb-dlgcqieyevoebefhcggi-auth-token', JSON.stringify({ access_token: `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: marker, exp: expires, role: 'authenticated', session_id: marker })}.signature`, refresh_token: 'test-only', expires_at: expires, expires_in: 86400, token_type: 'bearer', user: { id: marker, aud: 'authenticated', email: 'test@example.test', app_metadata: {}, user_metadata: {} } }));
     localStorage.setItem('axon.prefs.v1', JSON.stringify({ theme: 'dark', text_size: 'm', reduce_motion: true, always_show_reasoning: false }));
-  });
+  }, runMarker);
 
   // Load through the real production readers so this verifies cache population,
   // not just an app boot against hand-inserted IndexedDB records.
@@ -40,7 +50,7 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
       return route.fulfill({ json: true });
     }
     const table = url.pathname.split('/').pop();
-    const data = table === 'guardian' ? { id: 'guardian', name: 'Parent', contact: 'test@example.test' }
+    const data = table === 'guardian' ? { id: runMarker, name: 'Parent', contact: 'test@example.test' }
       : table === 'student' ? [student]
       : table === 'student_subject' ? [{ subject: 'Physics' }]
       : table === 'paper' ? (url.searchParams.has('id') ? detail : [paper])
