@@ -516,6 +516,9 @@ export type PaperPage = {
 };
 
 export type QuestionRegionRef = {
+  run_id: string;
+  /** queued | running | done | skipped | failed. The machine reason is deliberately not selected: it is not user copy. */
+  explain_status: string | null;
   committed_attempt_id: string | null;
   page_spans: { page: number; box: { x: number; y: number; w: number; h: number } }[] | null;
   crop_key: string | null;
@@ -644,6 +647,10 @@ export type RetryPaperResult = {
   reason?: string;
   status?: string;
 };
+
+export const explainRetry = scanApiMod.explainRetry as unknown as (
+  runId: string,
+) => Promise<{ run_id: string; retrying: number }>;
 
 export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
   paperId: string,
