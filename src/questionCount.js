@@ -1,5 +1,5 @@
 // AXO-122 counting contract, mirrored from the SQL function
-// public.question_count_contract (supabase/migrations/20261001150000_*). The
+// public.question_count_contract (supabase/migrations/20261001140906_*). The
 // two are held together by tests/fixtures/question-count-contract.json, which
 // both test suites read. Read-side only: stored labels are never rewritten.
 //
