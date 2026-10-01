@@ -46,6 +46,7 @@ select public._t('authenticated may execute exactly the audited browser-facing p
   (select coalesce(array_agg(name order by name), '{}') from _definer where schema = 'public' and auth_x)
     = array['begin_guardian_verification','claim_guardian_verification','clear_student_scope','delete_my_account',
             'get_cross_subject_signal','get_entitlements','parent_mode_state',
+            'record_explanation_feedback',  -- #169: student from the attempt, gated by student_scope_allows
             'resolve_academic_share','set_student_scope','student_scope_state'],
   (select string_agg(name, ', ' order by name) from _definer where schema = 'public' and auth_x));
 
@@ -121,8 +122,18 @@ insert into public.pattern_insight (student_id, scope, cause, subjects, paper_id
  ('a5400000-0000-4000-8000-000000000002','cross_subject','procedural_slip',array['Physics','Chemistry'],
   array['a5400000-0000-4000-8000-000000000010','a5400000-0000-4000-8000-000000000011']::uuid[],2,'x');
 
+insert into public.student_attempt (id, student_id, paper_id, paper_tier, question_label, marks_awarded, max_marks, marks_source, extraction_confidence)
+values ('a5400000-0000-4000-8000-000000000020','a5400000-0000-4000-8000-000000000002','a5400000-0000-4000-8000-000000000010','tier_1','Q1',1,2,'teacher_pen','confirmed');
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","role":"authenticated","session_id":"axo54-b"}';
+
+do $$ begin
+  perform public.record_explanation_feedback('a5400000-0000-4000-8000-000000000020', false);
+  perform public._t('B: record_explanation_feedback on A''s question is refused', false, 'recorded');
+exception when others then
+  perform public._t('B: record_explanation_feedback on A''s question is refused', sqlstate = '42501', sqlstate);
+end $$;
 
 select public._t('B: get_entitlements returns B''s free state, not A''s Pro',
   (select tier = 'free' from public.get_entitlements()));

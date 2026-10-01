@@ -1,46 +1,36 @@
-# Learning loop — design note (AXO-121)
+# Learning loop: Review-stage signals (AXO-121)
 
-Date 2026-10-01. Implementation: `supabase/migrations/20261001182000_axo_121_learning_loop.sql`. Tests: `supabase/tests/axo_121_learning_loop.sql` (18 assertions).
+Date 2026-10-01. This builds on `20261001190000_learning_schema.sql` (#169, merged from a parallel session). That migration owns the `learning` schema: explanation verdicts on committed questions, consent at write, aggregates, and purges.
 
-## Decision recap
+This delta (`20261001191000_learning_review_signals.sql`, tests in `supabase/tests/axo_121_review_signals.sql`, 13 assertions) adds the two signals #169 can't see, because they happen in Review before any `student_attempt` exists.
 
-Student reviews become evaluation signal **inside Supabase** (schema `learning`), written by triggers so no client path can skip them. Axon "learns" through better benchmarks and prompts. It never retrains automatically and never writes anything back to a student's paper.
+An earlier, separate `learning` schema on this branch was withdrawn (`c6b2b8c`) when #169 landed. Two schemas under the same name would have double-recorded.
 
-## What fires
+## What the delta records
 
-| Student action (existing UI) | Write it makes | Learning event |
-|---|---|---|
-| Fix a mark / answer in Review (`correctMark`, `correctAnswer`) | `question_region` field + new `student_confirmed_at` | one `field_corrected` per changed field |
-| Confirm a question as read correctly (`confirmQuestion`) | new `student_confirmed_at`, no field change | `region_confirmed` (calibration negative) |
-| "Not why I lost it" in Review (`rejectCause`) | `region_explanation.cause → null` | `explanation_rejected` with the rejected cause + prompt version |
-| Confirm / reject a committed explanation | `mark_loss_event.student_confirmed_at / student_rejected_at` | `explanation_confirmed / _rejected` |
+| Student action (existing UI) | Signal |
+|---|---|
+| Fix a mark or answer in Review (`correctMark`, `correctAnswer`) | `stage='extract'`, `kind='field_corrected'`, `field` = which field (enum), `confidence_before`, content prompt version |
+| Confirm a question as read right (`confirmQuestion`) | `kind='region_confirmed'`, the negative that confidence calibration needs |
+| "Not why I lost it" in Review (`rejectCause` clears `region_explanation.cause`) | `stage='explain'`, `kind='cause_rejected'`, the rejected cause and the prompt version |
 
-Pipeline writes never set `student_confirmed_at`, so a model re-read is never counted as a student correction.
+These signals fire only on a new `student_confirmed_at` (every Review call sets it; the pipeline never does) or on a cleared cause.
 
-## Minimisation and privacy
+## Same doctrine as #169
 
-- **Free text** (question text, student answer, teacher remark) is recorded as `{"length": n}` only, enforced by a CHECK constraint. Marks and labels keep their values, because the eval needs them.
-- **Identity.** `student_key` is HMAC-SHA256 of the student id. The key is generated inside Supabase Vault when the migration runs and never appears in Git or logs.
-- **Consent.** The event is always written as an operational record. `learning.queue_item` rows, the only route to benchmarks or prompts, are created only while `improve_extraction` is granted. On withdrawal, every queued item for that guardian (or student) moves to `REJECTED` in the same transaction.
-- **Deletion.** Events cascade from their region or mark-loss event, so paper deletion and erasure purge them (tested).
-- **Access.** The schema isn't exposed. `anon` and `authenticated` have no USAGE, and only `service_role` reads. Aggregate views (`learning.correction_rate`, `learning.calibration`) are counts only, with no values and no pseudonyms.
-- **Protected schemes.** Nothing here reads or stores marking-scheme text; Cambridge/Pearson content can't enter.
-- **Teacher marks.** No `learning` function writes to `public.*` (asserted by the suite).
+- Consent is read live at write time. Without `improve_extraction`, nothing is stored.
+- **No text, no values.** `field` and `confidence_before` are enums. #169's "no free-text column" guard stays green, and a mark *value* isn't stored either.
+- Purges: withdrawal (#169's trigger), student soft-delete (#169), and paper/question deletion (FK cascade on `region_id`).
+- Aggregates gain a `field` dimension, so the per-field correction rate is readable. Groups under 5 stay unpublished.
+- Nothing writes to `public.*`. A transcription correction never changes a teacher's mark.
 
-## Into evaluation
+## Production
 
-`queue_item` states `QUEUED → LABELLED → READY` are human-review gates. A `READY` `BENCHMARK_EXPANSION` item becomes a candidate golden case for AXO-41: a reviewer pulls the source region through the service role, writes the label, and adds a versioned case. `PROMPT_REGRESSION` and `ERROR_CLUSTERING` feed the per-prompt rejection rates in `learning.correction_rate`.
+Neither #169 nor this delta is applied yet; the live ledger ends at `axo_105_share_loss_reasons_allowlist`. The 10 corrections already in production overwrote the model's reading in place, and no copy exists, so they can't be backfilled without inventing data. Recording starts at apply.
 
-## The 10 corrected regions already in production
+## Still open on AXO-121
 
-Read-only check, 2026-10-01: 10 corrected regions across 3 runs and 2 students, all with a review timestamp. 0 explanations have a cleared cause. There are 46 `improve_extraction` consent events.
-
-These **can't be backfilled honestly.** The review overwrote the model's original reading in place, and no copy of the predicted value exists (`model_call` stores no outputs). Any backfill would have to invent the "predicted" side. The loop starts recording from the moment the migration is applied, and the first correction afterwards is the demonstration.
-
-## Not done here (open on AXO-121)
-
-- A "this helped" control on QuestionDetail for committed explanations. The data path exists; the UI and copy need a design decision.
-- A weekly scheduled report. The aggregate views exist; scheduling plus a Batch summariser are not built.
-- Making `eval_run` mandatory before a `model_route` change. Blocked on AXO-41's corpus.
-- Retiring the D1 correction ledger in `axon-intelligence`. The tutor profile already 404s `/v1/corrections` (AXO-126).
-- Consent copy accuracy. That's AXO-75, owned by the other workstream; a comment has been left there.
+- The weekly report: aggregates and `signal_counts()` exist, but the report itself isn't built.
+- Promoting reviewed signals into the AXO-41 golden set: needs the corpus.
+- A mandatory `eval_run` before route changes.
+- Consent copy (AXO-75, other workstream).
