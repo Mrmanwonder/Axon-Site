@@ -47,11 +47,14 @@ create or replace function public._region(p_id uuid, p_run uuid, p_paper uuid, p
                                           p_awarded numeric, p_available numeric, p_tier text default 'confident')
 returns void language plpgsql as $$
 begin
-  insert into public.question_region (id, run_id, paper_id, student_id, order_index, question_label,
+  insert into public.question_region (id, run_id, paper_id, student_id, order_index,
+      question_label, question_label_box,
       marks_awarded, marks_awarded_box, marks_available, marks_available_box,
       confidence_tier, needs_review, student_confirmed_at)
-  values (p_id, p_run, p_paper, 'aaaaaaaa-0000-4000-8000-000000000002', p_order, 'Q' || (p_order + 1),
-      p_awarded, '{"page":1,"x":1,"y":1,"w":1,"h":1}', p_available, '{"page":1,"x":2,"y":2,"w":1,"h":1}',
+  values (p_id, p_run, p_paper, 'aaaaaaaa-0000-4000-8000-000000000002', p_order,
+      'Q' || (p_order + 1), '{"page":1,"x":3,"y":3,"w":1,"h":1}',
+      p_awarded, case when p_awarded is not null then '{"page":1,"x":1,"y":1,"w":1,"h":1}'::jsonb end,
+      p_available, case when p_available is not null then '{"page":1,"x":2,"y":2,"w":1,"h":1}'::jsonb end,
       p_tier::public.confidence_tier, false, now());
 end $$;
 
