@@ -1,5 +1,7 @@
+-- NOT YET APPLIED TO PRODUCTION: the apply call for this migration was cancelled (2026-10-01).
+-- Parts 1 and 2 are applied. Rename this file to the ledger version when it is applied.
 -- AXO-124 (3/3): price each model_call from its tokens and roll the cost up onto the run.
--- See 20261001160000_axo_124_model_price.sql for the design.
+-- See 20261001164022_axo_124_model_price.sql for the design.
 
 create or replace function private.model_call_cost_usd(
   p_model text, p_tier text, p_input integer, p_cached integer, p_output integer, p_at timestamptz)

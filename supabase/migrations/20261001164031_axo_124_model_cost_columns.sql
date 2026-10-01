@@ -1,4 +1,4 @@
--- AXO-124 (2/3): token, tier and cost columns. See 20261001160000_axo_124_model_price.sql.
+-- AXO-124 (2/3): token, tier and cost columns. See 20261001164022_axo_124_model_price.sql.
 
 alter table public.model_call
   add column if not exists service_tier         text not null default 'standard' check (service_tier in ('standard', 'flex', 'batch')),
