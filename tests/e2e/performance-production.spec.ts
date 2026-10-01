@@ -62,23 +62,30 @@ function summary(values: number[]) {
   };
 }
 
+// This fixture deliberately uses an unsigned JWT while REST is mocked. A unique
+// per-run subject makes any stray Realtime connection attributable in the live
+// logs (AXO-113), instead of an anonymous "guardian".
+const runMarker = process.env.GITHUB_RUN_ID
+  ? `performance-e2e-${process.env.GITHUB_RUN_ID}-${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`
+  : `performance-e2e-local-${Date.now()}`;
+
 function authToken() {
   const expires = Math.floor(Date.now() / 1000) + 86400;
   const encode = (value: object) =>
     Buffer.from(JSON.stringify(value)).toString("base64url");
   return {
     access_token: `${encode({ alg: "HS256", typ: "JWT" })}.${encode({
-      sub: "guardian",
+      sub: runMarker,
       exp: expires,
       role: "authenticated",
-      session_id: "performance-e2e-session",
+      session_id: runMarker,
     })}.signature`,
     refresh_token: "test-only",
     expires_at: expires,
     expires_in: 86400,
     token_type: "bearer",
     user: {
-      id: "guardian",
+      id: runMarker,
       aud: "authenticated",
       email: "perf@example.test",
       app_metadata: {},
@@ -89,6 +96,15 @@ function authToken() {
 
 async function seedAuthenticatedContext(context: BrowserContext) {
   const token = authToken();
+  // Mark the page before application boot so watchLibrary never opens Realtime
+  // with the unsigned fixture token (the same boundary as production.spec.ts).
+  await context.addInitScript(() => {
+    Object.defineProperty(globalThis, "__AXON_E2E_DISABLE_REALTIME__", {
+      value: "production-fixture",
+      configurable: false,
+      writable: false,
+    });
+  });
   await context.addInitScript(({ token }) => {
     localStorage.setItem("sb-dlgcqieyevoebefhcggi-auth-token", JSON.stringify(token));
     localStorage.setItem("axon.prefs.v1", JSON.stringify({
