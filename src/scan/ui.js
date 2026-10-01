@@ -10,12 +10,13 @@ import {
   acceptPage, currentRunForPaper, ingest, regionsForRun, startExplanations, watchExplanations,
 } from './pipeline.js';
 import {
-  createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage, saveDraft,
+  createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage, replacePage, saveDraft,
 } from './drafts.js';
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
 import { paperTypesFor } from '../papers.js';
 import { publicScanMessage } from './errors.js';
+import { closestDuplicatePage } from './similarity.js';
 
 const MAX_PENDING_CAPTURES = 2;
 
@@ -68,13 +69,20 @@ const toast = (m, tone) => host.toast(m, tone);
 const tick = () => host.tick();
 const firm = () => host.firm();
 
-export async function initScanUI(ctx, surfaces = {}) {
+export function initScanUI(ctx, surfaces = {}) {
   setScanContext(ctx);
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
-  await restoreDraft();
-  await paintDrafts();
+  // Review re-entry is server state and must not wait for IndexedDB. On some
+  // browsers a blocked/slow local draft store can leave listDrafts() pending
+  // indefinitely; before this change that also kept ensureScan() pending, so a
+  // paper already at needs_review never even attempted its server review reads.
+  // Bind the host/context synchronously and hydrate scanner-only draft surfaces
+  // in the background. Epoch checks inside both functions prevent stale student
+  // data from painting after a profile switch.
+  void restoreDraft().catch((error) => console.warn('[scan] draft restore failed', error));
+  void paintDrafts().catch((error) => console.warn('[scan] draft list refresh failed', error));
 }
 
 export function resetScan() {
@@ -264,7 +272,7 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
     slot = actualSlot;
     renderTrayRows();
 
-    const { page } = await acceptPage({
+    const accepted = await acceptPage({
       draft: S.draft,
       bitmap: shot.bitmap,
       quad: shot.quad,
@@ -275,6 +283,46 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
       original: shot.original ?? null,
     });
     if (epoch !== S.epoch) return false;
+    let page = accepted.page;
+
+    // A duplicate decision is deliberately made after conditioning (so the
+    // signature is stable) but before the durable page is painted as accepted.
+    // Nothing is silently discarded: the student chooses keep, replace, or can
+    // cancel the decision and the just-captured page is removed again.
+    if (replacing === null && page?.fingerprint) {
+      const duplicate = closestDuplicatePage(S.draft.pages, page.fingerprint, {
+        excludePageNumber: page.page_number,
+      });
+      if (duplicate) {
+        const capturedPageNumber = page.page_number;
+        const decision = await offerDuplicateCapture(page, duplicate);
+        if (epoch !== S.epoch) return false;
+
+        if (decision === 'replace') {
+          const captured = S.draft.pages.find((p) => p.page_number === capturedPageNumber);
+          if (captured) {
+            await replacePage(S.draft, duplicate.pageNumber, captured);
+            await removePage(S.draft, capturedPageNumber);
+            S.placeholders.delete(capturedPageNumber);
+            if (S.thumbs.has(duplicate.pageNumber)) {
+              URL.revokeObjectURL(S.thumbs.get(duplicate.pageNumber));
+              S.thumbs.delete(duplicate.pageNumber);
+            }
+            page = S.draft.pages.find((p) => p.page_number === duplicate.pageNumber) ?? page;
+            slot = duplicate.pageNumber;
+            toast(`Page ${duplicate.pageNumber} replaced with the new capture.`);
+          }
+        } else if (decision === 'cancel') {
+          await removePage(S.draft, capturedPageNumber);
+          S.placeholders.delete(capturedPageNumber);
+          await paintTray();
+          refreshDrafts();
+          toast('That capture was not added.');
+          return false;
+        }
+      }
+    }
+
     const tAccepted = performance.now();
 
     // Only a successful durable replacement completes the retake transaction.
@@ -295,7 +343,9 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
       totalMs: +(performance.now() - tOnShot).toFixed(1),
     });
 
-    if (page.quality?.verdict === 'fail' && !page.quality?.accepted) {
+    if (page.meta?.geometry_confirmed === false && !page.meta?.geometry_accepted) {
+      offerGeometryRetake(page);
+    } else if (page.quality?.verdict === 'fail' && !page.quality?.accepted) {
       offerRetake(page);
     } else if (page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
@@ -322,6 +372,7 @@ function renderTrayRows() {
     ...p,
     thumb: S.thumbs.get(p.page_number),
     retakeRequested: S.retaking === p.page_number,
+    geometryIssue: p.meta?.geometry_confirmed === false && !p.meta?.geometry_accepted,
   }));
 
   for (const [pageNumber, thumb] of S.placeholders) {
@@ -376,11 +427,57 @@ function setRetake(pageNumber) {
 async function keepCapture(pageNumber) {
   const current = S.draft?.pages.find((p) => p.page_number === pageNumber);
   if (!current) return;
-  current.quality = { ...current.quality, accepted: true };
+  if (current.quality?.verdict === 'fail') {
+    current.quality = { ...current.quality, accepted: true };
+  }
+  if (current.meta?.geometry_confirmed === false) {
+    current.meta = { ...current.meta, geometry_accepted: true };
+  }
   await saveDraft(S.draft);
   if (S.retaking === pageNumber) S.retaking = null;
   await paintTray();
   toast(`Page ${pageNumber} kept.`);
+}
+
+function offerGeometryRetake(page) {
+  host.openSheet({
+    title: `We couldn't confirm page ${page.page_number}'s edges`,
+    body: "We kept the full photo instead of guessing a crop. Check it, retake it, or keep the uncropped photo.",
+    items: [],
+    choices: [
+      { label: 'Retake page', value: 'retake', emphasis: 'primary' },
+      { label: 'Keep full photo', value: 'keep', emphasis: 'secondary' },
+    ],
+    onChoice: async (choice) => {
+      if (choice === 'retake') {
+        setRetake(page.page_number);
+        return;
+      }
+      if (choice === 'keep') await keepCapture(page.page_number);
+    },
+  });
+}
+
+function offerDuplicateCapture(page, duplicate) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    host.openSheet({
+      title: `This looks like page ${duplicate.pageNumber}`,
+      body: 'The new capture is very similar to a page already in this paper. Keep both only if you meant to scan it twice.',
+      items: [],
+      choices: [
+        { label: 'Keep both', value: 'keep', emphasis: 'secondary' },
+        { label: `Replace page ${duplicate.pageNumber}`, value: 'replace', emphasis: 'primary' },
+      ],
+      onChoice: (choice) => finish(choice),
+      onCancel: () => finish('cancel'),
+    });
+  });
 }
 
 /** A fail needs an explicit decision before the booklet can be submitted. */
@@ -409,19 +506,22 @@ function openPageActions(pageNumber) {
   if (!page) return;
   const reasons = page.quality?.reasons ?? [];
   const unresolvedFail = page.quality?.verdict === 'fail' && !page.quality?.accepted;
+  const unresolvedGeometry = page.meta?.geometry_confirmed === false && !page.meta?.geometry_accepted;
 
   host.openSheet({
     title: `Page ${pageNumber}`,
-    body: reasons.length ? reasons[0] : 'This page looks fine.',
+    body: unresolvedGeometry
+      ? "We couldn't confirm this page's edges, so the full uncropped photo was kept."
+      : (reasons.length ? reasons[0] : 'This page looks fine.'),
     items: [],
     choices: [
       {
         label: 'Take this page again',
         value: 'retake',
-        ...(unresolvedFail ? { emphasis: 'primary' } : {}),
+        ...((unresolvedFail || unresolvedGeometry) ? { emphasis: 'primary' } : {}),
       },
-      ...(unresolvedFail
-        ? [{ label: 'Keep this capture', value: 'keep', emphasis: 'secondary' }]
+      ...((unresolvedFail || unresolvedGeometry)
+        ? [{ label: unresolvedGeometry ? 'Keep full photo' : 'Keep this capture', value: 'keep', emphasis: 'secondary' }]
         : []),
       ...(pageNumber > 1 ? [{ label: 'Move earlier', value: 'up' }] : []),
       ...(pageNumber < S.draft.pages.length ? [{ label: 'Move later', value: 'down' }] : []),
@@ -519,7 +619,9 @@ export function setPendingPaperType(type) {
 }
 
 function unresolvedPage() {
-  return S.draft?.pages.find((p) => p.quality?.verdict === 'fail' && !p.quality?.accepted) ?? null;
+  return S.draft?.pages.find((p) =>
+    (p.meta?.geometry_confirmed === false && !p.meta?.geometry_accepted)
+    || (p.quality?.verdict === 'fail' && !p.quality?.accepted)) ?? null;
 }
 
 function sendPaper() {
@@ -530,7 +632,11 @@ function sendPaper() {
   }
   const unresolved = unresolvedPage();
   if (unresolved) {
-    offerRetake(unresolved);
+    if (unresolved.meta?.geometry_confirmed === false && !unresolved.meta?.geometry_accepted) {
+      offerGeometryRetake(unresolved);
+    } else {
+      offerRetake(unresolved);
+    }
     return;
   }
 
@@ -651,17 +757,50 @@ async function openReview(runId, intent = null) {
   host.openReview(S.review?.paper?.id, intent);
 }
 
-export async function resumeDraftReview(draftId) {
+const LEGACY_DRAFT_LOOKUP_MS = 1200;
+
+function readDraftWithin(id, ms = LEGACY_DRAFT_LOOKUP_MS) {
+  return Promise.race([
+    Promise.resolve(readDraft(id)).catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+export async function resumeDraftReview(routeId) {
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   if (!studentId) return { state: 'gone' };
-  let draft = await readDraft(draftId);
-  if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
-  const paperId = draft?.paper_id ?? draftId;
-  draft ??= (await listDrafts(studentId)).find(item => item.paper_id === paperId) ?? null;
+
+  // Library and retry routes use the canonical paper id. Consult server truth
+  // first, before touching IndexedDB at all. A blocked local draft database must
+  // never hold a server-ready review behind a skeleton loader.
+  let paperId = routeId;
+  let draft = null;
+  let run = await currentRunForPaper(paperId);
   if (epoch !== S.epoch) return { state: 'gone' };
-  const run = await currentRunForPaper(paperId);
-  if (epoch !== S.epoch || !run) return { state: 'gone' };
+
+  // Legacy scanner URLs used a local draft id. Only if the route id is not a
+  // server paper do we ask IndexedDB to translate it — and even that fallback
+  // has a finite deadline so broken local storage cannot create an infinite
+  // loading state.
+  if (!run) {
+    draft = await readDraftWithin(routeId);
+    if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
+    if (!draft?.paper_id) return { state: 'gone' };
+    paperId = draft.paper_id;
+    run = await currentRunForPaper(paperId);
+    if (epoch !== S.epoch || !run) return { state: 'gone' };
+  }
+
+  // Recover an on-device draft opportunistically so "Rescan this page" becomes
+  // available when possible, but do not make the actual review wait for it.
+  if (!draft) {
+    void listDrafts(studentId).then((drafts) => {
+      if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+      const local = drafts.find((item) => item.paper_id === paperId) ?? null;
+      if (local) S.draft = local;
+    }).catch((error) => console.warn('[scan] local draft lookup failed during review', error));
+  }
 
   if (run.status === 'committed') return { state: 'committed', paperId };
 
@@ -672,7 +811,7 @@ export async function resumeDraftReview(draftId) {
 
   const regions = await regionsForRun(run.id);
   if (epoch !== S.epoch) return { state: 'gone' };
-  S.draft = draft;
+  S.draft = draft ?? S.draft;
   S.regions = regions;
   await openReview(run.id);
   // The SQL gate is idempotent too, but do not make a duplicate request when a

@@ -115,6 +115,7 @@ async function processOnThisThread(source, { quad, pageNumber, capturePath, live
     width: conditioned.width,
     height: conditioned.height,
     quality: conditioned.quality,
+    fingerprint: conditioned.fingerprint,
     meta: conditioned.meta,
     teacher_marks: layers.teacher.components.map((c) => ({
       box: c.box, shape: c.shape, metrics: c.metrics,

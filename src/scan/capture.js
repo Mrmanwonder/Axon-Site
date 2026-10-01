@@ -46,6 +46,14 @@ const FOCUS_WINDOW = 384;
 const MEASUREMENT_STALE_MS = 900;
 const VIEWPORT_SCALE_TOLERANCE = 0.01;
 const STILL_ANALYSIS_LONG_EDGE = 720;
+// Manual captures taken before live lock get one deliberately stronger pass on
+// the captured still. 1440px preserves substantially more edge evidence than
+// the live proxy without asking a phone to run the Hough search across a 12MP
+// sensor frame.
+export const RESCUE_STILL_ANALYSIS_LONG_EDGE = 1440;
+export const RESCUE_QUAD_AGREEMENT = 0.045;
+const RESCUE_DETECT_TIMEOUT_MS = 1800;
+const HINT_SEQUENCE_LIMIT = 32;
 const AUTO_RETRY_COOLDOWN_MS = 550;
 const TRACK_CONFIDENCE_FLOOR = 0.64;
 const FOCUS_BREATHING_AREA_DELTA = 0.05;
@@ -165,6 +173,24 @@ export function isVerifiedQuad(candidate) {
     && candidate.every((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
 }
 
+/** Confidence in geometry that existed before the shutter was pressed. */
+export function shutterQuadConfidence({ locked = false, hasCandidate = false } = {}) {
+  if (locked) return 'locked';
+  if (hasCandidate) return 'provisional';
+  return 'none';
+}
+
+/**
+ * A rescue quad must be independently sane. When the ordinary still pass also
+ * found geometry, disagreement between the two resolutions is evidence that at
+ * least one of them is guessing; the safe outcome is an honest uncropped page.
+ */
+export function rescueQuadAccepted(primaryQuad, rescueQuad, width, height) {
+  if (!isVerifiedQuad(rescueQuad)) return false;
+  if (!isVerifiedQuad(primaryQuad)) return true;
+  return quadDrift(primaryQuad, rescueQuad, width, height) <= RESCUE_QUAD_AGREEMENT;
+}
+
 export function resolveOverlayPhase({
   confirming = false,
   hasQuad = false,
@@ -276,12 +302,26 @@ export function settledPaperEvidence(
   return { confirmed: false, lastObservedAt: null };
 }
 
-export function settledScannerGuidance(showing, verdict, paperEvidence, now) {
-  return settledGuidance(
-    showing,
-    paperEvidence?.confirmed ? verdict : SEARCH_GUIDANCE,
-    now,
-  );
+function isLightingGuidance(verdict) {
+  if (!verdict) return false;
+  if (verdict.blocking === 'glare') return true;
+  return /\b(glare|bright|light)\b/i.test(verdict.hint ?? '');
+}
+
+export function settledScannerGuidance(
+  showing,
+  verdict,
+  paperEvidence,
+  now,
+  { candidatePresent = false } = {},
+) {
+  // A tentative rectangle still does not earn a visible paper lock. Lighting is
+  // the narrow exception: if real pixels inside a plausible candidate already
+  // show glare/over-exposure, telling the student to reframe cannot fix it.
+  const next = paperEvidence?.confirmed
+    ? verdict
+    : (candidatePresent && isLightingGuidance(verdict) ? verdict : SEARCH_GUIDANCE);
+  return settledGuidance(showing, next, now);
 }
 
 export function settledGuidance(showing, verdict, now) {
@@ -338,7 +378,12 @@ function ensureDetectWorker() {
   return detectWorker;
 }
 
-function runDetectWorker(kind, bitmap, extra = null) {
+function runDetectWorker(
+  kind,
+  bitmap,
+  extra = null,
+  { timeoutMs = DETECT_TIMEOUT_MS, affectsWorkerHealth = true } = {},
+) {
   const w = ensureDetectWorker();
   if (!w) { bitmap.close?.(); return Promise.resolve(null); }
   const id = nextDetectId++;
@@ -354,15 +399,16 @@ function runDetectWorker(kind, bitmap, extra = null) {
     };
     detectPending.set(id, finish);
     timeout = setTimeout(() => {
-      detectTimeouts++;
+      if (affectsWorkerHealth) detectTimeouts++;
       finish(null);
-      // A worker that repeatedly misses its deadline is not a worker path at
-      // all. Falling back to the bounded main-thread detector is preferable to a
-      // scanner that can search forever without ever publishing a page.
-      if (detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
+      // A worker that repeatedly misses its live deadline is not a worker path
+      // at all. The rare, larger still-rescue pass has a longer budget and must
+      // not demote an otherwise healthy live worker if that one pass times out.
+      if (affectsWorkerHealth
+          && detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
         disableDetectWorker(w);
       }
-    }, DETECT_TIMEOUT_MS);
+    }, timeoutMs);
     try {
       w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
     } catch {
@@ -424,6 +470,27 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let shootInFlight = false;
   let state = blankState();
   let nextTransactionId = 1;
+  let hintSequence = [];
+  let hintSequenceStartedAt = performance.now();
+
+  function recordHintState(next) {
+    const last = hintSequence[hintSequence.length - 1];
+    if (last?.hint === next.hint && last?.blocking === (next.blocking ?? null)) return;
+    hintSequence.push({
+      at_ms: Math.max(0, Math.round(performance.now() - hintSequenceStartedAt)),
+      hint: next.hint,
+      blocking: next.blocking ?? null,
+    });
+    if (hintSequence.length > HINT_SEQUENCE_LIMIT) hintSequence.shift();
+  }
+
+  function consumeHintSequence() {
+    const snapshot = hintSequence.map((entry) => ({ ...entry }));
+    hintSequence = [];
+    hintSequenceStartedAt = performance.now();
+    if (state?.hint) recordHintState(state);
+    return snapshot;
+  }
 
   const stepStats = { count: 0, sumMs: 0, maxMs: 0, lastFlush: 0 };
 
@@ -622,6 +689,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     autoStableSince = 0;
     autoCandidateSince = 0;
     state = blankState();
+    hintSequence = [];
+    hintSequenceStartedAt = performance.now();
     overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height);
     releaseCamera();
   }
@@ -947,7 +1016,37 @@ export function createCapture({ video, overlay, onState, onShot }) {
       quad = null;
       resetAutoTiming();
       armed = true;
-      guidance = settledScannerGuidance(guidance, null, paperEvidence, now);
+
+      // A plausible candidate is enough to diagnose lighting, but still not
+      // enough to draw brackets or call the page locked. This prevents the
+      // observed failure where glare existed for many seconds while the only
+      // instruction on screen was to fit corners that were already visible.
+      let candidateVerdict = null;
+      if (valid && measured && !measurementsStale(tracked, tw, th)) {
+        const candidateSize = quadSize(tracked);
+        const candidateLongEdge = Math.round(Math.max(candidateSize.width, candidateSize.height) * (vw / tw));
+        candidateVerdict = liveGateVerdict({
+          glare: measured.glare,
+          clipping: measured.clipping,
+          fill: quadFill(tracked, tw, th),
+          edgeCoverage: candidateLongEdge / Math.max(1, Math.min(vw, vh)),
+          sharpness: measured.sharpness,
+          skew: measured.skew,
+          pageLongEdge: candidateLongEdge,
+          resolutionStatus:
+            capturePath === 'image-capture' || Math.min(vw, vh) < LIVE_SOURCE_FLOOR
+              ? 'unknown' : 'known',
+          geometryReady: true,
+          qualityReady: true,
+        }, guidance?.blocking ?? null);
+      }
+      guidance = settledScannerGuidance(
+        guidance,
+        candidateVerdict,
+        paperEvidence,
+        now,
+        { candidatePresent: valid },
+      );
       next.blocking = guidance.blocking;
       next.hint = guidance.hint;
       publish(next);
@@ -1037,6 +1136,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   function publish(next) {
     state = next;
+    recordHintState(next);
     onState?.(next);
   }
 
@@ -1319,8 +1419,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   /** Re-detect and re-measure the actual pixels that will be stored. */
-  async function analyseStill(bitmap) {
-    const scale = Math.min(1, STILL_ANALYSIS_LONG_EDGE / Math.max(bitmap.width, bitmap.height));
+  async function analyseStill(bitmap, {
+    longEdge = STILL_ANALYSIS_LONG_EDGE,
+    detectTimeoutMs = DETECT_TIMEOUT_MS,
+    affectsWorkerHealth = true,
+  } = {}) {
+    const scale = Math.min(1, longEdge / Math.max(bitmap.width, bitmap.height));
     const pw = Math.max(1, Math.round(bitmap.width * scale));
     const ph = Math.max(1, Math.round(bitmap.height * scale));
     let result = null;
@@ -1328,7 +1432,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     if (workerUsed) {
       const stillProxy = await createImageBitmap(bitmap, { resizeWidth: pw, resizeHeight: ph });
-      result = await runDetectWorker('search', stillProxy, { minFill: STILL_MIN_FILL });
+      result = await runDetectWorker(
+        'search',
+        stillProxy,
+        { minFill: STILL_MIN_FILL },
+        { timeoutMs: detectTimeoutMs, affectsWorkerHealth },
+      );
     } else {
       if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
       proxyCtx.drawImage(bitmap, 0, 0, pw, ph);
@@ -1426,6 +1535,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
     const liveQuadAtShutter = overlayPhase === 'locked' && isVerifiedQuad(quad)
       ? quad.map((point) => ({ ...point }))
       : null;
+    const trackedCandidateAtShutter = quadOf(track);
+    const quadConfidenceAtShutter = shutterQuadConfidence({
+      locked: !!liveQuadAtShutter,
+      hasCandidate: isVerifiedQuad(trackedCandidateAtShutter),
+    });
+    const liveHintSequence = hintSequence.map((entry) => ({ ...entry }));
     const shotActivation = activation;
     const tShotStart = performance.now();
     let ownedBitmap = null;
@@ -1448,35 +1563,90 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
       const tAnalyseStart = performance.now();
       const analysed = await analyseStill(bitmap);
+      const rescueRedetectAttempted = quadConfidenceAtShutter !== 'locked';
+      let accepted = analysed;
+      let rescueRedetectSucceeded = false;
+
+      if (rescueRedetectAttempted) {
+        const rescued = await analyseStill(bitmap, {
+          longEdge: RESCUE_STILL_ANALYSIS_LONG_EDGE,
+          detectTimeoutMs: RESCUE_DETECT_TIMEOUT_MS,
+          affectsWorkerHealth: false,
+        });
+        rescueRedetectSucceeded = rescueQuadAccepted(
+          analysed.quad,
+          rescued.quad,
+          bitmap.width,
+          bitmap.height,
+        );
+        if (rescueRedetectSucceeded) {
+          accepted = rescued;
+        } else {
+          // The full still remains useful evidence even when geometry is not.
+          // What must never happen is turning detector uncertainty into a
+          // confident perspective transform.
+          accepted = {
+            ...analysed,
+            quad: null,
+            gate: {
+              ...analysed.gate,
+              geometryReady: false,
+              captureVerified: false,
+              blocking: 'geometry',
+              hint: "We couldn't find this page's edges clearly. Check the photo, or retake it.",
+            },
+          };
+        }
+      }
+
       const analyseMs = performance.now() - tAnalyseStart;
       if (!running || shotActivation !== activation) {
         return null;
       }
 
       // Automatic capture is allowed to assist, not knowingly store a frame its
-      // own captured-pixel gate rejects. Manual shutter remains sovereign.
-      if (auto && analysed.gate.blocking) {
-        publish({ ...analysed.gate, autoRejected: true });
+      // own captured-pixel gate rejects. Manual shutter remains sovereign, but
+      // manual sovereignty no longer means permission to warp unconfirmed
+      // geometry: that branch stores the honest uncropped still instead.
+      if (auto && accepted.gate.blocking) {
+        publish({ ...accepted.gate, autoRejected: true });
         scheduleAutoRetry();
         console.debug('[scan:auto-rejected-still]', {
           transactionId,
-          reason: analysed.gate.blocking,
+          reason: accepted.gate.blocking,
           grabMs: +grabMs.toFixed(1),
           analyseMs: +analyseMs.toFixed(1),
         });
         return null;
       }
 
+      const geometryConfirmed = isVerifiedQuad(accepted.quad);
       const timing = { grabMs: +grabMs.toFixed(1), analyseMs: +analyseMs.toFixed(1) };
-      console.debug('[scan:shoot-timing]', { transactionId, auto, capturePath: path, ...timing });
+      console.debug('[scan:shoot-timing]', {
+        transactionId,
+        auto,
+        capturePath: path,
+        quadConfidenceAtShutter,
+        rescueRedetectAttempted,
+        rescueRedetectSucceeded,
+        geometryConfirmed,
+        ...timing,
+      });
 
       const shot = {
         bitmap,
-        quad: analysed.quad,
+        quad: accepted.quad,
         auto,
         capturePath: path,
         original,
-        gate: { ...analysed.gate },
+        gate: {
+          ...accepted.gate,
+          quadConfidenceAtShutter,
+          rescueRedetectAttempted,
+          rescueRedetectSucceeded,
+          geometryConfirmed,
+          liveHintSequence,
+        },
         timing,
         transactionId,
         capturedAt: Date.now(),
@@ -1488,9 +1658,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // optimistic loading animation. Prefer the frozen live quad because it
       // is exactly what the student saw; fall back to the independently
       // verified still geometry when manual capture preceded a live lock.
-      const confirmationQuad = liveQuadAtShutter ?? (isVerifiedQuad(analysed.quad)
+      const confirmationQuad = liveQuadAtShutter ?? (isVerifiedQuad(accepted.quad)
         ? scaleQuad(
-            analysed.quad,
+            accepted.quad,
             { width: bitmap.width, height: bitmap.height },
             { width: video.videoWidth, height: video.videoHeight },
           )
@@ -1503,6 +1673,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       // visibly locked before the press (started above).
       if (auto) beginCaptureConfirmation(confirmationQuad);
       onShot?.(shot);
+      consumeHintSequence();
       ownedBitmap = null; // ownership passes to the accepted shot
       armed = false;
       return shot;
