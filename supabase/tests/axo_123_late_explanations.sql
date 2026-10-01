@@ -19,6 +19,9 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
  ('00000000-0000-0000-0000-000000000000','11111111-1111-4111-8111-111111111111','authenticated','authenticated','ga@test.invalid','x',now(),now(),now());
 insert into public.guardian (id, auth_user_id, name, contact, verified_at, verification_method, verification_ref) values
  ('aaaaaaaa-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111','Guardian A','a@test.invalid',now(),'stub','ref-a');
+insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version, method)
+select g.id, null, cp.purpose, true, 'v1.0', 'in_app_itemised'
+from public.guardian g cross join public.consent_purpose cp where cp.is_required;
 insert into public.student (id, guardian_id, first_name, class_level, age_band) values
  ('aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-000000000001','Anya',11,'under_18');
 insert into public.paper (id, student_id, type, tier, date_taken, subject) values
