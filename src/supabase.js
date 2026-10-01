@@ -10,7 +10,7 @@
 // Google can assert on a parent's behalf.
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
-import { clearLocalData, readThrough } from './cache.js';
+import { clearLocalData, putCached, readThrough } from './cache.js';
 
 // Imported rather than read off `window` from a vendored UMD script. The intent
 // is unchanged — the client is bundled into our own output, so there is still no
@@ -341,18 +341,46 @@ export function onAuthChange(fn) {
   return sb.auth.onAuthStateChange((_event, session) => fn(session));
 }
 
+const GUARDIAN_IDENTITY_COLUMNS = 'id, auth_user_id, name, contact';
+
+/**
+ * Reduce any guardian row to the identity the UI shows. Offline boot needs a
+ * display name only; verification, subscription and deletion state are
+ * authority-sensitive and are never cached (consent and billing stay live).
+ * Returns null unless the row belongs to `authUserId`, so a cache entry that
+ * was written for another account — or tampered with — is never reused.
+ */
+export function guardianIdentity(row, authUserId) {
+  if (!row || typeof row !== 'object' || !authUserId || row.auth_user_id !== authUserId) return null;
+  return { id: row.id, auth_user_id: row.auth_user_id, name: row.name, contact: row.contact };
+}
+
 /** The guardian row for the current session, or null before onboarding. */
 export async function currentGuardian() {
   const session = await currentSession();
   if (!session) return null;
-  const result = await readThrough(`guardian:${session.user.id}`, async () => {
-  const { data, error } = await sb
-    .from('guardian')
-    .select('*')
-    .eq('auth_user_id', session.user.id)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const owner = session.user.id;
+  const key = `guardian:${owner}`;
+  const result = await readThrough(key, async () => {
+    const { data, error } = await sb
+      .from('guardian')
+      .select(GUARDIAN_IDENTITY_COLUMNS)
+      .eq('auth_user_id', owner)
+      .maybeSingle();
+    if (error) throw error;
+    // Cache only an identity that provably belongs to this session. A null
+    // result (no guardian row yet) is not cached as a row.
+    return data ? guardianIdentity(data, owner) : null;
   });
-  return result.data;
+  const identity = guardianIdentity(result.data, owner);
+  if (result.data && !identity) {
+    // Foreign/corrupt cached row: drop it and never surface it.
+    await putCached(key, null).catch(() => {});
+    return null;
+  }
+  if (identity && result.data && Object.keys(result.data).length !== Object.keys(identity).length) {
+    // Legacy full row cached by an earlier build: shrink it on this read.
+    await putCached(key, identity).catch(() => {});
+  }
+  return identity;
 }
