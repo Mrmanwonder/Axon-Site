@@ -58,7 +58,7 @@ Status key: **OK** accurate as written · **STALE** was true, no longer · **FAL
 | 11-ish | Scheme language: "confirmed against … mark scheme … where applicable" | no corpus claim; Tier 2 uses stored scheme only via `resolveSchemeEvidence`; AXO-12 (registry) not done | **COND** — fine while it stays conditional; do **not** add "checked against the official scheme" |
 | 16 | Free product experience; Pro adds cross-paper patterns | `get_entitlements`: Pro gates `crossSubjectPatterns`, `fullHistoricalArchive`, `parentProgressReports`, `priorityProcessing`, profile count; scan + per-paper analysis free | **OK** with the non-negotiable (no student-facing paywall) |
 | 17-20 | Stripe-hosted Checkout, renewal, cancel, refunds | `billing-checkout`/`billing-portal`; `past_due` ends Pro immediately (entitlements) | **OK**; refund policy specifics **UNVERIFIED** (Stripe config) |
-| 31 | Governing law India, courts in India | — | **COND** — see entity gap below |
+| 36 | Governing law India, courts in India | — | **COND** — see entity gap below |
 | — | Tutor | backend `/tutor` route + `tutor` model route are live, but **no student-facing UI exists** (no tutor code in `src/` except an unrelated word in Terms) | Policies correctly make **no** tutor claim. **FUTURE**: when AXO-19/39 ship, Privacy must add that the student's free-text message (≤20,000 chars) goes to Gemini and `board programme stage subject code` (not the message) to Tavily. |
 
 ### Cookie Policy
