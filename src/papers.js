@@ -408,6 +408,22 @@ export async function readPaper(studentId, paperId) {
 }
 
 /**
+ * "This helped" / "This wasn't right" on one explanation. The database decides whether anything
+ * is kept (it needs live consent for improving extraction from corrections) and never stores
+ * text: only the verdict, the cause and the attempt. Resolves either way; the caller shows a
+ * single acknowledgement and does not report whether it was kept.
+ */
+export async function recordExplanationFeedback(attemptId, helped) {
+  requireOnline('Sending feedback');
+  const { data, error } = await sb.rpc('record_explanation_feedback', {
+    p_attempt_id: attemptId,
+    p_helped: helped,
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Permanently remove one saved paper.
  *
  * The database owns the destructive semantics: `delete_paper` runs as the
