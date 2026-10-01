@@ -79,13 +79,13 @@ select public._t('a changed explanation clears the confirmation of the old one',
   (select student_confirmed_at is null from public.mark_loss_event m
     where m.attempt_id = (select committed_attempt_id from public.question_region where id = 'aaaaaaaa-0000-4000-8000-0000000000c1')));
 
--- A rejected cause is the student's word and is not overwritten.
+-- A rejected cause is the student's word: it is left alone, and nothing is added beside it (the
+-- database refuses a second row whose marks lost would exceed the marks forgone).
 update public.mark_loss_event set student_rejected_at = now()
  where attempt_id = (select committed_attempt_id from public.question_region where id = 'aaaaaaaa-0000-4000-8000-0000000000c1');
 update public.region_explanation set body = 'Third explanation.' where region_id = 'aaaaaaaa-0000-4000-8000-0000000000c1';
-select public._t('a rejected row keeps its text; a fresh live row is offered beside it',
-  (select count(*) filter (where student_rejected_at is not null and ai_explanation = 'Second explanation.') = 1
-      and count(*) filter (where student_rejected_at is null and ai_explanation = 'Third explanation.') = 1
+select public._t('a rejected row keeps its text and no second row is added beside it',
+  (select count(*) = 1 and bool_and(student_rejected_at is not null and ai_explanation = 'Second explanation.')
      from public.mark_loss_event m
     where m.attempt_id = (select committed_attempt_id from public.question_region where id = 'aaaaaaaa-0000-4000-8000-0000000000c1')));
 

@@ -9,9 +9,11 @@
 --
 -- This trigger does the same copy as commit_extraction_run, for a region that already has a
 -- committed attempt. Before commit it does nothing (commit copies it). It updates the live
--- (non-rejected) row if there is one, and inserts one if not. A changed explanation clears the
--- student's confirmation of the old one, so they are never shown as confirming text they have not
--- seen. A row the student rejected is left alone.
+-- (non-rejected) row if there is one, and inserts one only when the attempt has no row at all. A
+-- changed explanation clears the student's confirmation of the old one, so they are never shown as
+-- confirming text they have not seen. A row the student rejected is left alone and nothing is added
+-- beside it: the database refuses a second row whose marks lost would exceed the marks forgone, and
+-- a rejected cause is the student's word.
 
 create or replace function private.sync_explanation_to_loss_event()
 returns trigger
@@ -57,8 +59,7 @@ begin
      and m.student_rejected_at is null;
 
   if not found
-     and not exists (select 1 from public.mark_loss_event m
-                      where m.attempt_id = r.committed_attempt_id and m.student_rejected_at is null) then
+     and not exists (select 1 from public.mark_loss_event m where m.attempt_id = r.committed_attempt_id) then
     insert into public.mark_loss_event (
       attempt_id, student_id, cause, marks_lost, ai_explanation, do_this_next, confidence,
       concepts, command_word, command_word_note, model_answer, loss_reasons,
