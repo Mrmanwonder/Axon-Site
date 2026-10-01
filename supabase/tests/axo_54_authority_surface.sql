@@ -42,9 +42,9 @@ select public._t('anon may execute exactly one SECURITY DEFINER function: the sh
     = array['public.resolve_academic_share'],
   (select string_agg(schema||'.'||name, ', ') from _definer where anon_x));
 
-select public._t('authenticated may execute exactly the audited browser-facing public RPCs',
+select public._t('authenticated may execute exactly the audited browser-facing public RPCs (AXO-57 adds begin_guardian_verification: derives the guardian from auth.uid, fresh Parent Mode, creates no verification)',
   (select coalesce(array_agg(name order by name), '{}') from _definer where schema = 'public' and auth_x)
-    = array['claim_guardian_verification','clear_student_scope','delete_my_account',
+    = array['begin_guardian_verification','claim_guardian_verification','clear_student_scope','delete_my_account',
             'get_cross_subject_signal','get_entitlements','parent_mode_state',
             'resolve_academic_share','set_student_scope','student_scope_state'],
   (select string_agg(name, ', ' order by name) from _definer where schema = 'public' and auth_x));
