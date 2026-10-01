@@ -28,7 +28,7 @@ import { useApp } from "../data/AppProvider";
 import { useAnalytics } from "../data/useAnalytics";
 import { paperPresentation } from "../data/paperPresentation";
 import { paths } from "../app/paths";
-import { paperTypeLabel, statusKeyForRun } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent, statusKeyForRun } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { NoPapersArt } from "../components/EmptyArt";
@@ -176,7 +176,7 @@ export default function Home() {
             data-interactive=""
           >
             <div className="b">
-              <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type)}</div>
+              <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type, providerKeyForStudent(student))}</div>
               <div className="t2">{presentation.statusLabel}{presentation.stale ? " · last-known status" : ""}</div>
 
               <div className="t2">

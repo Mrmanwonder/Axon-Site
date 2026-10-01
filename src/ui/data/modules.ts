@@ -241,6 +241,8 @@ export const assessmentRulesFor = curriculumMod.assessmentRulesFor as (a?: {
   supportsTeacherPenMarks: boolean; officialSchemeTerminology: string;
   paperLabels: Record<string, string>;
 };
+export const providerKeyForBoard = curriculumMod.providerKeyForBoard as (board?: string | null) => "cambridge" | "cbse" | "ib" | null;
+export const providerKeyForStudent = curriculumMod.providerKeyForStudent as (student?: { provider_key?: string | null; board?: string | null } | null) => "cambridge" | "cbse" | "ib" | null;
 export const paperLabelsFor = curriculumMod.paperLabelsFor as (providerKey?: string | null) => Record<string, string>;
 
 // Legacy read helpers remain exported until cached pre-v2 profiles age out.
@@ -248,7 +250,7 @@ export const BOARD = curriculumMod.BOARD as string;
 export const BOARD_LABEL = curriculumMod.BOARD_LABEL as string;
 export const CLASS_LEVELS = curriculumMod.CLASS_LEVELS as number[];
 export const STAGES = curriculumMod.STAGES as { stage: string; label: string; classLevels: number[] }[];
-export const stageForClass = curriculumMod.stageForClass as (c: number) => { stage: string; label: string; classLevels: number[] };
+export const stageForClass = curriculumMod.stageForClass as (c: number) => { stage: string; label: string; classLevels: number[] } | null;
 export const classLabel = curriculumMod.classLabel as (c: number) => string;
 export const classLabelShort = curriculumMod.classLabelShort as (c: number) => string;
 export const subjectsForClass = curriculumMod.subjectsForClass as (c: number) => { subject: string; code: string }[];

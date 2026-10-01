@@ -12,7 +12,7 @@
 
 import { sb } from '../supabase.js';
 import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
-import { assessmentRulesFor } from '../curriculum.js';
+import { assessmentRulesFor, providerKeyForBoard } from '../curriculum.js';
 
 async function assessmentRulesForStudent(studentId) {
   const { data: student, error } = await sb.from('student')
@@ -37,11 +37,7 @@ async function assessmentRulesForStudent(studentId) {
     if (providerError) throw providerError;
     providerKey = provider.key;
   } else {
-    providerKey = student.board === 'CBSE' ? 'cbse'
-      : student.board === 'IBDP' ? 'ib'
-      : student.board === 'CAIE' || student.board === 'IGCSE' || student.board === 'AS_A_LEVEL'
-        ? 'cambridge'
-        : null;
+    providerKey = providerKeyForBoard(student.board);
   }
   return assessmentRulesFor({ providerKey, programmeKey });
 }

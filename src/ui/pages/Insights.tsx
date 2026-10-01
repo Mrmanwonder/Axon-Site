@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAnalytics } from "../data/useAnalytics";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import PressBox from "../components/PressBox";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
@@ -26,6 +26,7 @@ function EvidenceGap({ title, children }: { title: string; children: React.React
 
 export default function Insights() {
   const { papers, student } = useApp();
+  const providerKey = providerKeyForStudent(student);
   const { state, readiness, loss, stale } = useAnalytics();
   const { addPaper } = useIngestion();
   const [subject, setSubject] = useState("all");
@@ -41,7 +42,7 @@ export default function Insights() {
   }, [papers, student?.subjects]);
 
   const types = useMemo(
-    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a).localeCompare(paperTypeLabel(b))),
+    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a, providerKey).localeCompare(paperTypeLabel(b, providerKey))),
     [papers],
   );
 
@@ -64,7 +65,7 @@ export default function Insights() {
   ];
   const typeOptions: AppDropdownOption[] = [
     { value: "all", label: "All papers" },
-    ...types.map((item) => ({ value: item, label: paperTypeLabel(item) })),
+    ...types.map((item) => ({ value: item, label: paperTypeLabel(item, providerKey) })),
   ];
   const rangeOptions: AppDropdownOption[] = [
     { value: "all", label: "Any date" },

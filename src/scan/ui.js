@@ -15,17 +15,11 @@ import {
 import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
 import { releaseCrops } from './crops.js';
 import { paperTypesFor } from '../papers.js';
+import { providerKeyForStudent } from '../curriculum.js';
 import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
 
 const MAX_PENDING_CAPTURES = 2;
-
-function providerKeyForStudent(student) {
-  if (student?.provider_key) return student.provider_key;
-  if (student?.board === 'CBSE') return 'cbse';
-  if (student?.board === 'IBDP') return 'ib';
-  return 'cambridge';
-}
 
 function paperTypes() {
   return paperTypesFor(providerKeyForStudent(S.ctx?.student));

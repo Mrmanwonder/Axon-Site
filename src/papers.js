@@ -30,7 +30,8 @@ const BASE_PAPER_TYPES = [
   { value: 'final_exam', label: 'End-of-year exam' },
 ];
 
-export function paperTypesFor(providerKey = 'cambridge') {
+/** Unknown/missing provider yields neutral labels (see paperLabelsFor); never Cambridge. */
+export function paperTypesFor(providerKey = null) {
   const labels = paperLabelsFor(providerKey);
   return [
     ...BASE_PAPER_TYPES,
@@ -39,10 +40,10 @@ export function paperTypesFor(providerKey = 'cambridge') {
   ];
 }
 
-// Compatibility for callers that do not yet have profile context.
-export const PAPER_TYPES = paperTypesFor('cambridge');
+// Compatibility for callers that do not yet have profile context: neutral labels.
+export const PAPER_TYPES = paperTypesFor(null);
 
-export function paperTypeLabel(type, providerKey = 'cambridge') {
+export function paperTypeLabel(type, providerKey = null) {
   return paperTypesFor(providerKey).find((item) => item.value === type)?.label ?? type;
 }
 

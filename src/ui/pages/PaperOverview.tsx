@@ -17,7 +17,7 @@ import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { deletePaper, paperTypeLabel } from "../data/modules";
+import { deletePaper, paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import { numMark } from "../data/causes";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
@@ -86,7 +86,7 @@ export default function PaperOverview() {
     <>
       <div className="greet detailgreet">
         <div className="detailcopy">
-          <h1>{paperTypeLabel(paper.type)}</h1>
+          <h1>{paperTypeLabel(paper.type, providerKeyForStudent(student))}</h1>
           <div className="sub">
             {paper.subject ? `${paper.subject} · ` : ""}
             {new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
