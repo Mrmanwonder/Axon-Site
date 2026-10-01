@@ -52,7 +52,7 @@ begin
       confidence_tier, needs_review, student_confirmed_at)
   values (p_id, p_run, p_paper, 'aaaaaaaa-0000-4000-8000-000000000002', p_order, 'Q' || (p_order + 1),
       p_awarded, '{"page":1,"x":1,"y":1,"w":1,"h":1}', p_available, '{"page":1,"x":2,"y":2,"w":1,"h":1}',
-      p_tier, false, now());
+      p_tier::public.confidence_tier, false, now());
 end $$;
 
 select public._region('aaaaaaaa-0000-4000-8000-0000000000c1','aaaaaaaa-0000-4000-8000-0000000000b1','aaaaaaaa-0000-4000-8000-0000000000a1', 0, 10, 12);
