@@ -85,6 +85,7 @@ export const analyticsReadiness = async () => ({ data: { papers_counted: 1, ques
 export const lossByCause = async () => ({ data: {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
+export const providerKeyForStudent = (s?: { provider_key?: string | null } | null) => s?.provider_key ?? null;
 export const paperTypeLabel = () => "Test paper";
 export const paperTypesFor = () => [{ value: "unit_test", label: "Class test" }];
 export const PROVIDER_KEYS = ["cambridge", "cbse", "ib"];
