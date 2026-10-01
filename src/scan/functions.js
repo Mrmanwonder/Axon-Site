@@ -101,6 +101,9 @@ export const retryFailedPaper = (paperId) => post('/paper-retry', { paper_id: pa
 /** Stage 8's gate: nothing is explained until every region has been through review. */
 export const reviewComplete = (body) => post('/review-complete', body);
 
+/** Re-queue the explanations that failed on a run. Pages and marks are not re-read. */
+export const explainRetry = (runId) => post('/explain-retry', { run_id: runId });
+
 /** Signed URLs for a page's stored image and mask. */
 export const pageAssetUrls = (body) => post('/page-asset-urls', body);
 
