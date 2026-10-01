@@ -849,6 +849,7 @@ function paintReview() {
       : paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review',
     lead: S.review.lead,
     delta: S.review.delta,
+    noTotal: S.review.noTotal,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
     saving: S.saving,

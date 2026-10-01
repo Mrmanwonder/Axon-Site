@@ -7,6 +7,7 @@ import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import { useIngestion } from "../data/useIngestion";
 import PageSkeleton from "../components/PageSkeleton";
+import { isCompleteTotal } from "../data/paperTotals";
 
 const CAUSE = {
   conceptual_gap: { hue: "var(--cause-conceptual-gap)", label: "Concept gap" },
@@ -51,7 +52,9 @@ export default function Insights() {
     (tier === "all" || p.tier === tier) &&
     (range === "all" || new Date(p.date_taken).getTime() >= Date.now() - 90 * 86400000)
   ), [papers, subject, type, range, tier]);
-  const trend = filtered.filter((p) => p.total_available != null && p.total_awarded != null).reverse();
+  // A partial total (some marks unreadable) is a lower bound and never enters a trend: comparing it
+  // with complete papers would draw a conclusion from missing marks.
+  const trend = filtered.filter((p) => p.total_available != null && p.total_awarded != null && isCompleteTotal(p)).reverse();
   const maxLost = Math.max(1, ...trend.map((p) => Number(p.total_available) - Number(p.total_awarded)));
   const allEvidence = subject === "all" && type === "all" && range === "all" && tier === "all";
   const entries = Object.entries(loss ?? {}).filter(([c, marks]) => c in CAUSE && marks > 0)

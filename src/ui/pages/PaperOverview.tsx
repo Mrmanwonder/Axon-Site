@@ -19,6 +19,7 @@ import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
 import { deletePaper, paperTypeLabel } from "../data/modules";
 import { numMark } from "../data/causes";
+import { isPartialTotal, totalNote } from "../data/paperTotals";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
 import { useSheetControls } from "../components/SheetProvider";
@@ -102,11 +103,17 @@ export default function PaperOverview() {
             {marksRows.length} of {attempts.length} part{attempts.length === 1 ? "" : "s"} marked
           </div>
           <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginTop: 4 }}>
+            {isPartialTotal(paper) && (
+              <span className="subnote" style={{ fontSize: 13, fontWeight: 500, marginRight: 6 }}>at least</span>
+            )}
             {numMark(sumAwarded)}<span style={{ color: "var(--label-3)", fontWeight: 500 }}>/{numMark(sumAvailable)}</span>
           </div>
 
           {/* We never assert our reading is right against the paper's own
               total — we state both and let the student judge. */}
+          {totalNote(paper) && (
+            <div className="subnote" style={{ marginTop: 10 }}>{totalNote(paper)}</div>
+          )}
           {paper.reconciled === false && paper.reported_total != null && (
             <div className="subnote" style={{ marginTop: 10 }}>
               Our reading adds up to {numMark(sumAwarded)}, and the total on your paper is{" "}
