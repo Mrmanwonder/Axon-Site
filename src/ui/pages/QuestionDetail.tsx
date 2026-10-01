@@ -19,10 +19,10 @@
    actually reporting.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { deleteQuestion, paperTypeLabel } from "../data/modules";
+import { deleteQuestion, explainRetry, paperTypeLabel } from "../data/modules";
 import type { StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
@@ -83,12 +83,38 @@ export default function QuestionDetail() {
     title: "Shared question from Axon",
   });
 
-  const { paper, error } = usePaperResource(student?.id, paperId);
+  const { paper, error, reload } = usePaperResource(student?.id, paperId);
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
   const [picked, setPicked] = useState<Segment | null>(null);
 
   const attempt: StudentAttempt | undefined = paper?.student_attempt.find((a) => a.id === qId);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const explainStatus = paper?.question_region.find((r) => r.committed_attempt_id === qId)?.explain_status ?? null;
+
+  // While an explanation is being written the screen checks back, so the answer
+  // appears without a manual refresh. Reads are cheap and cached; nothing is polled
+  // once the region has settled.
+  const writing = explainStatus === "queued" || explainStatus === "running";
+  useEffect(() => {
+    if (!writing) return;
+    const t = window.setInterval(() => { void reload(); }, 8000);
+    return () => window.clearInterval(t);
+  }, [writing, reload]);
+
+  const retryExplanation = async (runId: string) => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      await explainRetry(runId);
+      await reload();
+    } catch (e) {
+      setRetryError(e instanceof Error ? e.message : "That did not start. Try again in a moment.");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (loadError) {
     return (
@@ -380,7 +406,29 @@ export default function QuestionDetail() {
           </div>
         )}
 
-        {!loss && marksLost != null && marksLost > 0 && (
+        {!loss && marksLost != null && marksLost > 0 && explainStatus === "failed" && region && (
+          <div className="subnote" style={{ margin: "10px 0 0" }}>
+            <div>We couldn&rsquo;t write the explanation for this one. Your marks and the page are unchanged.</div>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ marginTop: 8 }}
+              disabled={retrying}
+              onClick={() => { void retryExplanation(region.run_id); }}
+            >
+              {retrying ? "Starting\u2026" : "Try again"}
+            </button>
+            {retryError && <div style={{ marginTop: 6 }}>{retryError}</div>}
+          </div>
+        )}
+
+        {!loss && marksLost != null && marksLost > 0 && writing && (
+          <div className="subnote" style={{ margin: "10px 0 0" }}>
+            The explanation for this one is being written. It will appear here.
+          </div>
+        )}
+
+        {!loss && marksLost != null && marksLost > 0 && explainStatus !== "failed" && !writing && (
           <div className="subnote" style={{ margin: "10px 0 0" }}>
             Marks were lost here, but we don&rsquo;t have an explanation for this one yet.
           </div>
