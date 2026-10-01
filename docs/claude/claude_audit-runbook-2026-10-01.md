@@ -2,7 +2,7 @@
 
 One scheduled run = one pass over the checks below, diffed against the last checkpoint, producing **only new or changed findings** in Linear and **one** consolidated summary. It is read-only everywhere except Linear.
 
-Status: runbook complete; scheduled as a nightly Routine (see "Scheduling"). Daytime reconciliation uses the same runbook with `mode=quiet` (no summary, findings only) and is **not** scheduled yet (decision for the owner: it doubles run cost and mostly repeats the nightly result).
+Status: runbook complete; a nightly Routine is created but **disabled until connectors are attached** (see "Scheduling"). Daytime reconciliation uses the same runbook with `mode=quiet` (no summary, findings only) and is **not** scheduled yet (decision for the owner: it doubles run cost and mostly repeats the nightly result).
 
 ## 1. Authoritative sources (what each run inspects)
 
@@ -72,4 +72,10 @@ A Linear **project status update** (health: on track / at risk / off track from 
 
 ## 7. Scheduling
 
-Implemented as a Routine (nightly, 22:47 IST) whose prompt is this runbook's procedure verbatim in short form and which keeps its checkpoint in the Linear document above. Pause with `update_trigger enabled=false`; delete with `delete_trigger`. The first run builds the baseline and posts only the baseline summary.
+A Routine exists: `trig_015cdGUoTVgsgY6yTFkEGryE` "Axon nightly audit", 22:47 IST daily, fresh session each run, checkpoint in the Linear document linked in the prompt.
+
+**It is created but disabled, and cannot run usefully yet.** The routines API refused the `connectors` parameter for this organisation, so the routine stores no MCP connectors and a fired session would have no Linear, Supabase or GitHub tools. The prompt tells it to stop and report UNAVAILABLE in that case, so enabling it as-is would only burn a session each night.
+
+BLOCKED-ON-HUMAN: open the routine in the claude.ai Routines UI, attach the Linear, Supabase and GitHub connectors (and Cloudflare if wanted), then enable it. Do a manual first run with `fire_trigger` and check that the baseline summary and checkpoint are written before leaving it on.
+
+Pause with `update_trigger enabled=false`; delete with `delete_trigger`. The first run builds the baseline (checkpoint is seeded `partial: true`) and posts only the baseline summary.
