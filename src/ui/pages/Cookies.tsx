@@ -1,6 +1,7 @@
 import LegalPage from "./LegalPage";
+import { SUPPORT_EMAIL } from "../lib/legal";
 
-const email = "support@axonstudy.online";
+const email = SUPPORT_EMAIL;
 
 export default function Cookies() {
   return (

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import DocumentMeta from "../components/DocumentMeta";
 import { paths } from "../app/paths";
 import META from "./publicMetadata.json";
+import { LEGAL_EFFECTIVE_DATE, LEGAL_LAST_UPDATED } from "../lib/legal";
 
 type LegalKind = "privacy" | "terms" | "cookies";
 type Props = { kind: LegalKind; children: ReactNode };
@@ -19,7 +20,7 @@ export default function LegalPage({ kind, children }: Props) {
       <main className="legal-content" id="main-content">
         <p className="eyebrow">Legal</p>
         <h1>{meta.heading}</h1>
-        <p className="updated">Effective 22 September 2026 · Last updated 22 September 2026</p>
+        <p className="updated">Effective {LEGAL_EFFECTIVE_DATE} · Last updated {LEGAL_LAST_UPDATED}</p>
         {children}
       </main>
       <footer className="public-footer">
