@@ -6,7 +6,7 @@
 -- rolled-back routes so nobody reintroduces that pairing silently.
 --
 --   Run:  psql "$DATABASE_URL" -f supabase/tests/axo_123_explain_route.sql
---   Pass: final SELECT reports failed = 0.
+--   Pass: the counts line reports failed = 0.
 -- ============================================================================
 
 begin;
@@ -30,7 +30,8 @@ select public._t(
   exists (select 1 from information_schema.columns
           where table_schema = 'public' and table_name = 'model_call' and column_name = 'reasoning_tokens'));
 
-select name, passed, detail from public._r order by seq;
-select count(*) filter (where not passed) as failed, count(*) as total from public._r;
+select count(*) as total, count(*) filter (where passed) as passed,
+       count(*) filter (where not passed) as failed from public._r;
+select seq, name, passed, detail from public._r where not passed order by seq;
 
 rollback;
