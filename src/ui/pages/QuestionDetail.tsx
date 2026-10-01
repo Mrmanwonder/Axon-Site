@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { deleteQuestion, explainRetry, paperTypeLabel } from "../data/modules";
+import { deleteQuestion, explainRetry, paperTypeLabel, recordExplanationFeedback } from "../data/modules";
 import type { StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
@@ -70,6 +70,35 @@ const CONF_LABEL: Record<string, string> = {
   likely: "Likely",
   unsure: "Unsure",
 };
+
+/* Two quiet buttons under an explanation. The answer is acknowledged once and never
+   explained back ("kept" vs "not kept" depends on a consent the student should not
+   have to think about here), and there is no streak, count or reward. */
+function ExplanationVerdict({ attemptId }: { attemptId: string }) {
+  const [state, setState] = useState<"idle" | "sending" | "done" | "failed">("idle");
+  const send = async (helped: boolean) => {
+    setState("sending");
+    try {
+      await recordExplanationFeedback(attemptId, helped);
+      setState("done");
+    } catch {
+      setState("failed");
+    }
+  };
+  if (state === "done") return <div className="subnote" style={{ marginTop: 10 }}>Noted.</div>;
+  return (
+    <div className="subnote" style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <span>Did this explanation help?</span>
+      <button type="button" className="btn ghost" disabled={state === "sending"} onClick={() => { void send(true); }}>
+        Helped
+      </button>
+      <button type="button" className="btn ghost" disabled={state === "sending"} onClick={() => { void send(false); }}>
+        Not right
+      </button>
+      {state === "failed" && <span>That did not send. Try again.</span>}
+    </div>
+  );
+}
 
 export default function QuestionDetail() {
   const { paperId, qId } = useParams();
@@ -332,6 +361,7 @@ export default function QuestionDetail() {
                 <MathText text={loss.ai_explanation} />
               </div>
             )}
+            {loss.ai_explanation && <ExplanationVerdict attemptId={attempt.id} />}
             {/* What an ungrounded diagnosis was actually written from. The
                 working is withheld on this row; presenting the prose beside it
                 in the same type, under the same heading, would assert the

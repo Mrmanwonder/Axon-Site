@@ -165,6 +165,30 @@ select public._t('cost_paise is derived from cost_usd once an fx rate exists',
   (select cost_paise::text || ' vs ' || round(cost_usd * 100 * 100)::text from public.extraction_run
     where id = 'aaaaaaaa-0000-4000-8000-000000000010'));
 
+-- ── the worker's role ──────────────────────────────────────────────────────
+-- The pipeline inserts model_call as service_role. The triggers once ran as the caller and
+-- failed with "permission denied for schema private", silently dropping every row. Everything
+-- above ran as the table owner and could not see that; this block inserts as the real role.
+
+do $$
+begin
+  set local role service_role;
+  begin
+    insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
+        input_tokens, output_tokens, service_tier, attempt)
+    values ('aaaaaaaa-0000-4000-8000-000000000010', 'explain', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-lite',
+        'paper_feedback.v2', true, 1000, 200, 'standard', 1);
+    reset role;
+    perform public._t('service_role can insert model_call rows through the cost triggers', true);
+  exception when others then
+    reset role;
+    perform public._t('service_role can insert model_call rows through the cost triggers', false, sqlerrm);
+  end;
+end $$;
+
+select public._t('the row inserted as service_role was priced',
+  (select cost_usd is not null and cost_basis = 'price_table' from public.model_call order by id desc limit 1));
+
 select count(*) as total, count(*) filter (where passed) as passed,
        count(*) filter (where not passed) as failed from public._r;
 select seq, name, passed, detail from public._r where not passed order by seq;
