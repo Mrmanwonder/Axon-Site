@@ -29,9 +29,11 @@ await ctx.route(/https:\/\/us\.i\.posthog\.com\/.*/, async (route) => {
 const RC = { token: "x", supportedCompression: ["gzip", "gzip-js"], hasFeatureFlags: false, captureDeadClicks: true, capturePerformance: false, autocapture_opt_out: false, autocaptureExceptions: false, sessionRecording: { endpoint: "/s/", consoleLogRecordingEnabled: false, recorderVersion: "v2", sampleRate: null, minimumDurationMilliseconds: null, linkedFlag: null, networkPayloadCapture: null, masking: null, urlTriggers: [], urlBlocklist: [], eventTriggers: [], triggerMatchType: null }, surveys: false, heatmaps: false, defaultIdentifiedOnly: true, siteApps: [] };
 await ctx.route(/https:\/\/us-assets\.i\.posthog\.com\/.*/, async (route) => {
   const u = new URL(route.request().url()); const h = { "access-control-allow-origin": "*" };
+  const tokenSeg = u.pathname.split("/")[2] ?? "";
+  if (!/^[A-Za-z0-9_]+$/.test(tokenSeg) && /\/array\//.test(u.pathname)) return route.fulfill({ status: 404, body: "" }); // only a plain project token is echoed into generated JS
   if (/\/array\/.*\/config\.js$/.test(u.pathname)) return route.fulfill({ status: 200, contentType: "application/javascript", headers: h, body: `(function(){window._POSTHOG_REMOTE_CONFIG=window._POSTHOG_REMOTE_CONFIG||{};window._POSTHOG_REMOTE_CONFIG[${JSON.stringify(u.pathname.split("/")[2])}]={config:${JSON.stringify(RC)},siteApps:[]}})()` });
   if (/\/array\/.*\/config$/.test(u.pathname)) return route.fulfill({ status: 200, contentType: "application/json", headers: h, body: JSON.stringify(RC) });
-  const f = u.pathname.split("/").pop();
+  const f = (u.pathname.split("/").pop() ?? "").replace(/[^A-Za-z0-9._-]/g, "_");
   const p = (process.env.PH_STATIC_DIR || "./.ph-static") + "/" + f;
   if (fs.existsSync(p)) return route.fulfill({ status: 200, contentType: "application/javascript", headers: h, body: fs.readFileSync(p) });
   return route.fulfill({ status: 200, contentType: "application/javascript", headers: h, body: "" });
