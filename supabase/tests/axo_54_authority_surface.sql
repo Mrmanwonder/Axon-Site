@@ -77,6 +77,19 @@ select public._t('clients cannot create objects in any schema an elevated functi
   and not has_schema_privilege('anon', 'private', 'create')
   and not has_schema_privilege('authenticated', 'private', 'create'));
 
+select public._t('service-only tables grant clients nothing (RLS is not the only wall)',
+  not exists (
+    select 1 from unnest(array['model_call','model_route','eval_run','eval_result','r2_deletion','stripe_event',
+                               'fx_rate','model_price','scheme_document','scheme_source_policy']) t
+     where to_regclass('public.'||t) is not null
+       and (has_table_privilege('anon', ('public.'||t)::regclass, 'select,insert,update,delete')
+        or has_table_privilege('authenticated', ('public.'||t)::regclass, 'select,insert,update,delete'))),
+  (select string_agg(t, ', ') from unnest(array['model_call','model_route','eval_run','eval_result','r2_deletion','stripe_event',
+                               'fx_rate','model_price','scheme_document','scheme_source_policy']) t
+    where to_regclass('public.'||t) is not null
+      and (has_table_privilege('anon', ('public.'||t)::regclass, 'select,insert,update,delete')
+       or has_table_privilege('authenticated', ('public.'||t)::regclass, 'select,insert,update,delete'))));
+
 select public._t('anon has no USAGE on the private schema',
   not has_schema_privilege('anon', 'private', 'usage'));
 

@@ -45,3 +45,12 @@ grant execute on function private.consent_is_granted(uuid, uuid, text)      to a
 grant execute on function private.current_guardian_id()                     to authenticated, service_role; -- RLS subject
 grant execute on function private.guardian_is_pro(uuid)                     to authenticated, service_role; -- Pro depth in RLS
 grant execute on function private.owns_storage_student_prefix(text)         to authenticated, service_role; -- storage.objects RLS
+
+-- Service-only tables. RLS is on with no policy (deny-all to clients), but the
+-- default public-schema grants still gave anon/authenticated full table
+-- privileges, so a single `disable row level security` would expose
+-- model_call.student_id/error_detail, Stripe payloads and the deletion queue.
+-- Only the Workers (service_role) and postgres touch these.
+revoke all on table public.model_call, public.model_route, public.eval_run, public.eval_result,
+                    public.r2_deletion, public.stripe_event
+  from anon, authenticated;
