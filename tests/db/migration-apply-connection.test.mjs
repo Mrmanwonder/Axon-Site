@@ -30,5 +30,6 @@ test("every fragment of the password is redacted, including the pieces around a 
   const stderr = `psql: error: could not translate host name "part-two:x@aws-0-example.pooler.supabase.com" to address; password s3cret@part-two:x`;
   const out = redact(stderr, fragments);
   for (const piece of ["s3cret", "part-two", PASSWORD]) assert.ok(!out.includes(piece), `leaked ${piece}: ${out}`);
-  assert.ok(out.includes("aws-0-example.pooler.supabase.com"));
+  // Exactly the error, with only the secret replaced: nothing else is lost.
+  assert.equal(out, `psql: error: could not translate host name "***@aws-0-example.pooler.supabase.com" to address; password ***`);
 });

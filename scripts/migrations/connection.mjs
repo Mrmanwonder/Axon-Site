@@ -26,7 +26,13 @@ export function connectionEnv(raw) {
 /** Everything in the secret that must never reach a log, including fragments. */
 export function secretFragments(raw, env) {
   const parts = new Set([raw, env.PGPASSWORD, encodeURIComponent(env.PGPASSWORD)]);
-  for (const piece of `${env.PGPASSWORD}`.split(/[@:/?#]/)) if (piece.length >= 4) parts.add(piece);
+  const pw = `${env.PGPASSWORD}`;
+  for (const piece of pw.split(/[@:/?#]/)) parts.add(piece);
+  // libpq may cut the URI at any separator, so whatever lies before or after each
+  // one is a fragment it could print: mask those whole, not just the pieces.
+  for (let i = 0; i < pw.length; i++) {
+    if ("@:/?#".includes(pw[i])) { parts.add(pw.slice(0, i)); parts.add(pw.slice(i + 1)); }
+  }
   return [...parts].filter((p) => p && p.length >= 4);
 }
 
