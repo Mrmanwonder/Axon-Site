@@ -24,6 +24,7 @@ export const router = createBrowserRouter([
       { path: "scan", lazy: async () => ({ Component: (await import("../pages/Scan")).default }) },
       { path: "scan/review/:draftId", lazy: async () => ({ Component: (await import("../pages/PaperReview")).default }) },
       { path: "insights", lazy: async () => ({ Component: (await import("../pages/Insights")).default }) },
+      { path: "tutor", lazy: async () => ({ Component: (await import("../pages/Tutor")).default }) },
       { path: "settings", lazy: async () => ({ Component: (await import("../pages/Settings")).default }) },
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],

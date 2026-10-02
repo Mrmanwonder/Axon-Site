@@ -24,6 +24,13 @@ export const paths = {
   review: (draftId: string) => `/scan/review/${draftId}`,
   insights: "/insights",
   settings: "/settings",
+  tutor: (ctx: { paperId?: string; attemptId?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (ctx.paperId) q.set("paper", ctx.paperId);
+    if (ctx.paperId && ctx.attemptId) q.set("q", ctx.attemptId);
+    const s = q.toString();
+    return s ? `/tutor?${s}` : "/tutor";
+  },
 } as const;
 
 /* ── Overlay convention ──

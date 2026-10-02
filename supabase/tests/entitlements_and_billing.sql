@@ -276,8 +276,13 @@ select public._t('a successful retry restores Pro immediately',
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"a1111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"entitlements-a"}';
 
-select public._t('authenticated reads no stripe events',
-  (select count(*) = 0 from public.stripe_event));
+-- AXO-54: stronger than RLS returning nothing — the role holds no privilege.
+do $$ begin
+  perform count(*) from public.stripe_event;
+  perform public._t('authenticated reads no stripe events', false, 'select was permitted');
+exception when insufficient_privilege then
+  perform public._t('authenticated reads no stripe events', true, sqlstate);
+end $$;
 
 do $$ begin begin
   insert into public.stripe_event (id, type) values ('evt_forged', 'checkout.session.completed');
@@ -296,7 +301,7 @@ set local "request.jwt.claims" = '';
 select public._t('anon reads no entitlements-relevant tables',
   (select count(*) = 0 from public.pattern_insight)
   and (select count(*) = 0 from public.parent_progress_report)
-  and (select count(*) = 0 from public.stripe_event));
+  and not has_table_privilege('anon', 'public.stripe_event', 'select'));
 
 reset role;
 

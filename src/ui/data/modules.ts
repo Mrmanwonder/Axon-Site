@@ -520,6 +520,8 @@ export type PaperPage = {
 };
 
 export type QuestionRegionRef = {
+  /** Absent on offline copies cached before the tutor needed it. */
+  id?: string;
   run_id: string;
   /** queued | running | done | skipped | failed. The machine reason is deliberately not selected: it is not user copy. */
   explain_status: string | null;
@@ -666,6 +668,23 @@ export const explainRetry = scanApiMod.explainRetry as unknown as (
 export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
   paperId: string,
 ) => Promise<RetryPaperResult>;
+
+/** What `/tutor` returns (axon-intelligence TutorResponseSchema). */
+export type TutorReply = {
+  traceId: string;
+  status: "supported" | "partially_supported" | "insufficient_evidence" | "controlled_failure";
+  answer: string;
+  citations: { title: string; url: string }[];
+  verification: { passed: boolean; repaired: boolean; failures: string[] };
+};
+
+export const askTutor = scanApiMod.askTutor as unknown as (body: {
+  studentId: string;
+  message: string;
+  requestId: string;
+  paperId?: string;
+  questionId?: string;
+}) => Promise<TutorReply>;
 
 /** Signed URLs for a stored page and its mask. */
 export const pageAssetUrl = papersMod.pageAssetUrl as unknown as (

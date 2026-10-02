@@ -39,6 +39,7 @@ import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
+import { tutorEntryVisible } from "../data/tutor";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -470,6 +471,14 @@ export default function QuestionDetail() {
           </div>
         )}
       </div>
+
+      {tutorEntryVisible() && (
+        <div style={{ margin: "14px var(--gutter) 0" }}>
+          <Link to={paths.tutor({ paperId: paperId!, attemptId: attempt.id })} className="btn ghost" style={{ display: "inline-flex" }}>
+            Ask the tutor about this question
+          </Link>
+        </div>
+      )}
 
       <div className="subnote" style={{ margin: "16px var(--gutter) 0" }}>
         If the mark itself looks wrong, that is a conversation with your teacher — we go by what they wrote.

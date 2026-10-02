@@ -22,10 +22,10 @@ const REQUEST_TIMEOUT_MS = 20000;
 const RETRY_DELAY_MS = 1200;
 
 /** fetch(), but bounded and retried once on a network-level failure. */
-async function resilientFetch(url, init) {
+async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       return await fetch(url, { ...init, signal: controller.signal });
     } catch (error) {
@@ -42,7 +42,7 @@ async function resilientFetch(url, init) {
   }
 }
 
-async function post(path, body) {
+async function post(path, body, { timeoutMs } = {}) {
   const session = await currentSession();
   if (!session) {
     const err = new Error('Sign in first.');
@@ -59,7 +59,7 @@ let res;
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify(body),
-    });
+    }, timeoutMs);
   } catch {
     throw new Error('Could not reach the server. Check your connection and try again.');
   }
@@ -103,6 +103,14 @@ export const reviewComplete = (body) => post('/review-complete', body);
 
 /** Re-queue the explanations that failed on a run. Pages and marks are not re-read. */
 export const explainRetry = (runId) => post('/explain-retry', { run_id: runId });
+
+/**
+ * One tutor turn. The server binds it to the active Student Mode scope and
+ * loads any paper evidence itself; the body carries only ids and the question.
+ * A model answer with thinking can take well past the pipeline's 20 s, so this
+ * call waits longer before treating the connection as lost.
+ */
+export const askTutor = (body) => post('/tutor', body, { timeoutMs: 60000 });
 
 /** Signed URLs for a page's stored image and mask. */
 export const pageAssetUrls = (body) => post('/page-asset-urls', body);

@@ -22,6 +22,7 @@ import { numMark } from "../data/causes";
 import { isPartialTotal, totalNote } from "../data/paperTotals";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
+import { tutorEntryVisible } from "../data/tutor";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
@@ -123,6 +124,14 @@ export default function PaperOverview() {
               {numMark(Number(paper.reported_total))} — worth a look at the questions below.
             </div>
           )}
+        </div>
+      )}
+
+      {tutorEntryVisible() && attempts.length > 0 && (
+        <div style={{ margin: "12px var(--gutter) 0" }}>
+          <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost" style={{ display: "inline-flex" }}>
+            Ask the tutor about this paper
+          </Link>
         </div>
       )}
 
