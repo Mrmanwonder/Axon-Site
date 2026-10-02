@@ -4,12 +4,20 @@
 //
 //   SUPABASE_DB_URL=postgres://... node scripts/migrations/apply.mjs [--dry-run]
 //
-// Needs `psql` on PATH. Never prints the connection string.
+// Needs `psql` on PATH. Never prints the connection string or any part of it.
+//
+// The URL is parsed here once and handed to psql as PG* environment variables,
+// never as a URI argument. libpq and the WHATWG parser disagree about a raw "@"
+// in the password: run 37031953032 passed a URI whose password held an
+// unencoded "@", libpq read part of the password as the host name, and its
+// "could not translate host name" error printed that fragment into the job log.
+// GitHub only masks a secret as a whole string, so a fragment is not masked.
 import { spawnSync } from "node:child_process";
 import { writeFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listMigrations, planMigrations, readBaseline } from "./plan.mjs";
+import { connectionEnv, redact, secretFragments } from "./connection.mjs";
 
 const DIR = "supabase/migrations";
 const dry = process.argv.includes("--dry-run");
@@ -19,11 +27,24 @@ if (!url) {
   process.exit(2);
 }
 
+let env;
+try {
+  env = connectionEnv(url);
+} catch (error) {
+  console.error(error.message);
+  process.exit(2);
+}
+const fragments = secretFragments(url, env);
+if (process.env.GITHUB_ACTIONS) for (const f of fragments) console.log(`::add-mask::${f}`);
+
 function psql(args, input) {
-  const r = spawnSync("psql", [url, "-X", "-v", "ON_ERROR_STOP=1", ...args], { encoding: "utf8", input });
+  const r = spawnSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", ...args], {
+    encoding: "utf8",
+    input,
+    env: { ...process.env, SUPABASE_DB_URL: "", ...env },
+  });
   if (r.status !== 0) {
-    // psql echoes the failing statement, never the URL; keep stderr only.
-    console.error(r.stderr.trim());
+    console.error(redact(r.stderr.trim(), fragments));
     throw new Error(`psql exited with ${r.status}`);
   }
   return r.stdout;
