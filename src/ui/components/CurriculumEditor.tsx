@@ -217,7 +217,8 @@ export default function CurriculumEditor({
 
   const activeClass = selectedStage ? inferredClass(selectedStage.stage) ?? preferredClass ?? 11 : preferredClass ?? 11;
   const classIndex = Math.max(0, CLASS_LEVELS.indexOf(activeClass as typeof CLASS_LEVELS[number]));
-  const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(value.providerKey || "cambridge"));
+  // No board selected (unresolved identity) is shown as no board selected, not Cambridge.
+  const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(value.providerKey as typeof PROVIDER_KEYS[number]));
 
   const chooseProvider = (providerKey: "cambridge" | "cbse" | "ib") => {
     if (disabled || providerKey === value.providerKey) return;
@@ -315,7 +316,7 @@ export default function CurriculumEditor({
           aria-label="Board"
           style={{ "--active-index": boardIndex } as CSSProperties}
         >
-          <span className="curriculum-selector-glider" aria-hidden="true" />
+          {value.providerKey && <span className="curriculum-selector-glider" aria-hidden="true" />}
           {PROVIDER_KEYS.map(key => (
             <button
               key={key}

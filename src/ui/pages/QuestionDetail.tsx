@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { deleteQuestion, explainRetry, paperTypeLabel, recordExplanationFeedback } from "../data/modules";
+import { deleteQuestion, explainRetry, paperTypeLabel, providerKeyForStudent, recordExplanationFeedback } from "../data/modules";
 import type { StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import Crop from "../components/Crop";
@@ -216,7 +216,7 @@ export default function QuestionDetail() {
             <path d="M15 5 8 12l7 7" />
           </svg>
         </Link>
-        <div className="rvtitle">{paperTypeLabel(paper.type)}</div>
+        <div className="rvtitle">{paperTypeLabel(paper.type, providerKeyForStudent(student))}</div>
         <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
 

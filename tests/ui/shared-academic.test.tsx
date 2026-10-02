@@ -125,3 +125,25 @@ test("network failure is an admitted gap rather than an expired-link claim", asy
   expect(await screen.findByRole("heading", { name: "We couldn’t open this link" })).toBeTruthy();
   expect(screen.getByText("This shared item could not be opened right now.")).toBeTruthy();
 });
+
+test("shared feedback does not claim to know what went wrong; it states its basis", async () => {
+  const base = {
+    question_label: "1", question_text: "Q", student_answer: "A", marks_awarded: 1, max_marks: 2,
+    marks_source: "teacher_pen", extraction_confidence: "confirmed",
+    feedback: { cause: "presentation", marks_lost: 1, explanation: "E", do_this_next: "D", command_word: null,
+      command_word_note: null, loss_reasons: [], corrected_answer: null, corrected_answer_state: "unavailable" },
+  };
+  const paper = { type: "unit_test", tier: "tier_1", date_taken: "2026-09-20", subject: "Physics" };
+  fixture.resolve.mockResolvedValue({ found: true, kind: "question", expires_at: "2026-09-26T07:00:00Z", paper, question: { ...base, teacher_remark: "Show working" } });
+  const first = render(<SharedAcademic />);
+  expect(await screen.findByText(/Axon's reading of the lost marks/)).toBeTruthy();
+  expect(screen.queryByText("What went wrong")).toBeNull();
+  expect(screen.getByText(/Based on the teacher's marks and written remark/)).toBeTruthy();
+  first.unmount();
+
+  sessionStorage.clear();
+  window.history.replaceState({}, "", "/share#token=" + "a".repeat(64));
+  fixture.resolve.mockResolvedValue({ found: true, kind: "question", expires_at: "2026-09-26T07:00:00Z", paper, question: { ...base, teacher_remark: null } });
+  render(<SharedAcademic />);
+  expect(await screen.findByText(/Based on the teacher's marks only/)).toBeTruthy();
+});

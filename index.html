@@ -48,10 +48,10 @@
   @media (prefers-reduced-motion:reduce){.bootmark{animation:none;opacity:1}}
 </style>
 
-<!-- The face is font-display: block, so it must arrive early or the first paint
-     is blank text. Before the port it was a data URI inside this document and
-     painted on the first frame with no network at all; as a real asset it is one
-     request, preloaded here and cached immutably. -->
+<!-- The face is font-display: swap (see app.css), so text paints in the fallback
+     face immediately and swaps when this arrives; the preload keeps that swap
+     early. It is one real asset, cached for a week with background revalidation
+     (public/_headers). It is unfingerprinted, so it is deliberately not immutable. -->
 <link rel="preload" href="/fonts/onest-latin-var.woff2" as="font" type="font/woff2" crossorigin>
 
 <script>

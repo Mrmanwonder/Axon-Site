@@ -133,7 +133,7 @@ function payloadFor(url: URL) {
   if (key === "rpc/clear_student_scope") return true;
 
   if (key === "guardian") {
-    return { id: "guardian", name: "Parent", contact: "perf@example.test" };
+    return { id: "guardian", auth_user_id: runMarker, name: "Parent", contact: "perf@example.test" };
   }
   if (key === "student") return [student];
   if (key === "student_subject") {

@@ -50,7 +50,7 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
       return route.fulfill({ json: true });
     }
     const table = url.pathname.split('/').pop();
-    const data = table === 'guardian' ? { id: runMarker, name: 'Parent', contact: 'test@example.test' }
+    const data = table === 'guardian' ? { id: runMarker, auth_user_id: runMarker, name: 'Parent', contact: 'test@example.test' }
       : table === 'student' ? [student]
       : table === 'student_subject' ? [{ subject: 'Physics' }]
       : table === 'paper' ? (url.searchParams.has('id') ? detail : [paper])

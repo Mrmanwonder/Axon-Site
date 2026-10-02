@@ -9,6 +9,7 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock("../../src/cache.js", () => ({
   readThrough: vi.fn(),
+  putCached: vi.fn(),
   clearLocalData: async () => {
     fixture.trace.push("local");
     await fixture.clearLocal();

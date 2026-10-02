@@ -67,6 +67,34 @@ export function filterSensitiveAnalyticsEvent(event: AnalyticsEvent | null): Ana
   return event;
 }
 
+/**
+ * Privacy-critical PostHog options, kept as one exported object so a test can
+ * pin them. `maskAllText` is NOT a `session_recording` option (it is an
+ * autocapture internal) and was silently ignored in an earlier revision, which
+ * left replay text and scanned-paper images unmasked. The real controls are:
+ * - `maskAllInputs`: masks input values in replay.
+ * - `maskTextSelector: "*"`: masks all DOM text in replay (names, marks, remarks).
+ * - `blockSelector`: replaces images/canvas/video with placeholders; masking
+ *   text does not hide an image whose `src` is recorded.
+ * - `mask_all_text` / `mask_all_element_attributes`: strip text and attributes
+ *   from `$autocapture` events.
+ */
+export const POSTHOG_PRIVACY_CONFIG = {
+  autocapture: true,
+  capture_pageview: "history_change",
+  capture_pageleave: true,
+  capture_exceptions: true,
+  mask_all_text: true,
+  mask_all_element_attributes: true,
+  before_send: filterSensitiveAnalyticsEvent,
+  opt_out_capturing_by_default: true,
+  session_recording: {
+    maskAllInputs: true,
+    maskTextSelector: "*",
+    blockSelector: "img, picture, canvas, video",
+  },
+} as const;
+
 export function getAnalyticsConsent(): AnalyticsConsent {
   if (typeof window === "undefined") return null;
   try {
@@ -149,16 +177,7 @@ export function initAnalytics() {
     api_host: apiHost,
     ui_host: "https://us.posthog.com",
     defaults: "2026-05-30",
-    autocapture: true,
-    capture_pageview: "history_change",
-    capture_pageleave: true,
-    capture_exceptions: true,
-    before_send: filterSensitiveAnalyticsEvent,
-    opt_out_capturing_by_default: true,
-    session_recording: {
-      maskAllInputs: true,
-      maskAllText: true,
-    },
+    ...POSTHOG_PRIVACY_CONFIG,
     persistence: "localStorage+cookie",
     loaded: () => {
       state = "ready";

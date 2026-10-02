@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, retryFailedPaper, searchLibrary } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent, retryFailedPaper, searchLibrary } from "../data/modules";
 import { isPartialTotal } from "../data/paperTotals";
 import type { LibrarySearchHit, Paper, ProgressRow } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
@@ -119,7 +119,8 @@ function marksLost(paper: Record<string, unknown>): number | null {
 }
 
 export default function Library() {
-  const { papers, papersError, papersResource, progressResource, refreshLibrary } = useApp();
+  const { papers, papersError, papersResource, progressResource, refreshLibrary, student } = useApp();
+  const providerKey = providerKeyForStudent(student);
 
   const navigate = useNavigate();
   const toast = useToast();
@@ -170,7 +171,7 @@ export default function Library() {
   }, [papers]);
 
   const types = useMemo(
-    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a).localeCompare(paperTypeLabel(b))),
+    () => [...new Set(papers.map((paper) => paper.type))].sort((a, b) => paperTypeLabel(a, providerKey).localeCompare(paperTypeLabel(b, providerKey))),
     [papers],
   );
 
@@ -303,7 +304,7 @@ export default function Library() {
   ];
   const typeOptions: AppDropdownOption[] = [
     { value: "all", label: "All types" },
-    ...types.map((item) => ({ value: item, label: paperTypeLabel(item) })),
+    ...types.map((item) => ({ value: item, label: paperTypeLabel(item, providerKey) })),
   ];
   const tierOptions: AppDropdownOption[] = [
     { value: "any", label: "Any tier" },
@@ -422,7 +423,7 @@ export default function Library() {
             <>
               <Thumb />
               <div className="b">
-                <div className="t1">{subjectInfo.label} · {paperTypeLabel(p.type)}</div>
+                <div className="t1">{subjectInfo.label} · {paperTypeLabel(p.type, providerKey)}</div>
                 <div className="t2">
                   <span>{pages ? `${pages} page${pages === 1 ? "" : "s"}` : "Paper"}</span>
                   <span>·</span>

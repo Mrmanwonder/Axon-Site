@@ -12,6 +12,25 @@
 /fonts/*
   Cache-Control: public, max-age=604800, stale-while-revalidate=86400
 
+# Unfingerprinted brand/icon files were revalidated on every page load
+# (max-age=0). They change rarely; a day fresh plus a week of background
+# revalidation removes the per-load round trip without making a logo swap
+# unreachable. /assets/* stays the only immutable path.
+/favicon.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/favicon.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/axon-logo.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/axon-logo.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/axon-lockup-v2.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 /share
   X-Robots-Tag: noindex, nofollow
 

@@ -1,0 +1,72 @@
+name: Apply migrations
+
+# Applies supabase/migrations/ to the live project when they land on main, so a
+# merged migration can no longer sit unapplied while the code that reads it
+# ships (it happened twice; see supabase/migrations/README.md).
+#
+# What it does and does not do:
+#   * Applies only files whose NAME the live ledger lacks (scripts/migrations/
+#     plan.mjs). Versions are not compared: the MCP stamps application time, so
+#     file and ledger versions legitimately differ.
+#   * Each file runs in one transaction with its ledger row. A failure rolls that
+#     file back, fails this job, and the next run retries it.
+#   * It never runs on a pull request and never sees a PR author's code with the
+#     secret: it triggers on push to main only.
+#   * Order is the human's, not this job's: apply-before-merge is still the rule
+#     for code that READS a new column, so run "Dry run" from the Actions tab
+#     (or merge the migration PR first, then the code PR).
+#
+# One-time setup (a person, once): repository secret SUPABASE_DB_URL = the
+# project's Postgres connection string (Dashboard -> Connect -> "Session
+# pooler", the postgres role). Until it exists this job fails on purpose; a
+# skipped job is how the problem went unnoticed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/migrations/**"
+      - ".github/workflows/migrate.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be applied; change nothing"
+        type: boolean
+        default: true
+
+concurrency:
+  group: apply-migrations
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: apply pending migrations
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Require the connection secret
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error title=SUPABASE_DB_URL is not set::Migrations were NOT applied. Add the repository secret (see the comment at the top of .github/workflows/migrate.yml)."
+            exit 1
+          fi
+
+      - name: Unit tests for the planner
+        run: node --test tests/db/migration-plan.test.mjs
+
+      - name: Apply
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
+        run: node scripts/migrations/apply.mjs $DRY | tee "$GITHUB_STEP_SUMMARY"

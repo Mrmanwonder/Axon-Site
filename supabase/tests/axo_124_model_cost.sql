@@ -54,6 +54,9 @@ select public._t('clients cannot read fx_rate',
 -- 3.1 Flash-Lite: $0.25 in / $1.50 out per 1M.  10,000 in + 2,000 out
 -- = 0.0025 + 0.0030 = 0.005500
 
+-- The migrations now seed a dated INR rate; clear it first (rolled back) so cost_paise starts untouched.
+delete from public.fx_rate;
+
 insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
                                input_tokens, output_tokens, billed_output_tokens)
 values ('aaaaaaaa-0000-4000-8000-000000000010','explain','gemini-3.1-flash-lite','gemini-3.1-flash-lite','t.v1', true,
@@ -73,7 +76,9 @@ values ('aaaaaaaa-0000-4000-8000-000000000010','content','gemini-3.1-flash-lite'
 select public._t('without a billed total, completion plus reasoning tokens are billed as output',
   (select cost_usd = 0.005500 from public.model_call order by id desc limit 1));
 
--- cached tokens are billed at the input price until a cached rate is set
+-- cached tokens are billed at the input price until a cached rate is set. The price table now
+-- carries cached rates, so this fixture clears them (rolled back) to exercise the fallback.
+update public.model_price set cached_input_per_mtok = null where model = 'gemini-3.1-flash-lite' and tier = 'standard';
 insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
                                input_tokens, cached_tokens, billed_output_tokens)
 values ('aaaaaaaa-0000-4000-8000-000000000010','structure','gemini-3.1-flash-lite','gemini-3.1-flash-lite','t.v1', true,

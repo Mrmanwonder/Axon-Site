@@ -188,34 +188,63 @@ export function stageLabelFromKey(key) {
   }[key] ?? key ?? '';
 }
 
+/** Boards that legitimately mean Cambridge on a pre-multi-curriculum profile. */
+const LEGACY_CAMBRIDGE_BOARDS = new Set(['CAIE', 'IGCSE', 'AS_A_LEVEL']);
+
+/**
+ * Provider for a legacy `student.board`. Only the explicit legacy values map;
+ * anything else is unknown (null). CLAUDE.md / AXO-94: no layer may let missing
+ * or unrecognised identity silently become Cambridge.
+ */
+export function providerKeyForBoard(board) {
+  if (board === 'CBSE') return 'cbse';
+  if (board === 'IBDP') return 'ib';
+  if (LEGACY_CAMBRIDGE_BOARDS.has(board)) return 'cambridge';
+  return null;
+}
+
+/** Normalised provider for a student row: stored key first, then explicit board, else null. */
+export function providerKeyForStudent(student) {
+  const stored = student?.provider_key;
+  if (PROVIDER_KEYS.includes(stored)) return stored;
+  return providerKeyForBoard(student?.board);
+}
+
+const UNRESOLVED_IDENTITY = Object.freeze({ providerKey: null, programmeKey: null, stageKey: null });
+
 export function legacyCurriculumForStudent(student = {}) {
   if (student.programme_key && student.stage_key) {
     return {
-      providerKey: student.provider_key,
+      providerKey: student.provider_key ?? null,
       programmeKey: student.programme_key,
       stageKey: student.stage_key,
     };
   }
+  const providerKey = providerKeyForBoard(student.board);
   const n = Number(student.class_level);
-  if (student.board === 'CBSE') {
+  const validClass = Number.isInteger(n) && n >= 9 && n <= 12;
+  // Unknown board, or a class that is not 9-12, stays unresolved. The caller
+  // renders an explicit "could not be resolved" state; we never guess a stage.
+  if (!providerKey) return { ...UNRESOLVED_IDENTITY };
+  if (providerKey === 'cbse') {
+    if (!validClass) return { providerKey, programmeKey: null, stageKey: null };
     return {
-      providerKey: 'cbse',
+      providerKey,
       programmeKey: n <= 10 ? 'cbse_secondary' : 'cbse_senior_secondary',
       stageKey: `cbse_${n}`,
     };
   }
-  if (student.board === 'IBDP') {
-    return { providerKey: 'ib', programmeKey: 'ibdp', stageKey: null };
-  }
+  if (providerKey === 'ib') return { providerKey, programmeKey: 'ibdp', stageKey: null };
+  if (!validClass) return { providerKey, programmeKey: null, stageKey: null };
   if (n <= 10) {
     return {
-      providerKey: 'cambridge',
+      providerKey,
       programmeKey: 'cambridge_igcse',
       stageKey: n === 9 ? 'cambridge_igcse_y10' : 'cambridge_igcse_y11',
     };
   }
   return {
-    providerKey: 'cambridge',
+    providerKey,
     programmeKey: n === 11 ? 'cambridge_as' : 'cambridge_a_level',
     stageKey: n === 11 ? 'cambridge_as' : 'cambridge_a_level',
   };
@@ -235,7 +264,8 @@ export function assessmentRulesFor({ providerKey, programmeKey } = {}) {
     supportsTeacherPenMarks: true,
     officialSchemeTerminology: provider === 'cbse' ? 'marking scheme'
       : provider === 'ib' ? 'markscheme'
-      : 'mark scheme',
+      : provider === 'cambridge' ? 'mark scheme'
+      : 'marking scheme',
     paperLabels: paperLabelsFor(provider),
   };
 }
@@ -247,7 +277,11 @@ export function paperLabelsFor(providerKey) {
   if (providerKey === 'ib') {
     return { pyq: 'Examination paper', sample_paper: 'Official sample paper' };
   }
-  return { pyq: 'Cambridge past paper', sample_paper: 'Specimen paper' };
+  if (providerKey === 'cambridge') {
+    return { pyq: 'Cambridge past paper', sample_paper: 'Specimen paper' };
+  }
+  // Unknown or missing provider: neutral vocabulary. Never assume Cambridge.
+  return { pyq: 'Past paper', sample_paper: 'Sample paper' };
 }
 
 // ── Legacy compatibility ───────────────────────────────────────────────────
@@ -262,17 +296,20 @@ export const STAGES = [
   { stage: 'a_level', label: 'A Level', classLevels: [12] },
 ];
 const YEAR_OF_CLASS = { 9: 10, 10: 11, 11: 12, 12: 13 };
+/** The Cambridge stage for a class level, or null — an invalid class is not IGCSE. */
 export function stageForClass(classLevel) {
   const n = Number(classLevel);
-  return STAGES.find((s) => s.classLevels.includes(n)) ?? STAGES[0];
+  return STAGES.find((s) => s.classLevels.includes(n)) ?? null;
 }
 export function classLabel(classLevel) {
   const n = Number(classLevel);
-  return `${stageForClass(n).label} · Year ${YEAR_OF_CLASS[n] ?? n}`;
+  const stage = stageForClass(n);
+  return stage ? `${stage.label} · Year ${YEAR_OF_CLASS[n] ?? n}` : 'Stage not set';
 }
 export function classLabelShort(classLevel) {
   const n = Number(classLevel);
   const stage = stageForClass(n);
+  if (!stage) return 'Stage not set';
   return stage.stage === 'igcse' ? `IGCSE Y${YEAR_OF_CLASS[n]}` : stage.label;
 }
 export function nextClassLevel(classLevel) {
