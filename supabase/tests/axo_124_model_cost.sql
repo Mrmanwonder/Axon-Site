@@ -54,6 +54,9 @@ select public._t('clients cannot read fx_rate',
 -- 3.1 Flash-Lite: $0.25 in / $1.50 out per 1M.  10,000 in + 2,000 out
 -- = 0.0025 + 0.0030 = 0.005500
 
+-- The migrations now seed a dated INR rate; clear it first (rolled back) so cost_paise starts untouched.
+delete from public.fx_rate;
+
 insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
                                input_tokens, output_tokens, billed_output_tokens)
 values ('aaaaaaaa-0000-4000-8000-000000000010','explain','gemini-3.1-flash-lite','gemini-3.1-flash-lite','t.v1', true,
@@ -149,8 +152,6 @@ select public._t('extraction_run.cost_usd equals the sum of its calls',
      from public.extraction_run r where r.id = 'aaaaaaaa-0000-4000-8000-000000000010'));
 
 -- ── cost_paise follows only when an fx rate exists ─────────────────────────
--- The migrations now seed a dated INR rate; clear it (rolled back) to exercise the no-rate case.
-delete from public.fx_rate;
 
 select public._t('cost_paise is untouched while no fx rate is set',
   (select cost_paise = 0 from public.extraction_run where id = 'aaaaaaaa-0000-4000-8000-000000000010'));
