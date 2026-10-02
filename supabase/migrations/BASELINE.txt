@@ -14,3 +14,7 @@
 # ledger: its schema, both tables, seven functions and the cause-verdict trigger
 # are all present (checked 2026-10-02), but there is no ledger row.
 20261001190000_learning_schema
+#
+# axo_124_no_printed_total was applied live in two parts (axo_124_no_printed_total_schema,
+# axo_124_no_printed_total_commit_and_view, 20261001204112 and 20261001204131).
+20261002002000_axo_124_no_printed_total
