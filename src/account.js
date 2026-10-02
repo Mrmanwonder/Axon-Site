@@ -32,7 +32,10 @@ async function section(name, query) {
  * contain data this account is entitled to see — an export cannot become a leak.
  */
 export async function exportMyData(guardian) {
-  const [students, papers, pages, attempts, losses, unreadable, prefs, consents] = await Promise.all([
+  const [
+    students, papers, pages, attempts, losses, unreadable, prefs, consents,
+    runs, regions, marks, explanations,
+  ] = await Promise.all([
     section('profiles', sb.from('student').select('*')),
     section('papers', sb.from('paper').select('*')),
     section('pages', sb.from('paper_page').select('*')),
@@ -41,26 +44,21 @@ export async function exportMyData(guardian) {
     section('unreadable pages', sb.from('page_unreadable').select('*')),
     section('preferences', sb.from('app_preference').select('*')),
     consentHistory(guardian.id),
+    section('extraction runs', sb.from('extraction_run').select('*')),
+    section('question regions', sb.from('question_region').select('*')),
+    section('teacher marks', sb.from('teacher_mark').select('*')),
+    section('explanations', sb.from('region_explanation').select('*')),
   ]);
 
   return {
-    export_schema_version: '1.0.0',
+    export_schema_version: '1.1.0',
     exported_at: new Date().toISOString(),
     note:
       'Your papers themselves are files, not rows. They are not included here — ' +
       'download them from Library, or ask us and we will send them.',
-    // Named rather than silently absent. The extraction pipeline's own records
-    // — runs, question regions and their provenance, teacher marks and the
-    // explanations built from them — are not in this file yet. Saying so is
-    // the difference between an admitted gap and a download that quietly means
-    // less than its button promises. Tracked as the server-side export (the
-    // re-audit's §19), which is where completeness can actually be enforced.
-    not_included_yet: [
-      'extraction_run',
-      'question_region and its provenance boxes',
-      'teacher_mark',
-      'region_explanation',
-    ],
+    // Anything we hold that is not in this file is named here, never silently
+    // absent. Empty means nothing is missing.
+    not_included_yet: [],
     guardian: {
       name: guardian.name,
       contact: guardian.contact,
@@ -75,6 +73,10 @@ export async function exportMyData(guardian) {
     attempts,
     mark_loss_events: losses,
     unreadable_pages: unreadable,
+    extraction_runs: runs,
+    question_regions: regions,
+    teacher_marks: marks,
+    region_explanations: explanations,
     preferences: prefs,
     consent_history: consents,
   };
