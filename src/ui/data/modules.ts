@@ -90,6 +90,8 @@ export type Paper = {
   subject_verified_at?: string | null;
   total_awarded?: number | null;
   total_available?: number | null;
+  total_basis?: "printed" | "added_up" | null;
+  total_partial?: boolean | null;
   stated_maximum?: number | null;
   [k: string]: unknown;
 };
@@ -543,6 +545,8 @@ export type PaperDetail = {
   stated_maximum: number | null;
   total_awarded: number | null;
   total_available: number | null;
+  total_basis: "printed" | "added_up" | null;
+  total_partial: boolean;
   reconciled: boolean | null;
   paper_page: PaperPage[];
   page_unreadable: { page_number: number; reason: string; storage_path: string | null }[];
