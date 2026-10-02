@@ -73,7 +73,9 @@ values ('aaaaaaaa-0000-4000-8000-000000000010','content','gemini-3.1-flash-lite'
 select public._t('without a billed total, completion plus reasoning tokens are billed as output',
   (select cost_usd = 0.005500 from public.model_call order by id desc limit 1));
 
--- cached tokens are billed at the input price until a cached rate is set
+-- cached tokens are billed at the input price until a cached rate is set. The price table now
+-- carries cached rates, so this fixture clears them (rolled back) to exercise the fallback.
+update public.model_price set cached_input_per_mtok = null where model = 'gemini-3.1-flash-lite' and tier = 'standard';
 insert into public.model_call (run_id, stage, requested_model, model_id, prompt_version, ok,
                                input_tokens, cached_tokens, billed_output_tokens)
 values ('aaaaaaaa-0000-4000-8000-000000000010','structure','gemini-3.1-flash-lite','gemini-3.1-flash-lite','t.v1', true,
@@ -147,6 +149,8 @@ select public._t('extraction_run.cost_usd equals the sum of its calls',
      from public.extraction_run r where r.id = 'aaaaaaaa-0000-4000-8000-000000000010'));
 
 -- ── cost_paise follows only when an fx rate exists ─────────────────────────
+-- The migrations now seed a dated INR rate; clear it (rolled back) to exercise the no-rate case.
+delete from public.fx_rate;
 
 select public._t('cost_paise is untouched while no fx rate is set',
   (select cost_paise = 0 from public.extraction_run where id = 'aaaaaaaa-0000-4000-8000-000000000010'));
