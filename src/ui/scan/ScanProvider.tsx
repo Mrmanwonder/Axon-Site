@@ -67,6 +67,7 @@ export type ReviewModel = {
   title: string;
   lead?: string;
   delta?: { message: string; ours: number; theirs: number } | null;
+  noTotal?: string | null;
   outstanding: number;
   cleanCount: number;
   saving?: boolean;

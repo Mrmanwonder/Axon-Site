@@ -219,6 +219,8 @@ export default function ReviewSheet() {
           </div>
         )}
 
+        {review.noTotal && <div className="subnote" style={{ marginTop: 14 }}>{review.noTotal}</div>}
+
         {review.lead && <div className="subnote" style={{ marginTop: 14 }}>{review.lead}</div>}
 
         {review.questions.map((q) => (

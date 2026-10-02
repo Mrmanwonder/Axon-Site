@@ -55,7 +55,7 @@ async function assessmentRulesForStudent(studentId) {
 export async function loadReview(runId) {
   const { data: run, error } = await sb
     .from('extraction_run')
-    .select('id, paper_id, student_id, status, reconciled, reconcile_delta, tier_routing')
+    .select('id, paper_id, student_id, status, reconciled, reconcile_delta, status_reason_code, tier_routing')
     .eq('id', runId)
     .single();
   if (error) throw error;
@@ -134,6 +134,7 @@ export async function loadReview(runId) {
     questions,
     pagesUnreadable: unreadable ?? [],
     delta: deltaFor(run, paper),
+    noTotal: noTotalFor(run),
     // Every headline shows its sample size; this is that screen's version of it.
     lead: leadFor(questions, pages ?? []),
     // Every unconfirmed region, not just the doubtful ones. commit_extraction_run
@@ -163,6 +164,16 @@ function deltaFor(run, paper) {
     ours: Number(paper.total_awarded ?? 0),
     theirs: Number(paper.reported_total),
   };
+}
+
+/**
+ * A paper that printed no total is unchecked, not wrong. Say so once, before the student saves,
+ * so the figure they see afterwards ("added up by Axon") is not a surprise.
+ */
+function noTotalFor(run) {
+  return run.status_reason_code === 'no_printed_total'
+    ? 'No total is printed on this paper, so there is nothing to check these marks against. Axon will add up the marks it reads.'
+    : null;
 }
 
 function leadFor(questions, pages) {
