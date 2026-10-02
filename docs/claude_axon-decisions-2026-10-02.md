@@ -60,6 +60,12 @@ The server half is built and tested (Axon-Site#165, 16 SQL assertions; axon-back
 
 ## 4. Telemetry left behind after deletion (AXO-128)
 
+**Update 2026-10-02 ~06:00 UTC:** option A is already implemented by the other session and **live**:
+- migration `20261002060000_axo_128_anonymise_telemetry_on_delete`, recorded in the ledger as `20261002053503`;
+- the delete sheets now say usage logs stay, anonymised.
+
+Nothing to decide unless you want B instead.
+
 **Decision:** On paper or account deletion, anonymise `model_call` and `eval_result`? That means nulling `student_id`, `paper_id`, `region_id` and `image_keys`, plus the R2 keys in `error_detail`, while keeping token and cost rows for AXO-124 accounting. **Recommended: yes (A, anonymise rather than cascade-delete).**
 
 - B: keep the rows and disclose a retention window, for example 90 days, in the Privacy Policy.
