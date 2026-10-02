@@ -397,7 +397,7 @@ export async function readPaper(studentId, paperId) {
       command_word,command_word_note,model_answer,loss_reasons,
       grounding_status,model_answer_source,depends_on_parts,unresolved_parts,
       confidence,student_confirmed_at,student_rejected_at)),
-      question_region(run_id,committed_attempt_id,page_spans,crop_key,confidence_signals,explain_status)`,
+      question_region(id,run_id,committed_attempt_id,page_spans,crop_key,confidence_signals,explain_status)`,
       )
     .eq('student_id', studentId)
     .eq('id', paperId)
