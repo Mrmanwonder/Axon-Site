@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent, retryFailedPaper, searchLibrary } from "../data/modules";
+import { isPartialTotal } from "../data/paperTotals";
 import type { LibrarySearchHit, Paper, ProgressRow } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
 import PressBox from "../components/PressBox";
@@ -438,9 +439,9 @@ export default function Library() {
                 </div>
                 {presentation.reason && <div className="t2">{presentation.reason}</div>}
               </div>
-              <div className="lost" aria-label={lost === null ? "Marks lost unavailable" : `${lost} marks lost`}>
+              <div className="lost" aria-label={lost === null ? "Marks lost unavailable" : `${isPartialTotal(p as Record<string, unknown>) ? "at least " : ""}${lost} marks lost`}>
                 {lost === null ? "—" : Number.isInteger(lost) ? lost : lost.toFixed(1)}
-                <small>lost</small>
+                <small>{isPartialTotal(p as Record<string, unknown>) ? "lost, at least" : "lost"}</small>
               </div>
             </>
           );

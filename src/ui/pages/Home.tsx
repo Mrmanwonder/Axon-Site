@@ -34,6 +34,7 @@ import Chevron from "../components/Chevron";
 import { NoPapersArt } from "../components/EmptyArt";
 import PageSkeleton from "../components/PageSkeleton";
 import { useIngestion } from "../data/useIngestion";
+import { isPartialTotal } from "../data/paperTotals";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -191,7 +192,7 @@ export default function Home() {
               </div>
             </div>
             {p.total_available != null && p.total_awarded != null && (
-              <div className="lost">{Number(p.total_available) - Number(p.total_awarded)}<small>marks lost</small></div>
+              <div className="lost">{Number(p.total_available) - Number(p.total_awarded)}<small>{isPartialTotal(p) ? "marks lost, at least" : "marks lost"}</small></div>
             )}
             <Chevron />
           </PressBox>
