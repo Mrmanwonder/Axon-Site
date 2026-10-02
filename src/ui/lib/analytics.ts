@@ -67,10 +67,14 @@ function sanitizeAnalyticsEventUrls(event: AnalyticsEvent): AnalyticsEvent {
   return changed ? { ...event, properties } : event;
 }
 
-export function hasSensitiveAuthFragment(fragment = typeof window === "undefined" ? "" : window.location.hash): boolean {
-  if (!fragment) return false;
-  const params = new URLSearchParams(fragment.replace(/^#/, ""));
-  return ["access_token", "refresh_token", "provider_token", "token_hash"].some((key) => params.has(key));
+export function hasSensitiveAuthCallback(
+  search = typeof window === "undefined" ? "" : window.location.search,
+  fragment = typeof window === "undefined" ? "" : window.location.hash,
+): boolean {
+  const query = new URLSearchParams(search.replace(/^\?/, ""));
+  const hash = new URLSearchParams(fragment.replace(/^#/, ""));
+  const fragmentKeys = ["access_token", "refresh_token", "provider_token", "token_hash"];
+  return query.has("code") || fragmentKeys.some((key) => hash.has(key));
 }
 
 function eventPath(event: AnalyticsEvent): string | null {
@@ -195,7 +199,7 @@ export function initAnalytics() {
   // Supabase OAuth returns credentials in the fragment. PostHog derives replay
   // start_url before before_send can sanitize it, so do not bootstrap analytics
   // at all on that page load. The next clean navigation or reload can opt in.
-  if (hasSensitiveAuthFragment()) {
+  if (hasSensitiveAuthCallback()) {
     document.documentElement.dataset.analytics = "deferred";
     return;
   }
