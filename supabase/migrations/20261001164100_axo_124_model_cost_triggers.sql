@@ -1,5 +1,6 @@
--- NOT YET APPLIED TO PRODUCTION: the apply call for this migration was cancelled (2026-10-01).
--- Parts 1 and 2 are applied. Rename this file to the ledger version when it is applied.
+-- Live in production (applied outside the migration tool; function bodies and both
+-- triggers verified identical to this file on 2026-10-02 and recorded in the ledger under
+-- this version then). See docs/claude_migration-ledger-2026-10-02.md.
 -- AXO-124 (3/3): price each model_call from its tokens and roll the cost up onto the run.
 -- See 20261001164022_axo_124_model_price.sql for the design.
 

@@ -46,6 +46,8 @@ alter table learning.signal
   add constraint signal_stage_check check (stage in ('explain', 'extract'));
 
 create index if not exists learning_signal_region on learning.signal (region_id);
+-- learning.purge_student deletes by student_id; the advisor flagged the FK as unindexed (2026-10-02).
+create index if not exists learning_signal_student on learning.signal (student_id);
 
 alter table learning.signal_daily add column field text not null default 'none';
 alter table learning.signal_daily

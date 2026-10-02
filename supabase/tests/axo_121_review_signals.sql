@@ -120,6 +120,9 @@ values ('a1210000-0000-4000-8000-000000000001', null, 'improve_extraction', fals
 select public._t('withdrawing improve_extraction purges Review signals too',
   not exists (select 1 from learning.signal where student_id = 'a1210000-0000-4000-8000-000000000002'));
 
+select public._t('purge-by-student has a covering index (advisor: unindexed FK)',
+  exists (select 1 from pg_indexes where schemaname = 'learning' and indexname = 'learning_signal_student'));
+
 select public._t('clients still have no access to learning',
   not has_schema_privilege('anon', 'learning', 'usage') and not has_schema_privilege('authenticated', 'learning', 'usage'));
 
