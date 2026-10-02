@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { FormEvent, KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
-import { askTutor, paperTypeLabel } from "../data/modules";
+import { askTutor, paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import { usePaperResource } from "../data/usePaperResource";
 import {
   classifyTutorError, isBusy, MAX_QUESTION_LENGTH, newTurnId, replyStanding, sourceHost, tutorReducer,
@@ -31,8 +31,6 @@ import { paths } from "../app/paths";
 import MathText from "../components/MathText";
 import { useSheetControls } from "../components/SheetProvider";
 import "../styles/tutor.css";
-
-const BOARD_NEUTRAL_LABEL: Record<string, string> = { pyq: "Past paper", sample_paper: "Sample paper" };
 
 function TurnView({ turn, onRetry, retryDisabled }: { turn: TutorTurn; onRetry: (id: string) => void; retryDisabled: boolean }) {
   const standing = turn.reply ? replyStanding(turn.reply.status) : null;
@@ -117,14 +115,13 @@ export default function Tutor() {
     if (!paperId) return { label: "Anything in your subjects", scope: "general" as const };
     if (paperError) return { label: "That paper couldn’t be opened", scope: "unavailable" as const };
     if (!paper) return { label: "Loading the paper…", scope: "loading" as const };
-    const typeLabel = BOARD_NEUTRAL_LABEL[paper.type] && !student?.provider_key
-      ? BOARD_NEUTRAL_LABEL[paper.type]
-      : paperTypeLabel(paper.type, student?.provider_key ?? undefined);
+    // Unknown curriculum reads neutrally ("Past paper"), never as Cambridge (AXO-94).
+    const typeLabel = paperTypeLabel(paper.type, providerKeyForStudent(student));
     if (attemptId && region) {
       return { label: `${attempt?.question_label || "This question"} · ${typeLabel}`, scope: "question" as const };
     }
     return { label: typeLabel, scope: "paper" as const };
-  }, [paperId, paperError, paper, attemptId, region, attempt, student?.provider_key]);
+  }, [paperId, paperError, paper, attemptId, region, attempt, student]);
 
   const backTo = attemptId && paperId ? paths.question(paperId, attemptId) : paperId ? paths.paper(paperId) : paths.home;
 

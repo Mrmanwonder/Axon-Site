@@ -47,7 +47,8 @@ select public._t('authenticated may execute exactly the audited browser-facing p
     = array['begin_guardian_verification','claim_guardian_verification','clear_student_scope','delete_my_account',
             'get_cross_subject_signal','get_entitlements','parent_mode_state',
             'record_explanation_feedback',  -- #169: student from the attempt, gated by student_scope_allows
-            'resolve_academic_share','set_student_scope','student_scope_state'],
+            'resolve_academic_share','set_student_scope','student_scope_state',
+            'tutor_enabled'],  -- AXO-126: no arguments; reads only the caller's own flag via auth.uid()
   (select string_agg(name, ', ' order by name) from _definer where schema = 'public' and auth_x));
 
 select public._t('no SECURITY DEFINER function keeps the default PUBLIC execute grant',
@@ -125,8 +126,18 @@ insert into public.pattern_insight (student_id, scope, cause, subjects, paper_id
 insert into public.student_attempt (id, student_id, paper_id, paper_tier, question_label, marks_awarded, max_marks, marks_source, extraction_confidence)
 values ('a5400000-0000-4000-8000-000000000020','a5400000-0000-4000-8000-000000000002','a5400000-0000-4000-8000-000000000010','tier_1','Q1',1,2,'teacher_pen','confirmed');
 
+do $$ begin
+  if to_regclass('public.guardian_feature_flag') is not null then
+    execute $q$insert into public.guardian_feature_flag (guardian_id, flag, enabled)
+             values ('a5400000-0000-4000-8000-000000000001', 'tutor_enabled', true)$q$;
+  end if;
+end $$;
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","role":"authenticated","session_id":"axo54-b"}';
+
+select public._t('B: tutor_enabled reports B''s own flag (off), not A''s (on)',
+  to_regprocedure('public.tutor_enabled()') is null or public.tutor_enabled() = false);
 
 do $$ begin
   perform public.record_explanation_feedback('a5400000-0000-4000-8000-000000000020', false);

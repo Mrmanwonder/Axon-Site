@@ -30,6 +30,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   recordExplanationFeedback: vi.fn(),
   deleteQuestion: vi.fn(),
   paperTypeLabel: () => "Class test",
+  providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
 }));
 vi.mock("../../src/cache.js", () => ({ getCached: fixture.getCached }));
 vi.mock("../../src/ui/components/Crop", () => ({ default: () => <div /> }));

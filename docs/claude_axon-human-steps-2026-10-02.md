@@ -8,6 +8,16 @@ Answer the six decisions in `docs/claude_axon-decisions-2026-10-02.md` whenever 
 
 ### 1. Apply the database migrations (unblocks AXO-116, 54, 57, 121)
 
+**Simplest path, now that `migrate.yml` is on `main`:**
+1. Add the repository secret `SUPABASE_DB_URL` under GitHub → Axon-Site → Settings → Secrets → Actions. The value comes from Supabase Dashboard → Connect → "Session pooler", `postgres` role.
+2. Run **Actions → Apply migrations → Run workflow** with dry run checked.
+
+Expect exactly five files: `…180000_axo_116…`, `…181000_axo_54…`, `…183000_axo_57…`, `…191000_learning_review_signals`, `…02090000_reconcile_live_drift`. Then merge Axon-Site#165, which runs it for real, or re-run with dry run unchecked.
+
+**Paste back:** the run URL.
+
+**CLI alternative:**
+
 The agent's apply tool timed out twice, and nothing was applied. The full procedure, with expected output and rollback, is in `docs/claude_migration-ledger-2026-10-02.md` under "Apply procedure". In short, from an up-to-date `main` after Axon-Site#165 and #166 are merged:
 
 ```bash

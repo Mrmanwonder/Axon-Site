@@ -43,7 +43,22 @@ Production will apply the five pending files *after* migrations whose versions a
 - **Production order:** a reset to merged `main` without the five files, then the five applied in order with `psql -1`, then all 41 SQL suites. Result: 41/41 pass, 0 failures.
 - **Filename order:** `supabase db reset` (122 migrations), then all 41 suites. Result: 41/41 pass.
 
-## Apply procedure (BLOCKED-ON-HUMAN)
+## Update 2026-10-02 ~06:00 UTC: migrate-on-merge exists now
+
+`main` now has `.github/workflows/migrate.yml` (from #166). On each push to `main` it applies every file whose **name** the live ledger lacks, minus `supabase/migrations/BASELINE.txt`, one transaction per file.
+
+- **Simulated against the live ledger** (now 118 rows: the other session also applied `axo_128_anonymise_telemetry_on_delete`, `axo_124_cached_rates_and_fx`, `axo_124_cost_alerts` and `axo_126_tutor_flag_and_purge`):
+  - `planMigrations` returns **exactly** the five pending files below;
+  - 0 unversioned ledger rows.
+- The four live-but-unrecorded files are already in `BASELINE.txt`, so the `migration repair` step is no longer needed for applying. It would only make the ledger complete.
+- **The workflow has failed on all 3 runs so far**, which is consistent with its "secret not set" guard. The one-time fix is the repository secret `SUPABASE_DB_URL`: Dashboard → Connect → Session pooler, `postgres` role.
+- Once it's set:
+  1. Run **Actions → Apply migrations → Run workflow**, with dry run on. Expect the five files.
+  2. Re-run it with dry run off, or merge this PR.
+- Rehearsed again on current `main` in production order: all five apply, and all 45 SQL suites pass.
+- `axo_54_authority_surface` now also audits `public.tutor_enabled()` (AXO-126). It takes no arguments, reads only the caller's own flag, and has a B-vs-A test.
+
+## Apply procedure via the CLI (alternative, BLOCKED-ON-HUMAN)
 
 Applying through the migration tool from the agent session timed out twice on 2026-10-02, at 60 s each. Nothing was applied: the column, function and index were unchanged afterwards, there were no waiting locks, and `question_region` holds 107 rows. Writing ledger rows directly was refused by the session's permission policy. So this procedure needs a person with the database password.
 
