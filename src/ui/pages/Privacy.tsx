@@ -16,10 +16,12 @@ export default function Privacy() {
           purchases a subscription, contacts support or otherwise uses the service.
         </p>
         <p>
-          Axon's current product is designed for Cambridge (CAIE) students in Classes 9–12,
-          corresponding to IGCSE through A Level. Under the current account model, the authenticated
-          account is controlled by a parent or guardian and the associated student profile is for a
-          student under 18.
+          Axon is a study-support product for students on the Cambridge (CAIE), CBSE and IB Diploma
+          curricula, as listed in Axon's curriculum catalogue. Which subjects, papers and official
+          marking schemes are available differs by curriculum and changes over time; Axon does not
+          claim that every subject, paper or scheme is covered. Under the current account model, the
+          authenticated account is controlled by a parent or guardian and the associated student
+          profile is for a student under 18.
         </p>
         <p>
           For privacy questions, requests and complaints, contact <a href={"mailto:" + email}>{email}</a>.
@@ -52,9 +54,9 @@ export default function Privacy() {
 
         <h3>Student profile information</h3>
         <p>
-          A student profile can include first name, Cambridge stage or class level, subjects, syllabus
-          codes, avatar choice and identifiers needed to associate the profile with the guardian
-          account. Axon's present profile flow does not ask for a school, home address or student
+          A student profile can include first name, curriculum, programme and stage (or class level),
+          subjects with their syllabus or subject codes, a generated avatar choice and identifiers
+          needed to associate the profile with the guardian account. Axon's present profile flow does not ask for a school, home address or student
           photograph.
         </p>
 
@@ -102,8 +104,9 @@ export default function Privacy() {
         <p>
           Axon integrates PostHog for optional product analytics. If analytics is allowed, PostHog may
           receive product usage events, page or route views, interactions, browser or device information,
-          exceptions and masked session-replay information. Axon's configuration masks text and input
-          fields in session replay. We also prohibit custom analytics events from deliberately including
+          exceptions and masked session-replay information. Axon's configuration masks all text and
+          input values in session replay and blocks images, canvas and video elements from it, so
+          scanned-paper images are not recorded. We also prohibit custom analytics events from deliberately including
           student names, email addresses, paper or answer text, authentication tokens, raw database IDs
           or uploaded document content.
         </p>
@@ -207,17 +210,22 @@ export default function Privacy() {
         <h2 id="privacy-ai">8. AI processing and model providers</h2>
         <p>
           Some study features require relevant text, instructions, images or page crops to be processed
-          by external AI infrastructure. Axon currently routes model requests through OpenRouter, which
-          can route a request to an eligible underlying model provider selected for the relevant
-          processing stage.
+          by external AI infrastructure. Axon currently sends model requests to Google's Gemini models
+          through the Google AI Studio (Gemini API) endpoint. Axon's own model configuration marks every
+          model route as not permitted to train on Axon data. Axon uses the paid tier of the Gemini API.
+          Under Google's terms for that tier, requests and responses are not used to train Google's
+          models and are not retained by Google. Model choice, routing and provider terms can change, so Axon does
+          not promise that a particular model will always be used. Any deliberate change that would
+          materially permit an AI provider to retain or train on identifiable student material must
+          receive privacy review and any notice or consent required by law before the affected
+          processing is used.
         </p>
         <p>
-          Axon's current model client is configured by default to request zero-data-retention endpoints
-          and deny provider data collection or training for those requests. Model routing, provider
-          availability and provider terms can change. Axon therefore does not promise that a particular
-          third-party model or provider will always be used. Any deliberate change that would materially
-          permit an AI provider to retain or train on identifiable student material must receive privacy
-          review and any notice or consent required by law before the affected processing is used.
+          For some explanations of school (non-official-paper) work, Axon also sends a web-search query
+          to Tavily, a third-party search service. The query is built by Axon's servers from the
+          subject, the student's class or stage and the printed text of the question being explained. It
+          does not include the student's answer, marks, teacher comments or name. Search results are
+          returned to the model to help it explain general academic content.
         </p>
         <p>
           Temporary signed access links may be used to make a paper image available to an AI request.
@@ -246,11 +254,11 @@ export default function Privacy() {
         <h2 id="privacy-providers">10. Service providers and recipients</h2>
         <p>Axon currently uses or may use the following categories of providers to operate the service:</p>
         <ul>
-          <li><strong>Supabase</strong> for authentication, database services and application infrastructure;</li>
-          <li><strong>Cloudflare</strong> for network, delivery, worker and/or object-storage infrastructure;</li>
-          <li><strong>OpenRouter and eligible routed model providers</strong> for AI processing;</li>
+          <li><strong>Supabase</strong> for authentication, the database, access-control policies and application infrastructure;</li>
+          <li><strong>Cloudflare</strong> for network delivery, Workers (the processing pipeline), Queues (job scheduling) and R2 object storage for uploaded pages and crops;</li>
+          <li><strong>Google</strong> for AI processing (Gemini models via Google AI Studio) and, when the user chooses Google authentication, sign-in;</li>
+          <li><strong>Tavily</strong> for web search used in some explanations, as described in section 8;</li>
           <li><strong>Stripe</strong> for hosted payments and subscription management;</li>
-          <li><strong>Google</strong> when the user chooses Google authentication; and</li>
           <li><strong>PostHog</strong> for optional product analytics when analytics is enabled.</li>
         </ul>
         <p>
@@ -335,6 +343,11 @@ export default function Privacy() {
           The account holder can request deletion through Axon's account controls or by contacting
           support. Axon's current deletion flow is designed to remove stored paper objects before the
           authentication account is released, reducing the risk that private files become orphaned.
+        </p>
+        <p>
+          When a paper or a student profile is deleted, Axon keeps its operational usage logs in
+          anonymised form: which model ran, how long it took and what it cost. The student, paper and
+          page references, stored image keys and any error or tool detail are removed from those logs.
         </p>
         <p>
           Deletion may not remove every technical copy instantly. Limited information can remain for a

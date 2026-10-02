@@ -65,7 +65,8 @@ export default function Cookies() {
           local storage and cookies for analytics persistence.
         </p>
         <p>
-          Axon's current session-replay configuration masks all text and input fields. We also prohibit
+          Axon's current session-replay configuration masks all text and input values and blocks images,
+          canvas and video elements, so scanned-paper images are not recorded. We also prohibit
           custom analytics events from deliberately containing student names, email addresses, paper
           or answer text, authentication tokens, raw database identifiers or uploaded document data.
           Masking reduces risk but is not an absolute guarantee that no sensitive material could ever

@@ -23,8 +23,9 @@ export default function Terms() {
 
       <section><h2>2. What Axon is</h2>
         <p>
-          Axon is an educational study-support product currently focused on Cambridge (CAIE) students
-          in Classes 9–12, corresponding to IGCSE through A Level. The Service can help a guardian and
+          Axon is an educational study-support product for students on the Cambridge (CAIE), CBSE and
+          IB Diploma curricula. Availability of subjects, papers and official marking schemes differs
+          by curriculum and is not complete for any of them. The Service can help a guardian and
           student scan or upload marked academic work, review what was extracted, identify patterns in
           lost marks and receive AI-assisted explanations, reflections, analyses, summaries and study
           suggestions.
@@ -148,7 +149,8 @@ export default function Terms() {
 
       <section><h2>10. Cambridge and third-party names</h2>
         <p>
-          References to Cambridge International, CAIE, Cambridge IGCSE, AS Level, A Level, examination
+          References to Cambridge International, CAIE, Cambridge IGCSE, AS Level, A Level, the Central
+          Board of Secondary Education (CBSE), the International Baccalaureate (IB), examination
           boards, schools, publishers or other third parties identify relevant educational programmes
           or materials. Unless Axon expressly states otherwise, Axon is independent and is not endorsed,
           certified, operated or sponsored by Cambridge University Press &amp; Assessment or another
