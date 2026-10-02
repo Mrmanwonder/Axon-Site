@@ -8,6 +8,7 @@ import { ToastProvider } from "../../src/ui/components/ToastProvider";
 const fixture = vi.hoisted(() => ({
   readPaper: vi.fn(),
   explainRetry: vi.fn(),
+  recordFeedback: vi.fn(),
   getCached: vi.fn(),
 }));
 
@@ -24,6 +25,7 @@ vi.mock("../../src/ui/data/useAcademicShare", () => ({
 vi.mock("../../src/ui/data/modules", () => ({
   readPaper: fixture.readPaper,
   explainRetry: fixture.explainRetry,
+  recordExplanationFeedback: fixture.recordFeedback,
   deleteQuestion: vi.fn(),
   providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Class test",
@@ -111,4 +113,39 @@ test("a queued explanation is described as being written, with no retry", async 
   mount();
   expect(await screen.findByText(/being written/i)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+});
+
+test("an explanation can be marked helpful; the screen acknowledges once and says nothing about storage", async () => {
+  const withLoss = paperWith("done");
+  (withLoss.student_attempt[0] as any).mark_loss_event = [{
+    id: "loss-1", cause: "procedural_slip", marks_lost: 2, ai_explanation: "You skipped a step.",
+    do_this_next: null, concepts: [], command_word: null, command_word_note: null, model_answer: null,
+    loss_reasons: [], grounding_status: "complete", model_answer_source: null, depends_on_parts: [],
+    unresolved_parts: [], confidence: "likely", student_confirmed_at: null, student_rejected_at: null,
+  }];
+  fixture.readPaper.mockResolvedValue({ data: withLoss, stale: false, offline: false });
+  fixture.recordFeedback.mockResolvedValue({ recorded: false });
+
+  mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Helped" }));
+  await waitFor(() => expect(fixture.recordFeedback).toHaveBeenCalledWith("attempt-1", true));
+  expect(await screen.findByText("Noted.")).toBeTruthy();
+  expect(screen.queryByText(/kept|saved|stored/i)).toBeNull();
+});
+
+test("a feedback call that fails offers another try", async () => {
+  const withLoss = paperWith("done");
+  (withLoss.student_attempt[0] as any).mark_loss_event = [{
+    id: "loss-1", cause: "procedural_slip", marks_lost: 2, ai_explanation: "You skipped a step.",
+    do_this_next: null, concepts: [], command_word: null, command_word_note: null, model_answer: null,
+    loss_reasons: [], grounding_status: "complete", model_answer_source: null, depends_on_parts: [],
+    unresolved_parts: [], confidence: "likely", student_confirmed_at: null, student_rejected_at: null,
+  }];
+  fixture.readPaper.mockResolvedValue({ data: withLoss, stale: false, offline: false });
+  fixture.recordFeedback.mockRejectedValue(new Error("offline"));
+
+  mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Not right" }));
+  expect(await screen.findByText(/did not send/i)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Helped" })).toBeTruthy();
 });

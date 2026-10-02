@@ -562,6 +562,11 @@ export const deletePaper = papersMod.deletePaper as unknown as (
   paperId: string,
 ) => Promise<{ deleted: boolean; paper_id: string }>;
 
+export const recordExplanationFeedback = papersMod.recordExplanationFeedback as unknown as (
+  attemptId: string,
+  helped: boolean,
+) => Promise<{ recorded: boolean }>;
+
 export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
