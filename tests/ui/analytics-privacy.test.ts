@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent, hasSensitiveAuthFragment } from "../../src/ui/lib/analytics";
+import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent, hasSensitiveAuthCallback } from "../../src/ui/lib/analytics";
 
 const event = (name: string, url: string, extra: Record<string, unknown> = {}) => ({
   event: name,
@@ -43,10 +43,11 @@ test("analytics strips query strings and fragments from captured URLs", () => {
 });
 
 test("analytics bootstrap fails closed on OAuth credential fragments", () => {
-  expect(hasSensitiveAuthFragment("#access_token=a&refresh_token=b&provider_token=c")).toBe(true);
-  expect(hasSensitiveAuthFragment("#token_hash=a&type=magiclink")).toBe(true);
-  expect(hasSensitiveAuthFragment("#section=privacy")).toBe(false);
-  expect(hasSensitiveAuthFragment("")).toBe(false);
+  expect(hasSensitiveAuthCallback("", "#access_token=a&refresh_token=b&provider_token=c")).toBe(true);
+  expect(hasSensitiveAuthCallback("", "#token_hash=a&type=magiclink")).toBe(true);
+  expect(hasSensitiveAuthCallback("?code=pkce-secret", "")).toBe(true);
+  expect(hasSensitiveAuthCallback("?billing=success", "#section=privacy")).toBe(false);
+  expect(hasSensitiveAuthCallback("", "")).toBe(false);
 });
 
 test("replay masking uses options PostHog actually honours (maskAllText is not one)", () => {
