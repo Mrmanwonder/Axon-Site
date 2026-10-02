@@ -10,10 +10,6 @@
 20261001170000_axo_124_pipeline_integrity
 20261001180500_axo_124_paper_totals_follow_commit
 #
-# learning_schema was applied to the live project directly, not through the
-# ledger: its schema, both tables, seven functions and the cause-verdict trigger
-# are all present (checked 2026-10-02), but there is no ledger row.
-20261001190000_learning_schema
 #
 # axo_124_no_printed_total, applied live in two parts, is now two files named for its two
 # ledger rows (20261001204112_axo_124_no_printed_total_schema,
