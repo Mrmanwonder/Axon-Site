@@ -62,11 +62,15 @@ jobs:
             exit 1
           fi
 
-      - name: Unit tests for the planner
-        run: node --test tests/db/migration-plan.test.mjs
+      - name: Unit tests for the planner and connection handling
+        run: node --test tests/db/migration-plan.test.mjs tests/db/migration-apply-connection.test.mjs
 
       - name: Apply
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
-        run: node scripts/migrations/apply.mjs $DRY | tee "$GITHUB_STEP_SUMMARY"
+        # pipefail: without it the step took tee's exit status, and run
+        # 37031953032 reported success while psql had failed and nothing applied.
+        run: |
+          set -o pipefail
+          node scripts/migrations/apply.mjs $DRY | tee "$GITHUB_STEP_SUMMARY"
