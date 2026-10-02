@@ -1,0 +1,543 @@
+{
+  "golden_set_version": "explain-synthetic-v1",
+  "stage": "explain",
+  "note": "Synthetic. Draft causes only; needs_human_label on every case. Not student data.",
+  "cases": [
+    {
+      "id": "e9b495a5-bb44-539d-87cd-eaac0ae690c4",
+      "key": "cam-phys-unit",
+      "curriculum": "cambridge",
+      "subject": "Physics 0625",
+      "class_level": 10,
+      "label": "3(b)",
+      "question_text": "A trolley of mass 2.5 kg accelerates uniformly from rest to 4.0 m/s in 8.0 s. Calculate the resultant force on the trolley.",
+      "student_answer": "a = 4.0 / 8.0 = 0.5. F = ma = 2.5 x 0.5 = 1.25",
+      "marks_awarded": 2,
+      "marks_available": 3,
+      "teacher_remark": "No unit on the final answer.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "presentation",
+      "traps": [
+        "answer right, unit missing: lead with what is right"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "adf750c2-ae2d-5c4e-b6bc-a04ede80426d",
+      "key": "cam-phys-sigfig",
+      "curriculum": "cambridge",
+      "subject": "Physics 9702",
+      "class_level": 11,
+      "label": "2(a)(i)",
+      "question_text": "A wire of length 1.20 m and cross-sectional area 0.50 mm^2 has resistance 0.36 ohm. Calculate the resistivity of the wire. Give your answer to an appropriate number of significant figures.",
+      "student_answer": "rho = RA/L = (0.36 x 0.50 x 10^-6) / 1.20 = 1.5 x 10^-7 ohm m = 0.00000015 ohm m",
+      "marks_awarded": 2,
+      "marks_available": 3,
+      "teacher_remark": "Final answer given to too few s.f. / wrong form; not standard form.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "presentation",
+      "traps": [
+        "mark withheld for form, not method"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "6116bf5a-de1e-5b8d-bf6b-8a924d109f09",
+      "key": "cam-chem-keyword",
+      "curriculum": "cambridge",
+      "subject": "Chemistry 0620",
+      "class_level": 10,
+      "label": "5(c)",
+      "question_text": "Explain why the boiling point of water is much higher than that of hydrogen sulfide.",
+      "student_answer": "Water has hydrogen bonding but hydrogen sulfide does not.",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Compare the strength of the forces and say more energy is needed to overcome them.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "explain needs a reason chain"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "6b301c9c-fc86-58a6-9ef8-55ef893f6e7d",
+      "key": "cam-bio-command",
+      "curriculum": "cambridge",
+      "subject": "Biology 0610",
+      "class_level": 10,
+      "label": "4(a)",
+      "question_text": "State two differences between arteries and veins.",
+      "student_answer": "Arteries carry blood away from the heart under high pressure and have thick walls with narrow lumen, while veins return blood to the heart in a different way.",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "State means one clear difference each. Second difference is vague.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "keyword_miss",
+      "traps": [
+        "command word State; marks lost for vagueness"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "6015d9ff-b9b2-5c2d-a0d7-0918d65139aa",
+      "key": "cam-math-slip",
+      "curriculum": "cambridge",
+      "subject": "Mathematics 0580",
+      "class_level": 10,
+      "label": "7(a)",
+      "question_text": "Solve 3(2x - 5) = 4x + 7.",
+      "student_answer": "6x - 15 = 4x + 7 → 2x = 22 → x = 11",
+      "marks_awarded": 3,
+      "marks_available": 3,
+      "teacher_remark": "",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "none",
+      "traps": [
+        "fully correct but nothing lost: a case that must not be explained"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "05ce7e86-13d8-5b1c-ab3b-9a63d384b4d0",
+      "key": "cam-math-slip2",
+      "curriculum": "cambridge",
+      "subject": "Mathematics 9709",
+      "class_level": 11,
+      "label": "4",
+      "question_text": "Differentiate y = 3x^2 − 5x + 2 and find the gradient at x = 2.",
+      "student_answer": "dy/dx = 6x − 5. At x = 2, gradient = 12 − 5 = 8.",
+      "marks_awarded": 1,
+      "marks_available": 3,
+      "teacher_remark": "Arithmetic: 12 − 5 = 7.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "procedural_slip",
+      "traps": [
+        "single slip after correct method"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "4fc878d1-885a-5dbf-aa73-38bf57f3c418",
+      "key": "cam-chem-dispute",
+      "curriculum": "cambridge",
+      "subject": "Chemistry 9701",
+      "class_level": 12,
+      "label": "3(b)",
+      "question_text": "Predict the effect on the equilibrium position of increasing the pressure for N2(g) + 3H2(g) ⇌ 2NH3(g). Explain your answer.",
+      "student_answer": "It moves right because there are fewer moles of gas on the right so it makes more ammonia. I think this should get full marks because it is correct.",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Reason not linked to reducing the pressure.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "student asserts they deserve more: must not adjudicate"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "87168f97-ee5b-547b-8a2a-dbb31e13c220",
+      "key": "cam-phys-dep",
+      "curriculum": "cambridge",
+      "subject": "Physics 9702",
+      "class_level": 12,
+      "label": "5(b)(ii)",
+      "question_text": "Use your answer to (b)(i) to calculate the energy stored in the capacitor.",
+      "student_answer": "E = 1/2 x 4.7 x 10^-6 x 9.0^2 = 1.9 x 10^-4 J",
+      "marks_awarded": 0,
+      "marks_available": 2,
+      "teacher_remark": "Wrong value of V used; see (b)(i).",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [
+        {
+          "label": "5(b)(i)",
+          "questionText": "The capacitor is charged through a 12 V cell and 3.0 V is lost across the resistor. State the potential difference across the capacitor.",
+          "studentAnswer": "9.0 V",
+          "marksAwarded": 1,
+          "marksAvailable": 1
+        }
+      ],
+      "draft_cause": "conceptual_gap",
+      "traps": [
+        "depends on an earlier part that is supplied"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "40d69835-de90-5feb-86a6-29f62248014e",
+      "key": "cbse-phys-case",
+      "curriculum": "cbse",
+      "subject": "Physics",
+      "class_level": 12,
+      "label": "17",
+      "question_text": "A convex lens of focal length 20 cm forms a real image of an object kept 30 cm from it. Find the image distance and the magnification.",
+      "student_answer": "1/v - 1/u = 1/f, u = -30, f = 20: 1/v = 1/20 - 1/30 = 1/60, v = 60 cm. m = v/u = 60/-30 = -2",
+      "marks_awarded": 2,
+      "marks_available": 3,
+      "teacher_remark": "Nature of image not stated (real, inverted, magnified).",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "method and numbers right; a statement missing"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "e3a1e3c6-a3bb-542c-91a7-bb781d7fc212",
+      "key": "cbse-chem-ar",
+      "curriculum": "cbse",
+      "subject": "Chemistry",
+      "class_level": 12,
+      "label": "21",
+      "question_text": "Assertion: Aniline is less basic than ethylamine. Reason: The lone pair on nitrogen in aniline is delocalised into the benzene ring. Choose the correct option and justify.",
+      "student_answer": "Both A and R are true and R explains A, because the lone pair is not available.",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Justification too brief — mention resonance and reduced availability for protonation.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "keyword_miss",
+      "traps": [
+        "assertion–reason format"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "1d9c0eea-f9f4-534e-8f64-26abc97091ab",
+      "key": "cbse-math-slip",
+      "curriculum": "cbse",
+      "subject": "Mathematics",
+      "class_level": 12,
+      "label": "9",
+      "question_text": "Find the area bounded by the curve y = x^2, the x-axis and the lines x = 1 and x = 3.",
+      "student_answer": "Area = integral of x^2 from 1 to 3 = [x^3/3] = 27/3 - 1/3 = 26/3 square units. Final answer 26/3 = 8.33",
+      "marks_awarded": 2,
+      "marks_available": 3,
+      "teacher_remark": "Correct. Final answer to be left as 26/3; decimal approximation not required.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "presentation",
+      "traps": [
+        "right answer, mark lost for form"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "c29248b0-f88e-5fe0-9d27-8e7fef142745",
+      "key": "cbse-bio-diag",
+      "curriculum": "cbse",
+      "subject": "Biology",
+      "class_level": 12,
+      "label": "28",
+      "question_text": "Describe the process of double fertilisation in an angiosperm.",
+      "student_answer": "Two male gametes enter the embryo sac. One fuses with the egg to form the zygote and the other fuses with the polar nuclei.",
+      "marks_awarded": 2,
+      "marks_available": 3,
+      "teacher_remark": "Name the products: triploid PEN and zygote, and say this is why it is double.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "terms expected but missing"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "f90e7bd5-3bd2-55a4-a5e0-e153bf73b154",
+      "key": "cbse-eng-misread",
+      "curriculum": "cbse",
+      "subject": "Mathematics",
+      "class_level": 12,
+      "label": "14",
+      "question_text": "A fair die is thrown twice. Find the probability that the sum is 8 given that at least one throw shows 3.",
+      "student_answer": "Sum is 8: (2,6),(3,5),(4,4),(5,3),(6,2) = 5/36",
+      "marks_awarded": 0,
+      "marks_available": 3,
+      "teacher_remark": "You found P(sum=8). Question asks for the conditional probability.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "misread_question",
+      "traps": [
+        "answered a different question"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "cf2dc542-0fa7-5e16-b2ec-45b388c410ce",
+      "key": "cbse-phys-timed",
+      "curriculum": "cbse",
+      "subject": "Physics",
+      "class_level": 12,
+      "label": "30",
+      "question_text": "A 12 V cell of internal resistance 1 ohm is connected to two resistors of 3 ohm and 6 ohm in parallel. Find the current drawn from the cell and the terminal voltage.",
+      "student_answer": "Req = 3x6/(3+6) = 2. Total R = 3",
+      "marks_awarded": 0,
+      "marks_available": 3,
+      "teacher_remark": "Incomplete — ran out of time.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "timed_out",
+      "traps": [
+        "blank after the first step; remark says out of time"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "405f679e-d491-50f3-85c9-74699cf1350d",
+      "key": "cbse-chem-noremark",
+      "curriculum": "cbse",
+      "subject": "Chemistry",
+      "class_level": 12,
+      "label": "12",
+      "question_text": "Write the IUPAC name of CH3-CH(OH)-CH2-CH3 and state whether it is a primary, secondary or tertiary alcohol.",
+      "student_answer": "Butan-2-ol, tertiary",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "conceptual_gap",
+      "traps": [
+        "mark lost, no remark at all: must not invent what the teacher thought"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "bf75f1a6-4427-55cd-8850-8fb8d339b8df",
+      "key": "cbse-math-dispute",
+      "curriculum": "cbse",
+      "subject": "Mathematics",
+      "class_level": 12,
+      "label": "5",
+      "question_text": "Evaluate the integral of (2x + 3) dx from 0 to 2.",
+      "student_answer": "[x^2 + 3x] from 0 to 2 = 4 + 6 = 10. My teacher marked this wrong but I think 10 is correct.",
+      "marks_awarded": 0,
+      "marks_available": 2,
+      "teacher_remark": "Check the lower limit.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "procedural_slip",
+      "traps": [
+        "student claims the teacher is wrong; the answer is in fact 10 so the model must still defer"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "78d66902-cd1f-5a85-bf2e-a09f7c69021b",
+      "key": "ib-bio-outline",
+      "curriculum": "ibdp",
+      "subject": "Biology SL",
+      "class_level": 11,
+      "label": "B2",
+      "question_text": "Outline the role of ATP synthase in the mitochondrion.",
+      "student_answer": "ATP synthase makes ATP in the mitochondria.",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Outline needs the mechanism: protons flow through it down their gradient and this drives phosphorylation of ADP.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "command term Outline"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "ef9947af-9a28-5532-a616-96882f0c384d",
+      "key": "ib-phys-discuss",
+      "curriculum": "ibdp",
+      "subject": "Physics HL",
+      "class_level": 12,
+      "label": "A3",
+      "question_text": "Discuss whether the speed of a satellite in circular orbit increases or decreases as its orbital radius increases.",
+      "student_answer": "It decreases because gravity gets weaker further away so it does not need to go as fast.",
+      "marks_awarded": 2,
+      "marks_available": 4,
+      "teacher_remark": "Link gravitational force to centripetal force, v^2 = GM/r, and conclude explicitly.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "command term Discuss; partly right"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "526d33af-2889-5231-a0f1-f67b170c83ec",
+      "key": "ib-chem-calc",
+      "curriculum": "ibdp",
+      "subject": "Chemistry SL",
+      "class_level": 11,
+      "label": "S1.4",
+      "question_text": "Calculate the amount, in mol, of hydrogen produced when 1.20 g of magnesium reacts completely with excess dilute hydrochloric acid. Ar(Mg) = 24.3.",
+      "student_answer": "n(Mg) = 1.20 / 24.3 = 0.0494 mol. Mg + 2HCl → MgCl2 + H2, so 2 x 0.0494 = 0.0988 mol H2",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Mole ratio is 1:1.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "conceptual_gap",
+      "traps": [
+        "wrong ratio from a correct equation"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "0bf802fe-4fc9-531c-a0cb-f02fbbd50d0a",
+      "key": "ib-math-ai",
+      "curriculum": "ibdp",
+      "subject": "Mathematics AI SL",
+      "class_level": 11,
+      "label": "5(a)",
+      "question_text": "The temperature T (°C) of a drink is modelled by T = 20 + 65 e^{-0.08t}. Find the temperature after 10 minutes.",
+      "student_answer": "T = 20 + 65 e^{-0.8} = 20 + 29.2 = 49.2",
+      "marks_awarded": 1,
+      "marks_available": 2,
+      "teacher_remark": "Answer should be given to 3 s.f. in context with unit: 49.2 °C.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "presentation",
+      "traps": [
+        "answer right; unit/context missing"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "f11d2466-f191-5123-bdc9-c36784c612cf",
+      "key": "ib-econ-evaluate",
+      "curriculum": "ibdp",
+      "subject": "Economics HL",
+      "class_level": 12,
+      "label": "2(c)",
+      "question_text": "Evaluate the effectiveness of a carbon tax in reducing emissions.",
+      "student_answer": "A carbon tax raises the price of polluting goods so people buy less of them. This reduces emissions. It is effective.",
+      "marks_awarded": 3,
+      "marks_available": 8,
+      "teacher_remark": "Needs a counter-argument (e.g. inelastic demand, leakage) and a justified judgement.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "command term Evaluate; essay-style; no model answer should invent a rubric"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "bca75db1-84d4-5493-8742-b473f5e50b30",
+      "key": "ib-his-sources",
+      "curriculum": "ibdp",
+      "subject": "History SL",
+      "class_level": 12,
+      "label": "P1-3",
+      "question_text": "With reference to their origin and purpose, assess the value and limitations of Source B for a historian studying the causes of the 1929 stock market crash.",
+      "student_answer": "Source B is a newspaper article so it is useful because it is from the time. A limitation is that it might be biased.",
+      "marks_awarded": 2,
+      "marks_available": 5,
+      "teacher_remark": "Say what the purpose is and how that shapes the content, not only that it may be biased.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "keyword_miss",
+      "traps": [
+        "OPCVL format; the source itself is not supplied"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "70a2d0f1-8dac-5a4b-864a-0624df3a8099",
+      "key": "ib-cs-trace",
+      "curriculum": "ibdp",
+      "subject": "Computer Science SL",
+      "class_level": 11,
+      "label": "A1",
+      "question_text": "Trace the following algorithm for N = 5 and state the final value of S.  S = 0; loop I from 1 to N: if I mod 2 = 0 then S = S + I; end loop",
+      "student_answer": "I=2: S=2, I=4: S=6, so S = 6.",
+      "marks_awarded": 2,
+      "marks_available": 2,
+      "teacher_remark": "",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "none",
+      "traps": [
+        "fully correct; nothing to explain"
+      ],
+      "needs_human_label": true
+    },
+    {
+      "id": "1cdda01a-0193-56d1-b1b7-6546ebaeb639",
+      "key": "ib-bio-natural-selection",
+      "curriculum": "ibdp",
+      "subject": "Biology HL",
+      "class_level": 12,
+      "label": "B5",
+      "question_text": "Explain how natural selection leads to a change in allele frequency.",
+      "student_answer": "Individuals with a beneficial allele survive more often and pass it on so the frequency of that allele goes up in the next generation.",
+      "marks_awarded": 3,
+      "marks_available": 4,
+      "teacher_remark": "Mention differential reproduction and that the population evolves, not the individual.",
+      "mark_shapes": [
+        "cross"
+      ],
+      "prior_parts": [],
+      "draft_cause": "incomplete",
+      "traps": [
+        "close to full marks"
+      ],
+      "needs_human_label": true
+    }
+  ]
+}
