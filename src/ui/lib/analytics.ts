@@ -42,6 +42,41 @@ const PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS = new Set([
   "$dead_click",
 ]);
 
+function coarseAnalyticsUrl(value: string): string {
+  try {
+    const url = new URL(value, "https://axonstudy.online");
+    if (url.protocol !== "http:" && url.protocol !== "https:") return value;
+    return value.startsWith("/") ? url.pathname : url.origin + url.pathname;
+  } catch {
+    return value;
+  }
+}
+
+function sanitizeAnalyticsEventUrls(event: AnalyticsEvent): AnalyticsEvent {
+  if (!event.properties) return event;
+  let changed = false;
+  const properties = { ...event.properties };
+  for (const [key, value] of Object.entries(properties)) {
+    if (typeof value !== "string" || !/(?:url|referrer)$/i.test(key)) continue;
+    const coarse = coarseAnalyticsUrl(value);
+    if (coarse !== value) {
+      properties[key] = coarse;
+      changed = true;
+    }
+  }
+  return changed ? { ...event, properties } : event;
+}
+
+export function hasSensitiveAuthCallback(
+  search = typeof window === "undefined" ? "" : window.location.search,
+  fragment = typeof window === "undefined" ? "" : window.location.hash,
+): boolean {
+  const query = new URLSearchParams(search.replace(/^\?/, ""));
+  const hash = new URLSearchParams(fragment.replace(/^#/, ""));
+  const fragmentKeys = ["access_token", "refresh_token", "provider_token", "token_hash"];
+  return query.has("code") || fragmentKeys.some((key) => hash.has(key));
+}
+
 function eventPath(event: AnalyticsEvent): string | null {
   const currentUrl = event.properties?.["$current_url"];
   const candidate = typeof currentUrl === "string"
@@ -59,12 +94,13 @@ function eventPath(event: AnalyticsEvent): string | null {
  */
 export function filterSensitiveAnalyticsEvent(event: AnalyticsEvent | null): AnalyticsEvent | null {
   if (!event) return null;
-  const path = eventPath(event);
+  const sanitized = sanitizeAnalyticsEventUrls(event);
+  const path = eventPath(sanitized);
   const privateLibrary = path === "/library" || Boolean(path?.startsWith("/library/"));
-  if (privateLibrary && event.event && PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS.has(event.event)) {
+  if (privateLibrary && sanitized.event && PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS.has(sanitized.event)) {
     return null;
   }
-  return event;
+  return sanitized;
 }
 
 /**
@@ -160,6 +196,13 @@ function installPostHogStub(): PostHogBootstrap {
  */
 export function initAnalytics() {
   if (state !== "idle" || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
+  // Supabase OAuth returns credentials in the fragment. PostHog derives replay
+  // start_url before before_send can sanitize it, so do not bootstrap analytics
+  // at all on that page load. The next clean navigation or reload can opt in.
+  if (hasSensitiveAuthCallback()) {
+    document.documentElement.dataset.analytics = "deferred";
+    return;
+  }
 
   const key = import.meta.env.VITE_POSTHOG_KEY || DEFAULT_KEY;
   const apiHost = import.meta.env.VITE_POSTHOG_HOST || DEFAULT_HOST;

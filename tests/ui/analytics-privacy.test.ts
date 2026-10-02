@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent } from "../../src/ui/lib/analytics";
+import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent, hasSensitiveAuthCallback } from "../../src/ui/lib/analytics";
 
 const event = (name: string, url: string, extra: Record<string, unknown> = {}) => ({
   event: name,
@@ -28,6 +28,26 @@ test("coarse Library pageviews remain allowed and public autocapture is untouche
 
   expect(filterSensitiveAnalyticsEvent(pageview)).toEqual(pageview);
   expect(filterSensitiveAnalyticsEvent(publicClick)).toEqual(publicClick);
+});
+
+
+test("analytics strips query strings and fragments from captured URLs", () => {
+  const filtered = filterSensitiveAnalyticsEvent(event(
+    "$pageview",
+    "https://axonstudy.online/#access_token=secret&refresh_token=secret",
+    { "$referrer": "https://accounts.example.test/callback?code=secret" },
+  ));
+  expect(filtered?.properties?.["$current_url"]).toBe("https://axonstudy.online/");
+  expect(filtered?.properties?.["$referrer"]).toBe("https://accounts.example.test/callback");
+  expect(JSON.stringify(filtered)).not.toContain("secret");
+});
+
+test("analytics bootstrap fails closed on OAuth credential fragments", () => {
+  expect(hasSensitiveAuthCallback("", "#access_token=a&refresh_token=b&provider_token=c")).toBe(true);
+  expect(hasSensitiveAuthCallback("", "#token_hash=a&type=magiclink")).toBe(true);
+  expect(hasSensitiveAuthCallback("?code=pkce-secret", "")).toBe(true);
+  expect(hasSensitiveAuthCallback("?billing=success", "#section=privacy")).toBe(false);
+  expect(hasSensitiveAuthCallback("", "")).toBe(false);
 });
 
 test("replay masking uses options PostHog actually honours (maskAllText is not one)", () => {
