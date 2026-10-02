@@ -39,6 +39,8 @@ jobs:
       # — which is the one place it can still stop the change.
       - run: npm run check:config
       - run: npm run check:contract-parity
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   sql-tests:
     name: supabase/tests/*.sql
