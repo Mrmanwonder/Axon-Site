@@ -71,6 +71,9 @@ export default function PaperOverview() {
       title: "Delete this paper",
       body:
         "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
+      items: [
+        ["Usage logs stay, anonymised.", "We keep which model ran, how long it took and what it cost. The student, paper and page references are removed."],
+      ],
       primary: "Delete paper",
       onConfirm: async () => {
         await deletePaper(paperId);

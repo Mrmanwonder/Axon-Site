@@ -158,6 +158,8 @@ test("paper Delete uses the authenticated owner session, explains the consequenc
     "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
   );
 
+  expect(dialog.textContent).toContain("Usage logs stay, anonymised.");
+
   const confirm = within(dialog).getByRole("button", { name: "Delete paper" });
   for (let tap = 0; tap < 8; tap += 1) fireEvent.click(confirm);
   await waitFor(() => expect(fixture.deletePaper).toHaveBeenCalledTimes(1));
