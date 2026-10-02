@@ -21,7 +21,9 @@ function parseContract(source) {
 
 async function githubFile(repo, path, ref) {
   const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
-  const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'axon-contract-parity' } });
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'axon-contract-parity' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const response = await fetch(url, { headers });
   if (response.status === 404 && ref !== 'main') return githubFile(repo, path, 'main');
   if (!response.ok) throw new Error(`Could not read ${repo}@${ref}/${path}: HTTP ${response.status}`);
   const payload = await response.json();
