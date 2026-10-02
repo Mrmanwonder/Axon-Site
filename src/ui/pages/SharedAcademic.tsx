@@ -24,7 +24,7 @@ function mark(value: number | null | undefined) {
 }
 
 function causeLabel(value: string | null | undefined) {
-  if (!value) return "What went wrong";
+  if (!value) return "Reason not recorded";
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
@@ -87,8 +87,15 @@ function QuestionSnapshot({ question }: { question: SharedQuestionSnapshot }) {
       {question.feedback && (
         <div className="shared-learning">
           <section className="shared-learning__section">
-            <div className="shared-learning__eyebrow">What went wrong</div>
+            <div className="shared-learning__eyebrow">Axon's reading of the lost marks</div>
             <h3>{causeLabel(question.feedback.cause)}</h3>
+            {/* Axon explains the teacher's marks; it does not verify why they were taken.
+                Say what the reading rests on, and no more than the data supports. */}
+            <p className="shared-learning__unavailable shared-learning__basis">
+              {question.teacher_remark
+                ? "Based on the teacher's marks and written remark. The mark itself is the teacher's and has not been changed."
+                : "Based on the teacher's marks only; no written remark was saved. The mark itself is the teacher's and has not been changed."}
+            </p>
             {question.feedback.explanation && (
               <div className="shared-learning__copy">
                 <MathText text={question.feedback.explanation} />

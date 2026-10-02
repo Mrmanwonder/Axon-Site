@@ -33,6 +33,7 @@ vi.mock("../../src/ui/data/AppProvider", () => ({
 }));
 
 vi.mock("../../src/ui/data/modules", () => ({
+  providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: (type: string) => type === "unit_test" ? "Class test" : type === "mid_term" ? "Mid-term" : "End-of-year exam",
   retryFailedPaper: vi.fn(),
   searchLibrary: fixture.search,

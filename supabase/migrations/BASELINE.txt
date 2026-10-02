@@ -1,0 +1,20 @@
+# Files that the live project already has under a DIFFERENT name, so a name
+# comparison would wrongly call them pending and re-run them. One stem per line;
+# say why. Nothing is ever added here to skip a migration that has not run.
+#
+# AXO-124 was iterated live before the files were merged: the ledger carries
+# axo_124_pipeline_integrity_columns, axo_124_no_printed_total_schema and
+# axo_124_no_printed_total_commit_and_view (20261001165344..204131), which
+# supersede these three. Re-running the originals would undo the later fix.
+20261001164100_axo_124_model_cost_triggers
+20261001170000_axo_124_pipeline_integrity
+20261001180500_axo_124_paper_totals_follow_commit
+#
+# learning_schema was applied to the live project directly, not through the
+# ledger: its schema, both tables, seven functions and the cause-verdict trigger
+# are all present (checked 2026-10-02), but there is no ledger row.
+20261001190000_learning_schema
+#
+# axo_124_no_printed_total was applied live in two parts (axo_124_no_printed_total_schema,
+# axo_124_no_printed_total_commit_and_view, 20261001204112 and 20261001204131).
+20261002002000_axo_124_no_printed_total

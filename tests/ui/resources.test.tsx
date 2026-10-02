@@ -36,6 +36,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   readConsentState: mocks.consent, recordConsent: vi.fn(), withdrawConsent: vi.fn(), signOut: vi.fn(),
   listPapers: mocks.papers, paperProgress: mocks.progress, watchLibrary: () => () => {},
   analyticsReadiness: mocks.analytics, lossByCause: async () => ({ data: {} }), needsCheck: async () => ({ data: { count: 0, papers: 0 } }), unreadablePages: async () => ({ data: [] }),
+  providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Test paper", statusKeyForRun: () => "reading", PAPER_STATUS: { reading: { label: "Reading", tone: "wait" } },
   retryFailedPaper: vi.fn(),
   searchLibrary: vi.fn().mockResolvedValue([]),

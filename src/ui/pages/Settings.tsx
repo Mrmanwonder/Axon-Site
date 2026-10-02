@@ -573,6 +573,7 @@ export default function Settings() {
               items: [
                 ["Papers and analysis are removed.", "Uploaded pages and everything derived from them."],
                 ["The profile stays.", "Name, class and subjects remain, so nothing needs re-entering."],
+                ["Usage logs stay, anonymised.", "We keep which model ran, how long it took and what it cost. The student, paper and page references are removed."],
               ],
               primary: "Delete the data",
               onConfirm: async () => {
@@ -607,6 +608,7 @@ export default function Settings() {
               items: [
                 ["Papers and analysis go first.", "Every uploaded page and every explanation is deleted, not archived."],
                 ["Your consent record is kept.", "It holds no personal data and is the evidence that consent was properly obtained."],
+                ["Usage logs stay, anonymised.", "We keep which model ran, how long it took and what it cost. The student, paper and page references are removed."],
                 ["Sign-in stops working immediately.", "The account is released, so this email or number can start fresh later."],
               ],
               primary: "Delete everything",

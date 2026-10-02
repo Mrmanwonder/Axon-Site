@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { filterSensitiveAnalyticsEvent } from "../../src/ui/lib/analytics";
+import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent } from "../../src/ui/lib/analytics";
 
 const event = (name: string, url: string, extra: Record<string, unknown> = {}) => ({
   event: name,
@@ -28,4 +28,16 @@ test("coarse Library pageviews remain allowed and public autocapture is untouche
 
   expect(filterSensitiveAnalyticsEvent(pageview)).toEqual(pageview);
   expect(filterSensitiveAnalyticsEvent(publicClick)).toEqual(publicClick);
+});
+
+test("replay masking uses options PostHog actually honours (maskAllText is not one)", () => {
+  const rec = POSTHOG_PRIVACY_CONFIG.session_recording as Record<string, unknown>;
+  expect(rec.maskAllInputs).toBe(true);
+  expect(rec.maskTextSelector).toBe("*");
+  expect(String(rec.blockSelector)).toMatch(/\bimg\b/);
+  expect(String(rec.blockSelector)).toMatch(/\bcanvas\b/);
+  expect("maskAllText" in rec).toBe(false);
+  expect(POSTHOG_PRIVACY_CONFIG.mask_all_text).toBe(true);
+  expect(POSTHOG_PRIVACY_CONFIG.mask_all_element_attributes).toBe(true);
+  expect(POSTHOG_PRIVACY_CONFIG.opt_out_capturing_by_default).toBe(true);
 });

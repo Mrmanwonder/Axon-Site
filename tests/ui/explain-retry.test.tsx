@@ -27,6 +27,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   explainRetry: fixture.explainRetry,
   recordExplanationFeedback: fixture.recordFeedback,
   deleteQuestion: vi.fn(),
+  providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Class test",
 }));
 vi.mock("../../src/cache.js", () => ({ getCached: fixture.getCached }));

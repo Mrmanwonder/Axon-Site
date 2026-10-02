@@ -168,14 +168,15 @@
   .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
   /* Saved paper/question actions. Compact, neutral chrome; destructive meaning
-     lives in the red glyph and the consequence sheet, not a giant danger block. */
+     lives in the amber glyph and the consequence sheet, not a giant danger block.
+     Red is reserved for signing out (CLAUDE.md), so destructive actions use amber. */
   .resourceactions{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
   .resourceaction{width:36px;height:36px;border-radius:18px;display:grid;place-items:center;padding:0;
     font:inherit;-webkit-appearance:none;appearance:none;
     background:var(--surface-sunk);color:var(--label-2);border:.5px solid var(--hairline);
     cursor:pointer;will-change:transform;}
   .resourceaction svg{width:17px;height:17px;}
-  .resourceaction.danger{color:var(--red);}
+  .resourceaction.danger{color:var(--attention);}
   .resourceaction.active{color:var(--accent);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 30%,transparent);}
   .resourceaction.unknown{color:var(--label-3);border-style:dashed;}
   .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}

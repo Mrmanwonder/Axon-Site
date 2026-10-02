@@ -20,8 +20,9 @@ from supabase_migrations.schema_migrations
 order by version;
 ```
 
-CI creates a local Supabase stack and tests migrations, but CI does **not** apply
-migrations to production.
+Merging to `main` applies new migrations through `.github/workflows/migrate.yml`
+(secret `SUPABASE_DB_URL`; see `supabase/migrations/README.md`). Pull-request CI
+only tests them against a throwaway local stack.
 
 ## 2. Billing secrets
 

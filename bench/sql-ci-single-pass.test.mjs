@@ -7,7 +7,7 @@ const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
 function sqlSuiteBlock() {
   const start = workflow.indexOf('- name: Run SQL test suites');
   assert.notEqual(start, -1, 'SQL suite workflow step must exist');
-  const end = workflow.indexOf('\n  # Nothing in this repository applies a migration', start);
+  const end = workflow.indexOf('\n  # Merging a migration now applies it', start);
   assert.notEqual(end, -1, 'SQL suite workflow step must remain bounded before migration notice');
   return workflow.slice(start, end);
 }

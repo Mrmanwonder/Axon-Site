@@ -1,22 +1,32 @@
 # Migrations
 
-## Nothing applies these for you
+## Merging applies these (since 2026-10-02)
 
-There is no deploy-on-merge step. `.github/workflows/ci.yml` runs
-`supabase db reset --local` against a throwaway database so the pgTAP suites in
-`supabase/tests/` have a schema to run against, and then throws it away. The
-live project is never touched by anything automatic.
+`.github/workflows/migrate.yml` runs on every push to `main` that touches this
+directory and applies the files the live ledger does not have
+(`scripts/migrations/plan.mjs` decides, `apply.mjs` does it). Each file runs in
+one transaction with its own ledger row, so a failure leaves nothing
+half-applied and the next run retries it.
 
-**Applying a merged migration to the live project is a manual step, every
-time.** If nobody does it, the migration silently never takes effect while the
-code that depends on it ships anyway. `20260825170000_honest_sweep_failure_messages.sql`
-merged on 2026-08-25 and was never applied — ten days dead in the tree, and by
-then no longer applicable verbatim (see below).
+- **Identity is the name, not the version.** The Supabase MCP stamps a
+  migration with the time it was applied, so a file and its ledger row routinely
+  carry different versions. Files sharing a name (two exist) are matched
+  one-to-one against ledger rows of that name.
+- **`BASELINE.txt`** lists files the live project already has under another name
+  or without a ledger row. Add to it only after checking the objects exist.
+- **Setup, once, by a person:** repository secret `SUPABASE_DB_URL` (Dashboard →
+  Connect → Session pooler, `postgres` role). Until it is set the job fails on
+  purpose rather than skipping.
+- **Dry run:** Actions → Apply migrations → Run workflow (dry run is the
+  default).
+- **Order still matters for code that reads a new column.** PostgREST rejects a
+  select naming an unknown column, so land the migration before the code that
+  reads it.
 
-When code *reads* a column a migration adds, there is no graceful degradation:
-PostgREST rejects a select naming an unknown column, so the request fails
-outright and takes the screen with it. **Apply the migration before merging the
-code, not after.**
+Before this, nothing applied them: `supabase db reset --local` in CI builds a
+throwaway database for the pgTAP suites, and
+`20260825170000_honest_sweep_failure_messages.sql` merged on 2026-08-25 and was
+never applied — ten days dead in the tree.
 
 ## The reconciliation (2026-09-04)
 

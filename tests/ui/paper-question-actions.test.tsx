@@ -30,6 +30,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   readPaper: fixture.readPaper,
   deletePaper: fixture.deletePaper,
   deleteQuestion: fixture.deleteQuestion,
+  providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Class test",
 }));
 
@@ -156,6 +157,8 @@ test("paper Delete uses the authenticated owner session, explains the consequenc
   expect(dialog.textContent).toContain(
     "This permanently removes the saved paper, its pages, questions, explanations and derived data from Axon. It cannot be restored.",
   );
+
+  expect(dialog.textContent).toContain("Usage logs stay, anonymised.");
 
   const confirm = within(dialog).getByRole("button", { name: "Delete paper" });
   for (let tap = 0; tap < 8; tap += 1) fireEvent.click(confirm);

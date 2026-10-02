@@ -66,7 +66,10 @@ insert into public.mark_loss_event(
   'State the final point explicitly before moving on.',
   'likely',
   'Two, with the required reasoning stated explicitly.',
-  'complete','axon_method','[]'::jsonb
+  'complete','axon_method',
+  -- AXO-105: a reason carrying keys the share must never publish. The allowlist
+  -- (error_type, marks, cause, note) is the only thing that may cross.
+  '[{"error_type":"presentation","marks":1,"cause":"missing statement","note":"State the point explicitly.","mark_type":null,"internal_trace":"LEAK-INTERNAL-TRACE","prompt_fragment":"LEAK-PROMPT-FRAGMENT","nested":{"student_id":"LEAK-NESTED-ID"}}]'::jsonb
 );
 
 insert into public.mark_loss_event(
@@ -217,6 +220,19 @@ begin
     and payload#>>'{questions,0,feedback,corrected_answer_state}'='available'
     and payload#>>'{questions,0,feedback,corrected_answer}'='Two, with the required reasoning stated explicitly.');
 
+  perform public._share_t('paper share loss_reasons carry only the allowlisted fields',
+    (select bool_and(k in ('error_type','marks','cause','note'))
+       from jsonb_array_elements(payload#>'{questions,0,feedback,loss_reasons}') r,
+            jsonb_object_keys(r) k)
+    and payload#>>'{questions,0,feedback,loss_reasons,0,note}'='State the point explicitly.'
+    and (payload#>>'{questions,0,feedback,loss_reasons,0,marks}')::int=1);
+
+  perform public._share_t('paper share never serializes unknown loss_reasons keys or values',
+    position('LEAK-INTERNAL-TRACE' in payload::text)=0
+    and position('LEAK-PROMPT-FRAGMENT' in payload::text)=0
+    and position('LEAK-NESTED-ID' in payload::text)=0
+    and position('mark_type' in payload::text)=0);
+
   perform public._share_t('paper share never includes a rejected diagnosis',
     position('REJECTED DIAGNOSIS MUST NOT LEAK' in payload::text)=0
     and position('REJECTED NEXT STEP MUST NOT LEAK' in payload::text)=0);
@@ -257,6 +273,12 @@ begin
     and payload->>'kind'='question'
     and payload#>>'{question,question_label}'='Q1'
     and not (payload ? 'questions'));
+
+  perform public._share_t('question share loss_reasons are allowlisted too',
+    (select bool_and(k in ('error_type','marks','cause','note'))
+       from jsonb_array_elements(payload#>'{question,feedback,loss_reasons}') r,
+            jsonb_object_keys(r) k)
+    and position('LEAK-' in payload::text)=0);
 
   perform public._share_t('question capability cannot traverse to sibling data',
     position('Private sibling question' in payload::text)=0

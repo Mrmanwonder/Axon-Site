@@ -10,7 +10,8 @@ test('public legal and not-found routes are intentional', () => {
   assert.match(routes, /path: "\/terms"/);
   assert.match(routes, /path: "\/cookies"/);
   assert.match(routes, /path: "\*", element: <NotFound/);
-  assert.match(read('src/ui/pages/Privacy.tsx'), /support@axonstudy\.online/);
+  assert.match(read('src/ui/lib/legal.ts'), /SUPPORT_EMAIL = "support@axonstudy\.online"/);
+  assert.match(read('src/ui/pages/Privacy.tsx'), /SUPPORT_EMAIL/);
   assert.match(read('src/ui/pages/Terms.tsx'), /hallucinated/);
   assert.match(read('src/ui/pages/Cookies.tsx'), /PostHog/);
 });
