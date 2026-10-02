@@ -42,6 +42,19 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  eval-gate:
+    name: eval gate (model_route changes need a passing eval run)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node harness/eval-gate.mjs --base origin/${{ github.base_ref }}
+
   sql-tests:
     name: supabase/tests/*.sql
     runs-on: ubuntu-latest
