@@ -2,24 +2,24 @@ import PressBox from "./PressBox";
 
 function ShareIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 15V3" />
-      <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
-      <path d="M5 11.5v6.75A2.75 2.75 0 0 0 7.75 21h8.5A2.75 2.75 0 0 0 19 18.25V11.5" />
+      <path d="M12 14.5V4" />
+      <path d="m8.25 7.75 3.75-3.75 3.75 3.75" />
+      <path d="M8.5 10.5H8A2 2 0 0 0 6 12.5v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5" />
     </svg>
   );
 }
 
 function TrashIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4.5 7h15" />
-      <path d="M9.25 7V4.75h5.5V7" />
-      <path d="m6.5 7 .65 12h9.7l.65-12" />
-      <path d="M10 10.5v5" />
-      <path d="M14 10.5v5" />
+      <path d="M4.75 7h14.5" />
+      <path d="M9.5 7V5.25a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75V7" />
+      <path d="m6.5 7 .7 11.1a1.9 1.9 0 0 0 1.9 1.9h5.8a1.9 1.9 0 0 0 1.9-1.9L17.5 7" />
+      <path d="M10.25 10.75v5.5" />
+      <path d="M13.75 10.75v5.5" />
     </svg>
   );
 }
