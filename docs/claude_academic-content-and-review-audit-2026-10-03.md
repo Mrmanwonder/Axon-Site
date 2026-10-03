@@ -39,7 +39,7 @@ The established AXO-122 SQL/JS fixture and earlier Linear evidence report run 89
 - 3 unassigned parts.
 - 12 raw regions.
 
-The current database audit reported 14 pages, with structure_failed pages 2, 4, 6, 10, 11 and 13, and no unreadable placeholders. These are six actual coverage failures, not six confirmed region actions. This report does not treat that run as complete or claim the frontend copy changes repair missing extraction coverage.
+The final database audit reported 14 pages, with structure_failed pages 2, 4, 6, 10, 11 and 13. Six durable rows in public.page_unreadable record those six failed pages separately from question_region; there are no corresponding unreadable question-region placeholders. The 5-question/12-part count therefore describes the extracted scope of an explicitly recorded partial paper. This trace does not prove an accidental silent omission, and the six page-source records are not six pending region confirmations. This report does not treat the source scope as complete or claim the frontend copy changes repair unreadable extraction.
 
 The original “Question 12” combination transcription, the 5(a) outcome grid and the apparent standard-deviation/subpart mixing still require original capture → conditioned artifact → region boundary → raw model response → persisted field comparison. Source inspection must identify the first loss of meaning; a display fix is not evidence that OCR or segmentation is accurate.
 
@@ -58,6 +58,8 @@ Eight parser/escaping examples were executed in the tool JavaScript runtime succ
 Intermediate GitHub CI run 37102523416 reported 246 passing UI tests and one failure: the new escaped-math test incorrectly searched the full textContent for a raw LaTeX command, which KaTeX intentionally retains in its accessible MathML annotation. Commit 0cae1cbeb9c9f6f35074a05535ac8e88d267fb15 corrected the assertion to require rendered visible HTML, no math-raw fallback and faithful source annotation. Full exact-head CI after the later evidence-error tests is still required.
 
 The local execution shell disconnected and read-only commands hung, so no local Vitest/build result is claimed. Remote CI, build/typecheck, source review, deployment version and deployed visual/noncamera verification remain explicit gates.
+
+The final separate source-reference audit classified all 156 apparent single-region orphan references as synthetic evaluation references, not a genuine production data leak. The remaining finding is a missing source-link hook; no remediation of a supposed leaked production artifact is claimed here.
 
 ## Remaining completion gates
 
