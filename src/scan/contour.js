@@ -5,7 +5,7 @@
 // substance — contour-shaped detection — without the 12.7MB (3.6MB gzipped)
 // OpenCV.js payload the brief names, which is fourteen times the entire
 // application bundle and would land on exactly the budget Android devices
-// CLAUDE.md's performance floor is written for. What OpenCV would have
+// Axon.md's performance floor is written for. What OpenCV would have
 // supplied is `Canny` + `findContours` + `approxPolyDP`; what that actually
 // buys over `edges.js` is the subject of this file, and it is about two
 // hundred lines.

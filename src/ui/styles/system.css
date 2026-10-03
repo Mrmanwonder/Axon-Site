@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    THE COMPONENT SYSTEM
 
-   Extracted verbatim from the pre-port index.html, which CLAUDE.md names as the
+   Extracted verbatim from the pre-port index.html, which Axon.md names as the
    design system of record. It is carried over rather than retyped because it
    already reads from the tokens for every colour — retyping ~900 lines by hand
    would only introduce drift, and the one thing this port must not do is
@@ -169,7 +169,7 @@
 
   /* Saved paper/question actions. Compact, neutral chrome; destructive meaning
      lives in the amber glyph and the consequence sheet, not a giant danger block.
-     Red is reserved for signing out (CLAUDE.md), so destructive actions use amber. */
+     Red is reserved for signing out (Axon.md), so destructive actions use amber. */
   .resourceactions{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
   /* A true 44x44 target. The glyph is 24px (Material Symbols); the ring stays quiet so the
      paper's own content, not the toolbar, is what the eye lands on. */

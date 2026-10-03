@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { expect, test } from "vitest";
 
-// CLAUDE.md: red is reserved for signing out. Not errors, warnings, low scores,
+// Axon.md: red is reserved for signing out. Not errors, warnings, low scores,
 // badges, or destructive rows such as deleting data.
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

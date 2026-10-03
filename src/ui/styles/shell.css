@@ -167,7 +167,7 @@
 
 /* ── the state glyphs ──
    Not in the reference, which relies on colour and position alone. Kept
-   because CLAUDE.md's confidence rule — form before colour, so state survives
+   because Axon.md's confidence rule — form before colour, so state survives
    greyscale — applies here too, and a consent switch in particular should not
    depend on a student correctly perceiving green versus grey. */
 .sw .gI {

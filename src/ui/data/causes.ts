@@ -1,4 +1,4 @@
-/* Cause colour encodes kind, not severity — CLAUDE.md: "Seven distinct hues
+/* Cause colour encodes kind, not severity — Axon.md: "Seven distinct hues
    of equal visual weight, never a green-to-red ramp." Shared here so
    ReviewSheet (scan-time) and the post-scan screens (QuestionDetail,
    PaperOverview) can't drift against each other. */

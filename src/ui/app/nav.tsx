@@ -1,16 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    NAV DESTINATIONS
 
-   Five destinations, in CLAUDE.md's order:
+   Five destinations, in Axon.md's order:
 
      Home · Library · Scan · Insights · Settings
 
    Note this is NOT the prototype's order, which runs Home · Insights · Scan ·
-   Library · Settings. CLAUDE.md and reference/prototype.html disagree, and
-   CLAUDE.md's own arbitration clause ("where this document and index.html
+   Library · Settings. Axon.md and reference/prototype.html disagree, and
+   Axon.md's own arbitration clause ("where this document and index.html
    disagree, index.html wins") is scoped to the design system — tokens, type,
    the lens, the springs — not to information architecture. Nav order is IA,
-   so CLAUDE.md governs. Flagged in the port report.
+   so Axon.md governs. Flagged in the port report.
 
    `solid` marks the glyph that fills rather than strokes when active, which
    is Home only. Library draws its live count in TabNav from the paper list.

@@ -131,7 +131,7 @@ a stale historical copy and are not the production runtime.
 
 ## The four hard rules
 
-`CLAUDE.md` names four rules whose violation is a product failure. Each is enforced
+`Axon.md` names four rules whose violation is a product failure. Each is enforced
 by a constraint rather than a convention, because a rule that lives only in a prompt
 eventually gets broken:
 
@@ -199,7 +199,7 @@ attention, blue carries accent. The scan crop contains real red pen, and if the 
 spent red freely every screen would read as a rebuke.
 
 Cause colours are seven categorical hues of equal weight, never a severity ramp. The
-values are in `CLAUDE.md`; take them from there rather than inventing a shade.
+values are in `Axon.md`; take them from there rather than inventing a shade.
 
 ## Haptics
 

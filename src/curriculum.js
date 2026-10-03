@@ -193,7 +193,7 @@ const LEGACY_CAMBRIDGE_BOARDS = new Set(['CAIE', 'IGCSE', 'AS_A_LEVEL']);
 
 /**
  * Provider for a legacy `student.board`. Only the explicit legacy values map;
- * anything else is unknown (null). CLAUDE.md / AXO-94: no layer may let missing
+ * anything else is unknown (null). Axon.md / AXO-94: no layer may let missing
  * or unrecognised identity silently become Cambridge.
  */
 export function providerKeyForBoard(board) {
