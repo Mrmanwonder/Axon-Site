@@ -4,7 +4,7 @@ Scope: adopted `claude_linear-agent-spec-2026-10-03.md`, WP-I/WP-H/WP-Q and data
 
 ## Result
 
-Migration **identity parity** is exact: 128 canonical SQL files and 128 ledger rows, one-to-one name multiset match, zero missing/extra names. Important object checks pass for AXO-54 hardening, AXO-105 sharing, AXO-116 structure assembly, learning and telemetry anonymisation. **Schema-effect parity is not fully complete:** the live `commit_extraction_run` definition has regressed to the older paper-totals body and no longer writes `total_basis` or `total_partial`, even though the later no-printed-total migration is recorded. There are also 156 dangling model-call region references, and learning acceptance has not occurred.
+Migration **identity parity** is exact: 128 canonical SQL files and 128 ledger rows, one-to-one name multiset match, zero missing/extra names. Important object checks pass for AXO-54 hardening, AXO-105 sharing, AXO-116 structure assembly, learning and telemetry anonymisation. **Schema-effect parity is not fully complete:** the live `commit_extraction_run` definition has regressed to the older paper-totals body and no longer writes `total_basis` or `total_partial`, even though the later no-printed-total migration is recorded. There are also 156 model-call region identifiers used for synthetic evaluation cases, not deleted student regions; learning acceptance has not occurred.
 
 Current-head CI is green: [CI 37065362371](https://github.com/Mrmanwonder/Axon-Site/actions/runs/37065362371) — from-scratch Supabase migration/SQL suites, node tests, typecheck, build, UI/DB, Chromium/WebKit E2E, accessibility, configuration and contract parity. [Apply migrations 37065362339](https://github.com/Mrmanwonder/Axon-Site/actions/runs/37065362339) and [CodeQL 37065361665](https://github.com/Mrmanwonder/Axon-Site/actions/runs/37065361665) also succeeded. These are automated tests, not authenticated production acceptance.
 
@@ -91,15 +91,19 @@ Paper-delete and student hard/soft-delete triggers exist. `private.anonymise_mod
 - orphaned model_call.student_id: 0;
 - orphaned eval_result.paper_id: 0;
 - orphaned learning student: 0;
-- **model_call.region_id referencing a missing question_region: 156**.
+- model_call.region_id not found in question_region: 156;
+- **all 156 join to a synthetic eval_case and their run_id joins eval_run; student_id/paper_id are null**;
+- genuine/unclassified missing-region references after excluding this intended evaluation contract: **0**.
 
-The existing AXO-128 comment already excludes single-question deletion. This audit makes the gap measurable; it does not prove which missing regions came from user deletion versus retry/re-extraction replacement. No raw student text/IDs were printed.
+The initial missing-region count was unclassified and must not be interpreted as erasure failure. A subsequent source + join audit established all 156 are intentional synthetic evaluation attribution: [explain-run.ts](https://github.com/Mrmanwonder/axon-backend/blob/31a11cf/shared/src/eval/explain-run.ts) assigns model_call.run_id=eval_run ID and region_id=eval_case ID. It never writes question_region. The 156 calls split into 78 paper_feedback.v2 and 78 eval_judge.v1 calls. Blanket cleanup would erase valid case/cost evidence. The original AXO-128 issue comment has been corrected. No raw student text/IDs were printed.
+
+The previously documented single-question deletion **source gap** still exists: private.delete_question removes its committed question_region, but no question-region telemetry erasure trigger exists. Current data does not contain an identified genuine orphan demonstrating that path. Preserve this distinction.
 
 Forward work plan:
 1. Define retention for a region erased explicitly and one replaced during re-extraction. Preserve aggregate usage/cost history; remove region content references and content-bearing telemetry.
 2. Add forward function/trigger handling question-region removal; cover delete_question's committed-attempt→region path. Do not silently alter applied migration files.
 3. Before selecting full row anonymisation, verify run-cost rollup behavior when run_id is cleared; changing an erasure path must not rewrite financial sums incorrectly.
-4. Backfill existing dangling refs only after the reviewed policy and forward migration are approved; produce count-only before/after evidence.
+4. Backfill only genuine unclassified missing-region refs after excluding the documented synthetic evaluation mapping. Current eligible count is zero. Never touch the 156 valid eval-attribution rows.
 5. Extend local SQL fixtures for a disposable committed question, an extraction retry replacement, paper deletion and student/account tombstone. Assert content refs are erased, intended cost facts survive, other questions/accounts are unchanged, and clients cannot call the privileged helper.
 6. Verify exact-head SQL/CI and then one genuine authenticated disposable deletion. No production test deletion was executed here.
 7. Synchronize app/Privacy retention copy (AXO-75/27); retain counsel/owner publication gates.
@@ -141,7 +145,7 @@ Managed upgrade is an owner dashboard action. Reconcile the commit-function effe
 | Owner | Issue | Required next evidence |
 |---|---|---|
 | Agent + production migration operator | AXO-124/80 | Forward restore of live commit basis/partial behavior; inspect effect after apply; genuine paper acceptance |
-| Agent + owner policy | AXO-128 | Region-deletion retention forward migration/test; 156 dangling region refs reconciled; real disposable deletion |
+| Agent + owner policy | AXO-128 | Region-deletion retention policy and forward migration/test; preserve 156 synthetic eval-attribution rows; real disposable deletion |
 | Agent + opted-in student/guardian | AXO-121 | Genuine correction/verdict, weekly rate report, passing evaluation comparison |
 | Owner dashboard | AXO-55 | Enable leaked-password protection or enforce documented server-side password policy |
 | Owner dashboard + agent postflight | AXO-112 | Managed 17.11 upgrade after clean baseline; postflight/authenticated smoke |
@@ -151,3 +155,9 @@ Managed upgrade is an owner dashboard action. Reconcile the commit-function effe
 | Owner authenticated retry + agent audit | AXO-116/122/138 | Retry original14-page scope, count/continuation/failed-page/fidelity evidence |
 
 This report records verified work and explicit gates. No issue is complete solely because its implementation merged or a migration name appears in the ledger.
+
+## Concrete fix proposals prepared, not applied
+
+- [Commit metadata SQL proposal](https://github.com/Mrmanwonder/Axon-Site/blob/codex/spec-execution-2026-10-03/docs/sql/claude_restore-commit-totals-2026-10-03.sql): latest canonical invoker function, with durable page_unreadable scope included in total_partial.
+- [Disposable local regression](https://github.com/Mrmanwonder/Axon-Site/blob/codex/spec-execution-2026-10-03/docs/sql/claude_restore-commit-totals-regression-2026-10-03.sql): reproduces the older migration overwriting the latest function, restores it, tests complete/no-printed-total, printed total, unreadable marks and a failed page without a region, preserves repeat-commit refusal and teacher marks. Explicit local fixture guard; changes roll back. UNEXECUTED because local shell/Postgres runtime is unavailable. It is review material, not passing evidence or production acceptance.
+- Region retention proposal explicitly distinguishes optional full unlinking (requires a separate cost attribution design) from minimal removal of region/content references while retaining the still-owned paper/run for cost accounting. No new migration filename was invented; create the forward migration via CLI when available.
