@@ -20,8 +20,11 @@ export type AcademicBlock =
 function cellsFor(line: string): string[] | null {
   if (!line.includes("|") || /\\\||\\begin\s*\{/.test(line)) return null;
   let value = line.trim();
-  if (value.startsWith("|")) value = value.slice(1);
-  if (value.endsWith("|")) value = value.slice(0, -1);
+  const outerPipes = value.startsWith("|");
+  if (outerPipes) value = value.slice(1);
+  // Without a leading outer pipe, a trailing delimiter is an empty final
+  // cell. Never silently discard it or move another value into its column.
+  if (outerPipes && value.endsWith("|")) value = value.slice(0, -1);
   const cells = value.split("|").map(cell => cell.trim());
   return cells.length >= 2 ? cells : null;
 }
