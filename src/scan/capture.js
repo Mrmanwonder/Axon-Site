@@ -41,7 +41,13 @@ const STILL_DETECT_TIMEOUT_MS = 12000;
 export const FINE_SCORE = 0.9;
 const REARM_AFTER_LOSS_MS = 800;
 const AUTO_RETRY_COOLDOWN_MS = 550;
-const NATIVE_PHOTO_TIMEOUT_MS = 1200;
+// A 12 MP takePhoto() on a mid-range Android routinely takes 1.5 to 2.5 s, the
+// first one longer. At 1200 ms the first shot timed out and the scanner demoted
+// itself to grabbing video frames for the rest of the session: smaller pages,
+// the "sharpened for readability" rescue on nearly every page, and the
+// rolling-shutter banding of a video frame under mains lighting.
+const NATIVE_PHOTO_TIMEOUT_MS = 4000;
+const NATIVE_TIMEOUTS_BEFORE_DEMOTION = 2;
 const VIDEO_FRAME_TIMEOUT_MS = 220;
 const VIEWPORT_SCALE_TOLERANCE = 0.01;
 const HINT_SEQUENCE_LIMIT = 32;
@@ -240,6 +246,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let photoSettings = null;
   let capturePath = 'canvas-grab';
   let nativeStillDemoted = false;
+  let nativeTimeouts = 0;
 
   // torch
   let torch = { supported: false, mode: 'auto', on: false, error: null };
@@ -350,6 +357,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     photoSettings = null;
     capturePath = 'canvas-grab';
     nativeStillDemoted = false;
+    nativeTimeouts = 0;
 
     if (cameraTrack && typeof ImageCapture !== 'undefined') {
       try {
@@ -422,6 +430,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     photoSettings = null;
     capturePath = 'canvas-grab';
     nativeStillDemoted = false;
+    nativeTimeouts = 0;
     processingHold = false;
     shootInFlight = false;
     autoRetryAfter = 0;
@@ -646,6 +655,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       searchingMs: noPageSince ? now - noPageSince : 0,
       torch,
       auto: autoCapture,
+      nativeStill: capturePath === 'image-capture',
     });
     autoTorch(now, guidance.reason);
 
@@ -838,19 +848,29 @@ export function createCapture({ video, overlay, onState, onShot }) {
     }
   }
 
+  /** One slow photo is not a broken camera: this shot falls back to a video
+      frame, and only repeated timeouts demote the session for good. */
+  async function nativeTimedOut(generation) {
+    nativeTimeouts += 1;
+    console.warn('[scan] native photo timed out', { nativeTimeouts, timeoutMs: NATIVE_PHOTO_TIMEOUT_MS });
+    if (nativeTimeouts >= NATIVE_TIMEOUTS_BEFORE_DEMOTION) await demoteNativeStill(generation);
+    return null;
+  }
+
   async function takeNativePhoto(generation) {
     if (!imageCapture) return null;
     if (Object.keys(photoSettings ?? {}).length) {
       const first = await takePhotoAttempt(photoSettings);
       if (generation !== activation) return null;
-      if (first.blob) return first.blob;
-      if (first.timedOut) { await demoteNativeStill(generation); return null; }
+      if (first.blob) { nativeTimeouts = 0; return first.blob; }
+      if (first.timedOut) return nativeTimedOut(generation);
       // Some stacks advertise dimensions they reject at capture time.
     }
     const second = await takePhotoAttempt(undefined);
     if (generation !== activation) return null;
-    if (second.timedOut) { await demoteNativeStill(generation); return null; }
+    if (second.timedOut) return nativeTimedOut(generation);
     if (!second.blob) await demoteNativeStill(generation);
+    else nativeTimeouts = 0;
     return second.blob;
   }
 
@@ -877,15 +897,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
       canvas.width = bitmap.width;
       canvas.height = bitmap.height;
       canvas.getContext('2d').drawImage(bitmap, 0, 0);
-      const original = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95));
-      return { bitmap, path: 'canvas-grab', original };
     } catch (error) {
-      bitmap.close?.();
-      throw error;
-    } finally {
       canvas.width = 1;
       canvas.height = 1;
+      bitmap.close?.();
+      throw error;
     }
+    // The JPEG of a full-resolution frame takes seconds to encode on the main
+    // thread. Nothing about finding the page on the still needs it, so it runs
+    // alongside that search instead of in front of it; `shoot` awaits it.
+    const original = new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95))
+      .finally(() => { canvas.width = 1; canvas.height = 1; });
+    return { bitmap, path: 'canvas-grab', original };
   }
 
   /**
@@ -964,7 +987,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       const captured = await grabStill(shotActivation);
       const grabMs = performance.now() - tStart;
       if (!captured) return null;
-      const { bitmap, path, original } = captured;
+      const { bitmap, path } = captured;
       ownedBitmap = bitmap;
       if (!running || shotActivation !== activation) return null;
 
@@ -973,6 +996,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
       const judged = judgeStillGeometry(analysed.detection);
       const quad = analysed.quad;
       const measured = quad ? await readStillFocus(bitmap, quad) : { sharpness: null, pageLongEdge: 0 };
+      const original = await captured.original;
       const analyseMs = performance.now() - tAnalyse;
       if (!running || shotActivation !== activation) return null;
 

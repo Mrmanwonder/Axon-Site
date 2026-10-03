@@ -32,7 +32,7 @@ import { createCapture } from '../src/scan/capture.js';
 // asserting that a shot it had made unreachable never happened. A test that
 // cannot pass is worse than no test: it reports the same failure whether the
 // capture loop works or not.
-const SCALE = 3.15;
+const SCALE = Number(new URLSearchParams(location.search).get("scale") ?? 3.15);
 // Square: camera.js asks the track for 4032x3024 after start, and a canvas
 // stream answers with a 3024x3024 frame, so a portrait scene would be re-cropped
 // mid-run and the page would overfill the view.

@@ -50,3 +50,20 @@ test('the shutter works when nothing can be detected, and the page is kept for a
   // geometry applied (flagged downstream), rather than refused.
   expect(shot).toEqual({ taken: true, shots: 1, hasQuad: false, errors: [] });
 });
+
+// A phone's tracking stream is 1280x720, so the page is well under the 1400 px
+// blur scale in the frame. Before 4 Oct 2026 the live blur reading enlarged that
+// window, called every sharp page "blurry" and Auto never fired here.
+test('a sharp page in a phone-resolution stream auto-captures quickly', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Canvas camera fixture');
+  await page.goto('/bench/viewfinder.html?shake=2&scale=1');
+  await page.waitForFunction(() => (window as any).__vf?.shots > 0, { timeout: 8000 });
+  const result = await page.evaluate(() => {
+    const r = (window as any).__vf;
+    r.stop();
+    return { errors: r.errors, blurry: r.states.filter((s: any) => s.reason === 'blurry').length, shotAfterReady: r.firstShotMs - r.cameraReadyAt };
+  });
+  expect(result.errors).toEqual([]);
+  expect(result.blurry).toBe(0);
+  expect(result.shotAfterReady).toBeLessThan(4000);
+});

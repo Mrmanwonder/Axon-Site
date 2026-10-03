@@ -127,3 +127,13 @@ test('lumaFromHistogram', () => {
   assert.deepEqual(lumaFromHistogram(h), { median: 100, p95: 250 });
   assert.equal(lumaFromHistogram(new Uint32Array(256)), null);
 });
+
+test('a page at a quarter of the view is not "small" when the still is a sensor photo', () => {
+  const s = {
+    phase: 'locked', engine: { status: 'ready' }, luma: { median: 120, p95: 220 }, motion: 1,
+    fill: 0.26, edgeContrast: 40, touchesEdge: false, sharpness: 0.8, glare: 0,
+    searchingMs: 0, torch: { supported: false }, auto: true,
+  };
+  assert.equal(chooseGuidance({ ...s, nativeStill: false }).reason, 'small');
+  assert.equal(chooseGuidance({ ...s, nativeStill: true }).reason, null);
+});

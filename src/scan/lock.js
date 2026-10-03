@@ -28,11 +28,11 @@ export const LOCK = Object.freeze({
   /** How long the page may go undetected before the lock is let go. */
   MISS_GRACE_MS: 600,
   /** A locked page is only replaced after this many disagreeing detections. */
-  DISAGREE_TO_REPLACE: 3,
+  DISAGREE_TO_REPLACE: 2,
   /** Overlap between successive smoothed quads above which the page counts as still. */
-  SETTLED_IOU: 0.96,
+  SETTLED_IOU: 0.94,
   /** Share of each new detection blended into the followed quad. */
-  SMOOTHING: 0.5,
+  SMOOTHING: 0.6,
 });
 
 /** @typedef {{x:number,y:number}} Point */
