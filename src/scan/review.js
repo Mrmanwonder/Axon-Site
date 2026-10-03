@@ -11,6 +11,8 @@
 // misread it.
 
 import { sb } from '../supabase.js';
+import { countQuestions } from '../questionCount.js';
+import { reviewLeadFor } from './reviewSummary.js';
 import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
 import { assessmentRulesFor, providerKeyForBoard } from '../curriculum.js';
 
@@ -86,7 +88,7 @@ export async function loadReview(runId) {
     return {
       id: r.id,
       order: r.order_index,
-      label: r.question_label ?? `Question ${r.order_index + 1}`,
+      label: r.question_label ?? `Unassigned part ${r.order_index + 1}`,
       tier: r.confidence_tier,
       confirmed: !!r.student_confirmed_at,
       corrected: !!r.student_corrected,
@@ -121,7 +123,14 @@ export async function loadReview(runId) {
 
   // Unreadable first, then unsure, then the rest — and within each, paper order.
   const rank = { unreadable: 0, unsure: 1, confident: 2 };
-  questions.sort((a, b) => (rank[a.tier] - rank[b.tier]) || (a.order - b.order));
+  questions.sort((a, b) => (Number(a.confirmed) - Number(b.confirmed)) || (rank[a.tier] - rank[b.tier]) || (a.order - b.order));
+  const counts = countQuestions((regions ?? []).map(r => ({
+    label: r.question_label,
+    order_index: r.order_index,
+    page: r.page_spans?.[0]?.page ?? null,
+    y: r.page_spans?.[0]?.box?.y ?? null,
+    evidence: r.marks_awarded != null || r.marks_available != null || !!r.student_answer || !!r.question_text,
+  })));
 
   return {
     run,
@@ -132,7 +141,7 @@ export async function loadReview(runId) {
     delta: deltaFor(run, paper),
     noTotal: noTotalFor(run),
     // Every headline shows its sample size; this is that screen's version of it.
-    lead: leadFor(questions, pages ?? []),
+    lead: reviewLeadFor(questions, pages ?? [], counts),
     // Every unconfirmed region, not just the doubtful ones. commit_extraction_run
     // refuses while *anything* still has needs_review and no confirmation, and
     // finalize sets needs_review on all of them — review is mandatory in v1 and
@@ -170,15 +179,6 @@ function noTotalFor(run) {
   return run.status_reason_code === 'no_printed_total'
     ? 'No total is printed on this paper, so there is nothing to check these marks against. Axon will add up the marks it reads.'
     : null;
-}
-
-function leadFor(questions, pages) {
-  const needing = questions.filter((q) => q.tier !== 'confident').length;
-  const base = `${questions.length} question${questions.length === 1 ? '' : 's'} · ` +
-    `${pages.length} page${pages.length === 1 ? '' : 's'}`;
-  return needing
-    ? `${base} · ${needing} need${needing === 1 ? 's' : ''} your eyes, shown first`
-    : `${base} · all read cleanly, worth a look before saving`;
 }
 
 // ── corrections ────────────────────────────────────────────────────────────
