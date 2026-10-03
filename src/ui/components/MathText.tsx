@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { normalizeAcademicText } from "../data/academicContent";
 
 /*
  * Student-facing rich text with safe maths.
@@ -21,7 +22,7 @@ const REFUSED = /\\(href|url|includegraphics|html(?:Class|Id|Style|Data)|color|t
 export function renderSafeLatex(latex: string, displayMode = false): string | null {
   if (!latex.trim() || REFUSED.test(latex)) return null;
   try {
-    return katex.renderToString(latex, {
+    return katex.renderToString(normalizeAcademicText(latex), {
       displayMode,
       strict: true,
       trust: false,
@@ -120,6 +121,9 @@ function normaliseSuperscripts(source: string): string {
 }
 
 function normaliseLegacyLatex(source: string): string {
+  // Existing LaTeX is already serialized mathematical source. Replacing bare
+  // words inside commands doubled backslashes and changed valid expressions.
+  if (/\\[A-Za-z]+/.test(source)) return source.trim();
   let value = normaliseSuperscripts(source.trim());
   value = value
     .replace(/≥/g, "\\ge ")
@@ -197,6 +201,14 @@ function firstLegacyMatch(text: string): { index: number; value: string } | null
 
 function legacyTokens(text: string): Token[] {
   if (!text) return [];
+  // A newline separates working steps; do not typeset a whole answer as one
+  // expression and lose the original line order or prose boundaries.
+  if (text.includes("\n")) {
+    return text.split("\n").flatMap((line, index) => [
+      ...(index ? [{ kind: "text" as const, value: "\n" }] : []),
+      ...legacyTokens(line),
+    ]);
+  }
   if (looksLikeWholeMath(text)) {
     return [{ kind: "math", value: normaliseLegacyLatex(text), display: false }];
   }
@@ -217,7 +229,7 @@ function legacyTokens(text: string): Token[] {
 }
 
 function tokensFor(text: string): Token[] {
-  const explicit = explicitTokens(text);
+  const explicit = explicitTokens(normalizeAcademicText(text));
   const out: Token[] = [];
   for (const token of explicit) {
     if (token.kind === "math") out.push(token);
