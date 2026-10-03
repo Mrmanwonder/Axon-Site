@@ -59,7 +59,7 @@ them once by dropping the hook:
 
 - `#obroot` scopes twenty rules, including the whole onboarding palette
   (`.ic-b`, `.ic-g`, `.ic-a`, `.ic-n`) and the `--ob-*` background wash.
-- `#scanVideo` and `#scanOverlay` size the viewfinder to its hero and hide both
+- `#scanVideo` and `#scanOverlay` size the viewfinder to `.sc-vf` and hide both
   while the camera is off. Without them the video renders at its natural size in
   the corner of a full-bleed viewfinder.
 - The per-screen rules were `#v0`–`#v4`. A routed shell has no stack of numbered

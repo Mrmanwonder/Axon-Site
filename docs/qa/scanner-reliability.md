@@ -21,8 +21,8 @@ failure, permission request races, stop/restart ownership, worker transfer failu
 native still timeout/throw/decode fallback, and subsequent manual shots. They do
 not emulate sensor optics, camera drivers or iOS background suspension.
 
-The Chromium canvas-stream fixture runs the actual worker, detector, tracker,
-quality gate and Auto capture. It checks a held synthetic page and an empty desk.
+The Chromium canvas-stream fixture runs the actual worker, detector (scanic ML),
+whole-page lock, quality gate and Auto capture. It checks a held synthetic page and an empty desk.
 Its latency is a cloud-rendering measurement, not an Android/iPhone benchmark.
 The preview must remain untransformed (AXO-90 removed display stabilisation).
 

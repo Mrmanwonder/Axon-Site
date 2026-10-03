@@ -1,9 +1,8 @@
 # bench/
 
 Mostly measurement, not tests — these answer questions where the honest
-answer is a number and the tempting answer is an opinion. `golden.test.mjs`
-is the one exception: real fixtures, real pass/fail assertions, wired into
-`npm test`.
+answer is a number and the tempting answer is an opinion. The `*.test.mjs`
+files are the exception: real assertions, wired into `npm test`.
 
 | What | Run it |
 | --- | --- |
@@ -12,16 +11,10 @@ is the one exception: real fixtures, real pass/fail assertions, wired into
 | `anisotropy.html` | Whether a motion-blur measure can tell a shaken page from a ruled one |
 | `conditioning.html` | One page through stage 1 and 2, timed under CPU throttling |
 | `viewfinder.html` + `viewfinder.mjs` | The real capture controller against a page-on-a-desk scene streamed from a canvas |
-| `tracking-continuity.mjs` | The same scene with the page *moving*: does the overlay stay on it, and how often does the pose refresh — see below |
 | `capture.test.mjs` | The steadiness window and the shutter decision, as pure functions |
-| `tracking.test.mjs` | The corner tracker and the local corner search, against synthetic corners with known answers |
 | `probe.html` | One page through conditioning, with the intermediate stages visible |
-| `detect.html` | Quad detection on the real fixtures below, with the quad drawn over each one — the visual version of `golden.test.mjs` |
-| `golden.test.mjs` | The same fixtures, as an actual CI check — see below |
 | `marks-report.mjs` | Whether the teacher's ink survives stage 2 on real submitted pages, and where the marked / wrote-in-red populations separate — see below |
 | `flatten-report.mjs` | What illumination flattening does to a page's lighting, and what it costs the teacher's red ink — see below |
-| `golden-report.mjs` | The same fixtures again, as a false-accept/false-reject rate report instead of pass/fail — `node bench/golden-report.mjs` |
-| `verdict-agreement.mjs` + `.test.mjs` | Whether the live capture gate ever waves through a shot the final `scorePage()` then fails — see below |
 
 Serve the repo and open them, or drive them with Playwright:
 
@@ -33,38 +26,6 @@ node --test bench/capture.test.mjs
 
 Playwright is not vendored — there is no `package.json` and `AGENTS.md` keeps it
 that way. Point `PLAYWRIGHT_HOME` at an install you already have.
-
-## tracking-continuity.mjs
-
-`viewfinder.mjs` asks whether a page held still gets photographed — the failure
-that happened in the field. This asks the other question: while the page is
-being *moved*, does the overlay stay on it?
-
-That is not visible in a still scene, and it is the whole claim of the corner
-tracker. A detector that re-searches the whole frame a dozen times a second
-looks perfect standing still and has nothing at all to say between two
-searches, which is when a moving page is somewhere new.
-
-```bash
-PLAYWRIGHT_HOME=/path/with/node_modules node bench/tracking-continuity.mjs
-```
-
-Measured across the change that added the tracker, same scene, same 12s window:
-
-| | global search only | four tracked corners |
-| --- | --- | --- |
-| pose refresh | 1.6 Hz | **6.6 Hz** |
-| frames with a page | 100% | 100% |
-| longest blink | 0 frames | 0 frames |
-
-Read the ratio, not the absolute numbers. Headless Chromium rendering and
-capturing a 3024x4032 canvas stream is the bottleneck in both columns — a real
-phone is not doing that — so what the run establishes is that the pose refreshes
-about four times as often for the same scene, not what either rate would be on
-a device. The scene is also an easy one (a bright page on a dark desk, moving
-smoothly), which is why continuity is 100% in both columns: this measures the
-refresh rate honestly and does not yet measure recovery from a genuinely hard
-frame. A fixture that goes briefly out of focus or under a hand is what would.
 
 ## flatten-report.mjs
 
@@ -184,42 +145,19 @@ number taken at a scale the pipeline never uses: the sharpness bug in
 AXON_FIX_BRIEF.md §B7, `flatten-report.mjs`'s first pass, and the report that
 first claimed these pages already yielded nothing.
 
-## golden.test.mjs
+## Page-detection fixtures
 
-`detectQuad`, `paperScore` and `scorePage` are pure functions with no DOM
-dependency, so the only thing that ever stood between "measured by hand in a
-browser" and "checked in CI" was a way to decode a real JPEG into the plain
-`{data, width, height}` shape they expect. `decode.mjs` does that with
-`sharp` — a devDependency used only here, never shipped to the browser
-bundle — and `golden.test.mjs` runs the real fixtures below through the real
-detector and gate, pinned to today's measured behaviour:
+The first-generation detector (`detectQuad`, `paperScore`, `edges.js`) and its
+`golden.test.mjs` / `golden-report.mjs` pair were removed when detection moved to
+scanic's ML model (`src/scan/detector.js`). What replaces them:
 
-```bash
-node --test bench/golden.test.mjs   # or: npm test, alongside harness/
-```
-
-This is a first instance of the golden-set harness `scansystemredesign.md`
-§4.5 asks for, not the thing in full — that wants a checked-in corpus
-spanning the whole failure taxonomy (blurry, glared, low-resolution, blank,
-ungraded, non-schoolwork...), and this repo has real photographs for only a
-slice of that so far: five real captured pages across a skew/tilt range, the
-two real viewfinder frames the live gate actually sees, and one deliberate
-non-page scene. That last one used to be the known empty-floor false accept:
-colour/paper share alone scored it as page-like. The current detector rejects
-it with the interior-texture gate in `edges.js`, and `golden.test.mjs` now
-pins that rejection so the false accept cannot silently return. The corpus is
-still intentionally described as partial: one fixed negative does not replace
-the broader real-photo failure taxonomy the redesign calls for.
-
-`golden-report.mjs` runs the same fixtures and prints the false-accept and
-false-reject rates directly, plus a per-fixture quality-gate breakdown, for
-looking at after a threshold change rather than only finding out a pinned
-assertion broke. The two real viewfinder frames currently sit close to the
-blur line — one scores under `BLUR_WARN` — which reads as the detector
-being marginal on real phones, but is a screenshot-of-a-screenshot artifact
-of those specific fixtures (a phone's own screen re-captured, then encoded
-again) rather than evidence about camera stills; worth knowing before acting
-on it, not a finding to chase.
+- `detector.test.mjs`, `lock.test.mjs`, `guidance.test.mjs` — behaviour of the
+  detector wrapper, the whole-page lock and the guidance priority.
+- `tests/e2e/scanner-viewfinder.spec.ts` — a synthetic held page is acquired and
+  auto-captured; an empty desk never earns a lock.
+- **Not yet existing:** a real-footage corpus. Thresholds in `guidance.js` are first
+  guesses until the phone clips described in section 9 of
+  `docs/claude_scanner-ground-up-plan-2026-10-03.md` (AXO-153) are recorded.
 
 ## verdict-agreement.mjs / .test.mjs
 
