@@ -157,7 +157,7 @@ scanic's ML model (`src/scan/detector.js`). What replaces them:
   auto-captured; an empty desk never earns a lock.
 - **Not yet existing:** a real-footage corpus. Thresholds in `guidance.js` are first
   guesses until the phone clips described in section 9 of
-  `docs/claude_scanner-ground-up-plan-2026-10-03.md` (AXO-153) are recorded.
+  `docs/claude_scanner-ground-up-plan-2026-10-03.md` (AXO-145) are recorded.
 
 ## verdict-agreement.mjs / .test.mjs
 

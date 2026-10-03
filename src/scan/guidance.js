@@ -9,7 +9,7 @@
 // on real phone footage yet, so they are named, exported and tested for
 // *behaviour* (each reason fires only under its own condition) and not for being
 // right (glare and blur excepted, see below). When the R-13 corpus exists they are replaced with measured values and
-// the corpus version that justified them (AXO-153).
+// the corpus version that justified them (AXO-148, after the AXO-145 corpus).
 
 import { QUALITY } from './contract.js';
 

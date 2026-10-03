@@ -8,7 +8,7 @@
 // never when ML ran and said "no page": a wall or an empty desk must stay empty,
 // and a second opinion from a weaker engine would only invent a page there.
 //
-// Tuning against real phone footage is a separate, later step (AXO-153) and
+// Tuning against real phone footage is a separate, later step (AXO-148, after the AXO-145 corpus) and
 // changes nothing in this file except the options passed to `scanDocument`.
 //
 // Pure ES module so the same code runs in the Web Worker, on the main thread and
