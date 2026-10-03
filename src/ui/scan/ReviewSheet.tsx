@@ -30,12 +30,12 @@ import PressBox from "../components/PressBox";
 import Crop from "../components/Crop";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
-const MathText = lazy(() => import("../components/MathText"));
+const AcademicText = lazy(() => import("../components/AcademicText"));
 
 function RichText({ text }: { text: string }) {
   return (
     <Suspense fallback={text}>
-      <MathText text={text} />
+      <AcademicText text={text} />
     </Suspense>
   );
 }
