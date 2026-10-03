@@ -133,7 +133,7 @@ test("paper detail paints the student-keyed cached copy before a delayed live re
   mount("/library/paper-1");
 
   expect(await screen.findByText(/Cached Physics/)).toBeTruthy();
-  expect(screen.getByText(/offline copy/)).toBeTruthy();
+  expect(screen.getByText(/offline copy/i)).toBeTruthy();
   expect(fixture.getCached).toHaveBeenCalledWith("paper:student-1:paper-1");
   expect(fixture.readPaper).toHaveBeenCalledWith("student-1", "paper-1");
 
@@ -141,7 +141,7 @@ test("paper detail paints the student-keyed cached copy before a delayed live re
 
   expect(await screen.findByText(/Live Physics/)).toBeTruthy();
   await waitFor(() => expect(screen.queryByText(/Cached Physics/)).toBeNull());
-  expect(screen.queryByText(/offline copy/)).toBeNull();
+  expect(screen.queryByText(/offline copy/i)).toBeNull();
 });
 
 test("paper Delete uses the authenticated owner session, explains the consequence, stays single-flight, then returns to Library", async () => {

@@ -12,7 +12,16 @@ import NotFound from "../../src/ui/pages/NotFound";
 import TabNav from "../../src/ui/shell/TabNav";
 import AnswerBlockView from "../../src/ui/components/AnswerBlock";
 import ReviewSheet from "../../src/ui/scan/ReviewSheet";
+import PaperOverview from "../../src/ui/pages/PaperOverview";
+import { Route, Routes } from "react-router-dom";
 const params = new URLSearchParams(location.search);
+// Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
+if (params.get("view") === "paper") {
+  await Promise.all([
+    import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
+    import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
+  ]);
+}
 function DialogDemo() {
   const { openSheet } = useSheetControls();
   const navigate = useNavigate(); const location = useLocation();
@@ -56,5 +65,5 @@ if (params.get("view") === "route-errors") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }
