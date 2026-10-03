@@ -13,6 +13,10 @@ export default defineConfig({
   optimizeDeps: {
     entries: ["index.html", "tests/browser/index.html"],
   },
+  // The page-finder worker lazily imports scanic (and through it the ONNX runtime),
+  // which is code-split; Vite's default worker format (iife) cannot do that.
+  // Every worker here is already constructed with { type: "module" }.
+  worker: { format: "es" },
   build: {
     manifest: true,
     // The performance floor is 60fps on mid-tier Android, which starts with

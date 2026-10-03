@@ -12,6 +12,17 @@ let workers: any[];
 let context: any;
 let bitmap: () => any;
 
+const noPage = { status: 'none', source: 'ml', quad: null, score: 0.01, degraded: false, error: null, ms: 3 };
+function replyTo(message: any) {
+  if (message.kind === 'init') return { id: message.id, ok: true, ml: true, error: null };
+  if (message.kind === 'detect') {
+    return { id: message.id, ok: true, detection: noPage, width: 100, height: 100,
+      signals: { luma: { median: 150, p95: 230 }, motion: 0, edgeContrast: null }, exposure: null };
+  }
+  if (message.kind === 'focus') return { id: message.id, ok: true, sharpness: 1 };
+  return { id: message.id, ok: true };
+}
+
 beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers();
@@ -28,9 +39,11 @@ beforeEach(() => {
     onerror: any;
     messages: any[] = [];
     terminate = vi.fn();
+    // Answers like the real worker (src/scan/detect-worker.js): every request gets
+    // exactly one reply. Tests override postMessage to hold or break replies.
     postMessage = vi.fn((message) => {
       this.messages.push(message);
-      queueMicrotask(() => this.onmessage?.({ data: { id: message.id, found: null } }));
+      queueMicrotask(() => this.onmessage?.({ data: replyTo(message) }));
     });
     constructor() { workers.push(this); }
   });
@@ -47,6 +60,7 @@ async function fixture() {
   const video = document.createElement('video');
   Object.defineProperties(video, {
     srcObject: { value: null, writable: true },
+    readyState: { value: 4 },
     videoWidth: { value: 0, writable: true },
     videoHeight: { value: 0, writable: true },
   });
@@ -146,35 +160,114 @@ test('old permission rejection does not clear a newer shared camera request', as
   camera.releaseCamera();
 });
 
-test('a stale global detector result cannot publish state or spawn a second detection loop', async () => {
+const workerOf = async (f: any) => { await f.capture.start(f.stream); await flush(); return workers[0]; };
+
+test('a detection answered after stop cannot publish state or start another loop', async () => {
   const f = await fixture();
-  workers[0].postMessage.mockImplementation((message: any) => workers[0].messages.push(message));
   showFrame(f.video);
-  await f.capture.start(f.stream);
+  // Hold every detect reply; init is answered so the search loop starts.
+  const held: any[] = [];
+  let w: any;
+  const originalWorker = (globalThis as any).Worker;
+  vi.stubGlobal('Worker', class extends originalWorker {
+    constructor() {
+      super();
+      w = this;
+      (this as any).postMessage = vi.fn((message: any) => {
+        (this as any).messages.push(message);
+        if (message.kind === 'detect') held.push(message);
+        else queueMicrotask(() => (this as any).onmessage?.({ data: replyTo(message) }));
+      });
+    }
+  });
+  vi.resetModules();
+  const fresh = await fixture();
+  showFrame(fresh.video);
+  await fresh.capture.start(fresh.stream);
   await flush();
-  const oldMessage = workers[0].messages[0];
-  expect(oldMessage.kind).toBe('search');
-  f.capture.stop();
-  Object.assign(f.video, { videoWidth: 0, videoHeight: 0 });
-  await f.capture.start(f.stream);
+  expect(held.length).toBe(1);
+  fresh.capture.stop();
+  fresh.onState.mockClear();
   const timersBefore = vi.getTimerCount();
-  workers[0].onmessage({ data: { id: oldMessage.id, found: null } });
+  w.onmessage({ data: { ...replyTo(held[0]) } });
   await flush();
-  expect(f.onState).not.toHaveBeenCalled();
-  // The old worker deadline disappears; no new detector timer replaces it.
-  expect(vi.getTimerCount()).toBe(timersBefore - 1);
+  expect(fresh.onState).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBeLessThanOrEqual(timersBefore);
 });
 
-test('a worker transfer failure immediately terminates the broken worker', async () => {
+test('a page finder that cannot take a frame is reported, and the shutter still works', async () => {
   const f = await fixture();
-  workers[0].postMessage.mockImplementation(() => { throw new Error('DataCloneError'); });
-  const close = vi.fn();
-  bitmap = () => ({ width: 100, height: 100, close });
   showFrame(f.video);
   await f.capture.start(f.stream);
   await flush();
-  expect(close).toHaveBeenCalledOnce();
-  expect(workers[0].terminate).toHaveBeenCalledOnce();
+  const close = vi.fn();
+  bitmap = () => ({ width: 100, height: 100, close });
+  workers[0].postMessage.mockImplementation(() => { throw new Error('DataCloneError'); });
+  await vi.advanceTimersByTimeAsync(2000);
+  // The frame handed to a worker that refused it is released, not leaked.
+  expect(close).toHaveBeenCalled();
+  const last = f.onState.mock.calls.at(-1)![0];
+  expect(last.engine.status).toBe('unavailable');
+  expect(last.reason).toBe('engine');
+  expect(last.hint).toMatch(/drag the corners/i);
+  // Capture never depends on detection.
+  const taken = f.capture.shoot();
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(await taken).toMatchObject({ auto: false, quad: null });
+  expect(f.onShot).toHaveBeenCalledOnce();
+});
+
+test('a worker crash is surfaced to the student, not swallowed', async () => {
+  const f = await fixture();
+  showFrame(f.video);
+  await f.capture.start(f.stream);
+  await flush();
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  workers[0].onerror({ message: 'wasm compile failed', filename: 'detect-worker.js', lineno: 1 });
+  await vi.advanceTimersByTimeAsync(5000);
+  const last = f.onState.mock.calls.at(-1)![0];
+  expect(last.engine.status).toBe('unavailable');
+  expect(last.engine.error).toMatch(/wasm compile failed/);
+  expect(consoleError).toHaveBeenCalled();
+});
+
+test('a frame that cannot be read is reported after repeated failures', async () => {
+  const f = await fixture();
+  showFrame(f.video);
+  vi.mocked(createImageBitmap).mockRejectedValue(new Error('decode failed'));
+  await f.capture.start(f.stream);
+  await vi.advanceTimersByTimeAsync(3000);
+  const last = f.onState.mock.calls.at(-1)![0];
+  expect(last.engine.status).toBe('unavailable');
+  expect(last.engine.error).toMatch(/camera frames/);
+});
+
+test('torch is offered only where the camera exposes it, and a refusal is shown, not hidden', async () => {
+  // No torch capability: the mode setter changes nothing on the track.
+  const none = await fixture();
+  showFrame(none.video);
+  await none.capture.start(none.stream);
+  await none.capture.setTorchMode('on');
+  expect(none.capture.torch).toMatchObject({ supported: false, on: false });
+  expect(none.track.applyConstraints).not.toHaveBeenCalledWith({ advanced: [{ torch: true }] });
+  none.capture.stop();
+
+  // With torch: On lights it, Off darkens it, a refusal leaves it off with the reason.
+  const f = await fixture();
+  showFrame(f.video);
+  f.track.getCapabilities = () => ({ focusMode: ['continuous'], torch: true });
+  await f.capture.start(f.stream);
+  expect(f.capture.torch.supported).toBe(true);
+  await f.capture.setTorchMode('on');
+  expect(f.track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] });
+  expect(f.capture.torch).toMatchObject({ mode: 'on', on: true, error: null });
+  await f.capture.setTorchMode('off');
+  expect(f.capture.torch).toMatchObject({ mode: 'off', on: false });
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  f.track.applyConstraints.mockRejectedValueOnce(new Error('torch busy'));
+  await f.capture.setTorchMode('on');
+  expect(f.capture.torch).toMatchObject({ mode: 'on', on: false });
+  expect(f.capture.torch.error).toMatch(/torch busy/);
 });
 
 for (const failure of ['stall', 'throw', 'decode']) {
@@ -192,8 +285,7 @@ for (const failure of ['stall', 'throw', 'decode']) {
     const first = f.capture.shoot();
     await vi.advanceTimersByTimeAsync(1500);
     expect(await first).toMatchObject({ capturePath: 'canvas-grab', auto: false });
-    expect(f.capture.overlayPhase).not.toBe('captured-confirm');
-    const calls = takePhoto.mock.calls.length;
+        const calls = takePhoto.mock.calls.length;
     expect(calls).toBeGreaterThan(0);
     const second = f.capture.shoot();
     await vi.advanceTimersByTimeAsync(250);

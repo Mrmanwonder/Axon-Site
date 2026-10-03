@@ -1,96 +1,64 @@
 // Stage 0 · capture.
 //
-// The viewfinder, gate and shutter are a transaction. Live tracking is only a
-// prediction about a future photograph; the saved still is re-detected and
-// re-measured before automatic capture is allowed to commit it.
+// What this controller promises, in order of importance:
+//
+//   1. The shutter always works. Detection assists the student; it never gates
+//      the photograph. A frame with nothing detectable still becomes a page that
+//      can be adjusted by hand and read.
+//   2. Every "not found" has a reason that was measured, or says nothing.
+//   3. Failures are visible. A worker that cannot start, a frame that cannot be
+//      read and a torch that will not light are all reported, not swallowed.
+//
+// Detection is a public library used as shipped (src/scan/detector.js); the lock
+// is a simple whole-page comparison over time (src/scan/lock.js); what the
+// strip says comes from src/scan/guidance.js. This file is the camera, the loop
+// that joins them, and the still.
 
-import { CAPTURE, CONDITIONING, ENHANCE, QUALITY } from './contract.js';
+import { CAPTURE } from './contract.js';
 import { withDeadline } from './deadline.js';
 import {
   CAMERA_CONTROL_TIMEOUT_MS, FALLBACK_CAPTURE_HEIGHT, FALLBACK_CAPTURE_WIDTH,
   releaseCamera, requestCamera, requestContinuousFocus, requestFallbackCaptureResolution,
 } from './camera.js';
-import { detectQuad, easeQuad, scaleQuad } from './edges.js';
-import { focusWindowRect, measureQuad, sharpness, skewDegrees } from './quality.js';
-import { quadDrift, quadFill, quadSize } from './geometry.js';
-import {
-  acquire, createTrack, documentConfidence, geometryValid, isSameDocument,
-  needsGlobal, observe, quadOf, searchWindows,
-} from './track.js';
+import { DETECTOR } from './detector.js';
+import { GUIDE, chooseGuidance, quadTouchesEdge } from './guidance.js';
+import { quadFill, quadSize } from './geometry.js';
+import { createLock } from './lock.js';
+import { focusWindowRect, skewDegrees } from './quality.js';
 
-// Live tracking must feel continuous, but it must never monopolise a phone.
-const DETECT_INTERVAL_MS = 65;
-const DETECT_MAX_INTERVAL_MS = 220;
-const DETECT_TIMEOUT_MS = 700;
-const DETECT_DUTY = 0.55;
-
-// Detection and capture quality are deliberately separate. The tracker should
-// find a small page early and tell the student to move closer; it must not wait
-// until the page is already capture-sized before it admits that paper exists.
-export const LIVE_SEARCH_MIN_FILL = 0.055;
-
-// Bound work by the proxy's long edge. The previous fixed 360px *width* became
-// ~360x800 on a portrait object-fit crop, doing 2–3x the intended pixel work.
-// A small fast pass runs normally; one larger recovery pass is tried after
-// misses so faint/shadowed boundaries still get a second chance.
-export const LIVE_PROXY_LONG_EDGE = 480;
-export const LIVE_PROXY_RECOVERY_LONG_EDGE = 720;
-const LIVE_RECOVERY_AFTER_MISSES = 2;
-// A tentative page should survive one noisy detector miss. Requiring two
-// literally consecutive global hits made acquisition probability collapse on
-// the exact low-light/hand-shadow frames where each individual pass is flaky.
-const TENTATIVE_CANDIDATE_GRACE_MS = 500;
-const TRACK_LONG_EDGE = 720;
-const TRACK_INTERVAL_MS = 45;
+// ── tunables (first guesses; see guidance.js and lock.js on why) ───────────
+const DETECT_LONG_EDGE = 640;        // the frame the detector sees
+const DETECT_PERIOD_MS = 90;         // aim for ~10 searches a second
+const DETECT_TIMEOUT_MS = 6000;      // a search that takes this long has failed
+const INIT_TIMEOUT_MS = 25000;       // first model download over a slow connection
+const ENGINE_FAILURES_BEFORE_UNAVAILABLE = 3;
 const FOCUS_WINDOW = 384;
-const MEASUREMENT_STALE_MS = 900;
-const VIEWPORT_SCALE_TOLERANCE = 0.01;
-const STILL_ANALYSIS_LONG_EDGE = 720;
-// Manual captures taken before live lock get one deliberately stronger pass on
-// the captured still. 1440px preserves substantially more edge evidence than
-// the live proxy without asking a phone to run the Hough search across a 12MP
-// sensor frame.
-export const RESCUE_STILL_ANALYSIS_LONG_EDGE = 1440;
-export const RESCUE_QUAD_AGREEMENT = 0.045;
-const RESCUE_DETECT_TIMEOUT_MS = 1800;
-const HINT_SEQUENCE_LIMIT = 32;
+const FOCUS_PERIOD_MS = 450;
+const FOCUS_STALE_MS = 1500;
+const STILL_DETECT_LONG_EDGE = 1024; // the photograph gets a bigger look
+const STILL_DETECT_TIMEOUT_MS = 12000;
+/** A still's page counts as "found with evidence" at or above this ML score. */
+export const FINE_SCORE = 0.9;
+const REARM_AFTER_LOSS_MS = 800;
 const AUTO_RETRY_COOLDOWN_MS = 550;
-const TRACK_CONFIDENCE_FLOOR = 0.64;
-const FOCUS_BREATHING_AREA_DELTA = 0.05;
 const NATIVE_PHOTO_TIMEOUT_MS = 1200;
 const VIDEO_FRAME_TIMEOUT_MS = 220;
-const STILL_MIN_FILL = 0.07;
-const DETECT_TIMEOUT_LIMIT = 2;
+const VIEWPORT_SCALE_TOLERANCE = 0.01;
+const HINT_SEQUENCE_LIMIT = 32;
+const TORCH_AUTO_AFTER_MS = 1000;
 
-export const CAPTURE_CONFIRM_TIMING = Object.freeze({
-  freezeEnd: 40,
-  morphEnd: 90,
-  edgesEnd: 160,
-  end: 180,
-});
+export const TORCH_MODES = Object.freeze(['auto', 'on', 'off']);
 
-export const PAPER_EVIDENCE_CONFIRMATIONS = 2;
-export const PAPER_EVIDENCE_LOSS_MS = 700;
-export const SEARCH_GUIDANCE = Object.freeze({
-  blocking: null,
-  hint: 'Fit all four page corners in frame',
-});
-
-function viewportScale() {
-  return globalThis.visualViewport?.scale ?? 1;
-}
 
 function viewportScaled() {
-  return Math.abs(viewportScale() - 1) > VIEWPORT_SCALE_TOLERANCE;
+  return Math.abs((globalThis.visualViewport?.scale ?? 1) - 1) > VIEWPORT_SCALE_TOLERANCE;
 }
 
 /**
  * Source rectangle visible through an object-fit: cover preview.
  *
- * Global detection must search what the student can actually see. On a portrait
- * phone a 16:9 camera stream can be horizontally cropped by more than half; the
- * old detector searched those invisible sensor margins and then rejected the
- * visible sheet for occupying too little of the full source frame.
+ * Detection must search what the student can actually see; on a portrait phone
+ * a 16:9 stream can be cropped by more than half horizontally.
  */
 export function coverCropRect(sourceWidth, sourceHeight, viewWidth, viewHeight) {
   if (!(sourceWidth > 0 && sourceHeight > 0 && viewWidth > 0 && viewHeight > 0)) {
@@ -116,58 +84,6 @@ export function fitLongEdge(width, height, longEdge) {
   };
 }
 
-const clamp01 = (value) => Math.max(0, Math.min(1, value));
-
-// cubic-bezier(0.2, 0.9, 0.2, 1), solved from x to y. The strong initial
-// response makes the confirmation read as feedback rather than progress.
-export function captureConfirmEase(progress) {
-  const x = clamp01(progress);
-  const sample = (a, b, t) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t ** 2 + t ** 3;
-  const slope = (a, b, t) => 3 * a * (1 - t) ** 2
-    + 6 * (b - a) * (1 - t) * t
-    + 3 * (1 - b) * t ** 2;
-  let t = x;
-  for (let i = 0; i < 5; i++) {
-    const dx = sample(0.2, 0.2, t) - x;
-    const d = slope(0.2, 0.2, t);
-    if (Math.abs(dx) < 0.0001 || Math.abs(d) < 0.0001) break;
-    t = clamp01(t - dx / d);
-  }
-  return sample(0.9, 1, t);
-}
-
-export function captureConfirmFrame(elapsedMs, reducedMotion = false) {
-  if (elapsedMs < 0 || elapsedMs >= CAPTURE_CONFIRM_TIMING.end) {
-    return { active: false, morph: 0, edges: 0, opacity: 0 };
-  }
-  if (reducedMotion) {
-    const fadeStart = 120;
-    return {
-      active: true,
-      morph: 1,
-      edges: 1,
-      opacity: elapsedMs < fadeStart
-        ? 1
-        : 1 - clamp01((elapsedMs - fadeStart) / (CAPTURE_CONFIRM_TIMING.end - fadeStart)),
-    };
-  }
-  const morph = captureConfirmEase(
-    (elapsedMs - CAPTURE_CONFIRM_TIMING.freezeEnd)
-      / (CAPTURE_CONFIRM_TIMING.morphEnd - CAPTURE_CONFIRM_TIMING.freezeEnd),
-  );
-  const edges = captureConfirmEase(
-    (elapsedMs - CAPTURE_CONFIRM_TIMING.morphEnd)
-      / (CAPTURE_CONFIRM_TIMING.edgesEnd - CAPTURE_CONFIRM_TIMING.morphEnd),
-  );
-  const opacity = elapsedMs < CAPTURE_CONFIRM_TIMING.edgesEnd
-    ? 1
-    : 1 - clamp01(
-        (elapsedMs - CAPTURE_CONFIRM_TIMING.edgesEnd)
-          / (CAPTURE_CONFIRM_TIMING.end - CAPTURE_CONFIRM_TIMING.edgesEnd),
-      );
-  return { active: true, morph, edges, opacity };
-}
-
 export function isVerifiedQuad(candidate) {
   return Array.isArray(candidate) && candidate.length === 4
     && candidate.every((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
@@ -181,241 +97,113 @@ export function shutterQuadConfidence({ locked = false, hasCandidate = false } =
 }
 
 /**
- * A rescue quad must be independently sane. When the ordinary still pass also
- * found geometry, disagreement between the two resolutions is evidence that at
- * least one of them is guessing; the safe outcome is an honest uncropped page.
+ * May Auto fire on this frame? Pure so it can be tested without a camera.
+ * Auto is an assist: it needs a locked, still, usable page and nothing the
+ * student can fix by moving. Glare is advice, not a veto.
  */
-export function rescueQuadAccepted(primaryQuad, rescueQuad, width, height) {
-  if (!isVerifiedQuad(rescueQuad)) return false;
-  if (!isVerifiedQuad(primaryQuad)) return true;
-  return quadDrift(primaryQuad, rescueQuad, width, height) <= RESCUE_QUAD_AGREEMENT;
-}
-
-export function resolveOverlayPhase({
-  confirming = false,
-  hasQuad = false,
-  trackState = 'searching',
-  trackConfidence = 0,
-  scaledViewport = false,
-} = {}) {
-  if (confirming) return 'captured-confirm';
-  if (hasQuad && trackState === 'tracking'
-      && trackConfidence >= TRACK_CONFIDENCE_FLOOR && !scaledViewport) return 'locked';
-  return 'searching';
-}
-
-/** Whether automatic capture is allowed to fire on this frame. */
 export function shouldAutoCapture({
-  autoCapture, armed, blocking, consecutiveFinds, globalConfirmations = 0,
-  trackState = 'tracking', viewportScaled = false, processing = false,
-  stableForMs = Infinity, candidateForMs = Infinity,
+  auto, armed, processing = false, scaled = false,
+  phase, stableMs = 0, lockedForMs = 0, reason = null,
 }) {
-  if (!autoCapture || !armed || blocking || viewportScaled || processing) return false;
-  if (consecutiveFinds < CAPTURE.CONSECUTIVE_FINDS) return false;
-  if (globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS) return false;
-  if (trackState !== 'tracking') return false;
-  if (stableForMs < CAPTURE.STABILITY_MS && candidateForMs < CAPTURE.PATIENCE_MS) return false;
-  return true;
+  if (!auto || !armed || processing || scaled) return false;
+  if (phase !== 'locked') return false;
+  if (reason !== null && reason !== 'glare') return false;
+  return stableMs >= CAPTURE.STABILITY_MS || lockedForMs >= CAPTURE.PATIENCE_MS;
 }
-
-export const MIN_EDGE_COVERAGE = 0.72;
-export const LIVE_SOURCE_FLOOR = Math.ceil(CONDITIONING.MIN_LONG_EDGE / ENHANCE.MAX_SCALE);
-
-/** One authoritative quality verdict for both live guidance and captured stills. */
-export function liveGateVerdict(
-  {
-    glare, clipping, fill, edgeCoverage = 1, sharpness, skew, pageLongEdge,
-    resolutionStatus = 'known', qualityReady = true, geometryReady = true,
-  },
-  holding = null,
-) {
-  const easing = (reason) => (holding === reason ? 1 + GUIDANCE_HYSTERESIS : 1);
-
-  if (!geometryReady) {
-    return { blocking: 'tracking', hint: 'Hold steady while I lock onto all four corners' };
-  }
-  if (resolutionStatus !== 'unknown'
-      && pageLongEdge < LIVE_SOURCE_FLOOR * easing('resolution')) {
-    return { blocking: 'resolution', hint: 'Move a little closer while keeping all four paper corners visible' };
-  }
-  if (edgeCoverage < MIN_EDGE_COVERAGE * easing('distance')) {
-    return { blocking: 'distance', hint: 'Move closer while keeping all four paper corners visible' };
-  }
-  if (!qualityReady) {
-    return { blocking: 'measuring', hint: 'Hold steady for a moment' };
-  }
-  // Warning-level quality signals are advice, not an infinite veto on Auto.
-  // The durable page scorer already distinguishes warn from fail, so live
-  // capture only blocks quality that is genuinely unusable.
-  if (glare > QUALITY.GLARE_FAIL / easing('glare')) {
-    return { blocking: 'glare', hint: 'Strong glare is washing out part of the page — tilt it slightly away from the light' };
-  }
-  if (sharpness !== null && sharpness < QUALITY.BLUR_FAIL * easing('focus')) {
-    return { blocking: 'focus', hint: 'Hold still — the page is too blurred to read clearly' };
-  }
-  if (glare > QUALITY.GLARE_WARN) {
-    return { blocking: null, hint: 'A little glare is visible — tilt the page slightly if you can' };
-  }
-  if (clipping > QUALITY.CLIP_WARN) {
-    return { blocking: null, hint: 'The page is very bright — more shade will preserve faint marking' };
-  }
-  if (sharpness !== null && sharpness < QUALITY.BLUR_WARN) {
-    return { blocking: null, hint: 'Slightly soft — hold still for a sharper scan' };
-  }
-  if (skew > QUALITY.SKEW_WARN_DEG) {
-    return { blocking: null, hint: 'Square the page up a little if you can' };
-  }
-  return { blocking: null, hint: 'Ready' };
-}
-
-export const GUIDANCE_DWELL_MS = 700;
-export const GUIDANCE_HYSTERESIS = 0.05;
 
 /**
- * Paper presence is deliberately stricter than a detector hit. A single
- * document-shaped rectangle is only a candidate; two agreeing global searches
- * plus a healthy local track are evidence. Once confirmed, brief corner misses
- * retain that evidence so guidance cannot bounce back to searching frame by
- * frame.
+ * Is this still's page "fine", and if not, why? A page is fine only on
+ * evidence: the detector's quad came from the ML engine at or above FINE_SCORE.
+ * Quality (blur, glare) is judged downstream by scorePage on the stored page.
  */
-export function settledPaperEvidence(
-  showing,
-  { globalConfirmations = 0, geometryReady = false, observedGeometry = false },
-  now,
-) {
-  const current = showing ?? { confirmed: false, lastObservedAt: null };
-  const confirmedNow = geometryReady
-    && globalConfirmations >= PAPER_EVIDENCE_CONFIRMATIONS;
-
-  if (!current.confirmed) {
-    return confirmedNow
-      ? { confirmed: true, lastObservedAt: now }
-      : { confirmed: false, lastObservedAt: null };
+export function judgeStillGeometry(detection) {
+  if (detection?.status === 'found' && detection.quad) {
+    if (detection.source === 'ml' && (detection.score ?? 0) >= FINE_SCORE) {
+      return { confirmed: true, reason: null };
+    }
+    return { confirmed: false, reason: 'uncertain' };
   }
-  if (observedGeometry || confirmedNow) {
-    return { confirmed: true, lastObservedAt: now };
-  }
-  if (current.lastObservedAt != null
-      && now - current.lastObservedAt < PAPER_EVIDENCE_LOSS_MS) {
-    return current;
-  }
-  return { confirmed: false, lastObservedAt: null };
-}
-
-function isLightingGuidance(verdict) {
-  if (!verdict) return false;
-  if (verdict.blocking === 'glare') return true;
-  return /\b(glare|bright|light)\b/i.test(verdict.hint ?? '');
-}
-
-export function settledScannerGuidance(
-  showing,
-  verdict,
-  paperEvidence,
-  now,
-  { candidatePresent = false } = {},
-) {
-  // A tentative rectangle still does not earn a visible paper lock. Lighting is
-  // the narrow exception: if real pixels inside a plausible candidate already
-  // show glare/over-exposure, telling the student to reframe cannot fix it.
-  const next = paperEvidence?.confirmed
-    ? verdict
-    : (candidatePresent && isLightingGuidance(verdict) ? verdict : SEARCH_GUIDANCE);
-  return settledGuidance(showing, next, now);
-}
-
-export function settledGuidance(showing, verdict, now) {
-  const settled = { hint: verdict.hint, blocking: verdict.blocking, since: now };
-  if (!showing || showing.hint === verdict.hint) {
-    return { ...settled, since: showing?.since ?? now };
-  }
-  // Entering/leaving a blocking state affects capture correctness, so it is
-  // immediate. Switching between two pieces of advice is debounced.
-  if (!showing.blocking !== !verdict.blocking) return settled;
-  if (now - showing.since < GUIDANCE_DWELL_MS) return showing;
-  return settled;
+  if (detection?.status === 'none') return { confirmed: false, reason: 'not-found' };
+  return { confirmed: false, reason: 'engine' };
 }
 
 // ── worker bridge ──────────────────────────────────────────────────────────
-let detectWorker = null;
-let nextDetectId = 1;
-let detectTimeouts = 0;
-const detectPending = new Map();
+// One worker for the page's life: the model is a few MB, so it is loaded once.
+let worker = null;
+let nextRequestId = 1;
+const pending = new Map();
+let workerFatal = null;
+let initPromise = null;
 
-function disableDetectWorker(worker) {
-  if (detectWorker !== worker) return;
-  detectWorker = false;
-  worker.terminate?.();
-  for (const finish of [...detectPending.values()]) finish(null);
-  detectPending.clear();
-  detectTimeouts = 0;
+function failAllPending(error) {
+  for (const settle of [...pending.values()]) settle({ ok: false, error });
+  pending.clear();
 }
 
-function ensureDetectWorker() {
-  if (detectWorker !== null) return detectWorker;
+function ensureWorker() {
+  if (worker || workerFatal) return worker;
   try {
-    detectWorker = new Worker(new URL('./detect-worker.js', import.meta.url), { type: 'module' });
-    const worker = detectWorker;
-    detectWorker.onmessage = (event) => {
-      const { id, ...rest } = event.data;
-      const resolve = detectPending.get(id);
-      if (!resolve) return;
-      detectPending.delete(id);
-      detectTimeouts = 0;
-      resolve(rest);
+    worker = new Worker(new URL('./detect-worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = (event) => {
+      const data = event.data;
+      if (data?.kind === 'fatal') { workerFatal = data.error; failAllPending(data.error); return; }
+      const settle = pending.get(data?.id);
+      if (settle) { pending.delete(data.id); settle(data); }
     };
-    detectWorker.onerror = (event) => {
-      console.error('[scan] detect worker failed, falling back to main-thread search', {
-        message: event?.message, filename: event?.filename, lineno: event?.lineno,
-      });
-      // A crashed worker is already a failed detection. Release every waiter
-      // immediately instead of making the viewfinder sit through the timeout.
-      disableDetectWorker(worker);
+    worker.onerror = (event) => {
+      workerFatal = event?.message || 'the page-finder worker crashed';
+      console.error('[scan] detect worker failed', workerFatal, event?.filename, event?.lineno);
+      failAllPending(workerFatal);
+      worker?.terminate?.();
+      worker = null;
     };
-  } catch {
-    detectWorker = false;
+  } catch (error) {
+    workerFatal = String(error?.message ?? error);
+    worker = null;
   }
-  return detectWorker;
+  return worker;
 }
 
-function runDetectWorker(
-  kind,
-  bitmap,
-  extra = null,
-  { timeoutMs = DETECT_TIMEOUT_MS, affectsWorkerHealth = true } = {},
-) {
-  const w = ensureDetectWorker();
-  if (!w) { bitmap.close?.(); return Promise.resolve(null); }
-  const id = nextDetectId++;
+/** Resolves to the worker's reply, or `{ ok:false, error }`. Never rejects. */
+function request(kind, payload = {}, { transfer = [], timeoutMs = DETECT_TIMEOUT_MS } = {}) {
+  const w = ensureWorker();
+  if (!w) {
+    transfer.forEach((b) => b?.close?.());
+    return Promise.resolve({ ok: false, error: workerFatal ?? 'the page finder could not start' });
+  }
+  const id = nextRequestId++;
   return new Promise((resolve) => {
-    let done = false;
-    let timeout = 0;
-    const finish = (value) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timeout);
-      detectPending.delete(id);
-      resolve(value);
-    };
-    detectPending.set(id, finish);
-    timeout = setTimeout(() => {
-      if (affectsWorkerHealth) detectTimeouts++;
-      finish(null);
-      // A worker that repeatedly misses its live deadline is not a worker path
-      // at all. The rare, larger still-rescue pass has a longer budget and must
-      // not demote an otherwise healthy live worker if that one pass times out.
-      if (affectsWorkerHealth
-          && detectTimeouts >= DETECT_TIMEOUT_LIMIT && detectWorker === w) {
-        disableDetectWorker(w);
-      }
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      resolve({ ok: false, error: `the page finder took longer than ${Math.round(timeoutMs / 1000)}s` });
     }, timeoutMs);
+    pending.set(id, (reply) => { clearTimeout(timer); resolve(reply); });
     try {
-      w.postMessage({ id, kind, bitmap, ...extra }, [bitmap]);
-    } catch {
-      bitmap.close?.();
-      disableDetectWorker(w);
+      w.postMessage({ id, kind, ...payload }, transfer);
+    } catch (error) {
+      clearTimeout(timer);
+      pending.delete(id);
+      transfer.forEach((b) => b?.close?.());
+      resolve({ ok: false, error: String(error?.message ?? error) });
     }
   });
+}
+
+/** Load the model once. Resolves to `{ ok, ml, error }`. */
+function initEngine() {
+  initPromise ??= request('init', {
+    assetBaseUrl: new URL(`/${DETECTOR.ASSET_PATH}`, globalThis.location?.origin ?? 'http://localhost').href,
+  }, { timeoutMs: INIT_TIMEOUT_MS }).then((reply) => {
+    if (!reply.ok) initPromise = null; // allow a retry on the next start
+    return reply;
+  });
+  return initPromise;
+}
+
+/** Warm the engine while the camera permission sheet is still open. */
+export function prepareScanner() {
+  ensureWorker();
+  return initEngine();
 }
 
 /**
@@ -426,50 +214,50 @@ function runDetectWorker(
  * @param {(shot:Object) => void} options.onShot
  */
 export function createCapture({ video, overlay, onState, onShot }) {
+  const debug = new URLSearchParams(globalThis.location?.search ?? '').has('scandebug');
+  const lock = createLock();
+
   let stream = null;
   let running = false;
-  let rafHandle = 0;
-  let videoFrameHandle = 0;
+  let activation = 0;
+  let starting = null;
   let frameClock = null;
-  let lastRenderedFrame = -1;
-  let detectHandle = 0;
+  let videoFrameHandle = 0;
+  let rafHandle = 0;
   let autoRetryHandle = 0;
 
-  let track = createTrack();
-  let trackSize = null;
-  let trackInFlight = false;
-  let lastTrackedFrame = -1;
-  let lastTrackStartedAt = 0;
-  let lastTrackedArea = null;
-  let globalMisses = 0;
-  let candidateLastSeenAt = 0;
-  let measured = null;
-  let measuredAt = 0;
-  let measuredQuad = null;
-  let guidance = null;
-  let paperEvidence = null;
-  let captureConfirmation = null;
-  let overlayPhase = 'searching';
-
-  let quad = null;
-  let consecutiveFinds = 0;
-  let globalConfirmations = 0;
   let autoCapture = true;
   let armed = true;
   let processingHold = false;
   let autoRetryAfter = 0;
-  let autoStableAnchor = null;
-  let autoStableSince = 0;
-  let autoCandidateSince = 0;
+  let lostSince = 0;
+  let lockedSince = 0;
+  let shootInFlight = false;
+  let nextTransactionId = 1;
 
   let imageCapture = null;
   let cameraTrack = null;
   let photoSettings = null;
   let capturePath = 'canvas-grab';
   let nativeStillDemoted = false;
-  let shootInFlight = false;
+
+  // torch
+  let torch = { supported: false, mode: 'auto', on: false, error: null };
+  let darkSince = 0;
+
+  // live evidence
+  let engine = { status: 'loading', source: null, score: null, error: null, ms: null };
+  let engineFailures = 0;
+  let frameFailures = 0;
+  let signals = { luma: null, motion: null, glare: null, edgeContrast: null, sharpness: null, sharpnessAt: 0 };
+  let snapshot = lock.snapshot(0);
+  let noPageSince = 0;
+  let lastFocusAt = 0;
+  let lastFocusInFlight = false;
+  let shown = null; // the quad being drawn, eased toward the lock, in video pixels
   let state = blankState();
-  let nextTransactionId = 1;
+  let lastPublishKey = '';
+
   let hintSequence = [];
   let hintSequenceStartedAt = performance.now();
 
@@ -485,109 +273,58 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   function consumeHintSequence() {
-    const snapshot = hintSequence.map((entry) => ({ ...entry }));
+    const out = hintSequence.map((entry) => ({ ...entry }));
     hintSequence = [];
     hintSequenceStartedAt = performance.now();
     if (state?.hint) recordHintState(state);
-    return snapshot;
-  }
-
-  const stepStats = { count: 0, sumMs: 0, maxMs: 0, lastFlush: 0 };
-
-  function recordStepTiming({ detectMs = 0, measureMs = 0, focusMs = 0, workerUsed = false }) {
-    const total = detectMs + measureMs + focusMs;
-    stepStats.count++;
-    stepStats.sumMs += total;
-    if (total > stepStats.maxMs) stepStats.maxMs = total;
-    const now = performance.now();
-    if (!stepStats.lastFlush) stepStats.lastFlush = now;
-    if (now - stepStats.lastFlush < 2000) return;
-    console.debug('[scan:step-timing]', {
-      n: stepStats.count,
-      workerUsed,
-      meanMs: +(stepStats.sumMs / stepStats.count).toFixed(1),
-      maxMs: +stepStats.maxMs.toFixed(1),
-      lastMs: +total.toFixed(1),
-      lastBreakdown: {
-        detectMs: +detectMs.toFixed(1), measureMs: +measureMs.toFixed(1), focusMs: +focusMs.toFixed(1),
-      },
-    });
-    stepStats.count = 0; stepStats.sumMs = 0; stepStats.maxMs = 0; stepStats.lastFlush = now;
-  }
-
-  const proxy = document.createElement('canvas');
-  const proxyCtx = proxy.getContext('2d', { willReadFrequently: true });
-  const focus = document.createElement('canvas');
-  focus.width = focus.height = FOCUS_WINDOW;
-  const focusCtx = focus.getContext('2d', { willReadFrequently: true });
-
-  // Worker startup is paid while camera permission / the first frame is arriving.
-  ensureDetectWorker();
-
-  function focusInFrameOnMainThread(source, quadInFrame, sw, sh, pageLongEdge) {
-    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
-    if (!rect) return null;
-    focusCtx.drawImage(source, rect.sx, rect.sy, rect.size, rect.size, 0, 0, rect.target, rect.target);
-    const read = sharpness(focusCtx.getImageData(0, 0, rect.target, rect.target), { scale: 1 });
-    return read.blank ? null : read.score;
-  }
-
-  function visibleSourceCrop(vw = video.videoWidth, vh = video.videoHeight) {
-    const rect = video.getBoundingClientRect();
-    return coverCropRect(vw, vh, rect.width, rect.height);
-  }
-
-  function cropQuadToVideo(quadInCrop, crop, pw, ph) {
-    return quadInCrop.map((p) => ({
-      x: crop.x + p.x * (crop.width / pw),
-      y: crop.y + p.y * (crop.height / ph),
-    }));
+    return out;
   }
 
   function blankState() {
     return {
+      phase: 'starting',
       hasPage: false,
+      hint: 'Starting the camera',
+      blocking: null,
+      tone: 'neutral',
+      reason: null,
+      action: null,
       fill: 0,
-      edgeCoverage: 0,
       pageLongEdge: 0,
-      resolutionStatus: capturePath === 'image-capture' ? 'unknown' : 'known',
       sharpness: null,
       glare: 0,
       clipping: 0,
-      headroom: 0,
       skew: 0,
-      geometryReady: false,
-      qualityReady: false,
-      steady: true,
-      hint: SEARCH_GUIDANCE.hint,
-      blocking: null,
-      trackState: 'searching',
-      trackConfidence: 0,
+      steady: false,
+      engine,
+      torch,
       timing: null,
     };
   }
 
-  let activation = 0;
-  let starting = null;
+  // ── start / stop ─────────────────────────────────────────────────────────
   function start(adopt = null) {
     if (starting) return starting;
     if (running) return Promise.resolve();
     const generation = ++activation;
-    const request = startActivation(adopt, generation).catch((error) => {
+    const run = startActivation(adopt, generation).catch((error) => {
       if (generation === activation) stop();
       throw error;
     }).finally(() => {
-      if (starting === request) starting = null;
+      if (starting === run) starting = null;
     });
-    starting = request;
-    return request;
+    starting = run;
+    return run;
   }
 
   async function startActivation(adopt, generation) {
+    // The model starts loading now, in parallel with the camera permission.
+    void prepareScanner();
+
     const resolved = adopt ? await adopt : await requestCamera();
     if (resolved instanceof Error) throw resolved;
     if (generation !== activation) {
-      resolved?.getTracks?.().forEach((cameraTrack) => cameraTrack.stop());
+      resolved?.getTracks?.().forEach((t) => t.stop());
       return;
     }
     stream = resolved;
@@ -602,7 +339,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     video.srcObject = stream;
     await withDeadline(() => video.play(), 5000);
     if (generation !== activation) {
-      resolved.getTracks().forEach((cameraTrack) => cameraTrack.stop());
+      resolved.getTracks().forEach((t) => t.stop());
       return;
     }
     armed = true;
@@ -645,9 +382,19 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (setupTrack) await requestContinuousFocus(setupTrack);
     if (generation !== activation) return;
 
+    // Torch exists only where the browser exposes it (Chrome on Android). Never
+    // offered, never claimed, anywhere else.
+    let torchSupported = false;
+    try { torchSupported = !!setupTrack?.getCapabilities?.().torch; } catch { torchSupported = false; }
+    torch = { supported: torchSupported, mode: torch.mode, on: false, error: null };
+    darkSince = 0;
+    if (torchSupported && torch.mode === 'on') await applyTorch(true);
+
     running = true;
-    loop();
-    detect(generation);
+    noPageSince = performance.now();
+    publish();
+    paintLoop();
+    void searchLoop(generation);
   }
 
   function stop() {
@@ -658,25 +405,18 @@ export function createCapture({ video, overlay, onState, onShot }) {
     else cancelAnimationFrame(rafHandle);
     videoFrameHandle = rafHandle = 0;
     frameClock = null;
-    lastRenderedFrame = -1;
-    clearTimeout(detectHandle);
     clearTimeout(autoRetryHandle);
+    // Releasing the track releases the torch with it; record that honestly.
     stream?.getTracks().forEach((t) => t.stop());
     stream = null;
     video.srcObject = null;
-    quad = null;
-    consecutiveFinds = globalConfirmations = 0;
-    track = createTrack();
-    trackSize = measured = measuredQuad = guidance = paperEvidence = null;
-    captureConfirmation = null;
-    overlayPhase = 'searching';
-    lastTrackedFrame = -1;
-    lastTrackStartedAt = 0;
-    lastTrackedArea = null;
-    globalMisses = 0;
-    candidateLastSeenAt = 0;
-    measuredAt = 0;
-    trackInFlight = false;
+    lock.reset();
+    snapshot = lock.snapshot(0);
+    shown = null;
+    engineFailures = frameFailures = 0;
+    signals = { luma: null, motion: null, glare: null, edgeContrast: null, sharpness: null, sharpnessAt: 0 };
+    torch = { ...torch, on: false, error: null };
+    darkSince = 0;
     imageCapture = null;
     cameraTrack = null;
     photoSettings = null;
@@ -685,483 +425,298 @@ export function createCapture({ video, overlay, onState, onShot }) {
     processingHold = false;
     shootInFlight = false;
     autoRetryAfter = 0;
-    autoStableAnchor = null;
-    autoStableSince = 0;
-    autoCandidateSince = 0;
+    lostSince = lockedSince = 0;
     state = blankState();
+    lastPublishKey = '';
     hintSequence = [];
     hintSequenceStartedAt = performance.now();
     overlay.getContext('2d')?.clearRect(0, 0, overlay.width, overlay.height);
     releaseCamera();
   }
 
-  // ── live search ──────────────────────────────────────────────────────────
-  async function detect(generation) {
-    if (!running || generation !== activation) return;
-    if (document.hidden) {
-      detectHandle = setTimeout(() => detect(generation), DETECT_MAX_INTERVAL_MS);
-      return;
-    }
-    const started = performance.now();
+  // ── torch ────────────────────────────────────────────────────────────────
+  async function applyTorch(on) {
+    if (!torch.supported || !cameraTrack) return false;
+    const track = cameraTrack;
     try {
-      // A tentative rectangle gets another independent whole-frame search
-      // immediately. Local corner tracking alone must not promote a face or a
-      // background rectangle into user-visible paper guidance.
-      const workerAvailable = !!ensureDetectWorker();
-      if (!workerAvailable
-          || globalConfirmations < PAPER_EVIDENCE_CONFIRMATIONS
-          || needsGlobal(track, started)) {
-        await step(generation);
-      } else {
-        await measureStep(video.videoWidth, video.videoHeight, generation);
-      }
-    } catch { /* one bad frame costs one cycle */ }
-    if (!running || generation !== activation) return;
-    const cost = performance.now() - started;
-    const wait = Math.min(DETECT_MAX_INTERVAL_MS, Math.max(DETECT_INTERVAL_MS, cost / DETECT_DUTY));
-    detectHandle = setTimeout(() => detect(generation), wait);
-  }
-
-  async function step(generation) {
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return;
-    const crop = visibleSourceCrop(vw, vh);
-    // Most frames use the bounded fast proxy. After misses, every third global
-    // attempt gets a higher-resolution recovery pass instead of permanently
-    // switching the scanner into an expensive mode.
-    const recovery = globalMisses >= LIVE_RECOVERY_AFTER_MISSES
-      && globalMisses % 3 === LIVE_RECOVERY_AFTER_MISSES;
-    const proxySize = fitLongEdge(
-      crop.width,
-      crop.height,
-      recovery ? LIVE_PROXY_RECOVERY_LONG_EDGE : LIVE_PROXY_LONG_EDGE,
-    );
-    const pw = proxySize.width;
-    const ph = proxySize.height;
-    const workerUsed = !!ensureDetectWorker();
-    const result = workerUsed
-      ? await searchOnWorker(pw, ph, vw, vh, crop, generation)
-      : searchOnMainThread(pw, ph, vw, vh, crop);
-    if (!running || generation !== activation) return;
-    track.lastGlobalDetection = performance.now();
-    finishStep(result, workerUsed, vw, vh);
-  }
-
-  async function trackStep() {
-    if (trackInFlight || !running || document.hidden) return;
-    if (!ensureDetectWorker()) return;
-    const generation = activation;
-    const now = performance.now();
-    if (now - lastTrackStartedAt < TRACK_INTERVAL_MS) return;
-    lastTrackStartedAt = now;
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh || !trackSize) return;
-    if (video.currentTime === lastTrackedFrame) return;
-    lastTrackedFrame = video.currentTime;
-    const { width: tw, height: th } = trackSize;
-    const windows = searchWindows(track, performance.now(), { width: tw, height: th });
-    if (!windows.length) return;
-
-    trackInFlight = true;
-    try {
-      const bitmap = await createImageBitmap(video, { resizeWidth: tw, resizeHeight: th });
-      if (!running || generation !== activation) { bitmap.close?.(); return; }
-      const reply = await runDetectWorker('track', bitmap, { windows });
-      if (!running || generation !== activation) return;
-      track = observe(track, reply?.observations ?? {}, performance.now(), { width: tw, height: th });
-      publishFromTrack(tw, th, vw, vh, reply?.trackMs ?? 0);
-    } catch {
-      /* one bad frame costs one tracking cycle */
+      await withDeadline(() => track.applyConstraints({ advanced: [{ torch: on }] }), CAMERA_CONTROL_TIMEOUT_MS);
+      torch = { ...torch, on, error: null };
+      return true;
+    } catch (error) {
+      torch = { ...torch, on: false, error: String(error?.message ?? error).slice(0, 120) };
+      console.warn('[scan] torch change failed', torch.error);
+      return false;
     } finally {
-      if (generation === activation) trackInFlight = false;
+      publish();
     }
   }
 
-  async function searchOnWorker(pw, ph, vw, vh, crop, generation) {
-    const proxyBitmap = await createImageBitmap(
-      video,
-      crop.x, crop.y, crop.width, crop.height,
-      { resizeWidth: pw, resizeHeight: ph },
-    );
-    if (generation !== activation) { proxyBitmap.close?.(); return null; }
-    const search = await runDetectWorker('search', proxyBitmap, { minFill: LIVE_SEARCH_MIN_FILL });
-    if (generation !== activation) return null;
-    if (!search?.found) {
-      return { found: null, detectMs: search?.detectMs ?? 0, measureMs: 0, focusMs: 0 };
+  async function setTorchMode(mode) {
+    if (!TORCH_MODES.includes(mode)) return;
+    torch = { ...torch, mode };
+    darkSince = 0;
+    if (!torch.supported) { publish(); return; }
+    if (mode === 'on') await applyTorch(true);
+    else if (mode === 'off') await applyTorch(false);
+    else publish();
+  }
+
+  /** Auto: light up after sustained darkness, and then stay lit for the session so
+      the extra light cannot make the scene "bright enough" and flicker the torch. */
+  function autoTorch(now, reason) {
+    if (torch.mode !== 'auto' || !torch.supported || torch.on) return;
+    if (reason !== 'dark') { darkSince = 0; return; }
+    darkSince ||= now;
+    if (now - darkSince >= TORCH_AUTO_AFTER_MS) void applyTorch(true);
+  }
+
+  // ── the search loop ──────────────────────────────────────────────────────
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function visibleSourceCrop() {
+    const rect = video.getBoundingClientRect();
+    return coverCropRect(video.videoWidth, video.videoHeight, rect.width, rect.height);
+  }
+
+  async function searchLoop(generation) {
+    const alive = () => running && generation === activation;
+    const init = await initEngine();
+    if (!alive()) return;
+    if (!init.ok) {
+      engine = { status: 'unavailable', source: null, score: null, error: init.error, ms: null };
+      console.error('[scan] page finder did not start:', init.error);
+    } else {
+      engine = { status: init.ml ? 'ready' : 'degraded', source: init.ml ? 'ml' : 'classical',
+        score: null, error: init.error, ms: null };
     }
-    const found = cropQuadToVideo(search.found, crop, pw, ph);
-    const size = quadSize(found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height));
-    const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, found, vw, vh, pageLongEdge);
-    return {
-      found,
-      exposure: search.exposure,
-      skew: search.skew,
-      pageLongEdge,
-      sharpness: sharpnessScore,
-      detectMs: search.detectMs,
-      measureMs: search.measureMs,
-      focusMs,
-    };
+    refresh();
+
+    while (alive()) {
+      const startedAt = performance.now();
+      if (document.hidden || !video.videoWidth || video.readyState < 2) {
+        await sleep(200);
+        continue;
+      }
+      try {
+        await searchOnce(generation);
+      } catch (error) {
+        // Never let one bad iteration end the loop, and never hide it.
+        console.error('[scan] search step failed', error);
+        noteEngineFailure(String(error?.message ?? error));
+        refresh();
+      }
+      await sleep(Math.max(engine.status === 'unavailable' ? 1500 : 30,
+        DETECT_PERIOD_MS - (performance.now() - startedAt)));
+    }
   }
 
-  async function focusOnWorker(source, quadInFrame, sw, sh, pageLongEdge) {
-    const rect = focusWindowRect(quadInFrame, sw, sh, pageLongEdge, FOCUS_WINDOW);
-    if (!rect) return { sharpness: null, focusMs: 0 };
-    const focusBitmap = await createImageBitmap(
-      source,
-      rect.sx, rect.sy, rect.size, rect.size,
-      { resizeWidth: rect.target, resizeHeight: rect.target },
-    );
-    const read = await runDetectWorker('focus', focusBitmap);
-    return { sharpness: read?.sharpness ?? null, focusMs: read?.focusMs ?? 0 };
+  /** Recompute guidance from the evidence held now, then publish. Used by every
+      path that changes what is known (a failure included), so the strip can
+      never keep saying something the evidence no longer supports. */
+  function refresh() {
+    evaluate(performance.now(), visibleSourceCrop());
   }
 
-  async function measureStep(vw, vh, generation) {
-    const tracked = quadOf(track);
-    if (!tracked || !trackSize || !ensureDetectWorker()) return;
-    const proxySize = fitLongEdge(vw, vh, LIVE_PROXY_LONG_EDGE);
-    const pw = proxySize.width, ph = proxySize.height;
-    const inProxy = scaleQuad(tracked, trackSize, { width: pw, height: ph });
-    const inVideo = scaleQuad(tracked, trackSize, { width: vw, height: vh });
-    const size = quadSize(inVideo);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height));
-    const bitmap = await createImageBitmap(video, { resizeWidth: pw, resizeHeight: ph });
+  function noteEngineFailure(message) {
+    engineFailures++;
+    if (engineFailures >= ENGINE_FAILURES_BEFORE_UNAVAILABLE) {
+      engine = { ...engine, status: 'unavailable', error: message };
+    }
+  }
+
+  async function searchOnce(generation) {
+    const crop = visibleSourceCrop();
+    const { width: pw, height: ph } = fitLongEdge(crop.width, crop.height, DETECT_LONG_EDGE);
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(video, crop.x, crop.y, crop.width, crop.height,
+        { resizeWidth: pw, resizeHeight: ph, resizeQuality: 'low' });
+      frameFailures = 0;
+    } catch (error) {
+      // Seen on some Android WebViews. It used to be swallowed, leaving the
+      // viewfinder "searching" forever with no reason.
+      frameFailures++;
+      console.warn('[scan] could not read a camera frame', error);
+      if (frameFailures >= 3) {
+        engine = { ...engine, status: 'unavailable', error: 'camera frames could not be read' };
+        refresh();
+      }
+      return;
+    }
     if (generation !== activation) { bitmap.close?.(); return; }
-    const read = await runDetectWorker('measure', bitmap, { quad: inProxy });
-    if (!running || generation !== activation || !read?.exposure) return;
-    const { sharpness: sharpnessScore, focusMs } =
-      await focusOnWorker(video, inVideo, vw, vh, pageLongEdge);
-    if (!running || generation !== activation) return;
-    measured = {
-      glare: read.exposure.glare,
-      clipping: read.exposure.clipping,
-      headroom: read.exposure.headroom,
-      skew: read.skew,
-      sharpness: sharpnessScore,
-    };
-    measuredAt = performance.now();
-    measuredQuad = quadOf(track);
-    recordStepTiming({ detectMs: 0, measureMs: read.measureMs ?? 0, focusMs, workerUsed: true });
-  }
 
-  function searchOnMainThread(pw, ph, vw, vh, crop) {
-    if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
-    proxyCtx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, pw, ph);
-    const frame = proxyCtx.getImageData(0, 0, pw, ph);
-    const tDetectStart = performance.now();
-    const inCrop = detectQuad(frame, { minFill: LIVE_SEARCH_MIN_FILL });
-    const detectMs = performance.now() - tDetectStart;
-    if (!inCrop) return { found: null, detectMs, measureMs: 0, focusMs: 0 };
-    const tMeasureStart = performance.now();
-    const exposure = measureQuad(frame, inCrop);
-    const skew = skewDegrees(inCrop);
-    const measureMs = performance.now() - tMeasureStart;
-    const found = cropQuadToVideo(inCrop, crop, pw, ph);
-    const size = quadSize(found);
-    const pageLongEdge = Math.round(Math.max(size.width, size.height));
-    const tFocusStart = performance.now();
-    const sharpnessScore = focusInFrameOnMainThread(video, found, vw, vh, pageLongEdge);
-    const focusMs = performance.now() - tFocusStart;
-    return { found, exposure, skew, pageLongEdge, sharpness: sharpnessScore, detectMs, measureMs, focusMs };
-  }
-
-  function finishStep(result, workerUsed, vw, vh) {
-    if (!running) return;
-    const next = blankState();
-    next.timing = {
-      detectMs: result.detectMs,
-      measureMs: result.measureMs,
-      focusMs: result.focusMs,
-      workerUsed,
-    };
-    recordStepTiming(next.timing);
-    trackSize = fitLongEdge(vw, vh, TRACK_LONG_EDGE);
-
-    if (!result.found) {
-      globalMisses = Math.min(999, globalMisses + 1);
-      const now = performance.now();
-      const tracked = quadOf(track);
-      const valid = !!tracked && geometryValid(track, trackSize.width, trackSize.height)
-        && track.state !== 'searching';
-      const observedGeometry = valid
-        && (track.state === 'tracking' || track.state === 'reacquiring');
-      const geometryReady = valid && track.state === 'tracking'
-        && documentConfidence(track) >= TRACK_CONFIDENCE_FLOOR;
-      paperEvidence = settledPaperEvidence(paperEvidence, {
-        globalConfirmations, geometryReady, observedGeometry,
-      }, now);
-
-      // One failed global re-check is not evidence that a confirmed page
-      // vanished. The local tracker owns that decision and the presence latch
-      // gives it time to recover without changing the sentence on screen.
-      if (paperEvidence.confirmed) {
-        if (!valid) publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
-        return;
-      }
-
-      // The first global hit is a candidate, not a lock. Keep it briefly across
-      // noisy misses so the next independent pass (including the higher-res
-      // recovery pass) can confirm the same sheet. The UI deliberately stays on
-      // calm searching guidance until confirmation, so false positives never
-      // become visible locks during this grace period.
-      if (globalConfirmations > 0 && valid && candidateLastSeenAt
-          && now - candidateLastSeenAt < TENTATIVE_CANDIDATE_GRACE_MS) {
-        publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
-        return;
-      }
-
-      candidateLastSeenAt = 0;
-      track = createTrack();
-      consecutiveFinds = globalConfirmations = 0;
-      measured = measuredQuad = null;
-      lastTrackedArea = null;
-      quad = null;
-      armed = true;
-      guidance = settledScannerGuidance(guidance, null, paperEvidence, now);
-      next.blocking = guidance.blocking;
-      next.hint = guidance.hint;
-      publish(next);
-      return;
-    }
-
-    globalMisses = 0;
-    const found = scaleQuad(result.found, { width: vw, height: vh }, trackSize);
+    const reply = await request('detect', { bitmap }, { transfer: [bitmap] });
+    if (generation !== activation || !running) return;
     const now = performance.now();
-    candidateLastSeenAt = now;
-    const sameDetectedDocument = isSameDocument(track, found, trackSize.width, trackSize.height);
-    globalConfirmations = sameDetectedDocument ? Math.min(3, globalConfirmations + 1) : 1;
-    track = sameDetectedDocument
-      ? observe(track, {
-          topLeft: { ...found[0], confidence: 0.9 },
-          topRight: { ...found[1], confidence: 0.9 },
-          bottomRight: { ...found[2], confidence: 0.9 },
-          bottomLeft: { ...found[3], confidence: 0.9 },
-        }, now, trackSize)
-      : acquire(createTrack(), found, now, trackSize);
 
-    measured = {
-      glare: result.exposure.glare,
-      clipping: result.exposure.clipping,
-      headroom: result.exposure.headroom,
-      skew: result.skew,
-      sharpness: result.sharpness,
-    };
-    measuredAt = now;
-    measuredQuad = found;
-    publishFromTrack(trackSize.width, trackSize.height, vw, vh, 0, next.timing);
-  }
-
-  function measurementsStale(current, width, height) {
-    if (!measured || !measuredQuad) return true;
-    if (performance.now() - measuredAt > MEASUREMENT_STALE_MS) return true;
-    return quadDrift(current, measuredQuad, width, height) > CAPTURE.STABILITY_TOLERANCE;
-  }
-
-  function resetAutoTiming() {
-    autoStableAnchor = null;
-    autoStableSince = 0;
-    autoCandidateSince = 0;
-  }
-
-  function updateAutoTiming(current, width, height, now, {
-    blocking = null, geometryReady = false, qualityReady = false,
-  } = {}) {
-    // Patience bypasses hand-held motion only. A genuine framing or quality
-    // failure still needs the student to fix the shot before Auto may fire.
-    if (!geometryReady || !qualityReady || blocking) {
-      resetAutoTiming();
-      return { stableForMs: 0, candidateForMs: 0 };
+    if (!reply.ok) {
+      noteEngineFailure(reply.error);
+      refresh();
+      return;
     }
 
-    if (!autoCandidateSince) autoCandidateSince = now;
-    if (!autoStableAnchor
-        || quadDrift(current, autoStableAnchor, width, height) > CAPTURE.STABILITY_TOLERANCE) {
-      autoStableAnchor = current.map((point) => ({ ...point }));
-      autoStableSince = now;
-    } else if (!autoStableSince) {
-      autoStableSince = now;
+    const detection = reply.detection;
+    if (detection.status === 'unavailable') {
+      noteEngineFailure(detection.error ?? 'the page finder failed');
+      refresh();
+      return;
+    }
+    engineFailures = 0;
+    engine = {
+      status: detection.degraded ? 'degraded' : 'ready',
+      source: detection.source,
+      score: detection.score,
+      error: detection.error,
+      ms: Math.round(detection.ms),
+    };
+
+    signals.luma = reply.signals?.luma ?? signals.luma;
+    signals.motion = reply.signals?.motion ?? null;
+    signals.glare = reply.exposure ? reply.exposure.glare : null;
+    signals.edgeContrast = reply.signals?.edgeContrast ?? null;
+
+    const quadNorm = detection.status === 'found' && detection.quad
+      ? detection.quad.map((p) => ({ x: p.x / reply.width, y: p.y / reply.height }))
+      : null;
+    const before = snapshot.phase;
+    snapshot = lock.observe(now, quadNorm);
+    if (snapshot.phase === 'locked' && before !== 'locked') lockedSince = now;
+    if (snapshot.phase !== 'locked') lockedSince = 0;
+    if (quadNorm) noPageSince = 0; else if (!noPageSince) noPageSince = now;
+    if (snapshot.phase === 'searching' && !noPageSince) noPageSince = now;
+
+    // Re-arm Auto once the page has really gone, not on a one-frame flicker.
+    if (snapshot.phase === 'searching') {
+      lostSince ||= now;
+      if (now - lostSince >= REARM_AFTER_LOSS_MS && !shootInFlight && !processingHold) armed = true;
+    } else {
+      lostSince = 0;
     }
 
-    return {
-      stableForMs: Math.max(0, now - autoStableSince),
-      candidateForMs: Math.max(0, now - autoCandidateSince),
-    };
+    if (snapshot.phase === 'locked') void focusStep(generation, crop, now);
+    else signals.sharpness = null;
+
+    evaluate(now, crop);
   }
 
-  function publishFromTrack(tw, th, vw, vh, trackMs, timing = null) {
-    if (!running) return;
-    const tracked = quadOf(track);
-    const next = blankState();
-    next.timing = timing ?? { detectMs: 0, measureMs: 0, focusMs: 0, trackMs, workerUsed: true };
-
-    const now = performance.now();
-    const valid = !!tracked && geometryValid(track, tw, th) && track.state !== 'searching';
-    const confidence = documentConfidence(track);
-    const observedGeometry = valid
-      && (track.state === 'tracking' || track.state === 'reacquiring');
-    const geometryReady = valid && track.state === 'tracking'
-      && confidence >= TRACK_CONFIDENCE_FLOOR;
-    paperEvidence = settledPaperEvidence(paperEvidence, {
-      globalConfirmations, geometryReady, observedGeometry,
-    }, now);
-
-    // Keep searching guidance while the detector only has a candidate. This is
-    // the important separation: internal tracking may begin immediately, but a
-    // face/non-paper false positive never earns a "lock onto corners" message.
-    if (!paperEvidence.confirmed) {
-      consecutiveFinds = 0;
-      lastTrackedArea = null;
-      quad = null;
-      resetAutoTiming();
-      armed = true;
-
-      // A plausible candidate is enough to diagnose lighting, but still not
-      // enough to draw brackets or call the page locked. This prevents the
-      // observed failure where glare existed for many seconds while the only
-      // instruction on screen was to fit corners that were already visible.
-      let candidateVerdict = null;
-      if (valid && measured && !measurementsStale(tracked, tw, th)) {
-        const candidateSize = quadSize(tracked);
-        const candidateLongEdge = Math.round(Math.max(candidateSize.width, candidateSize.height) * (vw / tw));
-        candidateVerdict = liveGateVerdict({
-          glare: measured.glare,
-          clipping: measured.clipping,
-          fill: quadFill(tracked, tw, th),
-          edgeCoverage: candidateLongEdge / Math.max(1, Math.min(vw, vh)),
-          sharpness: measured.sharpness,
-          skew: measured.skew,
-          pageLongEdge: candidateLongEdge,
-          resolutionStatus:
-            capturePath === 'image-capture' || Math.min(vw, vh) < LIVE_SOURCE_FLOOR
-              ? 'unknown' : 'known',
-          geometryReady: true,
-          qualityReady: true,
-        }, guidance?.blocking ?? null);
+  /** Sharpness of a window of the real video, at the page-relative scale the
+      contract's blur thresholds were measured at. Only while locked. */
+  async function focusStep(generation, crop, now) {
+    if (lastFocusInFlight || now - lastFocusAt < FOCUS_PERIOD_MS || !snapshot.quad) return;
+    const vq = snapshot.quad.map((p) => ({ x: crop.x + p.x * crop.width, y: crop.y + p.y * crop.height }));
+    const size = quadSize(vq);
+    const rect = focusWindowRect(vq, video.videoWidth, video.videoHeight,
+      Math.round(Math.max(size.width, size.height)), FOCUS_WINDOW);
+    if (!rect) return;
+    lastFocusInFlight = true;
+    lastFocusAt = now;
+    try {
+      const bitmap = await createImageBitmap(video, rect.sx, rect.sy, rect.size, rect.size,
+        { resizeWidth: rect.target, resizeHeight: rect.target });
+      const reply = await request('focus', { bitmap }, { transfer: [bitmap], timeoutMs: 2000 });
+      if (generation === activation && reply.ok) {
+        signals.sharpness = reply.sharpness;
+        signals.sharpnessAt = performance.now();
       }
-      guidance = settledScannerGuidance(
-        guidance,
-        candidateVerdict,
-        paperEvidence,
-        now,
-        { candidatePresent: valid },
-      );
-      next.blocking = guidance.blocking;
-      next.hint = guidance.hint;
-      publish(next);
-      return;
+    } catch (error) {
+      console.warn('[scan] focus read failed', error);
+    } finally {
+      lastFocusInFlight = false;
+    }
+  }
+
+  /** Join the evidence into one guidance verdict, publish it, and let Auto decide. */
+  function evaluate(now, crop) {
+    const quad = snapshot.quad;
+    const touches = quad ? quadTouchesEdge(quad) : false;
+    const fill = quad ? quadFill(quad, 1, 1) : 0;
+    const sharp = signals.sharpness !== null && now - signals.sharpnessAt < FOCUS_STALE_MS
+      ? signals.sharpness : null;
+
+    const guidance = chooseGuidance({
+      phase: snapshot.phase,
+      engine,
+      luma: signals.luma,
+      motion: signals.motion,
+      fill,
+      edgeContrast: signals.edgeContrast,
+      touchesEdge: touches,
+      sharpness: sharp,
+      glare: signals.glare,
+      searchingMs: noPageSince ? now - noPageSince : 0,
+      torch,
+      auto: autoCapture,
+    });
+    autoTorch(now, guidance.reason);
+
+    let pageLongEdge = 0;
+    let skew = 0;
+    if (quad) {
+      const vq = quad.map((p) => ({ x: crop.x + p.x * crop.width, y: crop.y + p.y * crop.height }));
+      const size = quadSize(vq);
+      pageLongEdge = Math.round(Math.max(size.width, size.height));
+      skew = skewDegrees(vq);
     }
 
-    next.hasPage = true;
-    next.trackState = track.state;
-    next.trackConfidence = confidence;
-    next.geometryReady = geometryReady;
+    state = {
+      phase: snapshot.phase,
+      hasPage: snapshot.phase === 'locked',
+      hint: guidance.text,
+      blocking: guidance.tone === 'attention' ? guidance.reason : null,
+      tone: guidance.tone,
+      reason: guidance.reason,
+      action: guidance.action,
+      fill,
+      pageLongEdge,
+      sharpness: sharp,
+      glare: signals.glare ?? 0,
+      clipping: 0,
+      skew,
+      steady: snapshot.stableMs >= CAPTURE.STABILITY_MS,
+      engine,
+      torch,
+      timing: { detectMs: engine.ms },
+    };
+    publish();
 
-    // Confirmed paper gets a short loss grace period. During it the capture is
-    // safely blocked, but the UI stays in the paper/locking family instead of
-    // alternating with the searching sentence on every weak frame.
-    if (!valid) {
-      consecutiveFinds = 0;
-      lastTrackedArea = null;
-      quad = null;
-      resetAutoTiming();
-      const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
-      guidance = settledScannerGuidance(guidance, verdict, paperEvidence, now);
-      next.blocking = guidance.blocking;
-      next.hint = guidance.hint;
-      armed = true;
-      publish(next);
-      return;
-    }
-
-    next.fill = quadFill(tracked, tw, th);
-    consecutiveFinds++;
-
-    const size = quadSize(tracked);
-    const area = Math.max(1, size.width * size.height);
-    const areaChange = lastTrackedArea === null ? 0 : Math.abs(area - lastTrackedArea) / lastTrackedArea;
-    lastTrackedArea = area;
-
-    // Autofocus breathing changes effective focal length and therefore the quad
-    // area. Treat >5% frame-to-frame change as transient even if the corners
-    // themselves still happen to fit the drift tolerance.
-    const focusBreathing = areaChange > FOCUS_BREATHING_AREA_DELTA;
-    const stale = measurementsStale(tracked, tw, th);
-    next.qualityReady = next.geometryReady && !stale && !focusBreathing;
-    next.glare = stale ? 0 : measured.glare;
-    next.clipping = stale ? 0 : measured.clipping;
-    next.headroom = stale ? 0 : measured.headroom;
-    next.skew = stale ? 0 : measured.skew;
-    next.pageLongEdge = Math.round(Math.max(size.width, size.height) * (vw / tw));
-    next.sharpness = stale ? null : measured.sharpness;
-    next.steady = !stale && !focusBreathing;
-    next.edgeCoverage = next.pageLongEdge / Math.max(1, Math.min(vw, vh));
-    next.resolutionStatus =
-      capturePath === 'image-capture' || Math.min(vw, vh) < LIVE_SOURCE_FLOOR
-        ? 'unknown' : 'known';
-
-    quad = easeQuad(
-      quad,
-      scaleQuad(tracked, { width: tw, height: th }, { width: vw, height: vh }),
-      { width: vw, height: vh },
-    );
-
-    const verdict = liveGateVerdict(next, guidance?.blocking ?? null);
-    guidance = settledScannerGuidance(guidance, verdict, paperEvidence, now);
-    next.blocking = guidance.blocking;
-    next.hint = guidance.hint;
-    publish(next);
-
-    const autoTiming = updateAutoTiming(tracked, tw, th, now, next);
-
-    if (performance.now() < autoRetryAfter) return;
     if (shouldAutoCapture({
-      autoCapture,
-      armed,
-      blocking: next.blocking,
-      consecutiveFinds,
-      globalConfirmations,
-      trackState: track.state,
-      viewportScaled: viewportScaled(),
-      processing: processingHold || shootInFlight,
-      stableForMs: autoTiming.stableForMs,
-      candidateForMs: autoTiming.candidateForMs,
-    })) {
+      auto: autoCapture, armed, processing: processingHold || shootInFlight,
+      scaled: viewportScaled(), phase: snapshot.phase, stableMs: snapshot.stableMs,
+      lockedForMs: lockedSince ? now - lockedSince : 0, reason: guidance.reason,
+    }) && now >= autoRetryAfter) {
       armed = false;
       void shoot(true);
     }
-    if (next.blocking) armed = true;
   }
 
-  function publish(next) {
-    state = next;
-    recordHintState(next);
-    onState?.(next);
+  function publish() {
+    // Engine/torch can change between detections, so refresh those before comparing.
+    state = { ...state, engine, torch };
+    const key = [state.phase, state.hint, state.blocking, state.tone, state.action,
+      engine.status, engine.source, torch.supported, torch.mode, torch.on, torch.error,
+      state.steady, debug ? Math.round(performance.now() / 500) : 0].join('|');
+    if (key === lastPublishKey) return;
+    lastPublishKey = key;
+    recordHintState(state);
+    onState?.(state);
   }
 
   // ── overlay ──────────────────────────────────────────────────────────────
-  function scheduleLoop() {
+  function paintLoop() {
     const generation = activation;
-    const nextFrame = () => { if (generation === activation) loop(); };
-    // Capture confirmation is clocked independently from the camera. Native
-    // still capture can briefly stall preview frames; feedback must remain fast.
-    if (!captureConfirmation && typeof video.requestVideoFrameCallback === 'function') {
+    const next = () => { if (generation === activation && running) paint(); };
+    if (typeof video.requestVideoFrameCallback === 'function') {
       frameClock = 'video';
-      videoFrameHandle = video.requestVideoFrameCallback(nextFrame);
+      videoFrameHandle = video.requestVideoFrameCallback(next);
     } else {
       frameClock = 'animation';
-      rafHandle = requestAnimationFrame(nextFrame);
+      rafHandle = requestAnimationFrame(next);
     }
   }
 
-  function loop() {
+  function paint() {
     if (!running) return;
-    scheduleLoop();
-    if (frameClock === 'animation' && !captureConfirmation
-        && video.currentTime === lastRenderedFrame) return;
-    lastRenderedFrame = video.currentTime;
-    trackStep();
+    paintLoop();
 
     const rect = overlay.getBoundingClientRect();
     const dpr = Math.min(2, devicePixelRatio || 1);
@@ -1171,139 +726,65 @@ export function createCapture({ video, overlay, onState, onShot }) {
     ctx.clearRect(0, 0, w, h);
     if (!video.videoWidth) return;
 
-    const cssScale = Math.max(rect.width / video.videoWidth, rect.height / video.videoHeight);
-    const cssOffsetX = (rect.width - video.videoWidth * cssScale) / 2;
-    const cssOffsetY = (rect.height - video.videoHeight * cssScale) / 2;
-    const toCss = (p) => ({ x: p.x * cssScale + cssOffsetX, y: p.y * cssScale + cssOffsetY });
+    // Quad → video pixels → the on-screen position of an object-fit: cover video.
+    const crop = coverCropRect(video.videoWidth, video.videoHeight, rect.width, rect.height);
+    const scale = Math.max(rect.width / video.videoWidth, rect.height / video.videoHeight);
+    const offX = (rect.width - video.videoWidth * scale) / 2;
+    const offY = (rect.height - video.videoHeight * scale) / 2;
+    const toOverlay = (p) => ({ x: (p.x * scale + offX) * dpr, y: (p.y * scale + offY) * dpr });
 
-    const toOverlay = (p) => {
-      const visual = toCss(p);
-      return { x: visual.x * dpr, y: visual.y * dpr };
-    };
-
-    overlayPhase = resolveOverlayPhase({
-      confirming: !!captureConfirmation,
-      hasQuad: !!quad,
-      trackState: state.trackState,
-      trackConfidence: state.trackConfidence,
-      scaledViewport: viewportScaled(),
-    });
-
-    if (overlayPhase === 'captured-confirm') {
-      const frame = captureConfirmFrame(
-        performance.now() - captureConfirmation.startedAt,
-        captureConfirmation.reducedMotion,
-      );
-      if (!frame.active) {
-        captureConfirmation = null;
-        overlayPhase = 'searching';
-        return;
-      }
-      drawQuadMarkers(
-        ctx,
-        captureConfirmation.quad.map(toOverlay),
-        dpr,
-        { morph: frame.morph, edges: frame.edges, opacity: frame.opacity, captured: true },
-      );
-      return;
+    // Nothing is drawn without a candidate: a bracket floating over the desk
+    // teaches the wrong pose, and a missing one is honest.
+    if (snapshot.quad && snapshot.phase !== 'searching' && !viewportScaled()) {
+      const target = snapshot.quad.map((p) => ({ x: crop.x + p.x * crop.width, y: crop.y + p.y * crop.height }));
+      shown = shown ? shown.map((p, i) => ({
+        x: p.x + (target[i].x - p.x) * 0.4, y: p.y + (target[i].y - p.y) * 0.4,
+      })) : target;
+      drawBrackets(ctx, shown.map(toOverlay), dpr, snapshot.phase === 'locked');
+    } else {
+      shown = null;
     }
-
-    // Never paint extrapolated/recovering corners. A missing marker is honest;
-    // a marker floating over the desk actively teaches the wrong pose.
-    if (overlayPhase !== 'locked') return;
-    drawQuadMarkers(ctx, quad.map(toOverlay), dpr, {
-      morph: 0,
-      edges: 0,
-      opacity: 1,
-      captured: false,
-      blocking: !!state.blocking,
-    });
+    if (debug) drawDebug(ctx, dpr);
   }
 
-  function unitVector(from, to) {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    const length = Math.hypot(dx, dy) || 1;
-    return { x: dx / length, y: dy / length };
-  }
-
-  function mixedUnit(from, to, amount) {
-    const x = from.x + (to.x - from.x) * amount;
-    const y = from.y + (to.y - from.y) * amount;
-    const length = Math.hypot(x, y) || 1;
-    return { x: x / length, y: y / length };
-  }
-
-  function lineAround(ctx, point, direction, behind, ahead) {
-    ctx.moveTo(point.x - direction.x * behind, point.y - direction.y * behind);
-    ctx.lineTo(point.x + direction.x * ahead, point.y + direction.y * ahead);
-  }
-
-  function drawQuadMarkers(ctx, points, dpr, {
-    morph, edges, opacity, captured, blocking = false,
-  }) {
-    const radius = 7 * dpr;
+  function drawBrackets(ctx, pts, dpr, locked) {
+    const accent = getComputedStyle(overlay).getPropertyValue('--accent').trim() || '#3a86ff';
     ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.strokeStyle = captured
-      ? 'rgba(255,255,255,.98)'
-      : blocking ? 'rgba(255,159,10,.95)' : 'rgba(255,255,255,.95)';
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.lineCap = 'square';
-    ctx.lineJoin = 'miter';
-
+    ctx.lineWidth = 3 * dpr;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = locked ? accent : 'rgba(255,255,255,.92)';
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {
-      const point = points[i];
-      const alongNext = unitVector(point, points[(i + 1) % 4]);
-      const alongPrevious = unitVector(point, points[(i + 3) % 4]);
-      const diagonalA = unitVector(
-        { x: 0, y: 0 },
-        { x: alongNext.x + alongPrevious.x, y: alongNext.y + alongPrevious.y },
-      );
-      const diagonalB = unitVector(
-        { x: 0, y: 0 },
-        { x: alongNext.x - alongPrevious.x, y: alongNext.y - alongPrevious.y },
-      );
-      // The cross first rotates into a plus. As its inward arms become the
-      // border, the two outward halves retract so the final shape is a clean
-      // document rectangle rather than a box with decorative whiskers.
-      const behind = captured ? radius * (1 - edges) : radius;
-      lineAround(ctx, point, mixedUnit(diagonalA, alongNext, morph), behind, radius);
-      lineAround(ctx, point, mixedUnit(diagonalB, alongPrevious, morph), behind, radius);
+      const p = pts[i], a = pts[(i + 1) % 4], b = pts[(i + 3) % 4];
+      for (const q of [a, b]) {
+        const dx = q.x - p.x, dy = q.y - p.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const arm = Math.min(26 * dpr, len * 0.3);
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x + (dx / len) * arm, p.y + (dy / len) * arm);
+      }
     }
     ctx.stroke();
-
-    if (edges > 0) {
-      ctx.beginPath();
-      for (let i = 0; i < 4; i++) {
-        const from = points[i], to = points[(i + 1) % 4];
-        const direction = unitVector(from, to);
-        const half = Math.hypot(to.x - from.x, to.y - from.y) / 2;
-        const reach = radius + Math.max(0, half - radius) * edges;
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(from.x + direction.x * reach, from.y + direction.y * reach);
-        ctx.moveTo(to.x, to.y);
-        ctx.lineTo(to.x - direction.x * reach, to.y - direction.y * reach);
-      }
-      ctx.stroke();
-    }
     ctx.restore();
   }
 
-  function beginCaptureConfirmation(verifiedQuad) {
-    if (!isVerifiedQuad(verifiedQuad) || !running) return false;
-    if (frameClock === 'video') video.cancelVideoFrameCallback?.(videoFrameHandle);
-    else if (frameClock === 'animation') cancelAnimationFrame(rafHandle);
-    videoFrameHandle = rafHandle = 0;
-    frameClock = 'animation';
-    captureConfirmation = {
-      quad: verifiedQuad.map((point) => ({ ...point })),
-      startedAt: performance.now(),
-      reducedMotion: !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
-    };
-    overlayPhase = 'captured-confirm';
-    rafHandle = requestAnimationFrame(loop);
-    return true;
+  function drawDebug(ctx, dpr) {
+    const lines = [
+      `phase ${snapshot.phase} hits ${snapshot.hits} stable ${Math.round(snapshot.stableMs)}ms`,
+      `engine ${engine.status}/${engine.source ?? '-'} score ${engine.score?.toFixed?.(2) ?? '-'} ${engine.ms ?? '-'}ms`,
+      `luma ${signals.luma ? `${signals.luma.median}/${signals.luma.p95}` : '-'} motion ${signals.motion?.toFixed?.(1) ?? '-'}`,
+      `fill ${state.fill.toFixed(2)} sharp ${state.sharpness?.toFixed?.(2) ?? '-'} glare ${state.glare?.toFixed?.(3) ?? '-'}`,
+      `reason ${state.reason ?? '-'} torch ${torch.supported ? `${torch.mode}/${torch.on ? 'lit' : 'dark'}` : 'n/a'}`,
+      engine.error ? `error ${engine.error}` : '',
+    ].filter(Boolean);
+    ctx.save();
+    ctx.font = `${11 * dpr}px ui-monospace, monospace`;
+    ctx.fillStyle = 'rgba(0,0,0,.6)';
+    ctx.fillRect(6 * dpr, 6 * dpr, 330 * dpr, (lines.length * 14 + 8) * dpr);
+    ctx.fillStyle = '#fff';
+    lines.forEach((line, i) => ctx.fillText(line, 12 * dpr, (20 + i * 14) * dpr));
+    ctx.restore();
   }
 
   // ── shutter ──────────────────────────────────────────────────────────────
@@ -1347,9 +828,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     imageCapture = null;
     photoSettings = null;
     capturePath = 'canvas-grab';
-    // A browser that exposed ImageCapture but cannot actually complete a still
-    // should not pay that stall on every shutter press. Promote the live stream
-    // once so future canvas grabs retain useful document resolution.
+    // A browser that exposed ImageCapture but cannot complete a still should not
+    // pay that stall on every press. Promote the live stream once instead.
     const fallbackTrack = cameraTrack;
     if (fallbackTrack) {
       await requestFallbackCaptureResolution(fallbackTrack);
@@ -1364,19 +844,12 @@ export function createCapture({ video, overlay, onState, onShot }) {
       const first = await takePhotoAttempt(photoSettings);
       if (generation !== activation) return null;
       if (first.blob) return first.blob;
-      if (first.timedOut) {
-        await demoteNativeStill(generation);
-        return null;
-      }
-      // Some camera stacks advertise dimensions they reject at capture time.
-      // Retry with browser-chosen settings before abandoning the native still.
+      if (first.timedOut) { await demoteNativeStill(generation); return null; }
+      // Some stacks advertise dimensions they reject at capture time.
     }
     const second = await takePhotoAttempt(undefined);
     if (generation !== activation) return null;
-    if (second.timedOut) {
-      await demoteNativeStill(generation);
-      return null;
-    }
+    if (second.timedOut) { await demoteNativeStill(generation); return null; }
     if (!second.blob) await demoteNativeStill(generation);
     return second.blob;
   }
@@ -1387,8 +860,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (nativeBlob) {
       try {
         return { bitmap: await createImageBitmap(nativeBlob), path: 'image-capture', original: nativeBlob };
-      } catch {
-        // An exposed native still API can also return an undecodable image.
+      } catch (error) {
+        console.warn('[scan] native still could not be decoded', error);
         await demoteNativeStill(generation);
       }
     }
@@ -1397,8 +870,6 @@ export function createCapture({ video, overlay, onState, onShot }) {
     await waitForNextVideoFrame();
     if (!running || generation !== activation || !video.videoWidth) return null;
 
-    // Freeze exactly one decoded frame first. The old path performed an extra
-    // draw before owning the frame, widening the preview/shutter race.
     const bitmap = await createImageBitmap(video);
     if (!running || generation !== activation) { bitmap.close?.(); return null; }
     const canvas = document.createElement('canvas');
@@ -1412,107 +883,56 @@ export function createCapture({ video, overlay, onState, onShot }) {
       bitmap.close?.();
       throw error;
     } finally {
-      // Only the accepted ImageBitmap remains at full resolution.
       canvas.width = 1;
       canvas.height = 1;
     }
   }
 
-  /** Re-detect and re-measure the actual pixels that will be stored. */
-  async function analyseStill(bitmap, {
-    longEdge = STILL_ANALYSIS_LONG_EDGE,
-    detectTimeoutMs = DETECT_TIMEOUT_MS,
-    affectsWorkerHealth = true,
-  } = {}) {
-    const scale = Math.min(1, longEdge / Math.max(bitmap.width, bitmap.height));
-    const pw = Math.max(1, Math.round(bitmap.width * scale));
-    const ph = Math.max(1, Math.round(bitmap.height * scale));
-    let result = null;
-    const workerUsed = !!ensureDetectWorker();
-
-    if (workerUsed) {
-      const stillProxy = await createImageBitmap(bitmap, { resizeWidth: pw, resizeHeight: ph });
-      result = await runDetectWorker(
-        'search',
-        stillProxy,
-        { minFill: STILL_MIN_FILL },
-        { timeoutMs: detectTimeoutMs, affectsWorkerHealth },
-      );
-    } else {
-      if (proxy.width !== pw || proxy.height !== ph) { proxy.width = pw; proxy.height = ph; }
-      proxyCtx.drawImage(bitmap, 0, 0, pw, ph);
-      const frame = proxyCtx.getImageData(0, 0, pw, ph);
-      const found = detectQuad(frame, { minFill: STILL_MIN_FILL });
-      if (found) result = { found, exposure: measureQuad(frame, found), skew: skewDegrees(found) };
+  /**
+   * Look for the page on the photograph that will actually be stored. This has
+   * no time pressure, so it gets a bigger frame than the live search. Whatever
+   * happens, the answer is a result, never an exception: "no quad" is a valid
+   * outcome and becomes a flagged page the student can adjust.
+   */
+  async function analyseStill(bitmap) {
+    const { width: pw, height: ph } = fitLongEdge(bitmap.width, bitmap.height, STILL_DETECT_LONG_EDGE);
+    let proxy;
+    try {
+      proxy = await createImageBitmap(bitmap, { resizeWidth: pw, resizeHeight: ph, resizeQuality: 'medium' });
+    } catch (error) {
+      console.warn('[scan] could not prepare the photo for the page finder', error);
+      return { detection: { status: 'unavailable', source: null, quad: null, score: null,
+        degraded: false, error: String(error?.message ?? error), ms: 0 }, quad: null,
+      measurements: null };
     }
+    const reply = await request('detect', { bitmap: proxy }, { transfer: [proxy], timeoutMs: STILL_DETECT_TIMEOUT_MS });
+    const detection = reply.ok
+      ? reply.detection
+      : { status: 'unavailable', source: null, quad: null, score: null, degraded: false, error: reply.error, ms: 0 };
 
-    if (!result?.found) {
-      return {
-        quad: null,
-        gate: {
-          ...blankState(),
-          hint: 'Fit all four paper corners in the frame',
-          blocking: 'framing',
-          geometryReady: false,
-          qualityReady: true,
-          captureVerified: true,
-        },
-      };
+    let quad = null;
+    if (detection.status === 'found' && detection.quad) {
+      const sx = bitmap.width / pw, sy = bitmap.height / ph;
+      quad = detection.quad.map((p) => ({ x: p.x * sx, y: p.y * sy }));
     }
+    return { detection, quad, glare: reply.ok ? (reply.exposure?.glare ?? null) : null,
+      clipping: reply.ok ? (reply.exposure?.clipping ?? null) : null };
+  }
 
-    const quadInBitmap = scaleQuad(
-      result.found,
-      { width: pw, height: ph },
-      { width: bitmap.width, height: bitmap.height },
-    );
-    const size = quadSize(quadInBitmap);
+  async function readStillFocus(bitmap, quad) {
+    const size = quadSize(quad);
     const pageLongEdge = Math.round(Math.max(size.width, size.height));
-    let sharpnessScore = null;
-    let focusMs = 0;
-    if (workerUsed) {
-      const focusRead = await focusOnWorker(
-        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
-      );
-      sharpnessScore = focusRead.sharpness;
-      focusMs = focusRead.focusMs;
-    } else {
-      const started = performance.now();
-      sharpnessScore = focusInFrameOnMainThread(
-        bitmap, quadInBitmap, bitmap.width, bitmap.height, pageLongEdge,
-      );
-      focusMs = performance.now() - started;
+    const rect = focusWindowRect(quad, bitmap.width, bitmap.height, pageLongEdge, FOCUS_WINDOW);
+    if (!rect) return { sharpness: null, pageLongEdge };
+    try {
+      const crop = await createImageBitmap(bitmap, rect.sx, rect.sy, rect.size, rect.size,
+        { resizeWidth: rect.target, resizeHeight: rect.target });
+      const reply = await request('focus', { bitmap: crop }, { transfer: [crop], timeoutMs: 4000 });
+      return { sharpness: reply.ok ? reply.sharpness : null, pageLongEdge };
+    } catch (error) {
+      console.warn('[scan] could not read the photo sharpness', error);
+      return { sharpness: null, pageLongEdge };
     }
-
-    const next = blankState();
-    next.hasPage = true;
-    next.fill = quadFill(result.found, pw, ph);
-    next.edgeCoverage = pageLongEdge / Math.max(1, Math.min(bitmap.width, bitmap.height));
-    next.pageLongEdge = pageLongEdge;
-    next.resolutionStatus = 'known';
-    next.sharpness = sharpnessScore;
-    next.glare = result.exposure?.glare ?? 0;
-    next.clipping = result.exposure?.clipping ?? 0;
-    next.headroom = result.exposure?.headroom ?? 0;
-    next.skew = result.skew ?? 0;
-    next.geometryReady = true;
-    next.qualityReady = true;
-    next.trackState = 'captured';
-    next.trackConfidence = 1;
-    next.captureVerified = true;
-    next.timing = {
-      detectMs: result.detectMs ?? 0,
-      measureMs: result.measureMs ?? 0,
-      focusMs,
-      workerUsed,
-    };
-    const verdict = liveGateVerdict(next, null);
-    next.blocking = verdict.blocking;
-    next.hint = verdict.hint;
-
-    return {
-      quad: quadInBitmap,
-      gate: next,
-    };
   }
 
   function scheduleAutoRetry() {
@@ -1532,155 +952,116 @@ export function createCapture({ video, overlay, onState, onShot }) {
     shootInFlight = true;
     const transactionId = nextTransactionId++;
     const mediaTime = video.currentTime;
-    const liveQuadAtShutter = overlayPhase === 'locked' && isVerifiedQuad(quad)
-      ? quad.map((point) => ({ ...point }))
-      : null;
-    const trackedCandidateAtShutter = quadOf(track);
     const quadConfidenceAtShutter = shutterQuadConfidence({
-      locked: !!liveQuadAtShutter,
-      hasCandidate: isVerifiedQuad(trackedCandidateAtShutter),
+      locked: snapshot.phase === 'locked', hasCandidate: snapshot.phase === 'candidate',
     });
     const liveHintSequence = hintSequence.map((entry) => ({ ...entry }));
     const shotActivation = activation;
-    const tShotStart = performance.now();
+    const tStart = performance.now();
     let ownedBitmap = null;
 
     try {
-      // Start feedback before the camera hardware is asked for the still.
-      // Android camera stacks can pause the preview texture during takePhoto();
-      // the independently-clocked confirmation keeps that pause from reading as
-      // an application freeze.
-      if (!auto && liveQuadAtShutter) beginCaptureConfirmation(liveQuadAtShutter);
-
       const captured = await grabStill(shotActivation);
-      const grabMs = performance.now() - tShotStart;
+      const grabMs = performance.now() - tStart;
       if (!captured) return null;
       const { bitmap, path, original } = captured;
       ownedBitmap = bitmap;
-      if (!running || shotActivation !== activation) {
-        return null;
-      }
+      if (!running || shotActivation !== activation) return null;
 
-      const tAnalyseStart = performance.now();
+      const tAnalyse = performance.now();
       const analysed = await analyseStill(bitmap);
-      const rescueRedetectAttempted = quadConfidenceAtShutter !== 'locked';
-      let accepted = analysed;
-      let rescueRedetectSucceeded = false;
+      const judged = judgeStillGeometry(analysed.detection);
+      const quad = analysed.quad;
+      const measured = quad ? await readStillFocus(bitmap, quad) : { sharpness: null, pageLongEdge: 0 };
+      const analyseMs = performance.now() - tAnalyse;
+      if (!running || shotActivation !== activation) return null;
 
-      if (rescueRedetectAttempted) {
-        const rescued = await analyseStill(bitmap, {
-          longEdge: RESCUE_STILL_ANALYSIS_LONG_EDGE,
-          detectTimeoutMs: RESCUE_DETECT_TIMEOUT_MS,
-          affectsWorkerHealth: false,
-        });
-        rescueRedetectSucceeded = rescueQuadAccepted(
-          analysed.quad,
-          rescued.quad,
-          bitmap.width,
-          bitmap.height,
-        );
-        if (rescueRedetectSucceeded) {
-          accepted = rescued;
-        } else {
-          // The full still remains useful evidence even when geometry is not.
-          // What must never happen is turning detector uncertainty into a
-          // confident perspective transform.
-          accepted = {
-            ...analysed,
-            quad: null,
-            gate: {
-              ...analysed.gate,
-              geometryReady: false,
-              captureVerified: false,
-              blocking: 'geometry',
-              hint: "We couldn't find this page's edges clearly. Check the photo, or retake it.",
-            },
-          };
-        }
-      }
-
-      const analyseMs = performance.now() - tAnalyseStart;
-      if (!running || shotActivation !== activation) {
-        return null;
-      }
-
-      // Automatic capture is allowed to assist, not knowingly store a frame its
-      // own captured-pixel gate rejects. Manual shutter remains sovereign, but
-      // manual sovereignty no longer means permission to warp unconfirmed
-      // geometry: that branch stores the honest uncropped still instead.
-      if (auto && accepted.gate.blocking) {
-        publish({ ...accepted.gate, autoRejected: true });
+      // Auto assists; it does not knowingly store a frame it can see is
+      // unreadable. The shutter is sovereign: a manual press always stores.
+      if (auto && measured.sharpness !== null && measured.sharpness < GUIDE.BLURRY) {
         scheduleAutoRetry();
-        console.debug('[scan:auto-rejected-still]', {
-          transactionId,
-          reason: accepted.gate.blocking,
-          grabMs: +grabMs.toFixed(1),
-          analyseMs: +analyseMs.toFixed(1),
-        });
+        console.debug('[scan:auto-rejected-still]', { transactionId, reason: 'blurry' });
         return null;
       }
 
-      const geometryConfirmed = isVerifiedQuad(accepted.quad);
+      const geometryConfirmed = judged.confirmed;
+      // Only evidence-backed geometry is applied. Anything less stores the whole
+      // photograph, flagged, for the student to adjust or keep as it is.
+      const appliedQuad = geometryConfirmed ? quad : null;
       const timing = { grabMs: +grabMs.toFixed(1), analyseMs: +analyseMs.toFixed(1) };
-      console.debug('[scan:shoot-timing]', {
-        transactionId,
-        auto,
-        capturePath: path,
+
+      const gate = {
+        hasPage: !!quad,
+        fill: quad ? quadFill(quad, bitmap.width, bitmap.height) : 0,
+        pageLongEdge: measured.pageLongEdge,
+        sharpness: measured.sharpness,
+        glare: analysed.glare ?? 0,
+        clipping: analysed.clipping ?? 0,
+        skew: quad ? skewDegrees(quad) : 0,
+        steady: snapshot.stableMs >= CAPTURE.STABILITY_MS,
+        blocking: geometryConfirmed ? null : 'geometry',
+        hint: geometryConfirmed ? 'Ready' : 'Page edges not confirmed',
+        captureVerified: geometryConfirmed,
+        geometryReady: geometryConfirmed,
         quadConfidenceAtShutter,
-        rescueRedetectAttempted,
-        rescueRedetectSucceeded,
+        // Kept for the stored telemetry: the live quad is never reused on the
+        // still (different field of view), the still is always searched afresh.
+        rescueRedetectAttempted: quadConfidenceAtShutter !== 'locked',
+        rescueRedetectSucceeded: quadConfidenceAtShutter !== 'locked' && !!quad,
         geometryConfirmed,
-        ...timing,
-      });
+        liveHintSequence,
+        timing: { detectMs: analysed.detection.ms ?? 0, measureMs: 0, focusMs: 0, workerUsed: true },
+      };
 
       const shot = {
         bitmap,
-        quad: accepted.quad,
+        quad: appliedQuad,
+        // The page the detector saw, applied or not, so Adjust edges can start
+        // from it instead of an arbitrary rectangle.
+        suggestedQuad: quad,
+        detection: {
+          status: analysed.detection.status,
+          source: analysed.detection.source,
+          score: analysed.detection.score,
+          error: analysed.detection.error,
+          flagReason: judged.reason,
+        },
         auto,
         capturePath: path,
         original,
-        gate: {
-          ...accepted.gate,
-          quadConfidenceAtShutter,
-          rescueRedetectAttempted,
-          rescueRedetectSucceeded,
-          geometryConfirmed,
-          liveHintSequence,
-        },
+        gate,
         timing,
         transactionId,
         capturedAt: Date.now(),
         mediaTime,
         sourceKind: 'camera',
       };
-      // This line is deliberately below every failure/rejection return. The
-      // completed rectangle is a receipt for an accepted capture, never an
-      // optimistic loading animation. Prefer the frozen live quad because it
-      // is exactly what the student saw; fall back to the independently
-      // verified still geometry when manual capture preceded a live lock.
-      const confirmationQuad = liveQuadAtShutter ?? (isVerifiedQuad(accepted.quad)
-        ? scaleQuad(
-            accepted.quad,
-            { width: bitmap.width, height: bitmap.height },
-            { width: video.videoWidth, height: video.videoHeight },
-          )
-        : null);
-      // Never manufacture a "live tracking" lock only after a manual shutter.
-      // That was the exact failure mode seen in the recording: the low-res live
-      // detector missed, the higher-res still detector succeeded, and the UI
-      // suddenly drew corners after the button press. Auto may confirm its
-      // accepted frame; manual capture only animates a quad it had already
-      // visibly locked before the press (started above).
-      if (auto) beginCaptureConfirmation(confirmationQuad);
+      console.debug('[scan:shoot]', {
+        transactionId, auto, path, quadConfidenceAtShutter, ...timing,
+        detection: shot.detection,
+      });
       onShot?.(shot);
       consumeHintSequence();
       ownedBitmap = null; // ownership passes to the accepted shot
       armed = false;
       return shot;
+    } catch (error) {
+      // A failed photograph is reported to the student, not dropped.
+      console.error('[scan] capture failed', error);
+      publishError('The photo could not be taken. Try again, or add the page from your files.');
+      scheduleAutoRetry();
+      return null;
     } finally {
       ownedBitmap?.close?.();
       if (shotActivation === activation) shootInFlight = false;
     }
+  }
+
+  function publishError(message) {
+    state = { ...state, hint: message, blocking: 'capture', tone: 'attention', reason: 'capture' };
+    lastPublishKey = '';
+    recordHintState(state);
+    onState?.(state);
   }
 
   return {
@@ -1688,7 +1069,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     stop,
     shoot: () => shoot(false),
     get state() { return state; },
-    get overlayPhase() { return overlayPhase; },
+    get overlayPhase() { return snapshot.phase; },
     setAutoCapture(on) {
       const next = !!on;
       if (autoCapture === next) return;
@@ -1696,16 +1077,14 @@ export function createCapture({ video, overlay, onState, onShot }) {
       clearTimeout(autoRetryHandle);
       armed = true;
       autoRetryAfter = 0;
-      resetAutoTiming();
+      lastPublishKey = '';
     },
     get autoCapture() { return autoCapture; },
-    /** Holds automatic capture while the previous page is being conditioned.
-        Releasing the hold must not itself arm another shot: the same document
-        may still be under the camera. Losing/blocking that document is what
-        arms the next automatic capture in publishFromTrack(). */
-    setProcessing(on) {
-      processingHold = !!on;
-    },
+    /** Holds Auto while earlier pages are being prepared. Releasing the hold must
+        not itself arm another shot: the same page may still be under the camera. */
+    setProcessing(on) { processingHold = !!on; },
+    setTorchMode,
+    get torch() { return torch; },
     get capturePath() { return capturePath; },
     supported: !!navigator.mediaDevices?.getUserMedia,
   };
