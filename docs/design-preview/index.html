@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Axon · Paper and review design proposal</title>
+<link rel="stylesheet" href="../../src/ui/styles/tokens.css">
+<style>
+@font-face{font-family:Onest;src:url("../../public/fonts/onest-latin-var.woff2") format("woff2");font-weight:400 700;font-display:swap}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg,#000);color:var(--label,#f5f5f7);font:400 16px/1.55 Onest,system-ui,sans-serif;font-variant-numeric:tabular-nums}button,input,select,textarea{font:inherit}button,a,select,input[type=number]{min-height:44px}button,a{touch-action:manipulation}button{border:1px solid var(--hairline);border-radius:var(--r-tile,12px);color:var(--label);background:var(--field);padding:9px 14px;cursor:pointer}button:hover{background:var(--accent-wash)}button:disabled{opacity:.65;cursor:default}a{color:var(--accent);display:inline-flex;align-items:center;text-decoration:none}a:hover{text-decoration:underline}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:var(--focus-ring);outline-offset:3px}.primary{color:var(--label);background:var(--accent-wash);border:1px solid var(--accent)}.quiet{background:transparent}.attention{color:var(--attention)}.muted{color:var(--label-2)}.tiny{font-size:13px}.eyebrow{font-size:13px;font-weight:600;letter-spacing:.03em;color:var(--label-2)}h1,h2,h3,p{margin:0}h1{font-size:var(--fs-h1);line-height:1.15;letter-spacing:var(--ls-h1);font-weight:600}h2{font-size:22px;line-height:1.3;letter-spacing:-.02em}h3{font-size:18px;line-height:1.3}p+p{margin-top:8px}strong{font-weight:600}.previewbar{background:var(--surface);border-bottom:1px solid var(--hairline);padding:16px max(16px,calc((100vw - 1160px)/2));display:flex;flex-wrap:wrap;gap:12px;align-items:center}.previewbar .intro{flex:1 1 260px}.previewbar .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.previewbar select{min-width:140px;max-width:100%;border:1px solid var(--hairline);background:var(--field);color:var(--label);border-radius:12px;padding:8px}.previewnote{font-size:13px;color:var(--label-2);max-width:1160px;margin:12px auto;padding:0 18px}.page{max-width:960px;margin:0 auto;padding:24px 18px 72px}.page.reviewpage{max-width:1120px}.breadcrumb{gap:12px;margin-bottom:20px;font-size:14px}.identity{display:flex;gap:20px;align-items:start;justify-content:space-between;flex-wrap:wrap}.identity .copy{flex:1 1 300px}.metadata{margin-top:10px;color:var(--label-2);display:flex;flex-wrap:wrap;gap:6px 12px;font-size:14px}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.toolbar button{display:flex;gap:8px;align-items:center;background:transparent;border-color:var(--hairline)}.toolbar svg{width:22px;height:22px}.toolbar .delete{color:var(--attention)}.summary{display:flex;gap:24px;flex-wrap:wrap;margin-top:24px;padding:20px 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}.stat{flex:1 1 150px}.stat .value{font-size:22px;font-weight:600;line-height:1.3;margin-top:4px}.banner{margin-top:24px;padding:18px 20px;border:1px solid var(--attention-rim);background:var(--attention-wash-soft);border-radius:16px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}.banner .copy{flex:1 1 240px}.banner h2{font-size:18px}.banner p{margin-top:4px;color:var(--label-2);font-size:14px}.sectionhead{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:32px 0 14px}.group{background:var(--surface);border:1px solid var(--hairline);border-radius:16px;overflow:hidden;margin-bottom:16px}.grouphead{padding:18px;border-bottom:1px solid var(--hairline)}.grouphead p{margin-top:6px;font-size:14px;color:var(--label-2)}.part{width:100%;background:transparent;border:0;border-radius:0;text-align:left;display:flex;gap:16px;padding:16px 18px;align-items:center;min-height:84px}.part+.part{border-top:1px solid var(--hairline)}.part .copy{min-width:0;flex:1}.part .path{font-size:16px;font-weight:600}.part .prompt{font-size:14px;color:var(--label-2);margin-top:4px}.part .end{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}.mark{white-space:nowrap;font-size:18px}.badge{display:inline-flex;font-size:12px;line-height:1.4;border:1px solid var(--hairline);padding:5px 8px;border-radius:6px;color:var(--label-2);background:var(--surface-sunk)}.badge.unsure{border-style:dashed;color:var(--label)}.badge.confirmed{color:var(--label);background:var(--field);border:0}.anno{display:inline-flex;align-items:center;justify-content:center;background:var(--accent-wash);color:var(--label);font-size:12px;font-weight:600;width:23px;height:23px;border-radius:7px;margin-right:8px;vertical-align:middle}.reviewtitle{margin:28px 0 8px}.promptblock{margin:14px 0 24px;max-width:68ch;color:var(--label-2)}.reviewgrid{display:grid;gap:24px;grid-template-columns:minmax(0,1fr)}.source{border:1px solid var(--hairline);background:var(--surface);border-radius:16px;padding:18px;align-self:start}.source figure{margin:12px 0 0}.paper{border-radius:8px;background:var(--surface-sunk);border:1px dashed var(--label-2);padding:24px;color:var(--label-2);aspect-ratio:4/3;display:flex;flex-direction:column;justify-content:center;gap:12px}.paper p{font-size:14px}.paper .rules{height:26px;border-bottom:1px solid var(--hairline)}figcaption{margin-top:10px;color:var(--label-2);font-size:13px}.source .toolbar{margin-top:12px}.fields{min-width:0}.field{padding:18px 0;border-top:1px solid var(--hairline)}.field:first-child{padding-top:0;border-top:0}.field h3{margin-bottom:10px;font-size:16px}.field .content{font-size:16px;line-height:1.7}.raw{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-sunk);padding:14px;border:1px dashed var(--hairline);border-radius:10px;font:14px/1.7 ui-monospace,monospace;margin:0}.warning{padding:12px 14px;background:var(--attention-wash-soft);border-left:3px solid var(--attention);border-radius:0 8px 8px 0;margin-top:12px;color:var(--label);font-size:14px}.choices{border:0;padding:0;margin:0;min-width:0}.choices legend{font-weight:600;margin-bottom:8px}.options{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.choice{position:relative;cursor:pointer}.choice input{position:absolute;opacity:0;width:1px;height:1px}.choice span{display:flex;justify-content:center;align-items:center;min-width:48px;height:48px;background:var(--field);border:1px solid var(--hairline);border-radius:10px;font-size:18px}.choice input:checked+span{background:var(--accent-wash);border:2px solid var(--accent);font-weight:600}.choice input:checked+span:after{content:"✓";font-size:12px;margin-left:6px}.choice input:focus-visible+span{outline:var(--focus-ring);outline-offset:3px}.fieldactions{margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.feedback{font-size:14px;color:var(--label-2);margin-top:10px}.tablewrap{overflow-x:auto;border:1px solid var(--hairline);border-radius:10px}table{border-collapse:collapse;width:100%;font-size:16px}caption{text-align:left;padding:12px;color:var(--label-2);font-size:13px}th,td{padding:12px;text-align:center;border-top:1px solid var(--hairline);border-right:1px solid var(--hairline)}th{font-weight:600;background:var(--surface-sunk)}td:last-child{border-right:0}math{font-size:21px;max-width:100%;overflow-x:auto;display:block;margin:12px 0}textarea,input[type=number]{background:var(--field);color:var(--label);border:1px solid var(--hairline);border-radius:10px;padding:10px;max-width:100%}textarea{width:100%;min-height:130px}input[type=number]{width:100px}.savebar{border-top:1px solid var(--hairline);margin-top:24px;padding-top:18px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between}.empty{padding:32px 24px;background:var(--surface);border:1px solid var(--hairline);border-radius:16px;margin-top:28px}.empty p{color:var(--label-2);margin-top:12px}.skeleton{height:18px;background:var(--field);border-radius:8px;margin-top:16px;max-width:100%}.annotations{border-top:1px solid var(--hairline);margin-top:32px;padding-top:18px;font-size:14px;color:var(--label-2)}.annotations summary{cursor:pointer;min-height:44px;display:flex;align-items:center}.annotations ol{padding-left:24px}.annotations li{margin:8px 0}dialog{max-width:min(90vw,620px);background:var(--surface);color:var(--label);border:1px solid var(--hairline);border-radius:18px;padding:24px}dialog::backdrop{background:var(--scrim)}dialog .fieldactions{justify-content:flex-end}#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:14px 18px;border-radius:14px;background:var(--sheet-bg);border:1px solid var(--hairline);max-width:calc(100vw - 32px);z-index:5;font-size:14px}#toast:empty{display:none}.large{font-size:20px}.large .tiny,.large .eyebrow,.large .metadata,.large .part .prompt,.large .badge,.large .feedback{font-size:16px}.large .part .path,.large .field .content{font-size:20px}.large .part{flex-wrap:wrap}.large .choice span{min-width:56px;height:56px}body.large h1{font-size:38px}body.large .page{max-width:1120px}
+@media(min-width:768px){.reviewgrid{grid-template-columns:minmax(300px,.95fr) minmax(300px,1.05fr)}}@media(max-width:480px){.page{padding-top:20px}.part{gap:10px;align-items:start}.part .end{max-width:100px;gap:6px}.badge{font-size:11px}.identity{gap:16px}.toolbar button{padding:9px 12px}.summary{gap:16px}.stat{flex-basis:120px}.banner{padding:16px}.reviewgrid{gap:20px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="previewbar">
+<div class="intro"><strong>Axon · Paper &amp; review proposal</strong><p class="tiny muted">Design review fixture · owner approval pending · no production changes</p></div>
+<div class="controls">
+<label class="tiny" for="view">Example</label><select id="view">
+<option value="overview">Paper overview</option><option value="review">Question 12 review</option><option value="table">5(a) table</option><option value="math">SD math / boundary</option><option value="unreadable">6 unreadable / 0 confirm</option><option value="completed">Review complete</option><option value="missing">Missing metadata</option><option value="loading">Loading</option><option value="failed">Load failed</option><option value="empty">No questions</option></select>
+<button id="theme" type="button">Light theme</button><button id="textsize" type="button" aria-pressed="false">Large text</button>
+</div></header>
+<p class="previewnote">Screenshot totals and transcriptions are labeled fixtures. Source panels are illustrative placeholders. All saves, sharing and recovery are local demonstrations; reload resets them.</p>
+<main id="app" class="page"></main>
+<dialog id="modal" aria-labelledby="modal-title"><h2 id="modal-title"></h2><div id="modal-body" style="margin-top:16px"></div><div class="fieldactions"><button id="close" type="button">Close</button></div></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const shareIcon="<svg aria-hidden=\"true\" focusable=\"false\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\" height=\"24\" viewBox=\"0 -960 960 960\" width=\"24\"><path d=\"M720-80q-50 0-85-35t-35-85q0-7 1-14.5t3-13.5L322-392q-17 15-38 23.5t-44 8.5q-50 0-85-35t-35-85q0-50 35-85t85-35q23 0 44 8.5t38 23.5l282-164q-2-6-3-13.5t-1-14.5q0-50 35-85t85-35q50 0 85 35t35 85q0 50-35 85t-85 35q-23 0-44-8.5T638-672L356-508q2 6 3 13.5t1 14.5q0 7-1 14.5t-3 13.5l282 164q17-15 38-23.5t44-8.5q50 0 85 35t35 85q0 50-35 85t-85 35Zm0-640q17 0 28.5-11.5T760-760q0-17-11.5-28.5T720-800q-17 0-28.5 11.5T680-760q0 17 11.5 28.5T720-720ZM240-440q17 0 28.5-11.5T280-480q0-17-11.5-28.5T240-520q-17 0-28.5 11.5T200-480q0 17 11.5 28.5T240-440Zm480 280q17 0 28.5-11.5T760-200q0-17-11.5-28.5T720-240q-17 0-28.5 11.5T680-200q0 17 11.5 28.5T720-160Zm0-600ZM240-480Zm480 280Z\"/></svg>";
+const deleteIcon="<svg aria-hidden=\"true\" focusable=\"false\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\" height=\"24\" viewBox=\"0 -960 960 960\" width=\"24\"><path d=\"M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z\"/></svg>";
+const app=document.getElementById("app");
+const fixtures={mark:3,confirmed:false,edit:false,saved:false};
+let state="overview";
+const note=(t)=>{document.getElementById("toast").textContent=t};
+const show=(title,body)=>{document.getElementById("modal-title").textContent=title;document.getElementById("modal-body").innerHTML=body;document.getElementById("modal").showModal()};
+function identity(missing=false){return '<a href="#overview" class="breadcrumb" data-view="overview">← Library / Paper</a><header class="identity"><div class="copy"><div class="eyebrow"><span class="anno">A</span>Screenshot identity fixture</div><h1>Class test</h1><div class="metadata"><span>'+ (missing?'Test date not recorded':'Test date · 7 September 2026')+'</span><span>Subject not confirmed</span></div><p class="tiny muted" style="margin-top:6px">School, curriculum and paper component not recorded</p></div><div class="toolbar"><button data-action="share">'+shareIcon+' Share</button><button class="delete" data-action="delete">'+deleteIcon+' Delete</button></div></header>'}
+const annotations='<details class="annotations"><summary>Design annotations &amp; approval notes</summary><ol><li>A · Paper kind/date are preserved; missing subject or component stays unknown.</li><li>B · Teacher-derived marks and scored parts have explicit coverage; question counts need verified parent identities.</li><li>C · Each attention category opens its actual unresolved part or recovery list.</li><li>D · Full part paths stay beneath their parent. Bare c/d/b stay unassigned.</li><li>E · Relevant prompt, teacher evidence and original full page stay inspectable.</li><li>F · Choosing a mark creates a draft; confirming it resolves that field only.</li></ol><p>This preview is a proposal, not deployment or physical scanner evidence. Review math, tables, keyboard focus and narrow-screen flow before approving.</p></details>';
+function part(path,prompt,mark,status="Extraction unconfirmed",view="review"){return '<button class="part" data-view="'+view+'"><div class="copy"><div class="path">'+path+'</div><div class="prompt">'+prompt+'</div></div><div class="end">'+(mark?'<span class="mark">'+mark+'</span>':'')+'<span class="badge unsure">'+status+'</span><span aria-hidden="true">›</span></div></button>'}
+function overview(missing=false){return identity(missing)+'<section class="summary" aria-label="Paper coverage"><div class="stat"><div class="eyebrow"><span class="anno">B</span>Marks lost</div><div class="value">8</div><div class="tiny muted">Teacher’s total · 19 of 27</div></div><div class="stat"><div class="eyebrow">Marked parts</div><div class="value">9 of 9</div><div class="tiny muted">Screenshot summary fixture</div></div><div class="stat"><div class="eyebrow">Question identities</div><div class="value">Incomplete</div><div class="tiny muted">Bare parts have no known parent</div></div></section><div class="banner"><div class="copy"><h2><span class="anno">C</span>Question identities need checking</h2><p>Some part labels have no confirmed parent. Their marks stay unchanged.</p></div><button class="primary" data-action="identity">Inspect unassigned parts</button></div><div class="sectionhead"><h2><span class="anno">D</span>Questions</h2><span class="tiny muted">Visible screenshot subset</span></div><section class="group"><header class="grouphead"><h3>Question 1</h3><p>Shared question text was not saved. View the source to recover it.</p></header>'+part('1(a)(i)','Question text not recorded · source required','0 / 1')+part('1(a)(ii)','Question text not recorded · source required','0 / 2','Extraction unconfirmed','math')+part('1(a)(iii)','Question text not recorded · source required','2 / 2')+'</section><section class="group" id="unassigned"><header class="grouphead"><h3>Unassigned parts</h3><p>Keep source order. Parent identities cannot be inferred from bare letters.</p></header>'+part('Unassigned part (c)','Parent question unknown · page not verified','2 / 2','Identity unresolved')+part('Unassigned part (d)','Parent question unknown · page not verified','4 / 4','Identity unresolved')+part('Unassigned part (b)','Parent question unknown · page not verified','6 / 8','Identity unresolved')+'</section><p class="tiny muted">The screenshot reports nine marked parts. This subset does not recreate unseen rows or establish the total number of top-level questions. 5(a) and Question 12 below are separate review examples.</p><div class="fieldactions"><button data-view="table">Inspect 5(a) table fixture</button><button data-view="review">Inspect Question 12 fixture</button></div>'+annotations}
+function source(title){return '<section class="source" aria-labelledby="source-title"><h3 id="source-title"><span class="anno">E</span>Source evidence</h3><figure><div class="paper"><strong>'+title+'</strong><p>Illustrative evidence placeholder</p><div class="rules"></div><div class="rules"></div><p>Real prompt, student working and teacher annotation belong here, with their recorded page/box.</p></div><figcaption>No original image is embedded. This does not demonstrate crop or scanner fidelity.</figcaption></figure><div class="toolbar"><button data-action="source">View full page</button><button data-action="source">Zoom source</button></div></section>'}
+function markControl(){return '<section class="field"><fieldset class="choices"><legend><span class="anno">F</span>Teacher’s mark · out of 3</legend><p class="tiny muted">Read from the teacher’s pen. '+(fixtures.confirmed?'You confirmed this field.':'Current reading is unconfirmed; it is not an Axon mark.')+'</p><div class="options">'+[0,1,2,3].map(n=>'<label class="choice"><input type="radio" name="teacher-mark" value="'+n+'" '+(fixtures.mark===n?'checked':'')+'><span>'+n+'</span></label>').join('')+'</div></fieldset><div class="fieldactions"><button class="primary" data-action="confirm" '+(fixtures.confirmed?'disabled':'')+'>'+(fixtures.confirmed?'Mark confirmed':'Confirm teacher’s mark')+'</button><button data-action="unread">I can’t read the mark</button></div><p class="feedback" id="markstatus" role="status">'+(fixtures.confirmed?'Saved in this local fixture. Answer transcription still needs checking.':'Selection is a draft. No field has been confirmed.')+'</p></section>'}
+function working(kind){if(fixtures.edit)return '<h3>Your working · edit transcription</h3><textarea id="answeredit" aria-label="Your transcribed working">10 different selections\nBA\nBN\nBC\nAN\nAC\nNC</textarea><div class="fieldactions"><button class="primary" data-action="save-answer">Save transcription</button><button data-action="cancel-edit">Cancel edit</button></div><p class="feedback">Local design fixture; exact text remains your authority.</p>';
+if(kind==="table")return '<h3>Your working · screenshot transcription fixture</h3><div class="tablewrap"><table><caption>Probability distribution · part 5(a)</caption><tbody><tr><th scope="row">X</th><td>0</td><td>1</td><td>2</td><td>3</td></tr><tr><th scope="row">P</th><td>1/4</td><td>3/8</td><td>1/4</td><td>1/8</td></tr></tbody></table></div><p class="tiny muted" style="margin-top:10px">Cell values copied from the supplied screenshot. This preview does not prove extraction or persistence.</p>';
+if(kind==="math")return '<h3>Your working · boundary not confirmed</h3><math xmlns="http://www.w3.org/1998/Math/MathML" aria-label="Square root of 32460 minus 642 squared divided by 60"><msqrt><mrow><mn>32460</mn><mo>−</mo><mfrac><msup><mn>642</mn><mn>2</mn></msup><mn>60</mn></mfrac></mrow></msqrt></math><p>160</p><math xmlns="http://www.w3.org/1998/Math/MathML" aria-label="642 divided by 60 equals 10.7"><mrow><mfrac><mn>642</mn><mn>60</mn></mfrac><mo>=</mo><mn>10.7</mn></mrow></math><p>95.7 − 10.7 = 85 = c</p><div class="warning">The “160” line and later c working remain separate as in the screenshot transcription. The part boundary needs checking. No arithmetic has been corrected.</div><p class="tiny muted" style="margin-top:10px">MathML demonstrates notation layout in this standalone fixture. Production will reuse existing MathText / KaTeX.</p>';
+return '<h3>Your working · unverified transcription</h3><pre class="raw">EE^{4}C^{3} = …\nEEE4 = 4C_{1}\n10 different selections\n3 BANC\nBA\nBN\nBC\nAN\nAC\nNC</pre><div class="warning">The first lines are unclear. Displaying them as polished combinations would guess what you wrote. Check the full page before correcting the transcription.</div>'}
+function review(kind="review"){const title=kind==="table"?'Question 5(a)':kind==="math"?'Question 1 · part not confirmed':'Question 12';return '<a href="#overview" data-view="overview" class="breadcrumb">← Class test / Review</a><header class="identity"><div class="copy"><div class="eyebrow">Separate screenshot review fixture</div><h1>'+title+'</h1><div class="metadata"><span>Paper identity incomplete</span><span class="badge unsure">'+(kind==="table"?'Table transcription fixture':'Transcription needs checking')+'</span></div></div></header><div class="reviewtitle"><h2>Question</h2></div><div class="promptblock">'+(kind==="table"?'Probability distribution table. Exact prompt must remain linked to its original page.':kind==="math"?'Standard-deviation working and later mean/c working need separate verified boundaries.':'Printed prompt is outside the tight answer crop. Recover it from the full page before treating the question as complete.')+'</div><div class="reviewgrid">'+source(title)+'<div class="fields"><section class="field">'+working(kind)+'<div class="fieldactions"><button data-action="edit">Fix this transcription</button></div></section>'+markControl()+'<section class="field"><h3>Teacher’s comment</h3><p class="muted">'+(kind==="math"?'“Show it” · screenshot reading; verify against source':'No written remark recorded in this fixture')+'</p></section><section class="field"><h3>What still needs checking</h3><p class="muted">Answer transcription and question identity. Confirming the teacher’s mark does not confirm either of these.</p><div class="fieldactions"><button data-action="source">Correct question identity</button><button data-action="retake">Retake this page</button></div></section></div></div><footer class="savebar"><div><strong>Review remains incomplete</strong><p class="tiny muted">Unconfirmed answer and identity stay outside analytics.</p></div><button data-view="overview">Back to paper</button></footer>'+annotations}
+function unreadable(){return identity()+'<div class="banner"><div class="copy"><h2><span class="anno">C</span>6 parts couldn’t be read</h2><p>0 to confirm · 6 unreadable · 0 ready to review</p><p>Inspect the affected sources. Retake only the page that needs replacing.</p></div></div><div class="sectionhead"><h2>Unreadable sources</h2><span class="tiny muted">Axon-authored state fixture</span></div>'+[1,2,3,4,5,6].map(n=>'<section class="group"><div class="grouphead"><h3>Unreadable part '+n+'</h3><p>Original question identity and page number not yet verified. Unread is not zero.</p><div class="fieldactions"><button data-action="source">Inspect source for part '+n+'</button><button data-action="retake">Retake affected page</button></div></div></section>').join('')+annotations}
+function completed(){return identity()+'<div class="empty"><h2>Review complete</h2><p>No unresolved confirmation tasks. This is an Axon-authored completed-state fixture, separate from the unresolved screenshot examples.</p><div class="fieldactions"><button class="primary" data-view="overview">Open saved paper fixture</button></div></div><section class="field" style="margin-top:24px"><h3>Teacher’s mark</h3><p><strong class="mark">3 / 3</strong> <span class="badge confirmed">Confirmed</span></p><p class="tiny muted">Human confirmation, not model grading. No amber attention banner.</p></section>'+annotations}
+function emptyview(which){if(which==="loading")return '<section class="empty" aria-busy="true" aria-label="Loading paper"><h2>Loading paper…</h2><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:48%"></div><div class="skeleton" style="height:90px"></div><p>No totals are shown until real data is available.</p></section>';
+if(which==="failed")return '<section class="empty"><h2>The paper couldn’t be opened</h2><p>This is a failed read, not an empty paper. Saved marks are not replaced by zero.</p><div class="fieldactions"><button class="primary" data-action="loadretry">Try again</button><button data-view="overview">Back to Library fixture</button></div></section>';
+return identity()+'<section class="empty"><h2>No readable questions yet</h2><p>The paper has no available question data. Show any recorded unreadable pages and their real recovery actions.</p><div class="fieldactions"><button data-view="unreadable">Inspect unreadable-state example</button></div></section>'}
+function render(){app.className="page "+(["review","table","math"].includes(state)?"reviewpage":"");app.innerHTML=state==="overview"||state==="missing"?overview(state==="missing"):["review","table","math"].includes(state)?review(state):state==="unreadable"?unreadable():state==="completed"?completed():emptyview(state);document.getElementById("view").value=state}
+function navigate(view){state=view;history.replaceState(null,"","#"+view);render();window.scrollTo(0,0);document.getElementById("toast").textContent=""}
+document.getElementById("view").addEventListener("change",e=>navigate(e.target.value));
+document.getElementById("theme").addEventListener("click",e=>{const isDark=document.documentElement.dataset.theme==="dark";document.documentElement.dataset.theme=isDark?"light":"dark";e.currentTarget.textContent=isDark?"Dark theme":"Light theme"});
+document.getElementById("textsize").addEventListener("click",e=>{const on=document.body.classList.toggle("large");e.currentTarget.setAttribute("aria-pressed",String(on))});
+document.getElementById("close").addEventListener("click",()=>document.getElementById("modal").close());
+app.addEventListener("change",e=>{if(e.target.name==="teacher-mark"){fixtures.mark=Number(e.target.value);fixtures.confirmed=false;document.getElementById("markstatus").textContent="Unsaved mark draft: "+fixtures.mark+" of 3. Answer and identity remain unresolved.";render();note("Mark draft changed. Confirmation is a separate action.")}});
+app.addEventListener("click",e=>{const el=e.target.closest("[data-view],[data-action]");if(!el)return;if(el.dataset.view){e.preventDefault();navigate(el.dataset.view);return}const action=el.dataset.action;
+if(action==="identity"){document.getElementById("unassigned").scrollIntoView({block:"start"});return}
+if(action==="confirm"){fixtures.confirmed=true;render();note("Teacher-mark field confirmed in this local fixture. Answer and identity remain unresolved.");return}
+if(action==="unread"){fixtures.mark=null;fixtures.confirmed=false;render();note("Mark unread. No zero has been selected or saved.");return}
+if(action==="edit"){fixtures.edit=true;render();document.getElementById("answeredit").focus();return}
+if(action==="cancel-edit"){fixtures.edit=false;render();return}
+if(action==="save-answer"){el.disabled=true;el.textContent="Saving fixture…";show("Save behavior proposal",'<p>This preview has no durable backend. A real save must acknowledge only the edited field and preserve the draft on failure.</p><p style="margin-top:12px">Answer correction must not confirm the mark or question identity.</p><div class="fieldactions"><button id="savepass">Show success</button><button id="savefail">Show failure</button></div>');document.getElementById("savepass").onclick=()=>{document.getElementById("modal").close();fixtures.edit=false;fixtures.saved=true;render();note("Transcription saved in fixture. Other fields remain unresolved.")};document.getElementById("savefail").onclick=()=>{document.getElementById("modal").close();render();note("Couldn't save. Your changes remain in the draft. Retry when connected.")};return}
+if(action==="source"){show("Source inspection proposal","<p>The real source must use recorded page and box provenance, with original-page and zoom access.</p><p style='margin-top:12px'>No real source image is embedded in this fixture. Full-page fidelity and camera reliability remain unverified.</p>");return}
+if(action==="retake"){show("Retake the affected page","<p>Show the actual page number and affected parts before replacing it. Keep original evidence until the new page is durably accepted.</p><p style='margin-top:12px'>This preview does not start a camera or replace any page.</p>");return}
+if(action==="share"){show("Share presentation proposal","<p>Keep Parent Mode and the existing visibility/expiry sheet. After minting, copy the capability link where supported and keep the second-tap Share fallback.</p><p style='margin-top:12px'>No token is minted or copied by this preview.</p>");return}
+if(action==="delete"){show("Delete this paper","<p>Production uses the existing consequence sheet: permanently remove the paper, its pages, questions, explanations and derived data. Usage logs stay anonymised.</p><p style='margin-top:12px'>No data is deleted in this preview.</p>");return}
+if(action==="loadretry"){navigate("loading");note("Local loading-state example. No production request was made.")}
+});
+const allowed=["overview","review","table","math","unreadable","completed","missing","loading","failed","empty"];const initial=location.hash.slice(1);if(allowed.includes(initial))state=initial;render();
+</script>
+<!-- Google Material Symbols Outlined: share/delete exact upstream SVGs.
+Source: https://github.com/google/material-design-icons/tree/master/symbols/web
+Modification: currentColor fill and decorative accessibility attributes.
+Apache-2.0 license follows:
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+</body></html>
