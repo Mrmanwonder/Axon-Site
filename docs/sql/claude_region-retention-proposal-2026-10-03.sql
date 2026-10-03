@@ -2,7 +2,7 @@
 -- This is not a migration and must not be applied directly to production.
 -- Create a NEW CLI-generated migration only after reviewing the policy below.
 --
--- Verified classification (2026-10-03): all156 model_call.region_id values absent
+-- Verified classification (2026-10-03): all 156 model_call.region_id values absent
 -- from question_region identify synthetic eval_case rows instead, and run_id
 -- identifies eval_run. They have null paper_id/student_id. DO NOT clean them up.
 -- Backend shared/src/eval/explain-run.ts explicitly defines this mapping.
@@ -27,7 +27,8 @@
 --
 -- The guard deliberately blocks direct application. A reviewed forward migration
 -- copies only the selected SQL section below, via the standard release process.
-do $$ begin
+begin;
+do $ begin
   raise exception 'review proposal only: choose region retention policy and create a new migration';
 end $$;
 
@@ -66,10 +67,13 @@ create trigger question_region_minimise_telemetry
   before delete on public.question_region
   for each row execute function private.minimise_on_region_delete();
 -- END PROPOSED POLICY B SQL
+-- ROLLBACK ends the deliberately aborted guard transaction even if a SQL
+-- client continues after the exception. No proposed DDL can execute directly.
+rollback;
 
 -- OPTIONAL REVIEWED BACKFILL, NOT automatically included in the proposal.
 -- Current eligible row count is ZERO. Keep this as a classification query until
--- a reviewed forward migration and policy exist; do not blindly UPDATE156 rows.
+-- a reviewed forward migration and policy exist; do not blindly UPDATE 156 rows.
 select count(*) as genuinely_stale_region_calls_with_live_owner_run
   from public.model_call mc
  where mc.region_id is not null
