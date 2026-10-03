@@ -52,10 +52,10 @@ for (const width of [360, 390, 768, 1024, 1440]) {
 }
 test("AXO-134 confirmation, radio keyboard and failed-save draft", async ({ page }) => {
   await page.goto(origin + "/docs/design-preview/index.html#review");
-  await page.getByRole("radio", { name: "3", exact: true }).focus();
+  await page.getByRole("radio", { name: "3 marks", exact: true }).focus();
   await page.keyboard.press("ArrowLeft");
-  await expect(page.getByRole("radio", { name: "2", exact: true })).toBeChecked();
-  await expect(page.getByRole("radio", { name: "2", exact: true })).toBeFocused();
+  await expect(page.getByRole("radio", { name: "2 marks", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "2 marks", exact: true })).toBeFocused();
   await expect(page.locator("#markstatus")).toContainText("Unsaved mark draft: 2 of 3");
   await page.getByRole("button", { name: "Confirm teacher’s mark", exact: true }).click();
   await expect(page.locator("#markstatus")).toContainText("Answer transcription still needs checking");
