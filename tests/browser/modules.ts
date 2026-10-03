@@ -117,3 +117,34 @@ export const avatarRenderFor = () => ({
 });
 export const avatarStyleFor = avatarRenderFor;
 export const initialFor = (name?: string) => name?.trim().charAt(0).toUpperCase() || "?";
+
+// Paper overview fixture (AXO-135). The pictured Class test: grouped parts plus bare c, d, b.
+const mk = (id: string, label: string, awarded: number | null, max: number, over: Record<string, unknown> = {}) => ({
+  id, question_label: label, question_text: null, student_answer: "x", answer_block: null,
+  marks_awarded: awarded, max_marks: max, marks_source: "teacher_pen", teacher_remark: null,
+  extraction_confidence: "confirmed", student_confirmed_at: null, mark_loss_event: [], ...over,
+});
+export const readPaper = async () => ({
+  stale: scenario === "cached", offline: false,
+  data: {
+    id: "paper-1", type: "unit_test", tier: "tier_1", date_taken: "2026-09-07", subject: null,
+    reported_total: 27, stated_maximum: 27, total_awarded: 19, total_available: 27,
+    total_basis: "printed", total_partial: false, reconciled: true, paper_page: [], page_unreadable: [],
+    question_region: [],
+    student_attempt: [
+      mk("a1", "1(a)(i)", 2, 2, { question_text: "State what is meant by the term standard deviation and why a small value indicates the readings are close to the mean." }),
+      mk("a2", "1(a)(ii)", 1, 2, { question_text: "Calculate the mean of the five readings." }),
+      mk("a3", "1(a)(iii)", 2, 3),
+      mk("a4", "c", 3, 3),
+      mk("a5", "d", 2, 4, { extraction_confidence: "unsure" }),
+      mk("a6", "b", null, 2),
+      mk("a7", "2(a)", 4, 6, { extraction_confidence: "likely" }),
+    ],
+  },
+});
+export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
+export const activeAcademicShare = async () => null;
+export const academicShareUrl = (token: string) => `https://example.invalid/share#token=${token}`;
+export const createAcademicShare = async () => ({ share_id: "s", resource_type: "paper", expires_at: "2099-01-01", token: "t" });
+export const presentAcademicShare = async () => "copied";
+export const revokeAcademicShare = async () => ({ revoked: true });

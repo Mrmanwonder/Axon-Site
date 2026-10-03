@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    TOKENS
 
-   Every value here was lifted from reference/prototype.html, which CLAUDE.md
+   Every value here was lifted from reference/prototype.html, which Axon.md
    names as the design system of record. Nothing was invented, rounded or
    "tidied": where the prototype says 15.5px, this file says 15.5px.
 
@@ -59,7 +59,7 @@
   --p-viewfinder: #050506;
 
   /* ── cause hues ──
-     Seven categorical hues of equal visual weight. Fixed by CLAUDE.md; they
+     Seven categorical hues of equal visual weight. Fixed by Axon.md; they
      do NOT vary by theme and they are NOT a severity ramp. Ordering them by
      anything other than the enum's own order would imply a ranking. */
   --p-cause-conceptual-gap: #4C7DF0;
@@ -324,7 +324,7 @@
   --fw-bold: 700;
 
   /* ── motion ──
-     CLAUDE.md names three durations by meaning. The prototype also uses a set
+     Axon.md names three durations by meaning. The prototype also uses a set
      of shorter values for colour and opacity cross-fades, which are recorded
      here as-is rather than being collapsed into the three — collapsing them
      would visibly change the interface. See the note in the port report. */

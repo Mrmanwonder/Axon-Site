@@ -47,7 +47,7 @@
    collects a syllabus code, even though the migration adding
    `student_subject.syllabus_code` shipped alongside it.
 
-   CLAUDE.md says board is CAIE for every new profile and that CBSE remains in
+   Axon.md says board is CAIE for every new profile and that CBSE remains in
    the enum only for accounts created before the switch; AGENTS.md says
    `curriculum.js` is the single source and nothing else may hardcode a board or
    a four-digit code. This screen follows both: the board is no longer a

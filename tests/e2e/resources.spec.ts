@@ -192,19 +192,21 @@ test("camera video remains renderable behind the placeholder while iPhone playba
   await page.goto("/tests/browser/index.html");
 
   const displays = await page.evaluate(async () => {
-    const stylesheet = document.createElement("link");
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = "/src/ui/styles/system.css";
-    const loaded = new Promise<void>((resolve, reject) => {
-      stylesheet.onload = () => resolve();
-      stylesheet.onerror = () => reject(new Error("scanner stylesheet did not load"));
-    });
-    document.head.append(stylesheet);
-    await loaded;
+    for (const href of ["/src/ui/styles/system.css", "/src/ui/styles/scanner.css"]) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = href;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.onload = () => resolve();
+        stylesheet.onerror = () => reject(new Error("scanner stylesheet did not load"));
+      });
+      document.head.append(stylesheet);
+      await loaded;
+    }
 
     const hero = document.createElement("div");
-    hero.className = "scanhero";
-    hero.innerHTML = '<video id="scanVideo"></video><canvas id="scanOverlay"></canvas><div class="feed"></div>';
+    hero.className = "sc";
+    hero.innerHTML = '<div class="sc-vf"><video id="scanVideo"></video><canvas id="scanOverlay"></canvas></div>';
     document.body.append(hero);
     const video = hero.querySelector("video")!;
     const overlay = hero.querySelector("canvas")!;

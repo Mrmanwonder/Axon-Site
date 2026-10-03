@@ -1,80 +1,480 @@
-/* Scanner-only layout and motion overrides.
-   The camera is an alignment tool: nothing except guidance and capture controls
-   is allowed to cover the document while pages already taken live in the tray. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE SCANNER
+
+   Phones and tablets get a column: top bar · camera · guidance strip · bottom
+   bar. Nothing but corner brackets and a faint level line sits on the paper,
+   and there is no blur over live video anywhere. Laptops get an import screen
+   (.sc-desk) that follows the theme; the camera screen is its own darkroom and
+   never does.
+
+   Motion: transform and opacity only. The only decorative motion is a page
+   dropping onto the stack, 220 ms, and none under reduced motion.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
   --scan-snap: cubic-bezier(.1, .9, .2, 1);
-  --scan-tray-h: calc(150px + max(10px, var(--bot-inset)));
-  --scan-nav-clearance: 0px;
+  /* White text on the palette blue (#3A86FF) measures 3.5:1, under the 4.5:1
+     AA needs for body-size text. Filled controls that carry words use this
+     deeper blue (4.8:1); non-text blue (brackets, rim, dots) keeps the palette. */
+  --sc-fill: #2B6BE6;
 }
 
-/* Capture is a focused mode on phones. Persistent app chrome adds accidental
-   exits and steals vertical room from the page, so the scanner owns the whole
-   viewport and supplies one explicit close control instead. */
-html.scanner-active .scanhero {
-  bottom: var(--scan-nav-clearance);
-}
+/* ── camera screen ──────────────────────────────────────────────────────── */
 
-html.scanner-active:has(.tray) .scanhero {
-  bottom: calc(var(--scan-nav-clearance) + var(--scan-tray-h));
-}
-
-.scanhero {
-  transition: bottom .2s var(--scan-snap);
-}
-
-.scanhero .scanhint {
-  left: 50%;
-  right: auto;
-  top: max(62px, calc(var(--top-inset) + 58px));
-  width: max-content;
-  max-width: min(78vw, 440px);
-  transform: translateX(-50%);
-  padding: 7px 11px;
-  border-radius: 999px;
-  color: rgba(255,255,255,.96);
-  background: rgba(8,8,10,.68);
-  border: 1px solid rgba(255,255,255,.14);
-  box-shadow: 0 2px 14px rgba(0,0,0,.22);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
-  backdrop-filter: blur(12px) saturate(1.2);
-  text-shadow: 0 1px 2px rgba(0,0,0,.35);
-  line-height: 1.25;
-  z-index: 8;
-  opacity: 1;
-  transition: opacity .12s var(--scan-snap), background .16s var(--scan-snap),
-              border-color .16s var(--scan-snap);
-}
-
-.scanhero .scanhint[data-blocking] {
-  background: rgba(26,20,10,.78);
-  border-color: rgba(255,190,70,.3);
-}
-
-/* A consequence/quality sheet is the single source of guidance while open.
-   Do not let the still diagnosis and the next live frame talk over each other. */
-html.scanner-active:has(.scrim.on) .scanhero .scanhint {
-  opacity: 0;
-}
-
-.scanhero::after {
-  content: "";
+.sc {
+  --sc-bg: #050506;
+  --sc-chip: #17171a;
+  --sc-strip: #111113;
+  --sc-strip-attn: #2a2010;
+  --sc-ink: #fff;
+  --sc-ink-2: #b5b5be;
+  --sc-line: rgba(255, 255, 255, .22);
+  --sc-accent: #3A86FF;
+  --sc-amber: #FF9F0A;
+  --sc-green: #30D158;
   position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  background: var(--sc-bg);
+  color: var(--sc-ink);
+  overflow: hidden;
+  /* A browser pinch changes the visual viewport without moving the video's
+     layout rect; capture.js maps the page through that rect, so a pinch breaks
+     the brackets. The screen owns its gestures. */
+  touch-action: none;
+}
+
+.sc button { font: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
+
+.sc-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: max(8px, var(--top-inset)) 10px 8px;
+}
+
+.sc-grow { flex: 1; }
+
+.sc-circ {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  border: 1px solid var(--sc-line);
+  background: var(--sc-chip);
+  cursor: pointer;
+}
+
+.sc-circ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.sc-circ svg circle { fill: currentColor; stroke: none; }
+
+.sc-circ .dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--sc-accent);
+  box-shadow: 0 0 0 2px var(--sc-chip);
+}
+
+.sc-auto {
+  min-height: 44px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .75);
+  background: #0c0c0e;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.sc-auto i { width: 9px; height: 9px; border-radius: 50%; background: var(--sc-green); }
+.sc-auto[data-on="false"] { border-color: var(--sc-line); }
+.sc-auto[data-on="false"] i { background: transparent; border: 1.5px solid #cfcfd6; }
+
+/* ── camera ─────────────────────────────────────────────────────────────── */
+
+.sc-vf {
+  position: relative;
+  overflow: hidden;
+  background: var(--sc-bg);
+  touch-action: none;
+  min-height: 0;
+}
+
+/* The id rules in system.css size these to the camera. Keep the video
+   renderable while the camera starts: iPhone WebKit may defer autoplay for
+   display:none media, so only hide it once the camera has failed or stopped. */
+.sc[data-camera="off"]:not([data-phase="starting"]) #scanVideo,
+.sc[data-camera="off"] #scanOverlay { display: none; }
+
+.sc-problem {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  background: var(--sc-bg);
+}
+
+.sc-problem h2 { margin: 0 0 8px; max-width: 24ch; font-size: 19px; font-weight: 650; line-height: 1.3; letter-spacing: -.01em; }
+
+.sc-btn {
+  min-height: 48px;
+  min-width: 220px;
+  padding: 0 24px;
+  border-radius: 24px;
+  border: 0;
+  background: var(--sc-fill);
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: opacity .12s var(--scan-snap);
+}
+
+.sc-btn.ghost { background: transparent; border: 1px solid var(--sc-line, var(--label-3)); color: inherit; font-weight: 600; }
+.sc-btn:disabled { opacity: .5; }
+
+/* ── the strip: every word the scanner says is here, under the camera ───── */
+
+.sc-strip {
+  min-height: 56px;
+  padding: 6px 10px 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--sc-strip);
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.sc-strip .g { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2px solid #cfcfd6; }
+.sc-strip[data-tone="locked"] .g { background: var(--sc-accent); border-color: var(--sc-accent); }
+.sc-strip[data-tone="attention"] { background: var(--sc-strip-attn); }
+.sc-strip[data-tone="attention"] .g { border: 2px dashed var(--sc-amber); }
+.sc-strip .t { min-width: 0; }
+
+.sc-strip .act {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .33);
+  background: transparent;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ── bottom bar ─────────────────────────────────────────────────────────── */
+
+.sc-dock {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 112px;
+  padding: 10px 14px max(20px, var(--bot-inset));
+  background: var(--sc-bg);
+}
+
+/* The shutter wears the navigation bar's capsule: a 32px shell with a 5px
+   margin around a 26px-radius pill, so the one control the student presses
+   most reads as part of the same family as the bar they came from. */
+.sc-shutter {
+  --pad: 5px;
+  width: 100px;
+  height: 58px;
+  padding: var(--pad);
+  display: block;
+  border-radius: 32px;
+  border: .5px solid rgba(255, 255, 255, .2);
+  background: rgba(38, 38, 42, .78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -1px 0 rgba(255, 255, 255, .08);
+  cursor: pointer;
+  transition: opacity .12s var(--scan-snap);
+}
+
+.sc-shutter span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 26px;
+  background: #fff;
+  transition: transform .12s var(--scan-snap);
+}
+
+.sc-shutter:active:not(:disabled) span { transform: scale(.94); }
+.sc-shutter[data-locked="true"] { border-color: var(--sc-accent); box-shadow: 0 0 0 1.5px var(--sc-accent), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.sc-shutter:disabled { opacity: .45; }
+
+/* ── the stack: papers dropped on a table ───────────────────────────────── */
+
+.sc-stack, .sc-stack-empty { justify-self: start; margin-left: 6px; }
+
+.sc-stack {
+  position: relative;
+  width: 64px;
+  height: 84px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sc-sheet {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  width: 46px;
+  height: 62px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e6e2d8;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 3px 8px rgba(0, 0, 0, .65), 0 1px 2px rgba(0, 0, 0, .8);
+}
+
+.sc-sheet img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sc-sheet[data-flagged="true"] { outline: 2px dashed var(--sc-amber); outline-offset: 2px; overflow: visible; }
+.sc-sheet[data-flagged="true"] img { border-radius: 3px; }
+.sc-sheet[data-landing="true"] { animation: sc-land .22s cubic-bezier(.2, .8, .3, 1) both; }
+
+@keyframes sc-land {
+  from { transform: translateY(-150px) scale(1.5) rotate(0); opacity: 0; }
+}
+
+.sc-count {
+  position: absolute;
+  right: -4px;
+  top: -2px;
+  z-index: 9;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: var(--sc-accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 24px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--sc-bg);
+}
+
+.sc-stack[data-flagged="true"] .sc-count { background: var(--sc-amber); color: #1a1000; }
+
+.sc-done {
+  justify-self: end;
+  min-height: 48px;
+  min-width: 96px;
+  padding: 0 20px;
+  border-radius: 24px;
+  border: 0;
+  background: var(--sc-fill);
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: opacity .12s var(--scan-snap);
+}
+
+.sc-done[data-kind="review"] { background: transparent; border: 1.5px solid #FF9F0A; color: #FF9F0A; }
+.sc-done:disabled { background: #1d1d21; color: #7d7d86; border-color: transparent; }
+
+/* Resume draft toast sits in the camera, near the top, and is draggable away. */
+.sc-vf .drafttoast {
+  top: 10px;
+  opacity: var(--draft-alert-opacity, 1);
+  transform: translateY(var(--draft-alert-drag, 0));
+  transition: transform .14s var(--scan-snap), opacity .12s linear;
+  cursor: grab;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(30, 30, 34, .92);
+}
+
+.sc-vf .drafttoast.is-dragging { transition: none; cursor: grabbing; }
+.sc-vf .drafttoast.is-dismissing { opacity: 0; transform: translateY(calc(100% + 110px)); pointer-events: none; }
+.sc-vf .drafttoast .dh { display: block; padding: 0; border: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.sc-vf .drafttoast .dh:focus-visible { outline: 2px solid rgba(255, 255, 255, .9); outline-offset: 3px; }
+
+/* ── sheets opened from the scanner ─────────────────────────────────────── */
+
+.sheet.sc-menu .sc-menu-list { display: flex; flex-direction: column; margin-top: 8px; }
+
+.sc-menu-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: .5px solid var(--hairline);
+  background: transparent;
+  color: var(--label);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sc-menu-list > button small { color: var(--label-2); font-size: 13px; text-align: right; }
+
+.sc-light { padding: 12px 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.sc-light > div { display: flex; gap: 6px; }
+.sc-light button {
+  min-height: 44px;
+  min-width: 56px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-sunk);
+  color: var(--label);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sc-light button[aria-pressed="true"] { background: var(--label); color: var(--bg); border-color: transparent; }
+.sc-light small { flex-basis: 100%; color: var(--label-2); }
+
+.sheet.sc-review { max-height: 88dvh; overflow-y: auto; }
+.sc-review-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+
+.sc-pg {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-areas: "th head" "th why" "th acts";
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: start;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--surface-sunk);
+  font-size: 14px;
+  color: var(--label-2);
+}
+
+.sc-pg .th { grid-area: th; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 6px; background: #e6e2d8; }
+.sc-pg .th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sc-pg[data-flagged="true"] .th { outline: 2px dashed var(--amber); outline-offset: 2px; }
+.sc-pg b { grid-area: head; color: var(--label); font-weight: 650; font-size: 15px; }
+.sc-pg .why { grid-area: why; line-height: 1.35; }
+.sc-pg[data-flagged="true"] .why { color: var(--label); }
+.sc-pg .pgacts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sc-pg .pgacts button {
+  flex: 0 1 auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--label-3, var(--hairline));
+  background: transparent;
+  color: var(--label);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sc-review-acts { position: sticky; bottom: 0; padding-top: 12px; background: var(--sheet-bg); }
+
+.sheet.sc-edge {
+  inset: 0;
   left: 0;
   right: 0;
+  top: 0;
   bottom: 0;
-  height: 110px;
-  pointer-events: none;
-  z-index: 5;
-  background: linear-gradient(to bottom, transparent, rgba(0,0,0,.5));
+  height: 100dvh;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 0;
+  border: 0;
+  padding: max(12px, var(--top-inset)) 12px max(12px, var(--bot-inset));
+  background: #050506;
+  color: #fff;
 }
 
+.sheet.sc-edge .body { color: #b5b5be; }
+.sc-edge-host { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; touch-action: none; }
+.sc-edge-host > * { max-width: 100%; max-height: 100%; }
+/* The editor reads its mask colour back from the canvas's computed style right
+   after setting it. A global colour transition makes that read return the old
+   colour (white), which painted the whole area outside the page opaque white. */
+.sc-edge-host canvas { transition: none !important; }
+.sc-edge-error { color: #ffc266; margin: 0; }
+.sheet.sc-edge .acts { flex-direction: row; flex-wrap: wrap; margin-top: 6px; }
+.sheet.sc-edge .acts .btn { flex: 1 1 auto; }
+
+html.scanner-active .sheet .sh-choice.primary {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 650;
+}
+
+html.scanner-active .sheet .sh-choice.secondary {
+  background: var(--surface-sunk);
+  color: var(--label);
+  font-weight: 500;
+}
+
+html.scanner-active .sheet .sh-choice {
+  transition: transform .12s var(--scan-snap), background .16s var(--scan-snap);
+}
+
+/* Capture is a focused mode on phones: persistent app chrome steals vertical
+   room from the page and adds accidental exits. The scanner draws its own
+   close button. */
+@media (max-width: 767px) {
+  html.scanner-active .tabdock,
+  html.scanner-active .themebtn,
+  html.scanner-active .header {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+/* Tablets: the camera column, centred, not stretched across the window. */
+@media (min-width: 768px) {
+  .sc {
+    position: relative;
+    inset: auto;
+    width: min(100%, 480px);
+    height: clamp(560px, calc(100dvh - var(--view-top) - 28px), 880px);
+    margin: 0 auto;
+    border-radius: 28px;
+  }
+}
+
+/* ── level line (visual only, never part of capture logic) ──────────────── */
 
 /* Apple Camera-style horizon level. The reference is three pieces: two short
    fixed outer guides and one long center segment that rotates around its own
    midpoint. At level, the gaps close and the three pieces read as one yellow
    line. This overlay is visual only and never participates in capture logic. */
-.scanhero .scanlevel {
+.sc-vf .scanlevel {
   --scan-level-opacity: 0;
   --scan-level-rotation: 0deg;
   --scan-level-gap: 3%;
@@ -95,12 +495,12 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   contain: layout paint style;
 }
 
-.scanhero .scanlevel[data-visible="true"] {
+.sc-vf .scanlevel[data-visible="true"] {
   opacity: var(--scan-level-opacity);
 }
 
-.scanhero .scanlevel-guide,
-.scanhero .scanlevel-moving {
+.sc-vf .scanlevel-guide,
+.sc-vf .scanlevel-moving {
   display: block;
   width: 100%;
   height: 1px;
@@ -108,7 +508,7 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
   box-shadow: 0 .5px .5px rgba(0,0,0,.36);
 }
 
-.scanhero .scanlevel-moving {
+.sc-vf .scanlevel-moving {
   transform: rotate(var(--scan-level-rotation));
   transform-origin: 50% 50%;
   will-change: transform;
@@ -116,303 +516,138 @@ html.scanner-active:has(.scrim.on) .scanhero .scanhint {
 
 /* Apple's aligned state is not three yellow dashes. The pieces close into one
    continuous line, then the complete guide turns yellow. */
-.scanhero .scanlevel[data-aligned="true"] {
+.sc-vf .scanlevel[data-aligned="true"] {
   --scan-level-gap: 0%;
 }
 
-.scanhero .scanlevel[data-aligned="true"] .scanlevel-guide,
-.scanhero .scanlevel[data-aligned="true"] .scanlevel-moving {
+.sc-vf .scanlevel[data-aligned="true"] .scanlevel-guide,
+.sc-vf .scanlevel[data-aligned="true"] .scanlevel-moving {
   background: rgba(255,214,10,.94);
   box-shadow: 0 .5px .5px rgba(0,0,0,.32);
 }
 
-html.scanner-active:has(.scrim.on) .scanhero .scanlevel {
+html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   opacity: 0;
 }
 
-.scanhero .scanctrls {
-  bottom: max(18px, env(safe-area-inset-bottom));
-  z-index: 8;
-  gap: 30px;
+
+
+/* ── the import screen (laptops and desktops) ───────────────────────────── */
+
+.sc-desk {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 8px var(--gutter) 40px;
 }
 
-.scanhero .autotoggle,
-.scanhero .draftsicon,
-.scanhero .scanexit {
-  z-index: 8;
-  background: rgba(8,8,10,.62);
-  border: 1px solid rgba(255,255,255,.12);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-}
+.sc-desk h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+.sc-desk-sub { margin: 0 0 26px; max-width: 60ch; color: var(--label-2); }
+.sc-desk-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 980px) { .sc-desk-cols { grid-template-columns: minmax(0, 1fr); } }
 
-.scanhero .draftsicon {
-  padding: 0;
-  color: #fff;
-  font: inherit;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.scanhero .scanexit {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 38px;
-  height: 38px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  color: #fff;
-  background: rgba(8,8,10,.62);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  cursor: pointer;
-}
-
-.scanhero .scanexit svg {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.9;
-  stroke-linecap: round;
-}
-
-.scanhero:not(:has(.draftsicon)) .autotoggle {
-  left: 16px;
-}
-
-.scanhero .shutter,
-.scanhero .sidebtn,
-.scanhero .autotoggle,
-.scanhero .draftsicon,
-.scanhero .scanexit {
-  transition: transform .12s var(--scan-snap), opacity .12s var(--scan-snap),
-              background .18s var(--scan-snap);
-}
-
-.scanhero .shutter:active:not(:disabled),
-.scanhero .sidebtn:active,
-.scanhero .autotoggle:active,
-.scanhero .draftsicon:active,
-.scanhero .scanexit:active {
-  transform: scale(.94);
-}
-
-.scanhero .shutter:disabled {
-  opacity: .46;
-}
-
-/* Reserve a real strip between camera and navigation for captured pages rather
-   than floating thumbnails over the paper or underneath the tab bar. */
-html.scanner-active .tray {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: var(--scan-nav-clearance);
-  z-index: 12;
-  height: var(--scan-tray-h);
-  box-sizing: border-box;
-  padding: 10px var(--gutter) max(10px, var(--bot-inset));
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 10px;
-  background: var(--bg, #f6f6f4);
-  border-top: 1px solid rgba(127,127,127,.16);
-  box-shadow: 0 -10px 28px rgba(0,0,0,.08);
-}
-
-html.scanner-active .tray .trayscroll {
-  min-height: 0;
+.sc-drop {
   display: flex;
-  gap: 9px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  padding: 1px 1px 3px;
-}
-
-html.scanner-active .tray .trayscroll::-webkit-scrollbar {
-  display: none;
-}
-
-html.scanner-active .tray .traypage {
-  position: relative;
-  flex: 0 0 56px;
-  width: 56px;
-  height: 72px;
-  border-radius: 10px;
-  overflow: hidden;
-  transition: transform .14s var(--scan-snap), box-shadow .18s var(--scan-snap),
-              opacity .18s var(--scan-snap);
-}
-
-html.scanner-active .tray .traypage[data-retake="true"] {
-  box-shadow: 0 0 0 2px rgba(225,145,30,.9), 0 4px 14px rgba(0,0,0,.12);
-}
-
-html.scanner-active .tray .traypage .retakebadge,
-html.scanner-active .tray .traypage .pending {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 4px;
-  padding: 3px 4px;
-  border-radius: 5px;
-  background: rgba(10,10,12,.76);
-  color: #fff;
-  font-size: 9px;
-  font-weight: 650;
-  text-align: center;
-  line-height: 1.1;
-}
-
-html.scanner-active .tray .traybar {
-  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 38px;
+  justify-content: center;
+  min-height: 420px;
+  padding: 32px;
+  text-align: center;
+  border-radius: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  transition: border-color .12s ease;
 }
 
-html.scanner-active .tray .cnt {
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.25;
+.sc-drop[data-over="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.sc-drop h2 { margin: 0 0 4px; font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
+.sc-drop p { margin: 0 0 18px; color: var(--label-2); }
+.sc-drop .sc-fine { margin: 16px 0 0; font-size: 13px; }
+
+.sc-pile { position: relative; width: 170px; height: 150px; margin-bottom: 22px; }
+
+.sc-pile b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  height: 140px;
+  margin: -70px 0 0 -52px;
+  border-radius: 6px;
+  background: #f2efe8;
+  box-shadow: 0 1px 0 #fff inset, 0 10px 24px rgba(0, 0, 0, .28), 0 2px 4px rgba(0, 0, 0, .3);
+  transition: transform .2s ease;
 }
 
-html.scanner-active .tray .btn.primary {
-  min-width: 126px;
-  min-height: 38px;
-  white-space: nowrap;
-  transition: transform .12s var(--scan-snap), opacity .14s var(--scan-snap);
+.sc-pile b::before {
+  content: "";
+  position: absolute;
+  inset: 18px 14px auto;
+  height: 80px;
+  background: repeating-linear-gradient(transparent 0 9px, rgba(154, 150, 140, .47) 9px 10px);
 }
 
-html.scanner-active .tray .btn.primary:disabled {
-  opacity: .48;
+.sc-pile b:nth-child(1) { transform: translate(-34px, 6px) rotate(-12deg); }
+.sc-pile b:nth-child(2) { transform: translate(30px, 2px) rotate(9deg); }
+.sc-pile b:nth-child(3) { transform: translate(-2px, -4px) rotate(-2deg); }
+.sc-drop[data-over="true"] .sc-pile b:nth-child(1) { transform: translate(-44px, -6px) rotate(-16deg); }
+.sc-drop[data-over="true"] .sc-pile b:nth-child(2) { transform: translate(40px, -10px) rotate(13deg); }
+.sc-drop[data-over="true"] .sc-pile b:nth-child(3) { transform: translate(-2px, -18px) rotate(-1deg); }
+
+.sc-desk .sc-btn { min-width: 0; }
+.sc-desk .sc-btn.ghost { background: transparent; border: 1px solid var(--label-3); color: var(--label); }
+
+.sc-card {
+  margin-bottom: 16px;
+  padding: 20px;
+  border-radius: 24px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
 }
 
-html.scanner-active .sheet .sh-choice.primary {
-  background: var(--blue);
-  color: #fff;
-  font-weight: 650;
-  box-shadow: 0 8px 20px rgba(58,134,255,.2);
-}
+.sc-card h3 { margin: 0 0 4px; font-size: 17px; font-weight: 650; }
+.sc-card p { margin: 0 0 12px; font-size: 14px; color: var(--label-2); }
+.sc-card p:last-child { margin-bottom: 0; }
+.sc-phone { display: flex; gap: 16px; align-items: center; }
+.sc-phone p { margin: 0; }
+.sc-qr { width: 112px; height: 112px; flex: none; border-radius: 14px; border: 1px solid rgba(0, 0, 0, .18); }
 
-html.scanner-active .sheet .sh-choice.secondary {
-  background: var(--surface-sunk);
-  color: var(--label);
-  font-weight: 500;
-}
+.sc-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
 
-html.scanner-active .sheet .sh-choice {
-  transition: transform .12s var(--scan-snap), background .16s var(--scan-snap),
-              box-shadow .16s var(--scan-snap);
-}
-
-html.scanner-active .scanhero .drafttoast {
-  top: auto;
-  bottom: 96px;
-  opacity: var(--draft-alert-opacity, 1);
-  transform: translateY(var(--draft-alert-drag, 0));
-  transition: transform .14s var(--scan-snap), opacity .12s linear;
-  cursor: grab;
-}
-
-html.scanner-active .scanhero .drafttoast.is-dragging {
-  transition: none;
-  cursor: grabbing;
-}
-
-html.scanner-active .scanhero .drafttoast.is-dismissing {
-  opacity: 0;
-  transform: translateY(calc(100% + 110px));
-  pointer-events: none;
-}
-
-html.scanner-active .scanhero .drafttoast .dh {
-  display: block;
+.sc-thumb {
+  position: relative;
+  width: 56px;
+  height: 74px;
   padding: 0;
+  overflow: visible;
   border: 0;
+  border-radius: 6px;
+  background: #e6e2d8;
   cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
 }
 
-html.scanner-active .scanhero .drafttoast .dh:focus-visible {
-  outline: 2px solid rgba(255,255,255,.9);
-  outline-offset: 3px;
-}
+.sc-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.sc-thumb[data-flagged="true"] { outline: 2px dashed var(--amber); outline-offset: 2px; }
+.sc-thumb span { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; font-weight: 700; }
 
+.sc-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--label-2); }
+.sc-card-row .sc-done { background: var(--sc-fill); }
+.sc-card-row .sc-done:disabled { background: var(--surface-sunk); color: var(--label-2); }
+.sc-card-row .sc-done[data-kind="review"] { background: transparent; border-color: var(--amber); color: var(--amber); }
 
-@media (max-width: 767px) {
-  html.scanner-active .tabdock,
-  html.scanner-active .themebtn,
-  html.scanner-active .header {
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
-  }
-}
-
-@media (hover: none) and (pointer: coarse) {
-  .scanhero[data-camera="on"] .draftsicon {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    background: rgba(30,30,34,.68);
-  }
-}
-
-/* system.css turns the desktop scanner back into a contained, in-flow panel at
-   768px. Match that breakpoint: do not apply a mobile `bottom` offset to a
-   position:relative camera, and keep the tray in document flow under it. */
-@media (min-width: 768px) {
-  :root { --scan-tray-h: 176px; }
-
-  html.scanner-active .scanhero,
-  html.scanner-active:has(.tray) .scanhero {
-    bottom: auto;
-  }
-
-  html.scanner-active .tray {
-    position: relative;
-    left: auto;
-    right: auto;
-    bottom: auto;
-    z-index: auto;
-    height: auto;
-    min-height: 154px;
-    margin: 12px var(--gutter) 0;
-    padding: 12px 14px;
-    grid-template-rows: auto auto;
-    border: .5px solid var(--hairline);
-    border-radius: var(--r-card);
-    box-shadow: none;
-  }
-
-  html.scanner-active .tray .traypage {
-    flex-basis: 72px;
-    width: 72px;
-    height: 92px;
-  }
-}
+.sc-drafts { margin: 0; padding: 0; list-style: none; }
+.sc-drafts li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-top: .5px solid var(--hairline); color: var(--label); }
+.sc-drafts button { min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--hairline); background: transparent; color: var(--label); font-weight: 600; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
-  .scanhero,
-  .scanhero .scanhint,
-  .scanhero .scanlevel,
-  .scanhero .shutter,
-  .scanhero .sidebtn,
-  .scanhero .autotoggle,
-  .scanhero .draftsicon,
-  html.scanner-active .scanhero .drafttoast,
-  html.scanner-active .tray .traypage,
-  html.scanner-active .tray .btn.primary,
+  .sc-sheet,
+  .sc-pile b,
+  .sc-shutter span,
+  .sc-done,
+  .sc-btn,
+  .sc-vf .drafttoast,
   html.scanner-active .sheet .sh-choice {
     transition: none !important;
+    animation: none !important;
   }
 }

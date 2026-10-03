@@ -1,0 +1,41 @@
+/* Paper overview (AXO-135). Tokens only; no new colours. Red is never used here. */
+
+.po { max-width: 920px;
+  /* Readable secondary text, derived rather than a new colour: --label-2/-3 fall under 4.5:1 on some
+     surfaces in light mode. Never --label-3 for anything a student needs to read. */
+  --po-secondary: color-mix(in srgb, var(--label) 74%, var(--bg));
+  --po-link: color-mix(in srgb, var(--accent) 84%, var(--label)); }
+.po-crumb { padding: 12px var(--text-gutter) 0; font-size: 13px; }
+.po .po-crumb a { color: var(--po-link); text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+.po-crumb a:hover { text-decoration: underline; }
+
+.po .greet .sub, .po-meta { color: var(--po-secondary); }
+.po-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.po-meta > span + span::before { content: "·"; margin-right: 10px; color: var(--label-3); }
+
+.po-summary { padding: 16px 18px; margin-top: 8px; }
+.po-lost { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.po .po-atleast { font-size: 14px; font-weight: 500; color: var(--po-secondary); letter-spacing: 0; }
+.po .po-sub { margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--po-secondary); font-variant-numeric: tabular-nums; }
+.po .po-note { margin: 10px 0 0; color: var(--po-secondary); }
+.po .row .t2, .po .row .t2 > span:not(.conf) { color: var(--po-secondary); }
+.po .conf.likely, .po .conf.unsure { color: var(--po-secondary); }
+
+.po-next { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5;
+  background: var(--attention-wash-soft); border: .5px solid var(--attention-rim); }
+.po-next-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; font-weight: 600; color: var(--label); }
+
+.po .po-qtitle { text-transform: none; letter-spacing: -.01em; font-size: 17px; font-weight: 650; color: var(--label); }
+.po .po-part { align-items: flex-start; }
+.po-part-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-variant-numeric: tabular-nums; }
+.po .po-page { font-size: 12.5px; font-weight: 500; color: var(--po-secondary); }
+.po .po-prompt { margin-top: 4px; font-size: 14px; line-height: 1.45; color: var(--po-secondary); overflow-wrap: anywhere; }
+.po-prompt.none { font-style: italic; }
+.po-mark { align-self: center; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.po-mark .num { font-size: 17px; font-weight: 650; }
+.po .po-mark .of { font-size: 14px; color: var(--po-secondary); }
+.po .po-mark-none { font-size: 13px; color: var(--po-secondary); white-space: normal; display: inline-block; max-width: 9ch; }
+
+@media (max-width: 420px) {
+  .po-mark-none { max-width: 7ch; }
+}

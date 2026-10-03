@@ -1,6 +1,17 @@
-const closed = new URLSearchParams(location.search).get("scenario") === "closed";
+import { scanFixture } from "./scan-fixtures";
+import type { ScanFixtureState } from "./scan-fixtures";
+
+const query = new URLSearchParams(location.search);
+const closed = query.get("scenario") === "closed";
+
+// view=scan-screen renders the real Scan page against a fixed scanner state.
+const calls: Record<string, unknown[][]> = {};
+(window as unknown as { __scanCalls: typeof calls }).__scanCalls = calls;
+const fixed = query.get("view") === "scan-screen"
+  ? scanFixture((query.get("state") ?? "search") as ScanFixtureState, calls) : null;
 
 export function useScan() {
+  if (fixed) return fixed;
   return {
     reviewOpen: !closed,
     closeReview() {},

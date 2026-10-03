@@ -21,27 +21,6 @@ function rememberDismissed(id: string) {
   catch { /* The draft remains in IndexedDB even if session storage is unavailable. */ }
 }
 
-export function DraftsButton({ count, onOpen }: { count: number; onOpen: () => void }) {
-  if (count === 0) return null;
-  const label = `Open ${count} saved draft${count === 1 ? "" : "s"}`;
-
-  return (
-    <PressBox
-      as="button"
-      type="button"
-      className="draftsicon show"
-      aria-label={label}
-      onClick={onOpen}
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 5.5h8.5a2 2 0 0 1 2 2V18" />
-        <path d="M5.5 8.5h8.5a2 2 0 0 1 2 2v8H7.5a2 2 0 0 1-2-2z" />
-      </svg>
-      {count > 0 && <span className="badge" aria-hidden="true" />}
-    </PressBox>
-  );
-}
-
 export function DraftAlert({
   draft,
   onResume,

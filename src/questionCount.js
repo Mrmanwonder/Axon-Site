@@ -31,46 +31,70 @@ const byReadingOrder = (a, b) => {
 };
 
 /**
+ * The one walk over a paper's regions, in reading order. countQuestions and every screen that
+ * groups parts under questions read this, so there is no second placement rule to drift.
+ *
+ * Each entry says where a region landed:
+ *   q          top-level question number it belongs to, or null when none can be determined
+ *   part       parsed part tail ("a", "a(ii)") or null
+ *   counted    false only for an unlabeled region with no evidence (a structural region)
+ *   unassigned true when it is a part but no parent question is known
+ *   inferred   true when a bare part took its parent from reading order, not from its own label
+ *
+ * @param {Array<{order_index?: number, label: string|null, page: number|null, y: number|null, evidence: boolean}>} regions
+ */
+export function placeRegions(regions) {
+  const used = new Set();
+  let prevQ = null;
+  let prevPage = null;
+  const placed = [];
+
+  for (const region of [...regions].sort(byReadingOrder)) {
+    const { q, part } = parseQuestionLabel(region.label);
+    const page = region.page ?? null;
+    const entry = { region, q: null, part, counted: true, unassigned: false, inferred: false };
+
+    if (q === null && part === null) {
+      entry.counted = !!region.evidence;
+      entry.unassigned = !!region.evidence;
+      prevQ = null;
+      prevPage = null;
+    } else if (q !== null) {
+      entry.q = q;
+      if (part !== null) used.add(`${q}:${part}`);
+      prevQ = q;
+      prevPage = page;
+    } else if (prevQ !== null && prevPage !== null && page !== null
+        && page - prevPage >= 0 && page - prevPage <= 1
+        && !used.has(`${prevQ}:${part}`)) {
+      used.add(`${prevQ}:${part}`);
+      entry.q = prevQ;
+      entry.inferred = true;
+      prevPage = page;
+    } else {
+      entry.unassigned = true;
+      prevQ = null;
+      prevPage = null;
+    }
+    placed.push(entry);
+  }
+  return placed;
+}
+
+/**
  * @param {Array<{order_index?: number, label: string|null, page: number|null, y: number|null, evidence: boolean}>} regions
  *   evidence is true when the region carries a mark, an answer or question text.
  */
 export function countQuestions(regions) {
   const tops = new Set();
-  const used = new Set();
-  let prevQ = null;
-  let prevPage = null;
   let parts = 0;
   let unassigned = 0;
-
-  for (const region of [...regions].sort(byReadingOrder)) {
-    const { q, part } = parseQuestionLabel(region.label);
-    const page = region.page ?? null;
-
-    if (q === null && part === null) {
-      if (region.evidence) { parts += 1; unassigned += 1; }
-      prevQ = null;
-      prevPage = null;
-    } else if (q !== null) {
-      tops.add(q);
-      parts += 1;
-      if (part !== null) used.add(`${q}:${part}`);
-      prevQ = q;
-      prevPage = page;
-    } else {
-      parts += 1;
-      if (prevQ !== null && prevPage !== null && page !== null
-          && page - prevPage >= 0 && page - prevPage <= 1
-          && !used.has(`${prevQ}:${part}`)) {
-        used.add(`${prevQ}:${part}`);
-        prevPage = page;
-      } else {
-        unassigned += 1;
-        prevQ = null;
-        prevPage = null;
-      }
-    }
+  for (const e of placeRegions(regions)) {
+    if (!e.counted) continue;
+    parts += 1;
+    if (e.unassigned) unassigned += 1;
+    if (e.q !== null) tops.add(e.q);
   }
-
   return {
     questions_total: tops.size,
     parts_total: parts,

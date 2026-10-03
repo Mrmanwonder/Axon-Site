@@ -44,3 +44,43 @@ test("ordinary dollar prose is not mistaken for maths", () => {
   expect(container.querySelector(".katex")).toBeNull();
   expect(container.textContent).toContain("$20 and $30");
 });
+
+test("valid bare LaTeX commands do not acquire a second backslash", () => {
+  const { container } = render(<MathText text={"e^{-\\lambda n} = \\frac{1}{2}"} />);
+  expect(container.querySelector(".katex")).not.toBeNull();
+  expect(container.querySelector(".math-raw")).toBeNull();
+});
+
+test("historical escaped square roots and fractions retain working line breaks", () => {
+  const { container } = render(<MathText text={"\\\\sqrt{\\\\frac{9}{4}}\\\\n X=1.5"} />);
+  expect(container.querySelectorAll(".katex")).toHaveLength(2);
+  expect(container.querySelector("br")).not.toBeNull();
+  expect(container.textContent).not.toContain("\\n");
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect([...container.querySelectorAll(".katex-html")].map(node => node.textContent).join("")).not.toContain("\\sqrt");
+  expect(container.querySelector('annotation[encoding="application/x-tex"]')?.textContent).toBe("\\sqrt{\\frac{9}{4}}");
+});
+
+test("faithful student algebra is typeset without being corrected", () => {
+  const { container } = render(<MathText text={"\\(2+2=5\\)\n\\(E^{4}C^{3}\\)"} />);
+  expect(container.querySelectorAll(".katex")).toHaveLength(2);
+  expect(container.querySelector('annotation[encoding="application/x-tex"]')?.textContent).toBe("2+2=5");
+});
+
+test("matrix row separators survive the escaping boundary", () => {
+  const latex = "\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}";
+  expect(renderSafeLatex(latex)).not.toBeNull();
+});
+
+test("bare fractions render inline while surrounding prose stays prose", () => {
+  const { container } = render(<MathText text={"Use \\frac{1}{2} as the probability."} />);
+  expect(container.querySelectorAll(".katex")).toHaveLength(1);
+  expect(container.textContent).toContain("Use ");
+  expect(container.textContent).toContain(" as the probability.");
+});
+
+test("bare matrix environments are typeset without becoming tables", () => {
+  const { container } = render(<MathText text={"\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}"} />);
+  expect(container.querySelector(".katex")).not.toBeNull();
+  expect(container.querySelector("table")).toBeNull();
+});

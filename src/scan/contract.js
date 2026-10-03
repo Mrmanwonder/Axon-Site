@@ -419,7 +419,7 @@ export const TIER = {
  * Map a pipeline tier to the three-value `confidence` enum the database holds.
  *
  * SCANNING_SYSTEM.md §10 says an unsure field is "included in analytics but
- * tagged". CLAUDE.md hard rule 3 says unsure data never reaches analytics until
+ * tagged". Axon.md hard rule 3 says unsure data never reaches analytics until
  * a student confirms it, and that rule is enforced by the analytics views rather
  * than by convention. The hard rule wins, and this mapping is where the two
  * documents are reconciled: an unsure field lands as `unsure`, which the views

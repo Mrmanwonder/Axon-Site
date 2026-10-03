@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DocumentMeta from "../components/DocumentMeta";
 import MathText from "../components/MathText";
+import AcademicText from "../components/AcademicText";
 import type { LossReason, SharedAcademicSnapshot, SharedQuestionSnapshot } from "../data/modules";
 import { resolveAcademicShare } from "../data/modules";
 
@@ -62,13 +63,13 @@ function QuestionSnapshot({ question }: { question: SharedQuestionSnapshot }) {
       {question.question_text && (
         <div className="shared-field">
           <div className="k">Question</div>
-          <div className="v"><MathText text={question.question_text} /></div>
+          <div className="v"><AcademicText text={question.question_text} /></div>
         </div>
       )}
       {question.student_answer && (
         <div className="shared-field">
           <div className="k">Written answer</div>
-          <div className="v steps"><MathText text={question.student_answer} /></div>
+          <div className="v steps"><AcademicText text={question.student_answer} /></div>
         </div>
       )}
       {question.teacher_remark && (

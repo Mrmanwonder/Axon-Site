@@ -24,7 +24,7 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'self'",
   "form-action 'self' https://*.supabase.co",
-  "script-src 'self' 'unsafe-inline' https://*.posthog.com",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.posthog.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "font-src 'self'",

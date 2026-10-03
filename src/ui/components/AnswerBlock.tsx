@@ -20,6 +20,7 @@
 import { useMemo, useState } from "react";
 import type { AnswerBlock as Block, Segment } from "../data/modules";
 import MathText, { SafeLatex } from "./MathText";
+import AcademicText from "./AcademicText";
 
 /* All mathematical text, including structured OCR segments, goes through
  * MathText's one hardened KaTeX boundary. Keeping one renderer matters here:
@@ -122,7 +123,7 @@ export default function AnswerBlockView({
            stage produced one. The raw text is what exists, shown as steps so at
            least the student's line breaks survive. */
         <div className={"v" + (rawText ? " steps" : " empty")}>
-          {rawText ? <MathText text={rawText} /> : "Not read"}
+          {rawText ? <AcademicText text={rawText} /> : "Not read"}
         </div>
       )}
 

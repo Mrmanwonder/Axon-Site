@@ -59,7 +59,7 @@ them once by dropping the hook:
 
 - `#obroot` scopes twenty rules, including the whole onboarding palette
   (`.ic-b`, `.ic-g`, `.ic-a`, `.ic-n`) and the `--ob-*` background wash.
-- `#scanVideo` and `#scanOverlay` size the viewfinder to its hero and hide both
+- `#scanVideo` and `#scanOverlay` size the viewfinder to `.sc-vf` and hide both
   while the camera is off. Without them the video renders at its natural size in
   the corner of a full-bleed viewfinder.
 - The per-screen rules were `#v0`–`#v4`. A routed shell has no stack of numbered
@@ -111,10 +111,10 @@ a stale historical copy and are not the production runtime.
 - **`device.js` falls back to the main thread when a module worker cannot be
   constructed.** That path is not theoretical on the phones this is built for,
   and a dropped frame is worth far less than a student who cannot scan at all.
-- **`TEACHER_INK` names the one red.** Stage 2 separates the layers by hue and
-  the design system reserves red for the teacher's pen and the sign-out row.
-  They were always the same rule; keep them one constant so a red error state
-  collides with it before it ships.
+- **`TEACHER_INK` is a known mistake.** Stage 2 separates the layers by red hue, but
+  a teacher's ink can be any colour (owner, 3 Oct 2026), so that mask must stop
+  depending on hue; it is tracked in Linear and must not be extended. In the
+  interface red is reserved for the sign-out row alone, not for the teacher's pen.
 - **Two models, on purpose.** The structure pass finds boundaries on a
   downscaled page with a small model; the content pass reads handwriting with a
   frontier one. Both are environment-overridable, because the harness is what
@@ -131,7 +131,7 @@ a stale historical copy and are not the production runtime.
 
 ## The four hard rules
 
-`CLAUDE.md` names four rules whose violation is a product failure. Each is enforced
+`Axon.md` names four rules whose violation is a product failure. Each is enforced
 by a constraint rather than a convention, because a rule that lives only in a prompt
 eventually gets broken:
 
@@ -193,13 +193,13 @@ and leaving either set pushes the column off-centre or strands it above dead spa
 
 ## Colour
 
-Red appears in exactly one place: the sign-out row. Not errors, not warnings, not
+Red appears in exactly one place: the sign-out row. A teacher's ink is never assumed to be red. Not errors, not warnings, not
 notification dots, not destructive rows like deleting an account. Amber carries
 attention, blue carries accent. The scan crop contains real red pen, and if the UI
 spent red freely every screen would read as a rebuke.
 
 Cause colours are seven categorical hues of equal weight, never a severity ramp. The
-values are in `CLAUDE.md`; take them from there rather than inventing a shade.
+values are in `Axon.md`; take them from there rather than inventing a shade.
 
 ## Haptics
 

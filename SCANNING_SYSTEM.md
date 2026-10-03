@@ -409,7 +409,7 @@ Inputs per question: question text, student answer, marks awarded and available,
 teacher's marks including the boxes of any circles or underlines, teacher's
 comment verbatim, the crop itself, and the scheme extract if Tier 2.
 
-Hard constraints, restated from CLAUDE.md because this is where they'd erode:
+Hard constraints, restated from Axon.md because this is where they'd erode:
 
 - Never dispute the mark. The starting premise is always that the teacher was
   right, and the job is explaining *why* — reconstructing the reasoning behind

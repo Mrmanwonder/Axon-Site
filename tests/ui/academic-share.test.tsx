@@ -53,6 +53,8 @@ function mount() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
   fixture.active.mockResolvedValue(null);
   fixture.create.mockResolvedValue({
     share_id: "share-1",
@@ -200,4 +202,75 @@ test("an existing active share can be explicitly replaced with a fresh link", as
 
   const fresh = await screen.findByRole("dialog", { name: "Share this paper" }, { timeout: 3000 });
   expect(fresh.textContent).toContain("The previous link has been stopped and replaced.");
+});
+
+test("clipboard write begins before the capability request resolves and copies only the minted URL", async () => {
+  let resolveCreation!: (value: object) => void;
+  fixture.create.mockImplementation(() => new Promise((resolve) => { resolveCreation = resolve; }));
+  const items: Array<Record<string, Promise<Blob>>> = [];
+  vi.stubGlobal("ClipboardItem", class {
+    constructor(data: Record<string, Promise<Blob>>) { items.push(data); }
+  });
+  const write = vi.fn(async () => { await items[0]["text/plain"]; });
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write } });
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("false"));
+  await userEvent.click(trigger);
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("dialog")).toBeNull();
+
+  resolveCreation({
+    share_id: "share-1", resource_type: "paper", token: "b".repeat(64),
+    expires_at: "2026-09-26T07:00:00Z",
+  });
+  const blob = await items[0]["text/plain"];
+  expect(blob.type).toBe("text/plain");
+  const fresh = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(fresh.textContent).toContain("Share link copied.");
+  expect(fixture.present).not.toHaveBeenCalled();
+  expect(fixture.present).not.toHaveBeenCalled();
+});
+
+test("writeText fallback automatically copies the fresh link when promise-backed write is unavailable", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("false"));
+  await userEvent.click(trigger);
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(
+    "https://axonstudy.online/share#token=" + "a".repeat(64),
+  ));
+  const fresh = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(fresh.textContent).toContain("Share link copied.");
+});
+
+test("denied automatic copy retains an explicit action without claiming success", async () => {
+  const writeText = vi.fn().mockRejectedValue(new Error("NotAllowedError"));
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  Object.defineProperty(navigator, "share", { configurable: true, value: undefined });
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("false"));
+  await userEvent.click(trigger);
+  const fresh = await screen.findByRole("dialog", { name: "Share this paper" });
+  expect(fresh.textContent).toContain("could not be copied automatically");
+  expect(within(fresh).getByRole("button", { name: "Copy link" })).toBeTruthy();
+  expect(screen.queryByText("Share link copied.")).toBeNull();
+  await userEvent.click(within(fresh).getByRole("button", { name: "Copy link" }));
+  await waitFor(() => expect(fixture.present).toHaveBeenCalledTimes(1));
+});
+
+test("a failed mint never writes an old or placeholder link", async () => {
+  fixture.create.mockRejectedValue(new Error("Mint failed"));
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  mount();
+  const trigger = await screen.findByRole("button", { name: "Share paper" });
+  await waitFor(() => expect(trigger.getAttribute("aria-pressed")).toBe("false"));
+  await userEvent.click(trigger);
+  expect(await screen.findByText("Mint failed")).toBeTruthy();
+  expect(writeText).not.toHaveBeenCalled();
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
