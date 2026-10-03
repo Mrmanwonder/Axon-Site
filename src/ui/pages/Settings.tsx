@@ -73,6 +73,7 @@ import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/C
 import type { CurriculumSelection } from "../components/CurriculumEditor";
 import type { Prefs } from "../data/modules";
 import { paths } from "../app/paths";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "../lib/legal";
 
 function Seg<T extends string>({
   value, options, onPick, label,
@@ -638,6 +639,25 @@ export default function Settings() {
 
       <div className="sectitle">About Axon</div>
       <div className="list">
+        <a className="srow noicon" href={SUPPORT_MAILTO}>
+          <div className="lbl">Contact us<small>{SUPPORT_EMAIL}</small></div>
+          <Chevron />
+        </a>
+        <PressBox
+          as="button" type="button" className="srow noicon" data-interactive=""
+          onClick={async () => {
+            try {
+              if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+              await navigator.clipboard.writeText(SUPPORT_EMAIL);
+              toast("Support email copied.");
+            } catch {
+              toast(`Copy isn't available. Email us at ${SUPPORT_EMAIL}.`, "warn");
+            }
+          }}
+        >
+          <div className="lbl">Copy support email<small>Use this if your email app does not open</small></div>
+          <Chevron />
+        </PressBox>
         <Link className="srow noicon" to={paths.privacy}>
           <div className="lbl">Privacy Policy<small>Data, storage, choices and deletion</small></div>
           <Chevron />
