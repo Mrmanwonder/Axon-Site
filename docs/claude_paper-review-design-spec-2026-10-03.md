@@ -26,7 +26,7 @@ The preview deliberately distinguishes **Screenshot fixture**, **Axon-authored l
 | Review /scan/review/:draftId | src/ui/pages/PaperReview.tsx | Server-resumable via ScanProvider; processing/stopped/committed/gone states already distinct. Preserve re-entry without local IndexedDB draft. |
 | Review overlay | src/ui/scan/ReviewSheet.tsx; ScanProvider | ReviewQuestion, onMark, onAction, onSave. Current q.confirmed is broader than the proposed field confirmations. Contract change is required before field-scoped UI promises. |
 | Recipient /share#token=… | src/ui/pages/SharedAcademic.tsx; src/shares.js | resolve_academic_share allow-listed snapshot; read-only, revoked/expired/failed/loading. MathText already reused. Do not add raw page/crop to public shares without changing reviewed privacy contract. |
-| Actions | src/ui/components/ResourceActions.tsx; useAcademicShare; SheetProvider | Already restyled in #178 with compact local SVGs. Replace assets in this existing component after approval, not a competing icon framework. Preserve Parent Mode and consequence sheet. |
+| Actions | src/ui/components/ResourceActions.tsx; useAcademicShare; SheetProvider | Already restyled in #178 with compact local SVGs. Replace assets in this existing component after approval, not a competing icon framework. Preserve authenticated ownership checks, share scope/expiry/revocation and the consequence sheet. AXO-98 removed the redundant paper/question Parent Mode prompt. |
 | Academic rendering | components/MathText, AnswerBlock, WorkedAnswer, Crop | Consolidate normalization/content rendering in these primitives; review currently uses lazy MathText and needs structured answer support. |
 | Addresses | src/ui/app/paths.ts | Use existing builders and ?sheet overlay convention; stable ids, scroll restoration and Back behavior persist. |
 
@@ -123,7 +123,7 @@ Recommendation for owner approval: Google Material Symbols Outlined, static SVG 
 - https://developers.google.com/fonts/docs/material_symbols
 - https://github.com/google/material-design-icons/blob/master/LICENSE
 
-They are Apache-2.0 licensed. Include upstream license and notices with distribution. Preview embeds the exact official share_24px and delete_24px assets, with full licence text in an HTML source comment; no icon-font or external font request. This demonstrates the proposed web family; it does not silently settle the owner's icon decision or change production ResourceActions. Other preview controls use text labels. Extend the same family to back, chevrons, edit, rescan, zoom and state only after owner acceptance. Delete remains amber/neutral and consequence-sheet behavior is retained; sharing remains Parent Mode → visibility/expiry sheet → mint → copy/second-tap share per AXO-89/130.
+They are Apache-2.0 licensed. Include upstream license and notices with distribution. Preview embeds the exact official share_24px and delete_24px assets, with full licence text in an HTML source comment; no icon-font or external font request. This demonstrates the proposed web family; it does not silently settle the owner's icon decision or change production ResourceActions. Other preview controls use text labels. Extend the same family to back, chevrons, edit, rescan, zoom and state only after owner acceptance. Delete remains amber/neutral and consequence-sheet behavior is retained; sharing remains authenticated owning session → visibility/expiry sheet → mint → copy/second-tap share. AXO-98 explicitly removed redundant action-time Parent Mode; this supersedes the outdated Parent Mode instruction in WP-D/AXO-89. No parent-code prompt is reintroduced. Draft PR #187 extends automatic copy with explicit native/manual fallback; treat it as proposed until exact-head CI and deployment proof.
 
 ## Interaction state inventory
 
@@ -152,7 +152,7 @@ They are Apache-2.0 licensed. Include upstream license and notices with distribu
 | Scanner reference | SourceEvidence; AXO-141/114 | Offline original/conditioned/crop comparison; physical tests explicitly separate |
 | X/P flattened table | AcademicContent/AnswerBlock; AXO-140 | Exact screenshot values/cell order, ragged table, source view, narrow viewport |
 | Raw math/merged SD | MathText/normalizer; AXO-138/139 | Root/fraction/newline fixture, unknown part boundary stays unresolved, parse fallback |
-| Share/Delete icons | Existing ResourceActions; AXO-137 | Actual SVG asset/licence, 44px targets, current Parent Mode/consequence actions |
+| Share/Delete icons | Existing ResourceActions; AXO-137 | Actual SVG asset/licence, 44px targets, current authenticated ownership/share-scope/consequence actions |
 | Flat paper list | Identity/QuestionGroup/PartRow; AXO-135 | Full paths, unassigned c/d/b, date fallbacks, known vs missing counts, Back restoration |
 | Non-actionable attention | NextRequiredAction; AXO-122/142 | 0 confirm/6 unreadable/0 ready fixture; exact recovery destinations; zero-action state |
 
