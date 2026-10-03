@@ -51,7 +51,7 @@ Use src/ui/styles/tokens.css directly. Onest is the existing self-hosted public/
 | Role | Final proposal |
 |---|---|
 | Spacing | 8px rhythm; mobile gutter 16–18px; section gap 24–32px; row padding 16px; field gap 16px |
-| Reading body | 16px, line-height 1.55; labels 13px using --label-2, never --label-3 for required instructions |
+| Reading body | 16px, line-height 1.55; labels 13px using a scoped --review-secondary derived from --label/--bg for stronger contrast, never --label-3 for required instructions |
 | Paper title | Existing --fs-h1 27–34px; full question title 21–24px |
 | Marks | 22px summary; 16–18px rows; maximum 28px everywhere; tabular numerals |
 | Surface | One group boundary; field separators inside, no redundant nested large cards |
@@ -158,6 +158,6 @@ They are Apache-2.0 licensed. Include upstream license and notices with distribu
 
 ## Review result, verification limits and next step
 
-Available result: this concrete specification and interactive responsive preview. Screenshot totals are fixtures only. Source inventory and all seven source images were inspected. HTML is static and changes no production interface or authentication/storage. The Windows execution transport failed during this task; **browser rendering, screenshots, mobile viewport overflow, axe accessibility and real-device tests have not been run**. Do not mark their acceptance as passed.
+Available result: this concrete specification and interactive responsive preview. Screenshot totals are fixtures only. Source inventory and all seven source images were inspected. HTML is static and changes no production interface or authentication/storage. The Windows execution transport failed during this task; a targeted browser harness is now in tests/e2e/design-preview.spec.ts and runs through existing PR CI. It serves the preview, local tokens and font through an isolated route fixture and checks all ten states at five widths in both themes, with screenshots, axe, target heights, runtime errors, keyboard radio selection and failed-save draft retention. A 200% CSS-zoom case is explicitly a proxy, not physical/browser-device proof. **Actual CI results, screenshots, mobile viewport overflow, axe accessibility and real-device evidence have not yet been inspected or marked passed**. Do not mark their acceptance as passed.
 
 Before owner review is considered complete, run preview in Chromium at 360/390/768/1024/1440 widths, both themes, 200% zoom and keyboard-only; capture overview/review/table/math/unreadable/completed views; run axe, check no horizontal document overflow and 44px targets. These are design-fixture tests, never physical scanner proof. No production UI work, final AXO-134 completion, or child release claim until owner explicitly approves the design result. Remaining production requirements and counters stay open in AXO-135–142.
