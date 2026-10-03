@@ -112,8 +112,8 @@ values ('aaaaaaaa-0000-4000-8000-0000000000a4','aaaaaaaa-0000-4000-8000-00000000
 insert into public.extraction_run (id,paper_id,student_id,pipeline_version,status,reconciled,status_reason_code)
 values ('aaaaaaaa-0000-4000-8000-0000000000b4','aaaaaaaa-0000-4000-8000-0000000000a4','aaaaaaaa-0000-4000-8000-000000000002','1.0.0','ready',null,'no_printed_total');
 select public._region('aaaaaaaa-0000-4000-8000-0000000000c6','aaaaaaaa-0000-4000-8000-0000000000b4','aaaaaaaa-0000-4000-8000-0000000000a4',0,2,3);
-insert into public.page_unreadable (paper_id,student_id,page_number,reason)
-values ('aaaaaaaa-0000-4000-8000-0000000000a4','aaaaaaaa-0000-4000-8000-000000000002',2,'local fixture: structure unreadable');
+insert into public.page_unreadable (paper_id,student_id,page_number,storage_path,reason)
+values ('aaaaaaaa-0000-4000-8000-0000000000a4','aaaaaaaa-0000-4000-8000-000000000002',2,'local-fixture/unreadable-page.png','local fixture: structure unreadable');
 select public.commit_extraction_run('aaaaaaaa-0000-4000-8000-0000000000b4');
 select public._t('an unreadable page without a region makes readable marks partial',
   (select total_basis='added_up' and total_partial and total_awarded=2 and total_available=3
