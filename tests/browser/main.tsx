@@ -14,9 +14,10 @@ import AnswerBlockView from "../../src/ui/components/AnswerBlock";
 import ReviewSheet from "../../src/ui/scan/ReviewSheet";
 import PaperOverview from "../../src/ui/pages/PaperOverview";
 import { Route, Routes } from "react-router-dom";
+import Scan from "../../src/ui/pages/Scan";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
-if (params.get("view") === "paper") {
+if (params.get("view") === "paper" || params.get("view") === "scan-screen") {
   await Promise.all([
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
@@ -56,7 +57,17 @@ function Screen() {
   return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "insights" ? <Insights /> : <Library />}</>;
 }
 const root = createRoot(document.getElementById("root")!);
-if (params.get("view") === "route-errors") {
+if (params.get("view") === "scan-screen") {
+  await Promise.all([import("../../src/ui/styles/tokens.css"), import("../../src/ui/styles/scanner.css")]);
+  document.documentElement.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
+  const style = document.createElement("style");
+  // No real camera here: a flat, lit surface stands in for the picture.
+  style.textContent = "#scanVideo{background:radial-gradient(120% 90% at 50% 40%,#3a3d34,#17181a)!important}"
+    + "body{margin:0;background:var(--bg)}[data-screen=scan]{position:fixed;inset:0}";
+  document.head.append(style);
+  root.render(<MemoryRouter initialEntries={["/scan"]}><ToastProvider><AppProvider><SheetProvider>
+    <main className="view on" data-screen="scan"><Scan /></main></SheetProvider></AppProvider></ToastProvider></MemoryRouter>);
+} else if (params.get("view") === "route-errors") {
   const router = createMemoryRouter([{
     path: "/", errorElement: <AppRouteErrorBoundary />, children: [
       { path: "boom", element: <Boom /> },

@@ -1,67 +1,109 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    SCAN
 
-   The live camera surface is deliberately kept clear. Page thumbnails and the
-   submit action live below it, not over the paper a student is trying to align.
+   Phones and tablets: a camera screen that is a column, not an overlay.
+   Top bar (close, Auto, drafts, more) · camera · guidance strip · bottom bar
+   (paper stack, capsule shutter, Done or Review). Nothing sits on the paper
+   except the corner brackets and a faint level line; every word the scanner
+   says lives in the strip under the camera.
+
+   Laptops and desktops: an import screen. A webcam is not offered.
+
+   The shutter is never disabled by detection. Detection only decides what the
+   brackets show and when Auto may fire.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
+import type { TorchMode } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
-import { DraftAlert, DraftsButton } from "../components/ScanDrafts";
+import Dialog from "../components/Dialog";
+import { DraftAlert } from "../components/ScanDrafts";
 import CameraLevel from "../scan/CameraLevel";
+import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
+import PageReview from "../scan/PageReview";
+import ImportDesk from "../scan/ImportDesk";
+import { useDeskMode } from "../scan/useDeskMode";
 import { useSheetControls } from "../components/SheetProvider";
-import { hapticTick, hapticFirm } from "../lib/haptics";
+import { hapticTick } from "../lib/haptics";
 import { paths } from "../app/paths";
 import "../styles/scanner.css";
+
+const PROBLEM_TITLE: Record<string, string> = {
+  unavailable: "This device has no camera we can use",
+  blocked: "Camera access is off for this site",
+  failed: "The scanner could not start",
+};
+
+const TORCH_LABEL: Record<TorchMode, string> = { auto: "Auto", on: "On", off: "Off" };
+
+type Strip = {
+  tone: "neutral" | "locked" | "attention";
+  text: string;
+  action?: { label: string; run: () => void };
+};
 
 export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, drafts, draftsHandlers, onScreenVisible, shoot, setAutoCapture, auto, submitting, pendingCaptureCount,
-
+    resumable, drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
+    setAutoCapture, setTorchMode, auto, submitting, pendingCaptureCount,
+    pageReviewOpen, openPageReview, closePageReview,
   } = useScan();
-  const { addPaper, addLink } = useIngestion();
+  const { ingestFiles, addPaper, addLink } = useIngestion();
   const { student } = useApp();
   const { openSheet } = useSheetControls();
   const navigate = useNavigate();
+  const desk = useDeskMode();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const cameraApp = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
-    onScreenVisible(true);
+    if (desk) void ensureScan().catch(() => { /* the screen still takes files */ });
+    else onScreenVisible(true);
     return () => {
       document.documentElement.classList.remove("scanner-active");
-      onScreenVisible(false);
+      if (!desk) onScreenVisible(false);
     };
-  }, [onScreenVisible]);
+  }, [desk, onScreenVisible, ensureScan]);
 
   // iOS Safari handles pinch through gesture events outside touch-action.
   useEffect(() => {
     const stop = (e: Event) => e.preventDefault();
-    // Not in the DOM lib — `gesture*` is Safari's own, and this is the browser
-    // it exists for. Passive listeners cannot preventDefault, so say so.
     const surface = videoRef.current?.parentElement;
     if (!surface) return;
     const listen = surface.addEventListener.bind(surface) as
-
       (t: string, l: EventListener, o?: AddEventListenerOptions) => void;
     const unlisten = surface.removeEventListener.bind(surface) as
       (t: string, l: EventListener) => void;
     const kinds = ["gesturestart", "gesturechange", "gestureend"];
     for (const kind of kinds) listen(kind, stop, { passive: false });
     return () => { for (const kind of kinds) unlisten(kind, stop); };
-  }, []);
+  }, [desk, videoRef]);
 
-  const pendingPages = tray.filter((p) => p.pending).length;
-  const unresolvedPages = tray.filter((p) =>
-    p.retakeRequested || p.geometryIssue || (p.quality?.verdict === "fail" && !p.quality.accepted));
-  const warningPages = tray.filter((p) =>
-    !p.pending && p.quality?.verdict === "warn").length;
-  const firstRetake = unresolvedPages[0]?.page_number;
-  const cannotSubmit = submitting || pendingCaptureCount > 0 || pendingPages > 0 || unresolvedPages.length > 0;
+  // A short, earned acknowledgment after a page is stored: never during a shot.
+  const settled = tray.filter((p) => !p.pending);
+  const settledCount = useRef(settled.length);
+  const [savedPage, setSavedPage] = useState<number | null>(null);
+  useEffect(() => {
+    if (settled.length > settledCount.current) {
+      const last = settled[settled.length - 1];
+      if (!needsLook(last)) {
+        setSavedPage(last.page_number);
+        const timer = window.setTimeout(() => setSavedPage(null), 3000);
+        settledCount.current = settled.length;
+        return () => window.clearTimeout(timer);
+      }
+    }
+    settledCount.current = settled.length;
+  }, [settled]);
+
+  const flaggedPages = tray.filter(needsLook);
+
   const openDrafts = () => {
     hapticTick();
     openSheet({
@@ -80,178 +122,201 @@ export default function Scan() {
     });
   };
 
+  const review = pageReviewOpen && <PageReview onClose={closePageReview} />;
+
+  if (desk) {
+    return (
+      <>
+        <ImportDesk onReview={openPageReview} />
+        {review}
+        {progress && <ProgressPanel progress={progress} />}
+        {!student && <div className="subnote">Create a student profile before scanning.</div>}
+      </>
+    );
+  }
+
+  const live = camera.on;
+  const torch = hint.torch;
+  const strip: Strip = (() => {
+    if (!live) {
+      return { tone: camera.phase === "starting" || camera.phase === "idle" ? "neutral" : "attention", text: hint.hint };
+    }
+    if (hint.tone === "attention" && hint.reason) {
+      if (hint.action === "torch" && torch?.supported) {
+        return { tone: "attention", text: hint.hint,
+          action: { label: "Turn on light", run: () => setTorchMode("on") } };
+      }
+      if (hint.reason === "nothing" || hint.reason === "engine") {
+        return { tone: "attention", text: hint.hint,
+          action: { label: "Take photo", run: shoot } };
+      }
+      return { tone: "attention", text: hint.hint };
+    }
+    if (flaggedPages.length) {
+      const page = flaggedPages[0];
+      return {
+        tone: "attention",
+        text: `Page ${page.page_number}: ${page.flag?.reason ?? "waiting for the new photo"}`,
+        action: page.retakeRequested ? undefined
+          : { label: "Retake", run: () => trayHandlers.onRetake?.(page.page_number) },
+      };
+    }
+    if (savedPage !== null) {
+      return { tone: "locked", text: `Page ${savedPage} saved. Turn to the next page` };
+    }
+    return { tone: hint.tone === "locked" ? "locked" : "neutral", text: hint.hint };
+  })();
+
+  const locked = live && hint.phase === "locked";
+  const cameraProblem = !live && ["unavailable", "blocked", "failed"].includes(camera.phase);
+  const shutterOff = !live || submitting || pendingCaptureCount >= 2;
+  const draftsCount = drafts.length;
+
+  const closeMenuThen = (fn: () => void) => { setMenuOpen(false); window.setTimeout(fn, 0); };
+
   return (
     <>
-      <div
-        className="scanhero"
-        data-camera={camera.on ? "on" : "off"}
-        data-phase={camera.on ? undefined : camera.phase}
-      >
-        {/* The ids are load-bearing, not legacy: system.css addresses the video
-            and overlay by id to size them to the hero and control their camera
-            lifecycle states. Without them the video renders at its natural size
-            in the corner of a full-bleed viewfinder. */}
-        <video id="scanVideo" ref={videoRef} autoPlay playsInline muted disablePictureInPicture />
-
-        <canvas id="scanOverlay" ref={overlayRef} />
-        <div className="feed"><div className="feedgrid" /></div>
-        <CameraLevel active={camera.on} />
-
-        <div
-          className="scanhint"
-          role="status"
-          aria-live="polite"
-          data-blocking={hint.blocking ?? undefined}
-        >
-          {hint.hint}
-        </div>
-
-        {camera.phase === "failed" && <button onClick={() => onScreenVisible(true)}>Retry scanner</button>}
-        <DraftsButton count={drafts.length} onOpen={openDrafts} />
-
-        <PressBox
-          as="button"
-          type="button"
-          className="scanexit"
-          aria-label="Exit scanner"
-          onClick={() => navigate(paths.home)}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 6l12 12M18 6 6 18" />
-          </svg>
-        </PressBox>
-
-        <PressBox
-          as="button"
-          type="button"
-          className={"autotoggle" + (auto ? " on" : "")}
-          aria-pressed={auto}
-          onClick={() => setAutoCapture(!auto)}
-        >
-          Auto <span className="dot" />
-        </PressBox>
-
-        <div className="scanctrls">
-          <PressBox as="button" type="button" className="sidebtn" aria-label="Add a link"
-                    onClick={addLink}>
+      <div className="sc" data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
+        <div className="sc-top">
+          <PressBox as="button" type="button" className="sc-circ" aria-label="Close scanner"
+                    onClick={() => navigate(paths.home)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </PressBox>
+          <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
+                    aria-pressed={auto} onClick={() => setAutoCapture(!auto)}>
+            <i aria-hidden="true" />{auto ? "Auto" : "Manual"}
+          </PressBox>
+          <span className="sc-grow" />
+          <PressBox as="button" type="button" className="sc-circ"
+                    aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
+                    onClick={openDrafts}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 13a4.5 4.5 0 0 0 6.4.4l2.6-2.6a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5" />
-              <path d="M14 11a4.5 4.5 0 0 0-6.4-.4L5 13.2a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5" />
+              <path d="M7 5.5h8.5a2 2 0 0 1 2 2V18" /><path d="M5.5 8.5h8.5a2 2 0 0 1 2 2v8H7.5a2 2 0 0 1-2-2z" />
+            </svg>
+            {draftsCount > 0 && <span className="dot" aria-hidden="true" />}
+          </PressBox>
+          <PressBox as="button" type="button" className="sc-circ" aria-label="More"
+                    aria-haspopup="dialog" onClick={() => { hapticTick(); setMenuOpen(true); }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="5.5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="18.5" r="1.7" />
             </svg>
           </PressBox>
+        </div>
 
-          <PressBox as="button" type="button" className="shutter" aria-label="Take this page"
-                    disabled={!camera.on || submitting || pendingCaptureCount >= 2}
+        {/* The ids are load-bearing: system.css sizes the video and the overlay
+            by id, and capture.js reads the overlay through the video's layout. */}
+        <div className="sc-vf" data-locked={locked ? "true" : undefined}>
+          <video id="scanVideo" ref={videoRef} autoPlay playsInline muted disablePictureInPicture />
+          <canvas id="scanOverlay" ref={overlayRef} />
+          <CameraLevel active={live} />
+          {cameraProblem && (
+            <div className="sc-problem" role="group" aria-label="Camera unavailable">
+              <h2>{PROBLEM_TITLE[camera.phase] ?? "The scanner could not start"}</h2>
+              {camera.phase !== "unavailable" && (
+                <button type="button" className="sc-btn" onClick={() => onScreenVisible(true)}>Try the camera again</button>
+              )}
+              <button type="button" className="sc-btn ghost" onClick={() => cameraApp.current?.click()}>
+                Use your camera app
+              </button>
+              <button type="button" className="sc-btn ghost" onClick={addPaper}>Import photos</button>
+            </div>
+          )}
+          {resumable && draftsHandlers.onResume && tray.length === 0 && (
+            <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
+          )}
+        </div>
 
+        <div className="sc-strip" data-tone={strip.tone} role="status" aria-live="polite">
+          <span className="g" aria-hidden="true" />
+          <span className="t">{strip.text}</span>
+          {strip.action && (
+            <button type="button" className="act" onClick={() => { hapticTick(); strip.action!.run(); }}>
+              {strip.action.label}
+            </button>
+          )}
+        </div>
+
+        <div className="sc-dock">
+          <PaperStack pages={tray} onOpen={openPageReview} disabled={submitting} />
+          <PressBox as="button" type="button" className="sc-shutter" aria-label="Take this page"
+                    data-locked={locked && auto ? "true" : undefined} disabled={shutterOff}
                     onClick={() => { hapticTick(); shoot(); }}>
-            <div className="ring" />
+            <span />
           </PressBox>
-
-          <PressBox as="button" type="button" className="sidebtn" aria-label="Upload from files"
-                    onClick={addPaper}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 16V5M12 5 8 9M12 5l4 4" />
-              <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" />
-            </svg>
-          </PressBox>
+          <DoneButton pages={tray} busy={submitting}
+                      onDone={() => { trayHandlers.onDone?.(); }} onReview={openPageReview} />
         </div>
-
-        {resumable && draftsHandlers.onResume && (
-          <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
-        )}
       </div>
 
-      {tray.length > 0 && (
-        <section className="tray" aria-label="Scanned pages">
-          <div className="trayscroll">
-            {tray.map((p) => (
-              <PressBox
-                as="button"
-                type="button"
-                key={p.page_number}
-                className="traypage"
-                disabled={submitting}
-                data-quality={p.geometryIssue ? "fail" : (p.quality?.verdict ?? "ok")}
-                data-retake={p.retakeRequested ? "true" : undefined}
-                aria-label={`Page ${p.page_number}${p.geometryIssue ? ", page edges unconfirmed" : ""}${p.retakeRequested ? ", retake requested" : ""}`}
-                onClick={() => { hapticTick(); trayHandlers.onPage?.(p.page_number); }}
-              >
-                {p.thumb && <img src={p.thumb} alt="" />}
-                <span className="n">{p.page_number}</span>
-                {p.pending && <span className="pending">Preparing…</span>}
-                {p.retakeRequested && <span className="retakebadge">Retake</span>}
-                <span className="flag">
-                  <svg viewBox="0 0 12 12" aria-hidden="true">
-                    <path d="M6 2.5v4" /><path d="M6 9h.01" />
-                  </svg>
-                </span>
-              </PressBox>
-            ))}
-          </div>
-          <div className="traybar">
-            <span className="cnt">
-              {tray.length} page{tray.length === 1 ? "" : "s"}
-              {pendingPages > 0
-                ? ` · ${pendingPages} preparing`
-                : unresolvedPages.length > 0
-                  ? ` · ${unresolvedPages.length} needs retake`
-                  : warningPages > 0
-                    ? ` · ${warningPages} quality note${warningPages === 1 ? "" : "s"}`
-                    : ""}
-            </span>
-            <PressBox as="button" type="button" className="btn primary"
-                      disabled={cannotSubmit} aria-busy={submitting}
-                      onClick={() => { hapticFirm(); trayHandlers.onDone?.(); }}>
-              {firstRetake ? `Retake page ${firstRetake} first` : "Read this paper"}
+      <input ref={cameraApp} type="file" accept="image/*" capture="environment" hidden
+             onChange={(e) => { const files = [...(e.target.files ?? [])]; e.target.value = ""; void ingestFiles(files); }} />
 
-            </PressBox>
-          </div>
-        </section>
-      )}
-
-      {progress && (
-        <div className="scanbelow">
-          <div className="sectitle tight">{progress.heading ?? "Reading this paper"}</div>
-          <div className="card proc">
-            <div className="hd">{progress.now}</div>
-            {progress.sub && <div className="sub">{progress.sub}</div>}
-            {progress.steps.map((st, i) => (
-              <div key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
-                <span className={"st " + st.state}>
-                  {st.state === "done" && (
-                    <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-                  )}
-                </span>
-                <span className="lb">{st.label}</span>
-              </div>
-            ))}
-            {progress.skeleton && (
-              <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div className="skel" style={{ width: "82%" }} />
-                <div className="skel" style={{ width: "64%" }} />
-                <div className="skel" style={{ width: "73%" }} />
+      {menuOpen && (
+        <Dialog title="More" busy={false} onClose={() => setMenuOpen(false)} className="sc-menu">
+          <div className="sc-menu-list">
+            <button type="button" onClick={() => closeMenuThen(addPaper)}>
+              Import photos <small>From your files</small>
+            </button>
+            <button type="button" onClick={() => closeMenuThen(() => cameraApp.current?.click())}>
+              Use your camera app <small>Take a photo with your phone’s own camera</small>
+            </button>
+            <button type="button" onClick={() => closeMenuThen(addLink)}>Add a link</button>
+            <button type="button" onClick={() => closeMenuThen(openDrafts)}>
+              Saved drafts <small>{draftsCount || "None"}</small>
+            </button>
+            {torch?.supported && (
+              <div className="sc-light" role="group" aria-label="Light">
+                <span>Light</span>
+                <div>
+                  {(["auto", "on", "off"] as TorchMode[]).map((mode) => (
+                    <button type="button" key={mode} aria-pressed={torch.mode === mode}
+                            onClick={() => setTorchMode(mode)}>{TORCH_LABEL[mode]}</button>
+                  ))}
+                </div>
+                {torch.error && <small role="alert">{torch.error}</small>}
               </div>
             )}
           </div>
-          {progress.note && <div className="subnote">{progress.note}</div>}
-        </div>
+          <div className="acts">
+            <button type="button" className="btn plain" onClick={() => setMenuOpen(false)}>Close</button>
+          </div>
+        </Dialog>
       )}
 
-      {drafts.length > 0 && camera.phase === "failed" && tray.length === 0 && (
-        <section className="scanbelow" aria-label="Unfinished papers">
-          <div className="sectitle">Unfinished papers</div>
-          <p className="subnote">Draft images are kept on this device for 30 days after their last change.</p>
-          {drafts.map(draft => <div className="srow noicon" key={draft.id}>
-            <span>{draft.title} · {draft.pages} page{draft.pages === 1 ? "" : "s"}</span>
-            <button disabled={submitting} onClick={() => draftsHandlers.onResume?.(draft.id)}>Resume</button>
-            <button disabled={submitting} onClick={() => draftsHandlers.onDiscard?.(draft.id)}>Discard</button>
-          </div>)}
-        </section>
-      )}
+      {review}
+      {progress && <ProgressPanel progress={progress} />}
 
-      {!student && (
-        <div className="subnote">Create a student profile before scanning.</div>
-      )}
+      {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
+  );
+}
+
+function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {
+  return (
+    <div className="scanbelow">
+      <div className="sectitle tight">{progress.heading ?? "Reading this paper"}</div>
+      <div className="card proc">
+        <div className="hd">{progress.now}</div>
+        {progress.sub && <div className="sub">{progress.sub}</div>}
+        {progress.steps.map((st, i) => (
+          <div key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
+            <span className={"st " + st.state}>
+              {st.state === "done" && (
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
+              )}
+            </span>
+            <span className="lb">{st.label}</span>
+          </div>
+        ))}
+        {progress.skeleton && (
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="skel" style={{ width: "82%" }} />
+            <div className="skel" style={{ width: "64%" }} />
+            <div className="skel" style={{ width: "73%" }} />
+          </div>
+        )}
+      </div>
+      {progress.note && <div className="subnote">{progress.note}</div>}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { DraftAlert, DraftsButton } from "../../src/ui/components/ScanDrafts";
+import { DraftAlert } from "../../src/ui/components/ScanDrafts";
 
 type TestWindow = Window & typeof globalThis & {
   __scanDraftsTest?: {
@@ -19,7 +19,6 @@ export function mountScanDraftsTest(root: HTMLElement, draft: { id: string; page
     remount: () => {
       reactRoot.render(
         <>
-          <DraftsButton count={1} onOpen={() => { state.opens += 1; }} />
           <DraftAlert draft={draft} onResume={(id) => { state.resumes.push(id); }} />
         </>,
       );

@@ -233,30 +233,8 @@
      Scoped to this screen only — the global viewport meta keeps user-scalable,
      because taking zoom away from the rest of the app to fix a bug in one
      screen is an accessibility regression, not a fix. */
-  .scanhero{position:absolute;inset:0;background:#050506;overflow:hidden;touch-action:none;}
-  .feed{position:absolute;inset:0;background:
-      radial-gradient(120% 90% at 30% 20%, #22262C 0%, #101215 55%, #060708 100%);}
-  .feedgrid{position:absolute;inset:0;background-image:
-      linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
-    background-size:34px 34px;opacity:.5;}
-  .scanhint{position:absolute;left:0;right:0;top:calc(var(--top-inset) + 92px);text-align:center;color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;letter-spacing:-.005em;padding:0 40px;}
 
-  /* top-left: the appearance toggle owns the top-right corner of the shell */
-  .draftsicon{position:absolute;top:16px;left:16px;width:38px;height:38px;border-radius:19px;
-    background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-    border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;
-    opacity:0;transform:scale(.7);pointer-events:none;transition:opacity .3s var(--spring),transform .3s var(--spring);will-change:transform;}
-  .draftsicon.show{opacity:1;transform:scale(1);pointer-events:auto;}
-  .draftsicon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-  .draftsicon .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:4px;background:var(--amber);border:1.5px solid #1a1a1c;}
 
-  .scanctrls{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 128px);z-index:6;
-    display:flex;align-items:center;justify-content:center;gap:34px;}
-  .sidebtn{width:46px;height:46px;border-radius:23px;background:rgba(255,255,255,.14);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:.5px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
-  .sidebtn svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-  .shutter{width:70px;height:70px;border-radius:35px;background:rgba(255,255,255,.16);border:2.5px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;cursor:pointer;will-change:transform;}
-  .shutter .ring{width:56px;height:56px;border-radius:28px;background:#fff;transition:transform .15s ease,border-radius .15s ease;}
 
   .drafttoast{position:absolute;left:10px;right:10px;top:10px;z-index:6;
     background:rgba(30,30,34,.7);backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
@@ -283,84 +261,6 @@
      pixels off the page, which reads as the detector being wrong when it isn't. */
   #scanVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#050506;}
   #scanOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
-  /* Keep startup video renderable beneath the opaque placeholder. iPhone
-     WebKit may defer autoplay for display:none media, while the app cannot mark
-     the camera live until play() resolves. Hiding both therefore deadlocked the
-     preview. The overlay still waits until a frame is live. */
-
-  .scanhero[data-camera="off"]:not([data-phase="starting"]) #scanVideo,
-  .scanhero[data-camera="off"] #scanOverlay{display:none;}
-  /* The real overlay draws the brackets on the detected page, so the static
-     placeholder frame and its sweep come off the moment the camera is live —
-     two sets of brackets, one of them fixed to the viewport, would read as
-     the detector being wrong. */
-  .scanhero[data-camera="on"] .feed{display:none;}
-  /* Before the camera is live there is nothing to point at, so the one line of
-     text moves to the middle and says what is actually happening. */
-  .scanhero[data-camera="off"] .scanhint{top:50%;transform:translateY(-50%);}
-
-  /* The gate speaks in one line, and amber is the whole vocabulary of attention
-     here. Red belongs to the teacher's pen and to signing out, nowhere else. */
-  .scanhint{transition:color .12s linear;}
-  .scanhint[data-blocking]{color:var(--amber);}
-
-  /* Top-left, beside the drafts slot. The appearance toggle owns the shell's
-     top-right corner, and two controls in one corner is one control nobody
-     can hit. The offset is fixed rather than conditional on the drafts icon
-     being visible, so this chip does not jump when a draft appears. */
-  .autotoggle{position:absolute;top:16px;left:62px;display:flex;align-items:center;gap:7px;
-    padding:7px 11px;border-radius:16px;background:rgba(255,255,255,.14);
-    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-    border:.5px solid rgba(255,255,255,.22);color:#fff;font-size:12px;font-weight:600;
-    letter-spacing:-.01em;cursor:pointer;will-change:transform;}
-  .autotoggle .dot{width:7px;height:7px;border-radius:4px;background:rgba(255,255,255,.35);}
-
-  /* Live blur forces touch-first phones to recomposite the camera texture under
-     several translucent controls on every frame. A denser flat material keeps
-     the same contrast without taxing the preview. */
-  @media (hover:none) and (pointer:coarse){
-    .scanhero[data-camera="on"] .sidebtn,
-    .scanhero[data-camera="on"] .autotoggle,
-    .scanhero[data-camera="on"] .drafttoast{
-      backdrop-filter:none;-webkit-backdrop-filter:none;
-      background:rgba(30,30,34,.68);
-    }
-  }
-  .autotoggle.on .dot{background:var(--green);}
-
-  /* Live backdrop blurs force older iPhones and other touch-first devices to
-     recomposite the camera texture underneath several translucent controls
-     for every frame. The same contrast is cheaper as a slightly denser flat
-     material; desktop glass and the navigation lens remain unchanged. */
-
-  /* ── the page tray ──
-     A booklet is 15-20 pages. The tray is where they accumulate, reorder and get
-     retaken, and where a page that failed its quality gate is flagged while the
-     paper is still physically in front of the student. */
-  .tray{position:absolute;left:0;right:0;bottom:calc(var(--bot-inset) + 222px);z-index:6;
-    padding:0 var(--gutter);}
-  .tray .trayscroll{padding-bottom:10px;}
-  /* The strip floats over the viewfinder, so its text is on camera, not on the
-     app's own background — it takes a light colour rather than the muted one
-     that reads correctly against a surface. */
-  .tray .traybar .cnt{color:rgba(255,255,255,.72);}
-  .trayscroll{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;}
-  .trayscroll::-webkit-scrollbar{display:none;}
-  .traypage{position:relative;width:62px;height:82px;border-radius:10px;flex-shrink:0;overflow:hidden;
-    background:var(--surface-sunk);border:.5px solid var(--hairline);cursor:pointer;will-change:transform;}
-  .traypage img{width:100%;height:100%;object-fit:cover;display:block;}
-  .traypage .n{position:absolute;left:5px;bottom:5px;font-size:10.5px;font-weight:700;color:#fff;
-    background:rgba(0,0,0,.55);padding:1.5px 5px;border-radius:5px;}
-  .traypage[data-quality="warn"]{border-color:rgba(255,159,10,.55);border-width:1.5px;}
-  .traypage[data-quality="fail"]{border-color:var(--amber);border-width:2px;}
-  .traypage .flag{position:absolute;top:5px;right:5px;width:16px;height:16px;border-radius:8px;
-    background:var(--amber);display:none;align-items:center;justify-content:center;}
-  .traypage[data-quality="warn"] .flag,.traypage[data-quality="fail"] .flag{display:flex;}
-  .traypage .flag svg{width:9px;height:9px;stroke:#fff;stroke-width:2.6;fill:none;stroke-linecap:round;}
-  .traybar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:4px;}
-  .traybar .cnt{font-size:12.5px;color:var(--label-3);font-weight:500;}
-  .traybar .btn{padding:11px 18px;font-size:14.5px;border-radius:14px;}
-
   /* ── review: the reconciliation banner ──
      Plain numbers, and a framing that puts the student in the position of
      checking the scan rather than auditing their teacher. */
@@ -824,11 +724,6 @@
        right on a phone held over a page and wrong on a desktop, where the page
        is somewhere else entirely and the window is mostly empty room. */
     [data-screen="scan"]{--vmax:820px;padding-top:var(--view-top);padding-bottom:var(--view-bottom);overflow-y:auto;}
-    .scanhero{position:relative;inset:auto;margin:0 var(--gutter);border-radius:var(--r-card);
-      height:clamp(360px,44vh,520px);min-height:0;}
-    .scanctrls{bottom:22px;}
-    .tray{position:static;margin:14px var(--gutter) 0;padding:0;}
-    .tray .traybar .cnt{color:var(--label-3);}
     .scanbelow{position:static;padding:20px 0 0;background:none;overflow:visible;}
 
     /* Library rows stay single-column — they're already dense. */
@@ -862,7 +757,6 @@
     .tab:hover svg{stroke:var(--nav-icon-on);}
     .tab:hover .lbl{color:var(--nav-icon-on);}
     .themebtn:hover{color:var(--label);}
-    .sidebtn:hover,.draftsicon:hover,.shutter:hover{background:rgba(255,255,255,.24);}
     .rvback:hover,.disclose .toggle:hover{color:var(--label);}
     .search:focus-within{box-shadow:0 0 0 2px var(--blue);}
   }

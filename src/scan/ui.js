@@ -57,6 +57,7 @@ let host = {
   renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {},
   openSheet() {}, openReview() {}, renderReview() {}, closeReview() {},
   goto() {}, refreshLibrary: async () => {},
+  reviewPages: null,
 };
 
 const toast = (m, tone) => host.toast(m, tone);
@@ -131,6 +132,12 @@ export function setAutoCapture(on) {
   S.autoCapture = !!on;
   tick();
   S.capture?.setAutoCapture(S.autoCapture);
+}
+
+/** 'auto' | 'on' | 'off'. Honoured only where the camera reports a torch. */
+export function setTorchMode(mode) {
+  tick();
+  return S.capture?.setTorchMode?.(mode);
 }
 
 export function setScanVisible(visible, camera = null) {
@@ -279,6 +286,17 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
     if (epoch !== S.epoch) return false;
     let page = accepted.page;
 
+    // What the detector saw, kept beside the page (never uploaded) so Review can
+    // say why a page was flagged and Adjust edges can start from the detected
+    // page instead of an arbitrary rectangle.
+    if (page && (shot.suggestedQuad || shot.detection)) {
+      page.capture = {
+        suggestedQuad: shot.suggestedQuad ?? null,
+        detection: shot.detection ?? null,
+      };
+      await saveDraft(S.draft);
+    }
+
     // A duplicate decision is deliberately made after conditioning (so the
     // signature is stable) but before the durable page is painted as accepted.
     // Nothing is silently discarded: the student chooses keep, replace, or can
@@ -337,11 +355,10 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
       totalMs: +(performance.now() - tOnShot).toFixed(1),
     });
 
-    if (page.meta?.geometry_confirmed === false && !page.meta?.geometry_accepted) {
-      offerGeometryRetake(page);
-    } else if (page.quality?.verdict === 'fail' && !page.quality?.accepted) {
-      offerRetake(page);
-    } else if (page.quality?.verdict === 'warn') {
+    // A flagged page does not interrupt the next shot with a sheet. The strip
+    // names it and the stack wears an amber outline; Review is one tap away
+    // and Done turns into Review until it is dealt with.
+    if (!flagFor(page) && page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
     }
     if (page.layer_fallback === 'non_red_marking') {
@@ -360,6 +377,29 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
   }
 }
 
+/**
+ * Why a page needs a look, in words for the student, or null when it does not.
+ * "Needs a look" is two things only: the page edges were not confirmed (and not
+ * accepted), or the quality gate failed (and not accepted). A quality *warning*
+ * is a note, never a flag, so Review is not forced on nearly every paper.
+ */
+export function flagFor(p) {
+  if (p.meta?.geometry_confirmed === false && !p.meta?.geometry_accepted) {
+    const why = p.capture?.detection?.flagReason;
+    return {
+      kind: 'edges',
+      reason: why === 'not-found' ? "The page edges weren't found, so the whole photo was kept"
+        : why === 'uncertain' ? "The page edges weren't certain, so the whole photo was kept"
+        : why === 'engine' ? "The page finder didn't run, so the whole photo was kept"
+        : "The page edges weren't confirmed, so the whole photo was kept",
+    };
+  }
+  if (p.quality?.verdict === 'fail' && !p.quality?.accepted) {
+    return { kind: 'quality', reason: p.quality.reasons?.[0] ?? 'Words may not read clearly' };
+  }
+  return null;
+}
+
 function renderTrayRows() {
   const pages = S.draft?.pages ?? [];
   const rows = pages.map((p) => ({
@@ -367,6 +407,9 @@ function renderTrayRows() {
     thumb: S.thumbs.get(p.page_number),
     retakeRequested: S.retaking === p.page_number,
     geometryIssue: p.meta?.geometry_confirmed === false && !p.meta?.geometry_accepted,
+    flag: flagFor(p),
+    canAdjust: !!p.original,
+    note: p.quality?.verdict === 'warn' ? (p.quality.reasons?.[0] ?? null) : null,
   }));
 
   for (const [pageNumber, thumb] of S.placeholders) {
@@ -382,7 +425,15 @@ function renderTrayRows() {
   }
 
   rows.sort((a, b) => a.page_number - b.page_number);
-  host.renderTray(rows, { onPage: openPageActions, onDone: sendPaper });
+  host.renderTray(rows, {
+    onPage: openPageActions,
+    onDone: sendPaper,
+    onRetake: setRetake,
+    onKeep: keepCapture,
+    onKeepAll: keepAllFlagged,
+    onAdjustSource: adjustSource,
+    onAdjustApply: adjustApply,
+  });
 }
 
 async function paintTray() {
@@ -493,6 +544,53 @@ function offerRetake(page) {
       if (choice === 'keep') await keepCapture(page.page_number);
     },
   });
+}
+
+/** "Read as it is": accept every flagged page exactly as captured. */
+async function keepAllFlagged() {
+  if (S.busy || S.submitting) return;
+  for (const page of S.draft?.pages ?? []) {
+    if (!flagFor(page)) continue;
+    if (page.quality?.verdict === 'fail') page.quality = { ...page.quality, accepted: true };
+    if (page.meta?.geometry_confirmed === false) page.meta = { ...page.meta, geometry_accepted: true };
+  }
+  S.retaking = null;
+  await saveDraft(S.draft);
+  await paintTray();
+}
+
+/** The photograph and detected page the edge editor starts from, or null. */
+function adjustSource(pageNumber) {
+  const page = S.draft?.pages.find((p) => p.page_number === pageNumber);
+  if (!page?.original) return null;
+  return { blob: page.original, quad: page.capture?.suggestedQuad ?? null };
+}
+
+/**
+ * The student has placed the corners. Condition that photograph again with
+ * exactly those corners; the page keeps its number and its place.
+ */
+async function adjustApply(pageNumber, quad) {
+  const page = S.draft?.pages.find((p) => p.page_number === pageNumber);
+  if (!page?.original) throw new Error('The original photo is no longer on this device. Retake the page instead.');
+  if (S.submitting || S.busy || S.pendingCaptures >= MAX_PENDING_CAPTURES) {
+    throw new Error('Wait for the current page to finish preparing.');
+  }
+  const bitmap = await createImageBitmap(page.original);
+  const ok = await takePage({
+    bitmap,
+    quad,
+    suggestedQuad: quad,
+    detection: null,
+    auto: false,
+    sourceKind: 'camera',
+    capturePath: 'edges-adjusted',
+    original: page.original,
+    gate: null,
+    transactionId: `adjust:${crypto.randomUUID()}`,
+  }, pageNumber);
+  if (!ok) throw new Error('That page could not be prepared again.');
+  if (S.retaking === pageNumber) S.retaking = null;
 }
 
 function openPageActions(pageNumber) {
@@ -626,6 +724,7 @@ function sendPaper() {
   }
   const unresolved = unresolvedPage();
   if (unresolved) {
+    if (host.reviewPages) { host.reviewPages(); return; }
     if (unresolved.meta?.geometry_confirmed === false && !unresolved.meta?.geometry_accepted) {
       offerGeometryRetake(unresolved);
     } else {
