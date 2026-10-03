@@ -163,7 +163,7 @@ export default function PaperOverview() {
           <div className="sub po-meta">
             {paper.subject ? <span>{typeLabel}</span> : <span>Subject not confirmed</span>}
             <span>Dated {dated}</span>
-            {stale && <span>Offline copy</span>}
+            {stale && <span>offline copy</span>}
           </div>
         </div>
         <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />

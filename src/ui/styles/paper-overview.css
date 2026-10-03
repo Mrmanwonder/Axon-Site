@@ -18,7 +18,7 @@
 .po .po-atleast { font-size: 14px; font-weight: 500; color: var(--po-secondary); letter-spacing: 0; }
 .po .po-sub { margin-top: 4px; font-size: 14px; line-height: 1.5; color: var(--po-secondary); font-variant-numeric: tabular-nums; }
 .po .po-note { margin: 10px 0 0; color: var(--po-secondary); }
-.po .row .t2, .po .row .t2 > span { color: var(--po-secondary); }
+.po .row .t2, .po .row .t2 > span:not(.conf) { color: var(--po-secondary); }
 .po .conf.likely, .po .conf.unsure { color: var(--po-secondary); }
 
 .po-next { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5;
