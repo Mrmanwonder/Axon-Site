@@ -120,6 +120,12 @@ jobs:
           done
           exit $status
 
+      - name: Verify commit-totals repair in a rolled-back local fixture
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+            -v ON_ERROR_STOP=1 -v axon_local_fixture=1 \
+            -f docs/sql/claude_restore-commit-totals-regression-2026-10-03.sql
+
   # Merging a migration now applies it (.github/workflows/migrate.yml). This job
   # stays as the PR-time warning, and keeps its original name because a branch
   # protection rule may name it. It never fails: a red check here would be a
