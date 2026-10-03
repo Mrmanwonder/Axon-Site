@@ -61,15 +61,15 @@ function Question({
   onAction: (id: string, action: string) => void;
   onMark: (id: string, value: number) => void;
 }) {
-  const attention = q.tier !== "confident";
+  const attention = !q.confirmed && q.tier !== "confident";
 
-  const conf = q.tier === "unreadable"
+  const conf = q.confirmed
+    ? <span className="conf confirmed">You confirmed</span>
+    : q.tier === "unreadable"
     ? <span className="conf unsure">Couldn&rsquo;t read</span>
     : q.tier === "unsure"
       ? <span className="conf unsure">Unsure</span>
-      : q.confirmed
-        ? <span className="conf confirmed">You confirmed</span>
-        : <span className="conf likely">Read cleanly</span>;
+      : <span className="conf likely">Read cleanly</span>;
 
   return (
     <div className="qcard" data-attention={attention ? "1" : undefined}>
