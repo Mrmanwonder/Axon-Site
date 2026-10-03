@@ -111,10 +111,10 @@ a stale historical copy and are not the production runtime.
 - **`device.js` falls back to the main thread when a module worker cannot be
   constructed.** That path is not theoretical on the phones this is built for,
   and a dropped frame is worth far less than a student who cannot scan at all.
-- **`TEACHER_INK` names the one red.** Stage 2 separates the layers by hue and
-  the design system reserves red for the teacher's pen and the sign-out row.
-  They were always the same rule; keep them one constant so a red error state
-  collides with it before it ships.
+- **`TEACHER_INK` is a known mistake.** Stage 2 separates the layers by red hue, but
+  a teacher's ink can be any colour (owner, 3 Oct 2026), so that mask must stop
+  depending on hue; it is tracked in Linear and must not be extended. In the
+  interface red is reserved for the sign-out row alone, not for the teacher's pen.
 - **Two models, on purpose.** The structure pass finds boundaries on a
   downscaled page with a small model; the content pass reads handwriting with a
   frontier one. Both are environment-overridable, because the harness is what
@@ -193,7 +193,7 @@ and leaving either set pushes the column off-centre or strands it above dead spa
 
 ## Colour
 
-Red appears in exactly one place: the sign-out row. Not errors, not warnings, not
+Red appears in exactly one place: the sign-out row. A teacher's ink is never assumed to be red. Not errors, not warnings, not
 notification dots, not destructive rows like deleting an account. Amber carries
 attention, blue carries accent. The scan crop contains real red pen, and if the UI
 spent red freely every screen would read as a rebuke.

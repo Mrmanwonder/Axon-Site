@@ -120,7 +120,7 @@ The atomic unit is an **attempt at a question**, not a paper. Two tiers: Tier 1 
 `src/ui/styles/` is the design system (`tokens.css` layers palette → surface → role → component; `system.css` is the component system). Read it before building UI. Components reference roles, never raw palette values.
 
 **Colour**
-- **Red is the teacher's pen.** In the interface chrome it appears in one place only: the sign-out row. Not errors, warnings, low marks, notification badges, or delete. `TEACHER_INK` names the one red so a red error state collides with it first. *Open: the owner's earlier note says red is never in chrome at all; the code keeps sign-out red. Ask before changing it.*
+- **Red appears in the interface in one place only: the sign-out row.** Not errors, warnings, low marks, notification badges, or delete. **A teacher's ink can be any colour (black, blue, red, pink, anything); never assume or encode that it is red** (owner, 3 Oct 2026). `TEACHER_INK = 'red'` in `src/scan/contract.js` and the red-hue mask in `src/scan/layers.js` encode that wrong assumption and are tracked for replacement in Linear; do not extend them.
 - Amber carries attention and destructive actions. Blue carries accent and "locked" or "primary".
 - Cause colours encode kind, never severity (seven hues of equal weight, never a green-to-red ramp). Values are in `tokens.css`.
 - **Confidence is form, not colour:** confirmed = solid, likely = light fill with a border, unsure = dashed outline. It must survive greyscale and screenshots.
@@ -190,6 +190,7 @@ Owner decisions applied to the rebuild:
 - The owner will push back on scope and defers on technical and legal recommendations. Flag unresolved decisions explicitly instead of resolving them.
 - When a spec turns out wrong, issue a corrective addendum instead of patching silently.
 - Specs and reports are standalone files named `claude_[descriptor]-[YYYY-MM-DD].md`, linked from the Linear issue. They must be usable by an agent with no other context.
+- **"Build me a spec sheet" means a detailed prompt and plan the owner can send straight to an agent** to carry out the work: context, ordered steps, files, acceptance checks, stop conditions. It is not a status report.
 - Secrets are never printed, committed, pasted into Linear, or placed in `VITE_*` variables.
 - Legal text is drafted for counsel and never published by an agent. Dates change only in the final publication commit.
 - Share links are bearer tokens: do not repeat them, and revoke them after use.
@@ -231,13 +232,16 @@ Backend, in `Mrmanwonder/axon-backend`: `npm run typecheck`, `npm test`, `npm ru
 - Paper dates: exam date if known, otherwise labelled as the upload date.
 - Project target 15 Oct 2026: a private beta of the core loop (scan, read, explain, review), not a public launch.
 - Scanner: close button top-left; page-drop animation welcome; Auto on by default; torch Auto, On, Off; no webcam on laptops; Done reads directly when all pages are fine, otherwise Review.
+- Teacher ink can be any colour (black, blue, red, pink, anything). Never assume or encode that it is red. In the interface red stays reserved for the sign-out row.
+- Sign-in: email/password will be built (alongside Google), as already decided.
+- Scanner follow-ups (3 Oct): importing accepts every common image type and PDFs (PDFs are crucial); the auto crop will be fine-tuned on real clips and Adjust edges stays part of the flow; landscape phones are not handled now and are a goal for the next release; a "warn" quality verdict is a note and does not flag a page (D25, owner delegated, option A); the `'wasm-unsafe-eval'` CSP entry is accepted for the ML runtime; the scanic and DocCornerNet licences are MIT (`third_party/scanic/NOTICE.md`).
 - Earlier numbered decisions are in `docs/claude_axon-decisions-2026-10-02.md` and the owner runbook.
 
 ---
 
 ## 12. Known inconsistencies to fix, not to copy
 
-- `README.md` still says Cambridge only and passwordless auth only. The opening of `AGENTS.md` still describes a single static `index.html` with no build step; the app is Vite and React now, and `reference/prototype.html` is the pre-port original.
+- `README.md` was brought up to date on 3 Oct 2026; re-check it whenever the product changes. The opening of `AGENTS.md` still describes a single static `index.html` with no build step; the app is Vite and React now, and `reference/prototype.html` is the pre-port original.
 - `docs/claude_*` files are dated records. They are evidence, not instructions.
 - Comments in applied migrations still mention `CLAUDE.md`; applied migration files are not edited for a comment.
 - The legal pages may still describe a retention route that is no longer true; counsel decides the corrected wording.
