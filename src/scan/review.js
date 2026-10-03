@@ -60,8 +60,7 @@ export async function loadReview(runId) {
 
   const markRules = await assessmentRulesForStudent(run.student_id);
 
-  const [{ data: paper }, { data: regions }, { data: pages }, { data: explanations }, { data: unreadable }] =
-    await Promise.all([
+  const responses = await Promise.all([
       sb.from('paper').select('id, type, tier, subject, date_taken, reported_total, total_awarded, total_available')
         .eq('id', run.paper_id).single(),
       sb.from('question_region')
@@ -73,6 +72,12 @@ export async function loadReview(runId) {
         .eq('run_id', runId),
       sb.from('page_unreadable').select('page_number, reason').eq('paper_id', run.paper_id),
     ]);
+  // A failed read is not an empty paper and cannot mean review is complete.
+  // Propagate it to the route's existing retry surface before building counts.
+  for (const response of responses) {
+    if (response.error) throw response.error;
+  }
+  const [{ data: paper }, { data: regions }, { data: pages }, { data: explanations }, { data: unreadable }] = responses;
 
   const byRegion = new Map((explanations ?? []).map((e) => [e.region_id, e]));
   const pageByNumber = new Map((pages ?? []).map((p) => [p.page_number, p]));
