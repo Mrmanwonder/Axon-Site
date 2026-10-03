@@ -177,8 +177,10 @@ const LEGACY_PATTERNS = [
 function looksLikeWholeMath(text: string): boolean {
   const value = text.trim();
   if (!value) return false;
+  if (/^\\begin\{(pmatrix|bmatrix|matrix|aligned|array)\}[\s\S]*\\end\{\1\}$/.test(value)) return true;
   if (/\\(?:frac|tfrac|dfrac|sqrt|sum|prod|int|lim|log|ln|sin|cos|tan|exp|lambda|mu|sigma|theta|pi|rho)\b/.test(value)) {
-    return true;
+    const prose = value.replace(/\\[A-Za-z]+/g, "").replace(/\\text\{[^}]*\}/g, "");
+    return !(prose.match(/[A-Za-z]{3,}/g)?.length);
   }
   const words = value.match(/[A-Za-z]{3,}/g) ?? [];
   return words.length <= 3
@@ -186,8 +188,37 @@ function looksLikeWholeMath(text: string): boolean {
     && /^[A-Za-z0-9_{}()[\].,+\-*/^<>=~!\\\s%≤≥≠≈×÷λμσθπραβγδ⁰¹²³⁴⁵⁶⁷⁸⁹]+$/.test(value);
 }
 
+
+/** A bounded bare command is rendered inline without swallowing surrounding prose. */
+function firstBareCommand(text: string): { index: number; value: string } | null {
+  const pattern = /\\(?:frac|tfrac|dfrac|sqrt|binom)\b/g;
+  const match = pattern.exec(text);
+  if (!match) return null;
+  let cursor = match.index + match[0].length;
+  const count = /frac|binom/.test(match[0]) ? 2 : 1;
+  for (let argument = 0; argument < count; argument++) {
+    while (/\s/.test(text[cursor] ?? "") && cursor < text.length) cursor++;
+    // Optional root degree.
+    if (argument === 0 && match[0] === "\\sqrt" && text[cursor] === "[") {
+      const end = text.indexOf("]", cursor + 1);
+      if (end < 0) return null;
+      cursor = end + 1;
+      while (/\s/.test(text[cursor] ?? "") && cursor < text.length) cursor++;
+    }
+    if (text[cursor] !== "{") return null;
+    let depth = 0;
+    do {
+      if (text[cursor] === "{" && text[cursor - 1] !== "\\") depth++;
+      if (text[cursor] === "}" && text[cursor - 1] !== "\\") depth--;
+      cursor++;
+    } while (cursor < text.length && depth > 0);
+    if (depth !== 0) return null;
+  }
+  return { index: match.index, value: text.slice(match.index, cursor) };
+}
+
 function firstLegacyMatch(text: string): { index: number; value: string } | null {
-  let best: { index: number; value: string } | null = null;
+  let best: { index: number; value: string } | null = firstBareCommand(text);
   for (const pattern of LEGACY_PATTERNS) {
     pattern.lastIndex = 0;
     const match = pattern.exec(text);
