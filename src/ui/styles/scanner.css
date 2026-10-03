@@ -23,15 +23,15 @@
 
 .sc {
   --sc-bg: #050506;
-  --sc-chip: #17171a;
-  --sc-strip: #111113;
-  --sc-strip-attn: #2a2010;
+  --sc-chip: #1c1c1f;
+  --sc-chip-press: #2a2a2e;
+  --sc-strip: #151517;
+  --sc-strip-attn: #241b0c;
   --sc-ink: #fff;
   --sc-ink-2: #b5b5be;
   --sc-line: rgba(255, 255, 255, .22);
   --sc-accent: #3A86FF;
   --sc-amber: #FF9F0A;
-  --sc-green: #30D158;
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -51,13 +51,15 @@
 .sc-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-height: 60px;
-  padding: max(8px, var(--top-inset)) 10px 8px;
+  padding: max(8px, var(--top-inset)) 12px 8px;
 }
 
 .sc-grow { flex: 1; }
 
+/* One family: borderless 44px chips on the darkroom ground, Material Symbols
+   at 22px, the same radius as the capsule below. */
 .sc-circ {
   position: relative;
   flex: none;
@@ -67,18 +69,20 @@
   display: grid;
   place-items: center;
   border-radius: 22px;
-  border: 1px solid var(--sc-line);
+  border: 0;
   background: var(--sc-chip);
+  color: var(--sc-ink);
   cursor: pointer;
+  transition: background-color .12s var(--scan-snap);
 }
 
-.sc-circ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.sc-circ svg circle { fill: currentColor; stroke: none; }
+.sc-circ:active { background: var(--sc-chip-press); }
+.sc-circ svg { display: block; }
 
 .sc-circ .dot {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 9px;
+  right: 9px;
   width: 8px;
   height: 8px;
   border-radius: 4px;
@@ -86,23 +90,27 @@
   box-shadow: 0 0 0 2px var(--sc-chip);
 }
 
+/* Auto is a state, not a badge: a quiet chip whose dot is the accent when on
+   and an empty ring when off. Blue, because blue means "locked" and "Auto" in
+   this screen; green would be a third meaning for one control. */
 .sc-auto {
   min-height: 44px;
-  padding: 0 16px;
+  padding: 0 16px 0 14px;
   display: flex;
   align-items: center;
   gap: 8px;
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, .75);
-  background: #0c0c0e;
+  border: 0;
+  background: var(--sc-chip);
   font-weight: 600;
   font-size: 15px;
+  letter-spacing: -.01em;
   cursor: pointer;
 }
 
-.sc-auto i { width: 9px; height: 9px; border-radius: 50%; background: var(--sc-green); }
-.sc-auto[data-on="false"] { border-color: var(--sc-line); }
-.sc-auto[data-on="false"] i { background: transparent; border: 1.5px solid #cfcfd6; }
+.sc-auto i { width: 8px; height: 8px; border-radius: 50%; background: var(--sc-accent); box-shadow: 0 0 0 3px rgba(58, 134, 255, .22); }
+.sc-auto[data-on="false"] { color: var(--sc-ink-2); }
+.sc-auto[data-on="false"] i { background: transparent; box-shadow: none; border: 1.5px solid var(--sc-ink-2); }
 
 /* ── camera ─────────────────────────────────────────────────────────────── */
 
@@ -157,28 +165,44 @@
 
 .sc-strip {
   min-height: 56px;
-  padding: 6px 10px 6px 16px;
+  margin: 10px 12px 0;
+  padding: 6px 8px 6px 8px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  border-radius: 16px;
   background: var(--sc-strip);
   font-size: 15px;
+  font-weight: 500;
   line-height: 1.3;
+  letter-spacing: -.005em;
 }
 
-.sc-strip .g { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2px solid #cfcfd6; }
-.sc-strip[data-tone="locked"] .g { background: var(--sc-accent); border-color: var(--sc-accent); }
+/* The glyph tile says the tone by shape as well as colour: a frame while
+   looking, a tick when locked or saved, an i when something needs the student. */
+.sc-strip .g {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .08);
+  color: var(--sc-ink-2);
+}
+.sc-strip .g svg { display: block; }
+.sc-strip[data-tone="locked"] .g { background: rgba(58, 134, 255, .2); color: var(--sc-accent); }
 .sc-strip[data-tone="attention"] { background: var(--sc-strip-attn); }
-.sc-strip[data-tone="attention"] .g { border: 2px dashed var(--sc-amber); }
-.sc-strip .t { min-width: 0; }
+.sc-strip[data-tone="attention"] .g { background: rgba(255, 159, 10, .18); color: var(--sc-amber); }
+.sc-strip .t { min-width: 0; padding-right: 6px; }
 
 .sc-strip .act {
   margin-left: auto;
   min-height: 44px;
-  padding: 0 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, .33);
-  background: transparent;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 0;
+  background: rgba(255, 255, 255, .12);
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;
@@ -299,8 +323,9 @@
   transition: opacity .12s var(--scan-snap);
 }
 
-.sc-done[data-kind="review"] { background: transparent; border: 1.5px solid #FF9F0A; color: #FF9F0A; }
-.sc-done:disabled { background: #1d1d21; color: #7d7d86; border-color: transparent; }
+.sc-done[data-kind="review"] { background: rgba(255, 159, 10, .14); border: 1.5px solid var(--sc-amber); color: var(--sc-amber); }
+.sc-done:disabled { background: transparent; color: #6e6e76; border-color: transparent; }
+.sc-done[data-kind="review"]:disabled { border-color: rgba(255, 159, 10, .4); color: rgba(255, 159, 10, .55); }
 
 /* Resume draft toast sits in the camera, near the top, and is draggable away. */
 .sc-vf .drafttoast {
@@ -321,43 +346,39 @@
 
 /* ── sheets opened from the scanner ─────────────────────────────────────── */
 
-.sheet.sc-menu .sc-menu-list { display: flex; flex-direction: column; margin-top: 8px; }
+.sheet.sc-menu .sc-menu-list { display: flex; flex-direction: column; margin: 10px 0 2px; border-radius: 16px; overflow: hidden; background: var(--surface-sunk); }
 
-.sc-menu-list > button {
+.sc-mrow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 54px;
-  padding: 0 4px;
+  gap: 13px;
+  min-height: 60px;
+  padding: 10px 14px;
   border: 0;
-  border-bottom: .5px solid var(--hairline);
   background: transparent;
   color: var(--label);
-  font-weight: 500;
-  font-size: 16px;
-  line-height: 1.3;
   text-align: left;
   cursor: pointer;
+  position: relative;
+}
+.sc-mrow + .sc-mrow::before, .sc-mrow + .sc-light::before {
+  content: ""; position: absolute; top: 0; left: 59px; right: 0; height: .5px; background: var(--hairline);
+}
+.sc-mrow:active { background: var(--hairline); }
+.sc-mrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-mrow .ti { font-weight: 550; font-size: 16px; line-height: 1.25; }
+.sc-mrow small { color: var(--label-2); font-size: 13px; line-height: 1.3; }
+.sc-mrow .chev { color: var(--label); }
+
+.sc-mrow .ic, .sc-light .ic {
+  width: 32px; height: 32px; flex: none; display: grid; place-items: center;
+  border-radius: 10px; background: var(--accent-wash); color: var(--blue);
 }
 
-.sc-menu-list > button small { color: var(--label-2); font-size: 13px; text-align: right; }
-
-.sc-light { padding: 12px 4px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.sc-light > div { display: flex; gap: 6px; }
-.sc-light button {
-  min-height: 44px;
-  min-width: 56px;
-  padding: 0 14px;
-  border-radius: 22px;
-  border: 1px solid var(--hairline);
-  background: var(--surface-sunk);
-  color: var(--label);
-  font-weight: 600;
-  cursor: pointer;
-}
-.sc-light button[aria-pressed="true"] { background: var(--label); color: var(--bg); border-color: transparent; }
-.sc-light small { flex-basis: 100%; color: var(--label-2); }
+.sc-light { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 13px; min-height: 60px; padding: 10px 14px; }
+.sc-light .lb { flex: 1; font-weight: 550; font-size: 16px; }
+.sc-light .seg button { min-height: 44px; min-width: 54px; font-size: 14px; }
+.sc-light small { flex-basis: 100%; padding-left: 45px; color: var(--label-2); }
 
 .sheet.sc-review { max-height: 88dvh; overflow-y: auto; }
 .sc-review-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
