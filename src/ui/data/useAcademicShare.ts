@@ -12,6 +12,33 @@ import { useToast } from "../components/ToastProvider";
 
 type ResourceType = "paper" | "question";
 
+/** Start a promise-backed clipboard write during the tap, before minting finishes. */
+function copyFreshShare(created: Promise<CreatedAcademicShare>): Promise<boolean> {
+  const url = created.then((share) => academicShareUrl(share.token));
+  // A rejected mint must never copy a placeholder or an older capability.
+  const blob = url.then((value) => new Blob([value], { type: "text/plain" }));
+  void blob.catch(() => {});
+  let pending: Promise<boolean>;
+  try {
+    pending = typeof ClipboardItem !== "undefined" && navigator.clipboard?.write
+      ? navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]).then(() => true, () => false)
+      : Promise.resolve(false);
+  } catch {
+    pending = Promise.resolve(false);
+  }
+  return pending.then(async (copied) => {
+    if (copied) return true;
+    try {
+      const value = await url;
+      if (!navigator.clipboard?.writeText) return false;
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 /**
  * Guardian-owned share flow for saved academic work.
  *
@@ -21,7 +48,7 @@ type ResourceType = "paper" | "question";
  *
  * Web Share needs a transient user activation. Capability creation necessarily
  * takes a network round-trip, so a freshly-created link is presented in a
- * second sheet with an explicit "Share link" / "Copy link" tap.
+ * second sheet with an explicit "Share link" / "Copy link" tap. Automatic\n * copying is best effort; success is reported only after the browser accepts it.
  */
 export function useAcademicShare({
   resourceType,
@@ -52,7 +79,7 @@ export function useAcademicShare({
     return () => { cancelled = true; };
   }, [resourceId, resourceType]);
 
-  const openCreatedShare = useCallback((created: CreatedAcademicShare, replaced: boolean) => {
+  const openCreatedShare = useCallback((created: CreatedAcademicShare, replaced: boolean, copied: boolean) => {
     setActive({
       share_id: created.share_id,
       resource_type: created.resource_type,
@@ -69,11 +96,12 @@ export function useAcademicShare({
         title: `Share this ${resourceType}`,
         body:
           `${replaced ? "The previous link has been stopped and replaced. " : ""}` +
+          (copied ? "Share link copied. " : "The link could not be copied automatically. Use the button below. ") +
           `Anyone with this link can read only this saved ${resourceType}. ` +
           "It expires in 24 hours and does not include the student's profile, contact details, other papers or page-image URLs.",
         choices: [
           {
-            label: native ? "Share link" : "Copy link",
+            label: native ? "Share link" : copied ? "Copy link again" : "Copy link",
             value: "send",
             emphasis: "primary",
           },
@@ -109,12 +137,18 @@ export function useAcademicShare({
   const createFreshShare = useCallback(async (replaced: boolean) => {
     if (!resourceId) return;
     try {
-      const created = await createAcademicShare({
+      const creation = createAcademicShare({
         resourceType,
         resourceId,
         expiresMinutes: 24 * 60,
       });
-      openCreatedShare(created, replaced);
+      // Do not await the network before asking the clipboard: Safari requires
+      // write() to begin in the tap's activation, using promise-backed data.
+      const copying = copyFreshShare(creation);
+      const created = await creation;
+      const copied = await copying;
+      openCreatedShare(created, replaced, copied);
+      if (copied) toast("Share link copied.");
     } catch (error) {
       toast((error as Error).message || "The share link could not be created.", "warn");
     }
