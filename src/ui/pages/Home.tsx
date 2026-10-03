@@ -27,14 +27,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { useAnalytics } from "../data/useAnalytics";
 import { paperPresentation } from "../data/paperPresentation";
-import { paths } from "../app/paths";
-import { paperTypeLabel, providerKeyForStudent, statusKeyForRun } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { NoPapersArt } from "../components/EmptyArt";
 import PageSkeleton from "../components/PageSkeleton";
 import { useIngestion } from "../data/useIngestion";
 import { isPartialTotal } from "../data/paperTotals";
+import { homeAttention } from "../data/homeAttention";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -97,22 +97,13 @@ export default function Home() {
   }
 
   const recent = papers.slice(0, 3);
-  const analyticsReady = state === "ready" && progressResource.state === "ready";
-  const unreadableCount = analyticsReady ? (unreadable?.length ?? 0) : null;
-  const waiting = [...progress.values()].filter((p) => {
-    const key = statusKeyForRun(p.status);
-    return key === "needs_review" || key === "ready";
-  }).length;
-  const attentionCount = analyticsReady
-    ? (needsCheck?.count ?? 0) + (unreadableCount ?? 0) + waiting
-    : null;
-  const nextCopy = attentionCount == null
-    ? "Checking your latest evidence…"
-    : attentionCount
-      ? `${attentionCount} ${attentionCount === 1 ? "thing needs" : "things need"} your eyes before the analysis can move on.`
-      : readiness?.has_enough_data
-        ? "Nothing needs you right now. Your latest evidence is ready in Insights."
-        : "Nothing needs you right now. Scan your next marked paper when you get it back.";
+  const attention = homeAttention({
+    papers, progress,
+    live: state === "ready" && !stale && progressResource.state === "ready" && progressResource.source === "live",
+    needsCheckCount: needsCheck?.count ?? 0,
+    unreadable: unreadable ?? [],
+    enoughData: readiness?.has_enough_data ?? false,
+  });
 
 
   return (
@@ -129,22 +120,22 @@ export default function Home() {
 
       <div className="card nextstep">
         <div className="eyebrow">Next step</div>
-        <div className="line">{nextCopy}</div>
-        {attentionCount != null && attentionCount > 0 && (
-          <PressBox as={Link} to={paths.library} className="textaction">Review now <Chevron /></PressBox>
+        <div className="line">{attention.copy}</div>
+        {attention.destination && (
+          <PressBox as={Link} to={attention.destination} className="textaction">{attention.actionLabel} <Chevron /></PressBox>
         )}
       </div>
 
 
       {/* Shown only when there is something to check. The count and the paper
           count are both real; the surface states its own sample size. */}
-      {attentionCount != null && attentionCount > 0 && (
+      {attention.title && attention.destination && (
         <PressBox
           as="button"
           type="button"
           className="card attention"
           data-interactive=""
-          onClick={() => navigate(paths.library)}
+          onClick={() => attention.destination && navigate(attention.destination)}
         >
           <div className="ic">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -154,10 +145,10 @@ export default function Home() {
           </div>
           <div className="b">
             <div className="t1">
-              Needs your eyes
+              {attention.title}
             </div>
             <div className="t2">
-              {needsCheck?.count ?? 0} to confirm · {unreadableCount ?? 0} unreadable · {waiting} ready to review
+              {attention.detail}
             </div>
           </div>
           <Chevron />
