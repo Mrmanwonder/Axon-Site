@@ -56,7 +56,9 @@ test("historical escaped square roots and fractions retain working line breaks",
   expect(container.querySelectorAll(".katex")).toHaveLength(2);
   expect(container.querySelector("br")).not.toBeNull();
   expect(container.textContent).not.toContain("\\n");
-  expect(container.textContent).not.toContain("\\sqrt");
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect([...container.querySelectorAll(".katex-html")].map(node => node.textContent).join("")).not.toContain("\\sqrt");
+  expect(container.querySelector('annotation[encoding="application/x-tex"]')?.textContent).toBe("\\sqrt{\\frac{9}{4}}");
 });
 
 test("faithful student algebra is typeset without being corrected", () => {
