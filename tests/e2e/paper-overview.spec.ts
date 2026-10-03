@@ -12,7 +12,12 @@ for (const width of [360, 390, 768, 1024, 1440]) {
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
       await page.goto(url);
-      await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      // The app cross-fades colours when the theme changes. axe measures whatever colour is on screen at
+      // that instant, so wait for the fade to finish or it reads white-on-white halfway through (seen in WebKit).
+      await page.evaluate(async (t) => {
+        document.documentElement.dataset.theme = t;
+        await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
+      }, theme);
 
       await expect(page.getByRole("heading", { level: 1, name: "Test paper" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 2, name: "Question 1" })).toBeVisible();
