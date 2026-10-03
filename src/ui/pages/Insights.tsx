@@ -114,6 +114,6 @@ export default function Insights() {
       <section className="isection"><div className="sectitle">Quick wins</div><EvidenceGap title="No defensible ranking yet">Axon can count marks, but cannot yet measure the effort a fix takes. It won&rsquo;t make a precise-looking list from a guess.</EvidenceGap></section>
       <section className="isection"><div className="sectitle">Pacing check</div><EvidenceGap title="Pacing isn&rsquo;t captured yet">Blank or rushed final questions need to repeat across papers before this can be called out. That signal is not recorded yet.</EvidenceGap></section>
     </div>}
-    {(stale || state === "failed") && <div role="status">Last available analysis.</div>}
+    {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis.</div>}
   </>;
 }
