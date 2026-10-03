@@ -232,6 +232,11 @@ function firstLegacyMatch(text: string): { index: number; value: string } | null
 
 function legacyTokens(text: string): Token[] {
   if (!text) return [];
+  // Valid matrix/alignment environments own their row boundaries, including
+  // actual newlines. Keep them as a single mathematical block.
+  if (/^\\begin\{/.test(text.trim()) && looksLikeWholeMath(text)) {
+    return [{ kind: "math", value: text.trim(), display: true }];
+  }
   // A newline separates working steps; do not typeset a whole answer as one
   // expression and lose the original line order or prose boundaries.
   if (text.includes("\n")) {
