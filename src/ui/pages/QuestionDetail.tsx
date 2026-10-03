@@ -31,6 +31,7 @@ import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import PageSkeleton from "../components/PageSkeleton";
 import MathText from "../components/MathText";
+import AcademicText from "../components/AcademicText";
 import WorkedAnswer from "../components/WorkedAnswer";
 import { paths } from "../app/paths";
 import { withheldWorking, diagnosisHeading, diagnosisNote } from "../data/grounding";
@@ -241,7 +242,7 @@ export default function QuestionDetail() {
         {attempt.question_text && (
           <div className="qfield">
             <div className="k">Question</div>
-            <div className="v"><MathText text={attempt.question_text} /></div>
+            <div className="v"><AcademicText text={attempt.question_text} /></div>
           </div>
         )}
 
