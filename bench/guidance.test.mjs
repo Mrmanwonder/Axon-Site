@@ -128,14 +128,14 @@ test('lumaFromHistogram', () => {
   assert.equal(lumaFromHistogram(new Uint32Array(256)), null);
 });
 
-test('a page at a quarter of the view is not "small" when the still is a sensor photo', () => {
+test('the small threshold for sensor photos is about a third of the view', () => {
   const s = {
     phase: 'locked', engine: { status: 'ready' }, luma: { median: 120, p95: 220 }, motion: 1,
-    fill: 0.26, edgeContrast: 40, touchesEdge: false, sharpness: 0.8, glare: 0,
+    fill: 0.3, edgeContrast: 40, touchesEdge: false, sharpness: 0.8, glare: 0,
     searchingMs: 0, torch: { supported: false }, auto: true,
   };
-  assert.equal(chooseGuidance({ ...s, nativeStill: false }).reason, 'small');
-  assert.equal(chooseGuidance({ ...s, nativeStill: true }).reason, null);
+  assert.equal(chooseGuidance({ ...s, nativeStill: true }).reason, 'small');
+  assert.equal(chooseGuidance({ ...s, fill: 0.36, nativeStill: true }).reason, null);
 });
 
 test('a dark shape darker than its surroundings is not followed as a page', async () => {

@@ -19,10 +19,12 @@ export const GUIDE = Object.freeze({
   DARK_P95: 120,
   /** A page covering less than this share of the view is "small". */
   SMALL_FILL: 0.35,
-  /** The same, when the still is a sensor photograph (ImageCapture, ~12 MP) rather
-      than a video frame: a page at a quarter of the view is still about 2000 px
-      long on the photo, above the conditioning refusal line (1600 px). */
-  SMALL_FILL_NATIVE: 0.22,
+  /** The same, when the still is a sensor photo. Measured on the owner's phone
+      (3000x4000 stills, 3 Oct 2026): fill 0.26 gave a 2020 px page and fill
+      0.33 a 2290 px page, both under the 2400 px target, so each was upscaled
+      and sharpened ("Page sharpened for readability"). 0.22 made that worse;
+      the page needs about a third of the view to arrive at full size. */
+  SMALL_FILL_NATIVE: 0.34,
   /** Mean luminance step across the quad's edges (0–255) that counts as a real page
       edge. Without one, a small quad may sit inside a page that overfills the frame. */
   EDGE_CONTRAST: 10,
