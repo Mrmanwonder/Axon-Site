@@ -9,7 +9,7 @@ alter table public.upload add constraint upload_capture_binding check (
   (asset_kind is null and page_number is null and page_revision is null and page_key is null)
   or (asset_kind in ('page','mask','thumb','raw') and page_number is not null and page_revision is not null and page_number between 1 and 25
       and page_revision ~ '^[A-Za-z0-9-]{1,80}$'
-      and (asset_kind = 'raw' or page_key is null))
+      and ((asset_kind = 'raw' and page_key is not null) or (asset_kind <> 'raw' and page_key is null)))
 );
 comment on column public.upload.page_revision is 'Capture identity recorded by the authenticated upload API; not an integrity hash or secret.';
 comment on column public.upload.page_key is 'Raw intent binding to a server-issued conditioned page capability.';
@@ -61,7 +61,7 @@ begin
        or v_upload.page_number is distinct from v_number
        or v_upload.page_revision is distinct from (v_item->>'page_revision')
        or v_upload.page_key is null or not private.asset_key_owned(v_upload.page_key,p_student_id,p_paper_id) or v_upload.bytes is null or v_upload.bytes not between 1 and 26214400
-       or v_upload.etag is null or v_upload.content_type not in ('image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf')
+       or v_upload.etag is null or v_upload.etag = '' or v_upload.content_type not in ('image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf')
        or not private.asset_key_owned(v_key,p_student_id,p_paper_id)
        or v_key not like p_student_id::text || '/' || p_paper_id::text || '/raw/p' || v_number::text || '-original-%'
        or v_key ~ '\.pending$' then

@@ -111,9 +111,34 @@ do $$ begin
  exception when insufficient_privilege then perform public._t('stale issued capture rejected',true);end;
 end $$;
 reset role;
--- Retrying a frozen unchanged submit may not clear an independently attached key.
-select public._t('submit preserves attached original on unchanged source and clears on retake',
- position('case when paper_page.r2_key is distinct from excluded.r2_key then excluded.original_key else coalesce' in
- pg_get_functiondef('public.submit_paper(uuid,public.paper_type,public.paper_tier,date,text,jsonb,uuid,numeric,numeric,text,uuid)'::regprocedure))>0);
+-- Exercise the public authenticated handoff as well as its service attachment.
+insert into private.student_scope_session(guardian_id,auth_session_id,student_id,expires_at)
+values ('aaaaaaaa-0000-4000-8000-000000000001','original-test','aaaaaaaa-0000-4000-8000-000000000002',now()+interval '15 minutes');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"original-test"}',true);
+select public.submit_paper('aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-10-04',null,
+ '[{"page_number":1,"r2_bucket":"derived","r2_key":"aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/p1-capture.jpg","conditioning_meta":{"upload_revision":"rev-1"},"original_key":null}]',
+ 'aaaaaaaa-0000-4000-8000-000000000099',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a1');
+select public._t('unchanged frozen submit preserves the independently attached original',
+ (select original_key='aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p1-original-capture.jpg'
+ from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1));
+do $ begin
+ begin update public.paper_page set original_key='aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p1-original-other.jpg'
+ where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1;
+ perform public._t('direct authenticated original replacement rejected',false);
+ exception when insufficient_privilege then perform public._t('direct authenticated original replacement rejected',true);end;
+end $;
+reset role;
+insert into public.upload(paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,etag,confirmed,asset_kind,page_number,page_revision)
+values('aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','image','derived',
+ 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/p1-retake.jpg','image/jpeg',100,'etag',true,'page',1,'retake-revision');
+set local role authenticated;
+select public.submit_paper('aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-10-04',null,
+ '[{"page_number":1,"r2_bucket":"derived","r2_key":"aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/p1-retake.jpg","conditioning_meta":{"upload_revision":"retake-revision"},"original_key":null}]',
+ 'aaaaaaaa-0000-4000-8000-000000000099',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a1');
+select public._t('a true retake clears the prior capture original',
+ (select original_key is null and conditioning_meta->>'upload_revision'='retake-revision'
+ from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1));
+reset role;
 select count(*) filter (where not passed) as failed,count(*) as total from public._r;
 rollback;
