@@ -42,12 +42,19 @@ select public.commit_extraction_run('aaaaaaaa-0000-4000-8000-0000000000b1'); com
   assert.equal(counts.out.trim(), "2|2|7.00");
   console.log("PASS: concurrent authenticated saves created one set of attempts, loss events and totals");
 } finally {
-  const cleaned = await sql(`drop trigger if exists audit_pause on public.student_attempt;
+  const cleaned = await sql(`begin;
+drop trigger if exists audit_pause on public.student_attempt;
 drop function if exists public._audit_pause();
+-- The database is explicitly localhost and disposable. Remove only this fixture's
+-- append-only consent rows inside a transaction, restoring triggers before commit.
+alter table public.consent_event disable trigger user;
+delete from public.consent_event where guardian_id='aaaaaaaa-0000-4000-8000-000000000001';
+alter table public.consent_event enable trigger user;
 delete from public.guardian where id='aaaaaaaa-0000-4000-8000-000000000001';
 delete from auth.users where id='11111111-1111-4111-8111-111111111111';
 drop function if exists public._region(uuid,uuid,uuid,integer,numeric,numeric,text);
 drop function if exists public._t(text,boolean,text);
-drop table if exists public._r;`);
+drop table if exists public._r;
+commit;`);
   assert.equal(cleaned.code, 0, cleaned.err);
 }

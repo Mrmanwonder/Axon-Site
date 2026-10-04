@@ -476,11 +476,17 @@ begin
   -- both reach this function, but only the first can mint the fresh run.
   perform pg_advisory_xact_lock(hashtextextended(v_paper.id::text, 0));
 
+  -- p_pages is the complete draft manifest, including additions/removals.
+  if exists (select 1 from jsonb_array_elements(p_pages) item
+             group by (item->>'page_number')::smallint having count(*) > 1) then
+    raise exception 'Page numbers must be unique' using errcode = '22023';
+  end if;
   select exists (
     select 1 from jsonb_array_elements(p_pages) incoming
-    join public.paper_page existing
-      on existing.paper_id = v_paper.id and existing.page_number = (incoming ->> 'page_number')::smallint
-    where (incoming ->> 'r2_key' is not null and incoming ->> 'r2_key' is distinct from existing.r2_key)
+    full join (select * from public.paper_page where paper_id = v_paper.id) existing
+      on existing.page_number = (incoming ->> 'page_number')::smallint
+    where incoming is null or existing.id is null
+       or (incoming ->> 'r2_key' is not null and incoming ->> 'r2_key' is distinct from existing.r2_key)
        or (incoming ->> 'mask_key' is not null and incoming ->> 'mask_key' is distinct from existing.mask_key)
        or (incoming ->> 'sha256' is not null and incoming ->> 'sha256' is distinct from existing.sha256)
   ) into v_source_changed;
@@ -494,6 +500,14 @@ begin
       finished_at = now(), heartbeat_at = now()
     where paper_id = v_paper.id and status not in ('failed', 'rejected', 'committed');
   end if;
+
+  -- Retire omitted pages and their independent unreadability records atomically.
+  delete from public.page_unreadable where paper_id = v_paper.id
+    and not exists (select 1 from jsonb_array_elements(p_pages) item
+                    where (item->>'page_number')::smallint = page_unreadable.page_number);
+  delete from public.paper_page where paper_id = v_paper.id
+    and not exists (select 1 from jsonb_array_elements(p_pages) item
+                    where (item->>'page_number')::smallint = paper_page.page_number);
 
   for v_page in select * from jsonb_array_elements(p_pages) loop
     insert into public.paper_page (

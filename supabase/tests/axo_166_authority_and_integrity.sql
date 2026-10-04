@@ -73,6 +73,9 @@ insert into public.paper_page(paper_id,student_id,page_number,source_kind,status
 values ('aaaaaaaa-0000-4000-8000-0000000000a3','aaaaaaaa-0000-4000-8000-000000000002',1,'upload','stored','fixture/owned','done');
 insert into public.page_unreadable(paper_id,student_id,page_number,storage_path,reason)
 values ('aaaaaaaa-0000-4000-8000-0000000000a3','aaaaaaaa-0000-4000-8000-000000000002',1,'fixture/owned','Historical failed extraction');
+insert into public.upload(paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,confirmed)
+values ('aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','image','derived',
+ 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/second.jpg','image/jpeg',100,true);
 insert into private.student_scope_session(guardian_id,auth_session_id,student_id,expires_at)
 values ('aaaaaaaa-0000-4000-8000-000000000001','audit-session','aaaaaaaa-0000-4000-8000-000000000002',now()+interval '15 minutes');
 set local role authenticated;
@@ -113,6 +116,49 @@ select public._t('unchanged submission reuses the fresh run',
  'aaaaaaaa-0000-4000-8000-000000000099',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a1')->>'run_id') =
  (select result->>'run_id' from audit_submit));
 
+
+create temporary table audit_added as select public.submit_paper(
+ 'aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-01','Physics',
+ '[{"page_number":1,"r2_key":"aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/retake.jpg"},{"page_number":2,"r2_key":"aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/second.jpg"}]',
+ 'aaaaaaaa-0000-4000-8000-000000000099',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a1') result;
+select public._t('adding a page starts a new extraction',
+ (select (result->>'run_created')::boolean from audit_added)
+ and (select count(*)=2 from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1'));
+reset role;
+insert into public.page_unreadable(paper_id,student_id,page_number,storage_path,reason)
+ values ('aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002',2,'fixture','Old failure');
+set local role authenticated;
+create temporary table audit_removed as select public.submit_paper(
+ 'aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-01','Physics',
+ '[{"page_number":1,"r2_key":"aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/retake.jpg"}]',
+ 'aaaaaaaa-0000-4000-8000-000000000099',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a1') result;
+select public._t('removing a page starts fresh and retires its page and marker',
+ (select (result->>'run_created')::boolean from audit_removed)
+ and not exists(select 1 from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=2)
+ and not exists(select 1 from public.page_unreadable where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=2));
+select public._t('pipeline writes remain inaccessible to clients',
+ not has_function_privilege('authenticated','public.pipeline_write(uuid,text,jsonb)','EXECUTE'));
+reset role;
+update public.extraction_run set status='structure' where id=(select (result->>'run_id')::uuid from audit_removed);
+select public._t('a retired worker cannot complete the replacement page',
+ not (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b1','structure',
+ jsonb_build_object('page_id',(select id from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' limit 1),
+ 'patch',jsonb_build_object('structure_status','done')))->>'applied')::boolean
+ and (select structure_status='pending' from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' limit 1));
+select public._t('the current structure worker can durably finish its own page',
+ (public.pipeline_write((select (result->>'run_id')::uuid from audit_removed),'structure',
+ jsonb_build_object('page_id',(select id from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' limit 1),
+ 'patch',jsonb_build_object('structure_status','done')))->>'applied')::boolean);
+update public.extraction_run set status='needs_review' where id=(select (result->>'run_id')::uuid from audit_removed);
+select public._t('a late same-run reconcile cannot overwrite review totals or confidence',
+ not (public.pipeline_write((select (result->>'run_id')::uuid from audit_removed),'reconcile_result',
+ '{"paper_result":{"total_awarded":999},"confidence":[],"to":"needs_review"}')->>'applied')::boolean
+ and (select total_awarded is distinct from 999 from public.paper where id='aaaaaaaa-0000-4000-8000-0000000000a1'));
+update public.extraction_run set status='content' where id='aaaaaaaa-0000-4000-8000-0000000000b2';
+select public._t('structure retry redispatches pending content after durable advancement',
+ jsonb_array_length(public.advance_after_structure('aaaaaaaa-0000-4000-8000-0000000000b2')->'enqueue_content')=2);
+set local role authenticated;
+
 select public.commit_extraction_run('aaaaaaaa-0000-4000-8000-0000000000b3');
 do $$ begin
   begin
@@ -125,6 +171,15 @@ insert into public.region_explanation(region_id,run_id,student_id,tier,cause,mar
 values ('aaaaaaaa-0000-4000-8000-0000000000c5','aaaaaaaa-0000-4000-8000-0000000000b3','aaaaaaaa-0000-4000-8000-000000000002','tier_1','procedural_slip',1,'Owned late explanation','Check','fixture','fixture','complete');
 select public._t('an owned late explanation still reaches the committed card',
  exists(select 1 from public.mark_loss_event where ai_explanation='Owned late explanation'));
+
+
+do $ begin
+ begin
+  perform public.submit_paper('aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-03','Physics',
+   '[{"page_number":1},{"page_number":2}]','aaaaaaaa-0000-4000-8000-000000000088',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a3');
+  perform public._t('saved paper page-set edits are rejected',false);
+ exception when insufficient_privilege then perform public._t('saved paper page-set edits are rejected',true); end;
+end $;
 
 select public._t('a recovered page marker cannot make a complete committed total partial',
  (select total_partial=false from public.paper where id='aaaaaaaa-0000-4000-8000-0000000000a3'));
