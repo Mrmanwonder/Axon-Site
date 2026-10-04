@@ -22,7 +22,7 @@ const REQUEST_TIMEOUT_MS = 20000;
 const RETRY_DELAY_MS = 1200;
 
 /** fetch(), but bounded and retried once on a network-level failure. */
-async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
+async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS, onRetry) {
   for (let attempt = 0; ; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -35,6 +35,7 @@ async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
       // be the wrong fix; the idempotency key upstream is what makes that safe
       // if it does happen, not this loop.
       if (attempt > 0) throw error;
+      onRetry?.();
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     } finally {
       clearTimeout(timeout);
@@ -42,7 +43,7 @@ async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS) {
   }
 }
 
-async function post(path, body, { timeoutMs } = {}) {
+async function post(path, body, { timeoutMs, onRetry } = {}) {
   const session = await currentSession();
   if (!session) {
     const err = new Error('Sign in first.');
@@ -59,7 +60,7 @@ let res;
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify(body),
-    }, timeoutMs);
+    }, timeoutMs, onRetry);
   } catch {
     throw new Error('Could not reach the server. Check your connection and try again.');
   }
@@ -84,16 +85,16 @@ return data;
 }
 
 /** Ask for presigned R2 upload URLs for a batch of page/mask objects. */
-export const uploadIntent = (body) => post('/upload-intent', body);
+export const uploadIntent = (body, onRetry) => post('/upload-intent', body, { onRetry });
 
 /** Tell the server the uploads it presigned have actually landed. */
-export const uploadComplete = (body) => post('/upload-complete', body);
+export const uploadComplete = (body, onRetry) => post('/upload-complete', body, { onRetry });
 
 /**
  * Hand the pipeline a paper and its pages. Stages 3 through 7 run server-side
  * and asynchronously from here on — this call only starts them.
  */
-export const submitPaper = (body) => post('/paper-submit', body);
+export const submitPaper = (body, onRetry) => post('/paper-submit', body, { onRetry });
 
 /** Retry a failed saved paper using the server-owned stored page keys. */
 export const retryFailedPaper = (paperId) => post('/paper-retry', { paper_id: paperId });
@@ -116,10 +117,10 @@ export const askTutor = (body) => post('/tutor', body, { timeoutMs: 60000 });
 export const pageAssetUrls = (body) => post('/page-asset-urls', body);
 
 /** Upload one blob straight to R2 via a presigned PUT URL. */
-export async function putObject(url, blob, contentType) {
+export async function putObject(url, blob, contentType, onRetry) {
   let res;
   try {
-    res = await resilientFetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
+    res = await resilientFetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob }, REQUEST_TIMEOUT_MS, onRetry);
   } catch {
     throw new Error('The upload was interrupted. Check your connection and try again.');
   }

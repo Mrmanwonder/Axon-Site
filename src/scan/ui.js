@@ -721,6 +721,7 @@ function unresolvedPage() {
 }
 
 function sendPaper() {
+  const sendStartedAt = performance.now();
   if (S.busy || S.placeholders.size) return toast('Wait for this page to finish preparing.');
   if (!S.draft?.pages.length) return toast('Take a page first.');
   if (S.retaking !== null) {
@@ -740,7 +741,7 @@ function sendPaper() {
   const type = S.draft.paper_type ?? S.pendingType;
   if (type) {
     S.pendingType = null;
-    return run(type);
+    return run(type, sendStartedAt);
   }
 
   host.openSheet({
@@ -748,11 +749,11 @@ function sendPaper() {
     body: 'This decides whether we can match it to an official marking scheme.',
     items: [],
     choices: paperTypes().map((t) => ({ label: t.label, value: t.value })),
-    onChoice: (value) => run(value),
+    onChoice: (value) => run(value, sendStartedAt),
   });
 }
 
-async function run(paperType) {
+async function run(paperType, sendStartedAt = performance.now()) {
   if (S.submitting || S.busy) return;
   S.submitting = true;
   host.submissionBusy(true);
@@ -788,6 +789,8 @@ async function run(paperType) {
       studentId: S.ctx.student.id,
       draft: S.draft,
       paperType,
+      sendStartedAt,
+      onTelemetry: host.uploadTelemetry,
       onProgress: ({ stage, message }) => { current = stage; paint(message); },
     });
 
