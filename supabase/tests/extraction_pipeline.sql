@@ -49,9 +49,9 @@ values ('aaaaaaaa-0000-4000-8000-000000000003','aaaaaaaa-0000-4000-8000-00000000
         'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-000000000003/1.jpg','stored',
         'ok','{"sharpness":0.41,"glare":0.004,"long_edge":3507}','{"dpi":300,"jpeg_quality":0.78}');
 
-insert into public.extraction_run (id, paper_id, student_id, pipeline_version, model_versions, reconciled, reconcile_delta)
+insert into public.extraction_run (id, paper_id, student_id, pipeline_version, model_versions, reconciled, reconcile_delta, status)
 values ('aaaaaaaa-0000-4000-8000-000000000010','aaaaaaaa-0000-4000-8000-000000000003',
-        'aaaaaaaa-0000-4000-8000-000000000002','1.0.0','{"structure":"m-small","content":"m-frontier"}', true, 0);
+        'aaaaaaaa-0000-4000-8000-000000000002','1.0.0','{"structure":"m-small","content":"m-frontier"}', true, 0, 'needs_review');
 
 -- ── provenance ─────────────────────────────────────────────────────────────
 -- A field without provenance does not exist. This is the primary defence
@@ -366,9 +366,9 @@ insert into public.paper (id, student_id, type, tier, date_taken, subject)
 values ('aaaaaaaa-0000-4000-8000-000000000005','aaaaaaaa-0000-4000-8000-000000000002',
         'unit_test','tier_1','2026-08-03','Physics');
 
-insert into public.extraction_run (id, paper_id, student_id, pipeline_version, reconciled)
+insert into public.extraction_run (id, paper_id, student_id, pipeline_version, reconciled, status)
 values ('aaaaaaaa-0000-4000-8000-000000000030','aaaaaaaa-0000-4000-8000-000000000005',
-        'aaaaaaaa-0000-4000-8000-000000000002','1.0.0', true);
+        'aaaaaaaa-0000-4000-8000-000000000002','1.0.0', true, 'needs_review');
 
 insert into public.question_region (
   id, run_id, paper_id, student_id, order_index, page_spans,

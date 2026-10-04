@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface CropBox { x: number; y: number; w: number; h: number }
 
-type Styles = { frame: React.CSSProperties; image: React.CSSProperties } | null;
+type Styles = { box: CropBox; frame: React.CSSProperties; image: React.CSSProperties } | null;
 
 export default function Crop({
   paperId,
@@ -34,7 +34,7 @@ export default function Crop({
   missing?: string;
   alt?: string;
   /**
-   * A box inside `box`, in the same 0–1000 page grid, drawn over the crop.
+   * A box inside `box`, in the same page-pixel coordinate space, drawn over the crop.
    *
    * This is what turns "the app misread me" from an argument into a two-second
    * check: tap a segment of the transcription and see the handwriting it was
@@ -110,10 +110,10 @@ export default function Crop({
           className="crophl"
           aria-hidden="true"
           style={{
-            left: `${((highlight.x - box.x) / box.w) * 100}%`,
-            top: `${((highlight.y - box.y) / box.h) * 100}%`,
-            width: `${(highlight.w / box.w) * 100}%`,
-            height: `${(highlight.h / box.h) * 100}%`,
+            left: `${((highlight.x - styles.box.x) / styles.box.w) * 100}%`,
+            top: `${((highlight.y - styles.box.y) / styles.box.h) * 100}%`,
+            width: `${(highlight.w / styles.box.w) * 100}%`,
+            height: `${(highlight.h / styles.box.h) * 100}%`,
           }}
         />
       )}

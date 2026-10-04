@@ -463,7 +463,7 @@ export type MarkLossEvent = {
 };
 
 /** A box on the page image, in the pipeline's 0–1000 grid. */
-export type Bbox = { x: number; y: number; w: number; h: number; page_index?: number };
+export type Bbox = { x: number; y: number; w: number; h: number; page_index?: number; page?: number };
 
 /** One piece of a transcribed line. `latex` is model-generated and untrusted. */
 export type Segment = {
@@ -491,6 +491,7 @@ export type AnswerBlock = {
   lines: { segments: Segment[]; role: "working" | "final_answer" | "restatement" | "crossed_out" }[];
   notation_profile: string;
   raw_text: string;
+  source_space?: "page_pixels_v1";
 };
 
 export type StudentAttempt = {

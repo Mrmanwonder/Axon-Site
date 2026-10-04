@@ -246,6 +246,8 @@ test("primary navigation uses navigation semantics and one current page @a11y", 
 test("answer content remains the accessible name of an interactive segment @a11y", async ({ page }) => {
   await page.goto("/tests/browser/index.html?view=answer");
   await expect(page.getByRole("button", { name: "x + 1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "x + 1", exact: true }).click();
+  await expect(page.getByLabel("Selected source page")).toHaveText("2");
 });
 
 test("runtime route failures and unknown URLs have distinct recovery UI", async ({ page }) => {

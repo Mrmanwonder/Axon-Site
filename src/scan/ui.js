@@ -34,6 +34,8 @@ const S = {
   visible: false,
   autoCapture: true,
   draft: null,
+  reviewDraft: null,
+  reviewRecovery: 0,
   thumbs: new Map(),
   placeholders: new Map(),
   run: null,
@@ -82,6 +84,8 @@ export function initScanUI(ctx, surfaces = {}) {
 
 export function resetScan() {
   ++S.epoch;
+  ++S.reviewRecovery;
+  S.reviewDraft = null;
   clearTimeout(refreshTimer);
   refreshTimer = null;
   detachSurface();
@@ -840,13 +844,15 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 
 // ── review ─────────────────────────────────────────────────────────────────
 
-async function openReview(runId, intent = null) {
+async function openReview(runId, intent = null, recovery = null) {
+  if (recovery === null) { ++S.reviewRecovery; S.reviewDraft = null; }
   if (S.runId !== runId) S.explanationsStarted = false;
   const epoch = S.epoch;
 
   S.runId = runId;
   await refreshReview();
   if (epoch !== S.epoch || S.runId !== runId) return;
+  if (S.draft?.paper_id === S.review?.paper?.id) S.reviewDraft = S.draft;
   host.openReview(S.review?.paper?.id, intent);
 }
 
@@ -860,6 +866,8 @@ function readDraftWithin(id, ms = LEGACY_DRAFT_LOOKUP_MS) {
 }
 
 export async function resumeDraftReview(routeId) {
+  const recovery = ++S.reviewRecovery;
+  S.reviewDraft = null;
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   if (!studentId) return { state: 'gone' };
@@ -870,7 +878,7 @@ export async function resumeDraftReview(routeId) {
   let paperId = routeId;
   let draft = null;
   let run = await currentRunForPaper(paperId);
-  if (epoch !== S.epoch) return { state: 'gone' };
+  if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
 
   // Legacy scanner URLs used a local draft id. Only if the route id is not a
   // server paper do we ask IndexedDB to translate it — and even that fallback
@@ -878,20 +886,21 @@ export async function resumeDraftReview(routeId) {
   // loading state.
   if (!run) {
     draft = await readDraftWithin(routeId);
-    if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
+    if (epoch !== S.epoch || recovery !== S.reviewRecovery || (draft && draft.student_id !== studentId)) return { state: 'gone' };
     if (!draft?.paper_id) return { state: 'gone' };
     paperId = draft.paper_id;
     run = await currentRunForPaper(paperId);
-    if (epoch !== S.epoch || !run) return { state: 'gone' };
+    if (epoch !== S.epoch || recovery !== S.reviewRecovery || !run) return { state: 'gone' };
   }
 
+  S.reviewDraft = draft;
   // Recover an on-device draft opportunistically so "Rescan this page" becomes
   // available when possible, but do not make the actual review wait for it.
   if (!draft) {
     void listDrafts(studentId).then((drafts) => {
-      if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+      if (epoch !== S.epoch || recovery !== S.reviewRecovery || S.ctx?.student?.id !== studentId) return;
       const local = drafts.find((item) => item.paper_id === paperId) ?? null;
-      if (local) S.draft = local;
+      if (local) S.reviewDraft = local;
     }).catch((error) => console.warn('[scan] local draft lookup failed during review', error));
   }
 
@@ -903,10 +912,9 @@ export async function resumeDraftReview(routeId) {
   if (!['needs_review', 'explaining', 'ready'].includes(run.status)) return { state: 'processing' };
 
   const regions = await regionsForRun(run.id);
-  if (epoch !== S.epoch) return { state: 'gone' };
-  S.draft = draft ?? S.draft;
+  if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
   S.regions = regions;
-  await openReview(run.id);
+  await openReview(run.id, null, recovery);
   // The SQL gate is idempotent too, but do not make a duplicate request when a
   // resumed run has already crossed into explanation generation.
   S.explanationsStarted = ['explaining', 'ready'].includes(run.status);
@@ -1013,7 +1021,7 @@ function handleReviewAction(id, action) {
     return;
   }
   if (action === 'rescan') {
-    if (!S.draft) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
+    if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,
       body: 'You retake one page, and we read the paper again with it.',
@@ -1023,6 +1031,8 @@ function handleReviewAction(id, action) {
       ],
       primary: 'Take it again',
       onConfirm: () => {
+        if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) return;
+        S.draft = S.reviewDraft;
         host.closeReview();
         releaseCrops();
         S.retaking = question.pageNumber;
@@ -1043,6 +1053,8 @@ async function save() {
   S.saving = true;
   const epoch = S.epoch;
   const runId = S.runId;
+  const paperId = S.review?.paper?.id;
+  const savedDraft = S.reviewDraft?.paper_id === paperId ? S.reviewDraft : null;
   const current = () => epoch === S.epoch && runId === S.runId;
   paintReview();
   try {
@@ -1091,9 +1103,12 @@ async function save() {
     S.explanationsStarted = false;
     S.retaking = null;
 
-    if (S.draft) {
-      await deleteDraft(S.draft.id);
+    ++S.reviewRecovery;
+    S.reviewDraft = null;
+    if (savedDraft) {
+      await deleteDraft(savedDraft.id);
       if (epoch !== S.epoch) return;
+      if (S.draft?.id === savedDraft.id) {
       S.draft = null;
       S.thumbs.forEach((url) => URL.revokeObjectURL(url));
       S.thumbs.clear();
@@ -1106,6 +1121,8 @@ async function save() {
       // the viewfinder pointing at a deleted draft for the rest of the session.
 
       host.draftToast(null, { onResume: resumeDraft });
+      }
+      await paintDrafts();
     }
     await host.refreshLibrary();
   } catch (error) {
