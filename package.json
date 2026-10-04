@@ -46,9 +46,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
     "katex": "^0.18.6",
+    "qrcode-generator": "2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "scanic": "1.6.0"
   },
   "private": true,
   "type": "module"

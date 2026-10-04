@@ -178,7 +178,9 @@ export default function QuestionDetail() {
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
   const span = region?.page_spans?.[0];
   const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
-  const readingPart = paperReading(paper).parts.find(p => p.attempt.id === attempt.id);
+  const reading = paperReading(paper);
+  const readingPart = reading.parts.find(p => p.attempt.id === attempt.id);
+  const sharedStem = reading.groups.find(g => g.question === readingPart?.question)?.sharedStem;
   const questionLabel = readingPart?.label ?? partPath(null, null);
 
   // Three-valued, and read from the region rather than inferred: "unknown" is a
@@ -226,8 +228,8 @@ export default function QuestionDetail() {
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
         <div className="qhead">
           <h1 className="t1">{questionLabel}</h1>
-          <span className={"conf " + attempt.extraction_confidence}>
-            {CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
+          <span className={"conf " + (attempt.student_confirmed_at ? "confirmed" : attempt.extraction_confidence)}>
+            {attempt.student_confirmed_at ? "Confirmed by you" : CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
           </span>
           {attempt.marks_awarded != null && attempt.max_marks != null && (
             <span className="qmarks">
@@ -237,6 +239,8 @@ export default function QuestionDetail() {
         </div>
 
         <div className="qfield"><div className="k">Printed question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
+        {sharedStem && sharedStem !== attempt.question_text && <Field k="Shared question context" v={sharedStem} steps />}
+        {readingPart?.inherited && <p className="subnote">Parent linked by source order; the printed label has no parent number.</p>}
         <SourceEvidence paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />
 
         {/* Not "Your answer". The crop above is the student's answer; this is

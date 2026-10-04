@@ -1,16 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   PAPER OVERVIEW
-
-   The question list for one saved paper — marks, reconciliation state, and a
-   link into each question's detail. Reads student_attempt (the committed,
-   frontend-side record — see AXON_FIX_BRIEF.md §1's "two data models"), never
-   question_region directly for the marks themselves.
-
-   A paper still mid-pipeline (no committed attempts yet) has nothing to show
-   here — that state belongs to the Library row (§6.5), which links here only
-   once there is something to open. This screen assumes it is being asked for
-   a paper that has been saved.
-   ═══════════════════════════════════════════════════════════════════════════ */
+/** Saved-paper identity, full prompts and source-backed grouping. */
 
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
@@ -30,12 +18,7 @@ import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
-
-const CONF_LABEL: Record<string, string> = {
-  confirmed: "Confirmed",
-  likely: "Likely",
-  unsure: "Unsure",
-};
+import "../styles/paper-overview.css";
 
 export default function PaperOverview() {
   const { paperId } = useParams();
@@ -67,6 +50,9 @@ export default function PaperOverview() {
 
   const attempts = paper.student_attempt;
   const reading = paperReading(paper);
+  const needsCheck = reading.parts.filter(p => !p.attempt.student_confirmed_at && p.attempt.extraction_confidence === "unsure");
+  const unreadMarks = reading.parts.filter(p => p.attempt.marks_awarded == null);
+  const next = needsCheck[0] ?? unreadMarks[0];
   const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
 
   const requestDelete = () => {
@@ -92,7 +78,7 @@ export default function PaperOverview() {
   const renderPart = (part: typeof reading.parts[number], sharedStem?: string | null) => (
     <PressBox as={Link} key={part.attempt.id} to={paths.question(paperId!, part.attempt.id)} className="paper-part" data-interactive="">
       <div className="paper-part-copy">
-        <div className="paper-part-heading"><span>{part.label}</span><span className={"conf " + part.attempt.extraction_confidence}>{CONF_LABEL[part.attempt.extraction_confidence] ?? part.attempt.extraction_confidence}</span></div>
+        <div className="paper-part-heading"><span>{part.label}</span><span className={"conf " + (part.attempt.student_confirmed_at ? "confirmed" : part.attempt.extraction_confidence)}>{part.attempt.student_confirmed_at ? "Confirmed by you" : part.attempt.extraction_confidence === "unsure" ? "Needs checking" : part.attempt.extraction_confidence === "confirmed" ? "Read clearly" : "Likely read"}</span></div>
         {part.page != null && <div className="paper-secondary">Page {part.page}{part.inherited ? " · Parent linked by source order; printed label has no parent number" : ""}</div>}
         {part.stem && part.stem !== sharedStem ? <div className="paper-prompt"><AcademicText text={part.stem} /></div> : !part.stem && <div className="paper-secondary">Printed question not read. Inspect the saved page.</div>}
         <div className="paper-secondary">Teacher’s mark: {part.attempt.marks_awarded == null ? "Not read" : numMark(part.attempt.marks_awarded)}{part.attempt.max_marks != null ? ` out of ${numMark(part.attempt.max_marks)}` : " · Maximum not read"}</div>
@@ -118,6 +104,12 @@ export default function PaperOverview() {
     {!!paper.page_unreadable.length && <section className="paper-recovery" aria-label="Unreadable pages"><h2>{paper.page_unreadable.length} page{paper.page_unreadable.length === 1 ? "" : "s"} couldn’t be read</h2>{paper.page_unreadable.map(page => <p key={page.page_number}>Page {page.page_number}: {page.reason}</p>)}<p className="paper-secondary">These source records remain unreadable. Opening a saved part lets you inspect its page; this does not create a new confirmation task.</p></section>}
     {tutorEntryVisible() && attempts.length > 0 && <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost">Ask the tutor about this paper</Link>}
     <section aria-label="Saved questions"><h2>Questions</h2>
+      <p className="paper-secondary">{reading.groups.length} questions · {reading.parts.length} saved parts · {reading.unassigned.length} parts not placed under a question</p>
+      {next && <div className="paper-secondary" role="status">
+        {!!needsCheck.length && <p>{needsCheck.length} part{needsCheck.length === 1 ? " needs" : "s need"} checking.</p>}
+        {!!unreadMarks.length && <p>{unreadMarks.length} part{unreadMarks.length === 1 ? " has" : "s have"} no readable mark.</p>}
+        <Link to={paths.question(paperId!, next.attempt.id)}>Open {next.label}</Link>
+      </div>}
       {!attempts.length && <p>No saved parts to show yet. Source coverage above may include readings that have not been saved.</p>}
       {reading.groups.map(group => <section className="paper-group" key={group.question} aria-label={`Question ${group.question}`}><h3>Question {group.question}</h3>{group.sharedStem && <div className="paper-shared-stem"><AcademicText text={group.sharedStem} /></div>}{group.items.map(part => renderPart(part, group.sharedStem))}</section>)}
       {!!reading.unassigned.length && <section className="paper-group" aria-label="Unassigned parts"><h3>Unassigned parts</h3><p className="paper-secondary">The source does not establish these parts’ parent questions.</p>{reading.unassigned.map(part => renderPart(part))}</section>}

@@ -1,7 +1,12 @@
+import { scanFixture } from "./scan-fixtures";
+import type { ScanFixtureState } from "./scan-fixtures";
 import { useState } from "react";
 const params = new URLSearchParams(location.search);
 const scenario = params.get("scenario");
 const styled = location.pathname.includes("paper-reading");
+const calls: Record<string, unknown[][]> = {};
+(window as unknown as { __scanCalls: typeof calls }).__scanCalls = calls;
+const fixed = params.get("view") === "scan-screen" ? scanFixture((params.get("state") ?? "search") as ScanFixtureState, calls) : null;
 export function useScan() {
   const [open, setOpen] = useState(scenario !== "closed");
   const [questions, setQuestions] = useState<any[]>(() => [{
@@ -12,6 +17,7 @@ export function useScan() {
     paperId: styled ? "fixture" : undefined, pageNumber: styled ? 1 : undefined, pageNumbers: styled ? [1, 2] : [],
     crop: styled ? { paperId: "fixture", page: 1, box: { x: 30, y: 90, w: 720, h: 260 } } : null,
   }]);
+  if (fixed) return fixed;
   const outstanding = questions.filter(q => !q.confirmed).length;
   return { reviewOpen: open, closeReview() { setOpen(false); },
     review: { title: "Review paper", outstanding, cleanCount: 0, saveLabel: outstanding ? `${outstanding} left to check` : "Save to Library", questions },

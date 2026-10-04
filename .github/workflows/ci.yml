@@ -45,6 +45,9 @@ jobs:
             test-results/**/unreadable-*.png
             test-results/**/completed-*.png
             test-results/**/zoom-proxy-*.png
+            test-results/**/question-source-*.png
+            test-results/**/failed-save-*.png
+            test-results/**/paper-overview-*.png
       - run: npm run test:a11y
 
       # INV-01: a production build must not be able to select a development

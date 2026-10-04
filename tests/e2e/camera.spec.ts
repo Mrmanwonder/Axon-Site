@@ -52,19 +52,21 @@ test("camera startup stays renderable until iPhone playback becomes live", async
   await page.goto("/tests/browser/index.html");
 
   const displays = await page.evaluate(async () => {
-    const stylesheet = document.createElement("link");
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = "/src/ui/styles/system.css";
-    const loaded = new Promise<void>((resolve, reject) => {
-      stylesheet.onload = () => resolve();
-      stylesheet.onerror = () => reject(new Error("scanner stylesheet did not load"));
-    });
-    document.head.append(stylesheet);
-    await loaded;
+    for (const href of ["/src/ui/styles/system.css", "/src/ui/styles/scanner.css"]) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = href;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.onload = () => resolve();
+        stylesheet.onerror = () => reject(new Error("scanner stylesheet did not load"));
+      });
+      document.head.append(stylesheet);
+      await loaded;
+    }
 
     const hero = document.createElement("div");
-    hero.className = "scanhero";
-    hero.innerHTML = '<video id="scanVideo"></video><canvas id="scanOverlay"></canvas><div class="feed"></div>';
+    hero.className = "sc";
+    hero.innerHTML = '<div class="sc-vf"><video id="scanVideo"></video><canvas id="scanOverlay"></canvas></div>';
     document.body.append(hero);
     const video = hero.querySelector("video")!;
     const overlay = hero.querySelector("canvas")!;
@@ -87,7 +89,7 @@ test("camera startup stays renderable until iPhone playback becomes live", async
   });
 });
 
-test("mobile Scan owns the viewport without stretching the resume draft", async ({ page }) => {
+test("mobile camera screen is a column: top bar, camera, strip, bottom bar", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/tests/browser/index.html");
 
@@ -118,60 +120,60 @@ test("mobile Scan owns the viewport without stretching the resume draft", async 
     document.body.innerHTML = `
       <main class="app">
         <section class="view on" data-screen="scan">
-          <div class="scanhero" data-camera="on">
-            <div class="drafttoast" style="transform: translateY(0)">
-              <div class="dh"></div>
-              <div class="row2">
-                <div class="ic"></div>
-                <div class="b"><div class="t1">Resume draft</div><div class="t2">2 pages added</div></div>
-                <button class="go">Resume</button>
-              </div>
+          <div class="sc" data-camera="on">
+            <div class="sc-top"><button class="sc-circ"></button><button class="sc-auto" data-on="true"><i></i>Auto</button><span class="sc-grow"></span><button class="sc-circ"></button><button class="sc-circ"></button></div>
+            <div class="sc-vf"><video id="scanVideo"></video><canvas id="scanOverlay"></canvas>
+              <div class="drafttoast" style="transform: translateY(0)"><div class="dh"></div><div class="row2"><div class="ic"></div><div class="b"><div class="t1">Resume draft</div><div class="t2">2 pages added</div></div><button class="go">Resume</button></div></div>
             </div>
-            <div class="scanctrls"><button class="sidebtn"></button><button class="shutter"></button></div>
+            <div class="sc-strip" data-tone="neutral"><span class="g"></span><span class="t">Looking for the page</span></div>
+            <div class="sc-dock"><span class="sc-stack-empty"></span><button class="sc-shutter"><span></span></button><button class="sc-done" disabled>Done</button></div>
           </div>
         </section>
         <nav class="tabdock"><div class="tabbar"><div class="refractlayer"><button class="tab">Scan</button></div></div></nav>
       </main>`;
 
-    const hero = document.querySelector<HTMLElement>(".scanhero")!;
-    const toast = document.querySelector<HTMLElement>(".drafttoast")!;
-    const controls = document.querySelector<HTMLElement>(".scanctrls")!;
+    const rect = (selector: string) => {
+      const r = document.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height };
+    };
     const dock = document.querySelector<HTMLElement>(".tabdock")!;
-    const withoutTray = {
+    const shutterStyle = getComputedStyle(document.querySelector<HTMLElement>(".sc-shutter")!);
+    return {
       dockVisibility: getComputedStyle(dock).visibility,
       dockPointerEvents: getComputedStyle(dock).pointerEvents,
-      heroBottom: hero.getBoundingClientRect().bottom,
-      controlsBottom: controls.getBoundingClientRect().bottom,
       viewportHeight: window.innerHeight,
-      toastHeight: toast.getBoundingClientRect().height,
-      toastBottomGap: hero.getBoundingClientRect().bottom - toast.getBoundingClientRect().bottom,
-    };
-
-    const tray = document.createElement("section");
-    tray.className = "tray";
-    tray.innerHTML = '<div class="trayscroll"></div><div class="traybar"><span class="cnt">2 pages</span></div>';
-    hero.style.transition = "none";
-    document.querySelector('[data-screen="scan"]')!.append(tray);
-
-    return {
-      withoutTray,
-      withTray: {
-        heroBottom: hero.getBoundingClientRect().bottom,
-        trayTop: tray.getBoundingClientRect().top,
-        trayBottom: tray.getBoundingClientRect().bottom,
-        viewportHeight: window.innerHeight,
-      },
+      viewportWidth: window.innerWidth,
+      sc: rect(".sc"), top: rect(".sc-top"), vf: rect(".sc-vf"), strip: rect(".sc-strip"), bar: rect(".sc-dock"),
+      shutter: rect(".sc-shutter"),
+      shutterRadius: shutterStyle.borderTopLeftRadius,
+      toast: rect(".drafttoast"),
+      circ: rect(".sc-circ"), auto: rect(".sc-auto"), done: rect(".sc-done"),
+      blur: getComputedStyle(document.querySelector<HTMLElement>(".sc-vf")!).backdropFilter,
     };
   });
 
-  expect(layout.withoutTray.dockVisibility).toBe("hidden");
-  expect(layout.withoutTray.dockPointerEvents).toBe("none");
-  expect(layout.withoutTray.toastHeight).toBeLessThan(120);
-  expect(layout.withoutTray.toastBottomGap).toBeCloseTo(96, 0);
-  expect(layout.withoutTray.heroBottom).toBeCloseTo(layout.withoutTray.viewportHeight, 0);
-  expect(layout.withoutTray.controlsBottom).toBeLessThanOrEqual(layout.withoutTray.heroBottom + 1);
-  expect(layout.withTray.heroBottom).toBeLessThanOrEqual(layout.withTray.trayTop + 1);
-  expect(layout.withTray.trayBottom).toBeCloseTo(layout.withTray.viewportHeight, 0);
+  expect(layout.dockVisibility).toBe("hidden");
+  expect(layout.dockPointerEvents).toBe("none");
+  expect(layout.sc.top).toBeCloseTo(0, 0);
+  expect(layout.sc.bottom).toBeCloseTo(layout.viewportHeight, 0);
+  // Reading order, top to bottom, with the camera taking the remaining room.
+  expect(layout.top.bottom).toBeLessThanOrEqual(layout.vf.top + 1);
+  expect(layout.vf.bottom).toBeLessThanOrEqual(layout.strip.top + 1);
+  expect(layout.strip.bottom).toBeLessThanOrEqual(layout.bar.top + 1);
+  expect(layout.bar.bottom).toBeCloseTo(layout.viewportHeight, 0);
+  expect(layout.vf.height).toBeGreaterThan(layout.viewportHeight * 0.45);
+  // The shutter is the navigation bar's capsule: 100x58, 32px shell.
+  expect(layout.shutter.width).toBeCloseTo(100, 0);
+  expect(layout.shutter.height).toBeCloseTo(58, 0);
+  expect(layout.shutterRadius).toBe("32px");
+  // 44px targets.
+  for (const target of [layout.circ, layout.auto, layout.done]) {
+    expect(target.height).toBeGreaterThanOrEqual(44);
+  }
+  // The resume toast stays inside the camera and is not stretched.
+  expect(layout.toast.height).toBeLessThan(120);
+  expect(layout.toast.top).toBeGreaterThanOrEqual(layout.vf.top);
+  expect(layout.toast.bottom).toBeLessThanOrEqual(layout.vf.bottom);
 });
 
 test("a draft alert slides away while its saved pages remain available", async ({ page }) => {
@@ -205,7 +207,7 @@ test("a draft alert slides away while its saved pages remain available", async (
     document.body.innerHTML = `
       <main class="app">
         <section class="view on" data-screen="scan">
-          <div id="draft-root" class="scanhero" data-camera="on"></div>
+          <div id="draft-root" class="sc-vf" data-camera="on" style="height: 420px"></div>
         </section>
       </main>`;
 
@@ -226,16 +228,6 @@ test("a draft alert slides away while its saved pages remain available", async (
       pages: draft.pages.length,
     });
   });
-
-  const draftsButton = page.getByRole("button", { name: "Open 1 saved draft" });
-  await expect(draftsButton).toBeVisible();
-  const buttonBox = await draftsButton.boundingBox();
-  expect(buttonBox?.x).toBeCloseTo(16, 0);
-  expect(buttonBox?.y).toBeCloseTo(16, 0);
-  await draftsButton.click();
-  await expect.poll(() => page.evaluate(() => (
-    window as typeof window & { __scanDraftsTest?: { opens: number } }
-  ).__scanDraftsTest?.opens)).toBe(1);
 
   const alert = page.locator(".drafttoast");
   await expect(alert).toBeVisible();

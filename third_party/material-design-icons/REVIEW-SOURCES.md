@@ -18,3 +18,5 @@ Only path geometry is embedded in `src/ui/components/MaterialSymbol.tsx`. Geomet
 
 The `rescan` API name uses the `document_scanner` glyph; `confirmed` uses `check_circle`; `attention` uses `error`. Status meaning always also appears as text. Attention/Delete use Axon's existing amber role; no new red UI is introduced.
 
+
+The shared renderer uses the existing scanner check_circle glyph for confirmed state.

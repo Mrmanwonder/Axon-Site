@@ -65,7 +65,7 @@ export default function CameraLevel({ active }: { active: boolean }) {
     // Never put that permission in the camera startup path: the scanner remains
     // fully usable when permission is absent or denied. A tap on the empty
     // viewfinder requests it; scanner buttons are deliberately excluded.
-    const surface = level.closest(".scanhero");
+    const surface = level.closest(".sc-vf");
     const requestPermission = (event: Event) => {
       if (permissionResolved) return;
       const target = event.target;

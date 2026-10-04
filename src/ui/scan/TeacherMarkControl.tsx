@@ -30,7 +30,7 @@ export default function TeacherMarkControl({ id, awarded, available, step = 1, a
     finally { flight.current = false; setBusy(false); onBusy?.(false); }
   }
   return <fieldset className="teacher-mark-control" disabled={busy}>
-    <legend>Which number did your teacher write?</legend>
+    <legend>Teacher’s mark{knownMaximum ? ` (out of ${numMark(available)})` : " (maximum not read)"}</legend>
     <p>The teacher’s mark is the source. This corrects our transcription.</p>
     {small ? <div className="teacher-mark-options">{Array.from({ length: Math.round(available / validStep) + 1 }, (_, i) => i * validStep).map(value => <label className="teacher-mark-option" key={value}>
       <input type="radio" name={`teacher-mark-${id}`} value={value} checked={draft === String(value)} onChange={() => choose(String(value))} />

@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>detector harness</title>
+<body>
+<pre id="out">idle</pre>
+<script type="module">
+// Runs the REAL page detector (scanic's ML engine, our self-hosted model) on a
+// repo fixture in the browser. Used by tests/e2e/detector.spec.ts. Fixtures here
+// have no ground-truth corners, so results are judged on plausibility (fill),
+// not on corner error. Perturbations are labelled synthetic stress, not evidence
+// about phones.
+import { detectPage } from '../src/scan/detector.js';
+
+const ASSETS = new URL('/scan-ml/0.2.0/', location.origin).href;
+
+async function load(name, variant, longEdge = 1000) {
+  const img = new Image();
+  img.src = `/bench/fixtures/${name}`;
+  await img.decode();
+  const s = Math.min(1, longEdge / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+  const c = new OffscreenCanvas(w, h);
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, w, h);
+  const data = g.getImageData(0, 0, w, h);
+  const mul = (r, gg, b) => { const d = data.data; for (let i = 0; i < d.length; i += 4) { d[i] *= r; d[i + 1] *= gg; d[i + 2] *= b; } };
+  if (variant === 'dim60') mul(.6, .6, .6);
+  if (variant === 'dim45') mul(.45, .45, .45);
+  if (variant === 'warm') mul(1, .85, .6);
+  return data;
+}
+
+const area = (q) => { let a = 0; for (let i = 0; i < 4; i++) { const p = q[i], r = q[(i + 1) % 4]; a += p.x * r.y - r.x * p.y; } return Math.abs(a) / 2; };
+
+window.__detect = async (name, variant = 'base') => {
+  const image = await load(name, variant);
+  const d = await detectPage(image, { assetBaseUrl: ASSETS });
+  return {
+    status: d.status, source: d.source, score: d.score, degraded: d.degraded, error: d.error,
+    ms: Math.round(d.ms), fill: d.quad ? area(d.quad) / (image.width * image.height) : 0,
+  };
+};
+document.getElementById('out').textContent = 'ready';
+window.__ready = true;
+</script>

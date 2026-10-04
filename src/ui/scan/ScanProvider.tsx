@@ -35,6 +35,36 @@ export type TrayPage = {
   retakeRequested?: boolean;
   /** Geometry could not be confirmed; the tray must not look normally accepted. */
   geometryIssue?: boolean;
+  /** Why this page needs a look; null when it does not. A quality *warning* is
+      a note, not a flag. */
+  flag?: { kind: "edges" | "quality"; reason: string } | null;
+  /** The original photo is still on this device, so edges can be adjusted. */
+  canAdjust?: boolean;
+  note?: string | null;
+};
+
+export type TorchMode = "auto" | "on" | "off";
+
+/** What the live camera is reporting, one measured reason at a time. */
+export type LiveState = {
+  hint: string;
+  blocking?: string | null;
+  tone?: "neutral" | "locked" | "attention";
+  reason?: string | null;
+  action?: "torch" | null;
+  phase?: "searching" | "candidate" | "locked" | string;
+  torch?: { supported: boolean; mode: TorchMode; on: boolean; error: string | null };
+  engine?: { status: string; source?: string | null; score?: number | null; error?: string | null };
+};
+
+export type TrayHandlers = {
+  onPage?: (n: number) => void;
+  onDone?: () => void;
+  onRetake?: (n: number) => void;
+  onKeep?: (n: number) => Promise<void> | void;
+  onKeepAll?: () => Promise<void> | void;
+  onAdjustSource?: (n: number) => { blob: Blob; quad: { x: number; y: number }[] | null } | null;
+  onAdjustApply?: (n: number, quad: { x: number; y: number }[]) => Promise<void>;
 };
 
 export type ProgressModel = {
@@ -110,6 +140,7 @@ type ScanModule = {
 
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
+  setTorchMode: (mode: TorchMode) => Promise<void> | void;
   resumeDraftReview: (draftId: string) => Promise<ResumeReviewResult>;
 };
 
@@ -119,9 +150,9 @@ type ScanValue = {
   camera: { on: boolean; phase: string };
   scanPhase: string;
   pendingCaptureCount: number;
-  hint: { hint: string; blocking?: string | null };
+  hint: LiveState;
   tray: TrayPage[];
-  trayHandlers: { onPage?: (n: number) => void; onDone?: () => void };
+  trayHandlers: TrayHandlers;
   progress: ProgressModel;
   drafts: { id: string; title: string; pages: number }[];
   draftsHandlers: { onResume?: (id: string) => void; onDiscard?: (id: string) => void };
@@ -134,11 +165,19 @@ type ScanValue = {
   onScreenVisible: (visible: boolean) => void;
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
+  setTorchMode: (mode: TorchMode) => void;
   auto: boolean;
   submitting: boolean;
+  pageReviewOpen: boolean;
+  openPageReview: () => void;
+  closePageReview: () => void;
 };
 
 const Ctx = createContext<ScanValue | null>(null);
+
+/** Exposed so screens can be rendered against a fixed state in tests. */
+export const ScanContext = Ctx;
+export type { ScanValue };
 
 function reviewIdentityFromPath(pathname: string) {
   const prefix = "/scan/review/";
@@ -175,11 +214,12 @@ export function ScanProvider({ children }: { children: ReactNode }) {
 
   const [camera, setCamera] = useState({ on: false, phase: "idle" });
   const [scanState, setScanState] = useState({ phase: "idle", pendingCaptureCount: 0 });
-  const [hint, setHint] = useState<{ hint: string; blocking?: string | null }>({
+  const [hint, setHint] = useState<LiveState>({
     hint: "Starting the camera…",
   });
+  const [pageReviewOpen, setPageReviewOpen] = useState(false);
   const [tray, setTray] = useState<TrayPage[]>([]);
-  const [trayHandlers, setTrayHandlers] = useState<ScanValue["trayHandlers"]>({});
+  const [trayHandlers, setTrayHandlers] = useState<TrayHandlers>({});
   const [progress, setProgress] = useState<ProgressModel>(null);
   const [drafts, setDrafts] = useState<ScanValue["drafts"]>([]);
   const [draftsHandlers, setDraftsHandlers] = useState<ScanValue["draftsHandlers"]>({});
@@ -231,10 +271,11 @@ export function ScanProvider({ children }: { children: ReactNode }) {
         tick: hapticTick,
         firm: hapticFirm,
         scanSurface: () => ({ video: videoRef.current, overlay: overlayRef.current }),
-        renderHint: (state: { hint: string; blocking?: string | null }) => setHint(state),
+        renderHint: (state: LiveState) => setHint(state),
+        reviewPages: () => setPageReviewOpen(true),
         cameraLive: (on: boolean, phase?: string) =>
           setCamera({ on, phase: on ? "live" : (phase ?? "idle") }),
-        renderTray: (pages: TrayPage[], handlers: ScanValue["trayHandlers"]) => {
+        renderTray: (pages: TrayPage[], handlers: TrayHandlers) => {
           setTray(pages);
           setTrayHandlers(() => handlers);
         },
@@ -370,17 +411,22 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     modRef.current?.setAutoCapture(on);
   }, []);
   const closeReview = useCallback(() => { navigate(-1); }, [navigate]);
+  const setTorchMode = useCallback((mode: TorchMode) => { void modRef.current?.setTorchMode(mode); }, []);
+  const openPageReview = useCallback(() => setPageReviewOpen(true), []);
+  const closePageReview = useCallback(() => setPageReviewOpen(false), []);
 
   const value = useMemo<ScanValue>(() => ({
     videoRef, overlayRef,
     camera, scanPhase: scanState.phase, pendingCaptureCount: scanState.pendingCaptureCount,
     hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
-    ensureScan, onScreenVisible, shoot, setAutoCapture, auto, submitting,
+    ensureScan, onScreenVisible, shoot, setAutoCapture, setTorchMode, auto, submitting,
+    pageReviewOpen, openPageReview, closePageReview,
   }), [
     camera, scanState, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
-    ensureScan, onScreenVisible, shoot, setAutoCapture, auto, submitting,
+    ensureScan, onScreenVisible, shoot, setAutoCapture, setTorchMode, auto, submitting,
+    pageReviewOpen, openPageReview, closePageReview,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

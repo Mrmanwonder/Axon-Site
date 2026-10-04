@@ -33,3 +33,11 @@ test("an unknown maximum remains unbounded and blank never means zero", () => {
   expect((screen.getByRole("button", { name: "Save teacher’s mark" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText(/No maximum has been inferred/)).toBeTruthy();
 });
+
+test("a fully awarded three-mark reading stays selected without a save or confirmation", () => {
+  const onSave = vi.fn();
+  render(<TeacherMarkControl id="full" awarded={3} available={3} onSave={onSave} />);
+  expect((screen.getByRole("radio", { name: "3" }) as HTMLInputElement).checked).toBe(true);
+  expect((screen.getByRole("button", { name: /Save teacher.s mark/ }) as HTMLButtonElement).disabled).toBe(true);
+  expect(onSave).not.toHaveBeenCalled();
+});

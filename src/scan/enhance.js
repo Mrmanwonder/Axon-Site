@@ -56,7 +56,7 @@
 // Nothing here may put structure on the page that was not in the photograph.
 // A model reading an invented stroke would produce a confident, sourced-looking
 // misreading of a teacher's mark, which is the one failure this product cannot
-// have (CLAUDE.md rules 1 and 4).
+// have (Axon.md rules 1 and 4).
 //
 // Upscaling does not invent — it resamples what is there. Sharpening can, if it
 // overshoots: an unsharp mask left unclamped rings, and a ring beside a stroke

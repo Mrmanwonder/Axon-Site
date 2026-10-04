@@ -81,8 +81,11 @@ export const signOut = async () => {
 export async function listPapers() { await wait(); return { data: [], stale: false }; }
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
-export const analyticsReadiness = async () => ({ data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" });
-export const lossByCause = async () => ({ data: {} });
+// `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
+export const analyticsReadiness = async () => scenario === "patterns"
+  ? { data: { papers_counted: 4, questions_counted: 25, has_enough_data: true }, stale: false }
+  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" };
+export const lossByCause = async () => ({ data: scenario === "patterns" ? { incomplete: 6, misread_question: 2, procedural_slip: 1 } : {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
 export const providerKeyForStudent = (s?: { provider_key?: string | null } | null) => s?.provider_key ?? null;
@@ -118,8 +121,33 @@ export const avatarRenderFor = () => ({
 export const avatarStyleFor = avatarRenderFor;
 export const initialFor = (name?: string) => name?.trim().charAt(0).toUpperCase() || "?";
 
+// Paper overview fixture (AXO-135). The pictured Class test: grouped parts plus bare c, d, b.
+const mk = (id: string, label: string, awarded: number | null, max: number, over: Record<string, unknown> = {}) => ({
+  id, question_label: label, question_text: null, student_answer: "x", answer_block: null,
+  marks_awarded: awarded, max_marks: max, marks_source: "teacher_pen", teacher_remark: null,
+  extraction_confidence: "confirmed", student_confirmed_at: null, mark_loss_event: [], ...over,
+});
+const overviewPaper = async () => ({
+  stale: scenario === "cached", offline: false,
+  data: {
+    id: "paper-1", type: "unit_test", tier: "tier_1", date_taken: "2026-09-07", subject: null,
+    reported_total: 27, stated_maximum: 27, total_awarded: 19, total_available: 27,
+    total_basis: "printed", total_partial: false, reconciled: true, paper_page: [], page_unreadable: [],
+    question_region: [],
+    student_attempt: [
+      mk("a1", "1(a)(i)", 2, 2, { question_text: "State what is meant by the term standard deviation and why a small value indicates the readings are close to the mean." }),
+      mk("a2", "1(a)(ii)", 1, 2, { question_text: "Calculate the mean of the five readings." }),
+      mk("a3", "1(a)(iii)", 2, 3),
+      mk("a4", "c", 3, 3),
+      mk("a5", "d", 2, 4, { extraction_confidence: "unsure" }),
+      mk("a6", "b", null, 2),
+      mk("a7", "2(a)", 4, 6, { extraction_confidence: "likely" }),
+    ],
+  },
+});
 // Source fixtures exercise actual reading components; no external mutations occur.
 export const readPaper = async () => {
+  if (!location.pathname.includes("paper-reading")) return overviewPaper();
   if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
   const { readingFixture } = await import("./reading-fixture");
   return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };

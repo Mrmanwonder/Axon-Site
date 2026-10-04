@@ -37,3 +37,6 @@
 .reviewsheet .qact:disabled { opacity:.5; }
 @media (max-width:380px) { .reviewsheet .qcard { padding:16px; } .reviewsheet .qacts .qact { flex:1 1 140px; } }
 .reviewsheet .rvsave { color:color-mix(in srgb,var(--accent) 84%,var(--label)); }
+
+.reviewsheet .qmarks small,.reviewsheet .conf { color:var(--reading-secondary); }
+.reviewsheet h1.rvtitle { margin:0; font-size:17px; }

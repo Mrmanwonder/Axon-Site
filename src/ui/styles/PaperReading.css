@@ -31,3 +31,5 @@
 .question-reading .rvtitle { min-width:0; overflow-wrap:anywhere; }
 .question-reading .rvback { min-width:44px; min-height:44px; }
 .question-reading .subnote { color:var(--reading-secondary); font-size:14px; line-height:1.55; }
+
+.question-reading .qmarks small,.question-reading .conf { color:var(--reading-secondary); }

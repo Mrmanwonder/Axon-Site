@@ -78,9 +78,9 @@ test("no printed total with an unreadable mark: the figure is shown as at least,
 test("a printed total carries no added-up note", async () => {
   fixture.readPaper.mockResolvedValue({ data: paper({ reported_total: 7, total_basis: "printed", reconciled: true }), stale: false, offline: false });
   mount();
-  await screen.findByText(/Questions/);
+  await screen.findByRole("heading", { name: "Question 1", level: 3 });
   expect(screen.queryByText(/No total was printed/)).toBeNull();
-  expect(screen.queryByText("at least")).toBeNull();
+  expect(screen.queryByText(/^at least$/i)).toBeNull();
 });
 
 test("a printed total that does not match still says so, with both numbers", async () => {

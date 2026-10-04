@@ -45,7 +45,8 @@ export const CAPTURE = {
   // Auto-capture fires only when the quad has held still this long. Shorter and
   // it fires mid-adjustment; longer and it feels broken and people reach for the
   // shutter, which is fine but wastes the feature.
-  STABILITY_MS: 600,
+  // 600 until 4 Oct 2026; the owner measured Auto as too slow on his phone.
+  STABILITY_MS: 400,
   // Corner travel away from the pose the steady window began at, as a share of
   // the frame's short edge, still counted as still.
   //
@@ -58,7 +59,9 @@ export const CAPTURE = {
   STABILITY_TOLERANCE: 0.04,
   // A page found and unblocked for this long fires even if it never satisfies
   // the stillness test. The gate assists; it does not get to refuse forever.
-  PATIENCE_MS: 3500,
+  // 3500 until 4 Oct 2026 (owner: Auto too slow). The still is checked for
+  // blur after the shot, so waiting longer here buys nothing a retry does not.
+  PATIENCE_MS: 2000,
   // The page must fill this share of the viewport before auto-capture will fire.
   // Raised from 0.35 per AXON_FIX_BRIEF.md §7.3. It is not a resolution proxy —
   // the gate checks the projected long edge directly now — it is a framing one:
@@ -419,7 +422,7 @@ export const TIER = {
  * Map a pipeline tier to the three-value `confidence` enum the database holds.
  *
  * SCANNING_SYSTEM.md §10 says an unsure field is "included in analytics but
- * tagged". CLAUDE.md hard rule 3 says unsure data never reaches analytics until
+ * tagged". Axon.md hard rule 3 says unsure data never reaches analytics until
  * a student confirms it, and that rule is enforced by the analytics views rather
  * than by convention. The hard rule wins, and this mapping is where the two
  * documents are reconciled: an unsure field lands as `unsure`, which the views

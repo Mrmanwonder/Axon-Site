@@ -89,3 +89,19 @@ test("missing source and completed review remain distinct", async ({ page }) => 
   await expect(page.getByText("You confirmed", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Confirm all readings" })).toHaveCount(0);
 });
+
+for (const width of [768, 1024, 1440]) {
+  test(`review reading uses source and fields at ${width}px @a11y`, async ({page}, info) => {
+    await page.setViewportSize({width, height: 900});
+    await page.goto("/tests/browser/paper-reading.html?view=review&theme=light");
+    await expect(page.getByRole("heading", {name: "Question 1(a)", exact: true})).toBeVisible();
+    const source = await page.locator(".source-evidence").boundingBox();
+    const fields = await page.locator(".review-fields").boundingBox();
+    expect(source).not.toBeNull(); expect(fields).not.toBeNull();
+    if (width >= 1024) expect(fields!.x).toBeGreaterThan(source!.x);
+    else expect(fields!.y).toBeGreaterThan(source!.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect((await new AxeBuilder({page}).analyze()).violations).toEqual([]);
+    await page.screenshot({path: info.outputPath(`review-source-${width}-light.png`), fullPage: true});
+  });
+}

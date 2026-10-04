@@ -1,6 +1,6 @@
 // Offline read cache.
 //
-// The rule from CLAUDE.md: past papers and their analysis must be readable
+// The rule from Axon.md: past papers and their analysis must be readable
 // offline; scanning and extraction are online-only; cache read paths and queue
 // nothing that needs the model. So this caches query *results* and never queues
 // a write. An upload attempted offline fails and says so, rather than sitting in

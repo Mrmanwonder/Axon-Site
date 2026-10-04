@@ -113,7 +113,7 @@ export default function Home() {
         <h1>{name}</h1>
       </div>
 
-      {(stale || state === "failed") && <div role="status">Last available analysis. Live analysis is unavailable.</div>}
+      {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
         {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
       </div>

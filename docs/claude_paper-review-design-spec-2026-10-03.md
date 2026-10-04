@@ -1,6 +1,6 @@
 # Paper and review design specification — 3 October 2026
 
-Status: proposed; owner review required. Implements the **design deliverable** of AXO-134, not AXO-135–142 or a shipped redesign. Source baseline: Axon-Site main 191e3057427b58a0284e76802512b47b96aaf5ec. The adopted spec explicitly says: “Owner approves the spec before UI work”. This document and docs/design-preview/index.html are the concrete review result for that decision.
+Status: owner-approved in this session ("Approved."); implementation in draft PR #187. The source inventory below is the dated design baseline. The 4 October addendum records implementation and remaining acceptance without changing that evidence.
 
 ## Evidence and scope
 
@@ -166,3 +166,17 @@ Before owner review is considered complete, run preview in Chromium at 360/390/7
 ### Actual CI rendering and corrections
 
 Run [37103028693](https://github.com/Mrmanwonder/Axon-Site/actions/runs/37103028693) rendered the fixture and found eight failures: light breadcrumbs at 4.01:1 contrast, MathML scroll regions lacking keyboard access, and 200% CSS-zoom overflow (Chromium 122px / WebKit proxy 165px at 360px). 36 other E2E rows passed; core/typecheck/build/UI/DB checks passed. Corrected actual preview roles, focusable math, intrinsic columns and shrinking/wrapping controls/source content in commit 32160f98cab8f6dbefa06d9131a14dbde8bffcc1. Strict tests remain unchanged. Updated exact-head CI result and visual screenshot inspection remain pending; nothing is certified from the failed run.
+
+
+## Implementation addendum — 4 October 2026
+
+The owner approved this specification before UI implementation. Draft PR #187 integrates main f6f467207c34c10f02007e301927a2efdbfc5d7d, including the independent scanner rebuild and grouped overview.
+
+- `placeRegions` remains the single placement walk; the count and review projection delegate to it. Stored labels are unchanged, inherited parents are disclosed, and unsupported parents stay unassigned.
+- The overview shows full academic prompts, shared stems once, verified versus suggested subjects, an explicitly labelled Added date, saved-part coverage separately from source-region coverage, and marks lost from scored leaf parts. Unsure unconfirmed readings and missing marks do not enter that summary.
+- Question detail and review use owner-authorized saved-page access, recorded page selection, contained keyboard-scrollable zoom, retry and distinct unavailable states. This is saved source evidence, not a claim that an unprocessed original is retained.
+- Small teacher-mark ranges use native radios with styled 44px tiles; large or unknown ranges use a numeric field. Zero requires selection. Save changes only that reading and clears whole-question confirmation. Explicit Confirm all readings accepts the question; no per-field confirmation timestamps have been invented.
+- Answer correction preserves multiline drafts and errors, and clears stale structured answer content before commit. Unsaved field edits block confirmation and saving the whole review.
+- The existing Material Symbols renderer and licence are shared with the scanner; share/delete ownership checks and consequence sheets are retained. Model-local answer boxes are not presented as validated saved-page coordinates.
+
+Automated fixtures are labelled illustrative. They verify browser rendering and correction persistence contracts, not extraction accuracy, physical-device behaviour or live authenticated acceptance. The actual production exam-date/edit-identity workflow, exact page-replacement impact and owner device acceptance remain open work. This PR does not deploy, merge, apply migrations or publish legal text.

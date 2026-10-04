@@ -32,8 +32,11 @@ import { createCapture } from '../src/scan/capture.js';
 // asserting that a shot it had made unreachable never happened. A test that
 // cannot pass is worse than no test: it reports the same failure whether the
 // capture loop works or not.
-const SCALE = 3.15;
-const W = 960, H = 1280;
+const SCALE = Number(new URLSearchParams(location.search).get("scale") ?? 3.15);
+// Square: camera.js asks the track for 4032x3024 after start, and a canvas
+// stream answers with a 3024x3024 frame, so a portrait scene would be re-cropped
+// mid-run and the page would overfill the view.
+const W = 960, H = 960;
 const scene = document.createElement('canvas');
 scene.width = Math.round(W * SCALE); scene.height = Math.round(H * SCALE);
 const g = scene.getContext('2d');
@@ -68,7 +71,7 @@ function draw() {
   // too far away to ever be photographed. 1.22 puts it at ~71%, held the way
   // someone photographing a page actually holds one, with all four edges still
   // clear of the frame.
-  g.scale(1.22, 1.22);
+  g.scale(0.75, 0.75);
   g.fillStyle = '#efeee9';                                   // the page
   g.fillRect(-330, -450, 660, 900);
   g.strokeStyle = '#c9c7c0'; g.lineWidth = 2;
@@ -102,12 +105,13 @@ const capture = createCapture({
   onState: (s) => {
     if (s.hasPage && result.cameraReadyAt !== null) result.firstLockMs ??= Math.round(performance.now() - result.cameraReadyAt);
     const line = `${Math.round(performance.now() - started)}ms  page=${s.hasPage ? 'yes' : 'no '}  ` +
-      `steady=${s.steady ? 'yes' : 'no '}  edge=${s.pageLongEdge}  block=${s.blocking ?? '-'}  ${s.hint}`;
+      `phase=${s.phase}  engine=${s.engine?.status}/${s.engine?.source ?? '-'}  edge=${s.pageLongEdge}  reason=${s.reason ?? '-'}  ${s.hint}`;
     events.push(line);
     result.states.push({ hasPage: s.hasPage, steady: s.steady, blocking: s.blocking,
                          pageLongEdge: s.pageLongEdge, hint: s.hint,
                          at: Math.round(performance.now() - started),
-                         trackState: s.trackState, trackConfidence: s.trackConfidence,
+                         phase: s.phase, reason: s.reason, tone: s.tone, engine: s.engine?.status,
+                         engineSource: s.engine?.source, score: s.engine?.score, fill: s.fill,
                          videoTransform: document.getElementById('v').style.transform });
     log.textContent = events.slice(-14).join('\n');
   },
@@ -121,6 +125,7 @@ const capture = createCapture({
   },
 });
 
+result.shoot = () => capture.shoot();
 result.stop = () => { drawing = false; cancelAnimationFrame(drawHandle); capture.stop(); };
 
 // `?auto=0` for runs about the frames rather than the shutter — a shot

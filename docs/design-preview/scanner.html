@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scanner proposal v2 — Axon</title>
+<link rel="stylesheet" href="../../src/ui/styles/tokens.css">
+<style>
+@font-face{font-family:Onest;src:url("../../public/fonts/onest-latin-var.woff2") format("woff2");font-weight:400 700;font-display:swap}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--label);font:16px/1.5 Onest,system-ui,sans-serif}
+button{font-family:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.03em}
+.lede{color:var(--label-2);max-width:70ch;margin:0 0 14px}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:3px 8px;border:1px solid var(--hairline);border-radius:6px;color:var(--label-2);margin-bottom:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 18px;align-items:center}
+.toolbar button{min-height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--hairline);background:var(--surface);color:var(--label);font-size:15px;cursor:pointer}
+.toolbar button[aria-pressed=true]{background:var(--label);color:var(--bg);border-color:transparent}
+.toolbar .sp{flex:1}
+.stage{display:grid;grid-template-columns:minmax(0,390px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:860px){.stage{grid-template-columns:minmax(0,1fr)}}
+
+/* ───────── the phone: its own darkroom, never themed ───────── */
+.phone{width:100%;max-width:390px;aspect-ratio:390/800;margin:0 auto;border-radius:34px;background:#050506;color:#fff;position:relative;overflow:hidden;display:grid;grid-template-rows:60px minmax(0,1fr) auto auto;border:1px solid rgba(255,255,255,.1)}
+.top{display:flex;align-items:center;gap:8px;padding:0 10px}
+.circ{width:44px;height:44px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:#17171a;color:#fff;display:grid;place-items:center;cursor:pointer;position:relative;flex:none}
+.circ svg{width:22px;height:22px;fill:currentColor}
+.circ .dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:4px;background:#3A86FF;box-shadow:0 0 0 2px #17171a}
+.autopill{min-height:44px;padding:0 16px;border-radius:22px;border:1px solid rgba(255,255,255,.75);background:#0c0c0e;color:#fff;font:600 15px Onest,system-ui;display:flex;align-items:center;gap:8px;cursor:pointer}
+.autopill i{width:9px;height:9px;border-radius:50%;background:#30D158}
+.autopill[data-off] i{background:transparent;border:1.5px solid #cfcfd6}
+.grow{flex:1}
+.vf{position:relative;overflow:hidden;background:radial-gradient(120% 90% at 50% 40%,#3a3d34,#17181a)}
+.vf.dark{background:radial-gradient(120% 90% at 50% 40%,#16171a,#0b0b0c)}
+.vf small{position:absolute;left:10px;bottom:8px;font-size:11px;color:#c3c4cc;background:#0009;padding:2px 6px;border-radius:4px}
+.paper{position:absolute;left:50%;top:50%;width:60%;aspect-ratio:210/297;background:#e6e2d8;transform:translate(-50%,-50%) rotate(-3deg);border-radius:3px;box-shadow:0 10px 30px #0008}
+.dark .paper{background:#4b4a46}
+.paper::before{content:"";position:absolute;inset:12% 12% auto;height:56%;background:repeating-linear-gradient(#0000 0 12px,#8a867c66 12px 13px)}
+.small .paper{width:30%}
+.cut .paper{width:96%;top:62%}
+.guide{position:absolute;inset:8% 12%;pointer-events:none}
+.guide i{position:absolute;width:26px;height:26px;border:3px solid #ffffffb0}
+.guide i:nth-child(1){left:0;top:0;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+.guide i:nth-child(2){right:0;top:0;border-left:0;border-bottom:0;border-radius:0 8px 0 0}
+.guide i:nth-child(3){left:0;bottom:0;border-right:0;border-top:0;border-radius:0 0 0 8px}
+.guide i:nth-child(4){right:0;bottom:0;border-left:0;border-top:0;border-radius:0 0 8px 0}
+.locked .guide{inset:11% 19%}.locked .guide i{border-color:#3A86FF}
+.locked .paper{transform:translate(-50%,-50%) rotate(0)}
+.none .guide{display:none}
+/* guidance strip: under the camera, never over the paper */
+.strip{min-height:56px;padding:6px 10px 6px 16px;display:flex;align-items:center;gap:12px;background:#111113;font-size:15px;line-height:1.3}
+.strip .g{width:20px;height:20px;border-radius:50%;border:2px solid #cfcfd6;flex:none}
+.strip.ok .g{background:#3A86FF;border-color:#3A86FF}
+.strip.warn{background:#2a2010}.strip.warn .g{border:2px dashed #FF9F0A}
+.strip .act{margin-left:auto;min-height:44px;padding:0 16px;border-radius:22px;border:1px solid #ffffff55;background:transparent;color:#fff;font:600 14px Onest,system-ui;cursor:pointer;white-space:nowrap}
+/* dock */
+.dock{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:10px 14px 20px;background:#050506;min-height:112px}
+/* shutter = the navbar's capsule: 32px shell, 5px glass margin, 26px opaque pill */
+.shutter{--pad:5px;width:100px;height:58px;padding:var(--pad);border-radius:32px;background:rgba(38,38,42,.78);border:.5px solid rgba(255,255,255,.2);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 0 rgba(255,255,255,.08);cursor:pointer;display:block}
+.shutter span{display:block;width:100%;height:100%;border-radius:26px;background:#fff;transition:transform .12s ease}
+.shutter:active span{transform:scale(.94)}
+.shutter.lock{border-color:#3A86FF;box-shadow:0 0 0 1.5px #3A86FF,inset 0 1px 0 rgba(255,255,255,.3)}
+.shutter.off{opacity:.45}
+/* stack = papers dropped on a table */
+.stack{position:relative;width:64px;height:84px;border:0;background:transparent;padding:0;cursor:pointer;justify-self:start;margin-left:6px}
+.sheetp{position:absolute;left:8px;top:6px;width:46px;height:62px;border-radius:3px;background:#e6e2d8;box-shadow:0 1px 0 #fff6 inset,0 3px 8px #000a,0 1px 2px #000c}
+.sheetp::before{content:"";position:absolute;inset:9px 7px auto;height:38px;background:repeating-linear-gradient(#0000 0 5px,#8a867c88 5px 5.6px)}
+.sheetp.bad{outline:2px dashed #FF9F0A;outline-offset:2px}
+.sheetp.land{animation:land .22s cubic-bezier(.2,.8,.3,1) both}
+@keyframes land{from{transform:translateY(-150px) scale(1.5) rotate(0);opacity:0}}
+.stack em{position:absolute;right:-4px;top:-2px;min-width:24px;height:24px;border-radius:12px;background:#3A86FF;color:#fff;font:700 13px/24px Onest,system-ui;text-align:center;font-style:normal;box-shadow:0 0 0 2px #050506;z-index:9;padding:0 6px}
+.stack.warn em{background:#FF9F0A;color:#1a1000}
+.done{justify-self:end;min-height:48px;min-width:96px;padding:0 20px;border-radius:24px;border:0;background:#3A86FF;color:#fff;font:700 16px Onest,system-ui;cursor:pointer}
+.done.review{background:transparent;border:1.5px solid #FF9F0A;color:#FF9F0A}
+.done[disabled]{background:#1d1d21;color:#7d7d86}
+.sheet{position:absolute;z-index:30;inset:auto 0 0;background:#141418;border-radius:22px 22px 0 0;padding:16px;max-height:80%;overflow:auto;box-shadow:0 -10px 40px #000a}
+.sheet h2{margin:0 0 4px;font-size:18px}
+.sheet p{margin:0 0 12px;color:#b5b5be;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pg{background:#1c1c20;border-radius:14px;padding:8px;font-size:13px;color:#cfcfd6}
+.pg .th{aspect-ratio:3/4;background:#e6e2d8;border-radius:6px;margin-bottom:6px;position:relative}
+.pg .th::before{content:"";position:absolute;inset:14% 12% auto;height:52%;background:repeating-linear-gradient(#0000 0 9px,#8a867c88 9px 10px)}
+.pg.bad .th{outline:2px dashed #FF9F0A;outline-offset:2px}
+.pg b{display:block;color:#fff;font-weight:600}
+.pg .why{color:#ffc266}
+.pg button{min-height:44px;width:100%;margin-top:4px;border-radius:12px;border:1px solid #ffffff33;background:transparent;color:#fff;font:600 14px Onest,system-ui;cursor:pointer}
+.sheet .full{display:block;width:100%;min-height:48px;margin-top:14px;border-radius:24px;border:0;background:#3A86FF;color:#fff;font:700 16px Onest,system-ui}
+.sheet .ghost{background:transparent;border:1px solid #ffffff44}
+.menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:54px;text-align:left;padding:0 4px;border:0;border-bottom:1px solid #ffffff1a;background:transparent;color:#fff;font:500 16px Onest,system-ui}
+.menu small{color:#9a9aa4;font-size:13px}
+
+/* ───────── the laptop import screen (follows the theme) ───────── */
+.deskwrap{display:none}
+.app{display:grid;grid-template-columns:76px minmax(0,1fr);min-height:640px;border-radius:24px;overflow:hidden;border:1px solid var(--hairline);background:var(--bg)}
+.rail{background:var(--surface-sunk);display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 0}
+.rail .logo{width:34px;height:34px;border-radius:10px;background:var(--accent);margin-bottom:14px}
+.rail .it{width:48px;height:48px;border-radius:24px;display:grid;place-items:center;color:var(--label-2)}
+.rail .it svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.rail .it.on{background:var(--surface);color:var(--label);box-shadow:inset 0 0 0 .5px var(--hairline)}
+.main{padding:32px 40px 40px;max-width:1040px;width:100%}
+.main h2{margin:0 0 6px;font-size:30px;letter-spacing:-.03em}
+.main .sub{margin:0 0 26px;color:var(--label-2);max-width:60ch}
+.cols{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:980px){.cols{grid-template-columns:minmax(0,1fr)}.app{grid-template-columns:minmax(0,1fr)}.rail{display:none}.main{padding:22px 16px}}
+.drop{border-radius:28px;background:var(--surface);border:1px solid var(--hairline);min-height:420px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;position:relative;overflow:hidden;transition:border-color .12s ease}
+.drop.over{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}
+.drop .art{position:relative;width:170px;height:150px;margin-bottom:22px}
+.drop .art b{position:absolute;left:50%;top:50%;width:104px;height:140px;margin:-70px 0 0 -52px;border-radius:6px;background:#f2efe8;box-shadow:0 1px 0 #fff inset,0 10px 24px rgba(0,0,0,.28),0 2px 4px rgba(0,0,0,.3);transition:transform .2s ease}
+.drop .art b::before{content:"";position:absolute;inset:18px 14px auto;height:80px;background:repeating-linear-gradient(#0000 0 9px,#9a968c77 9px 10px)}
+.drop .art b:nth-child(1){transform:translate(-34px,6px) rotate(-12deg)}
+.drop .art b:nth-child(2){transform:translate(30px,2px) rotate(9deg)}
+.drop .art b:nth-child(3){transform:translate(-2px,-4px) rotate(-2deg)}
+.drop.over .art b:nth-child(1){transform:translate(-44px,-6px) rotate(-16deg)}
+.drop.over .art b:nth-child(2){transform:translate(40px,-10px) rotate(13deg)}
+.drop.over .art b:nth-child(3){transform:translate(-2px,-18px) rotate(-1deg)}
+.drop h3{margin:0 0 4px;font-size:22px;letter-spacing:-.02em}
+.drop p{margin:0 0 18px;color:var(--label-2)}
+.btn{min-height:48px;padding:0 24px;border-radius:24px;border:0;background:var(--accent);color:#fff;font:700 16px Onest,system-ui;cursor:pointer}
+.drop .fine{margin:16px 0 0;font-size:13px;color:var(--label-2)}
+.card{background:var(--surface);border:1px solid var(--hairline);border-radius:24px;padding:20px;margin-bottom:16px}
+.card h4{margin:0 0 4px;font-size:17px}
+.card p{margin:0;color:var(--label-2);font-size:14px}
+.qr{display:flex;gap:16px;align-items:center}
+.qrbox{width:112px;height:112px;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.18);padding:9px;flex:none;position:relative}
+.qrbox div{width:100%;height:100%;background:conic-gradient(from 0deg,#111 0 25%,#fff 0 50%,#111 0 75%,#fff 0);background-size:14px 14px;opacity:.85;image-rendering:pixelated}
+.qrbox span{position:absolute;inset:auto 0 -22px;text-align:center;font-size:11px;color:var(--label-2)}
+.row{display:flex;gap:10px;margin-top:12px}
+.row input{flex:1;min-height:48px;border-radius:24px;border:1px solid var(--hairline);background:var(--surface-sunk);color:var(--label);padding:0 18px;font:inherit}
+.row button{min-height:48px;padding:0 18px;border-radius:24px;border:1px solid var(--hairline);background:transparent;color:var(--label);font:600 15px Onest,system-ui}
+.draftrow{display:flex;align-items:center;justify-content:space-between;min-height:56px;margin-top:8px;color:var(--label)}
+.draftrow small{color:var(--label-2)}
+.mockflag{font-size:12px;color:var(--label-2);margin-top:6px}
+
+/* notes column */
+.notes h2{font-size:18px;margin:0 0 6px}
+.notes ul{margin:0 0 16px;padding-left:18px;color:var(--label-2)}
+.notes li{margin:4px 0}
+.cmp{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 18px}
+.cmp th,.cmp td{border-bottom:1px solid var(--hairline);padding:8px 6px;text-align:left;vertical-align:top}
+.cmp th{color:var(--label-2);font-weight:600}
+@media(prefers-reduced-motion:reduce){.sheetp.land{animation:none}.drop .art b,.shutter span{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">Proposal v2 · static mock · camera area is a placeholder, not a real camera or a processed paper</span>
+  <h1>Scanner, rebuilt from the ground up</h1>
+  <p class="lede">Your layout, kept. The paper stack, the navbar-shaped shutter, a Done button that tells you where it is going, and the laptop screen are new. Everything is a state you can switch to below.</p>
+  <div class="toolbar" role="group" aria-label="State">
+    <button data-s="search" aria-pressed="true">1 Looking</button>
+    <button data-s="lock" aria-pressed="false">2 Locked</button>
+    <button data-s="taken" aria-pressed="false">3 Page dropped</button>
+    <button data-s="dark" aria-pressed="false">4 Too dark</button>
+    <button data-s="small" aria-pressed="false">5 Page too small</button>
+    <button data-s="stuck" aria-pressed="false">6 Can't find edges</button>
+    <button data-s="flag" aria-pressed="false">7 One page flagged</button>
+    <button data-s="review" aria-pressed="false">8 Review sheet</button>
+    <button data-s="more" aria-pressed="false">9 More menu</button>
+    <button data-s="desk" aria-pressed="false">10 Laptop</button>
+    <span class="sp"></span>
+    <button id="theme" aria-pressed="false">Light theme (laptop screen)</button>
+    <button id="replay">Replay drop</button>
+  </div>
+  <div class="stage" id="stage">
+    <div><div class="phone" id="phone" aria-label="Scanner screen mock"></div></div>
+    <div class="notes" id="notes"></div>
+  </div>
+  <div class="deskwrap" id="desk">
+    <div class="app">
+      <nav class="rail" aria-label="Main">
+        <div class="logo"></div>
+        <div class="it"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg></div>
+        <div class="it"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M9 12h6M9 16h6"/></svg></div>
+        <div class="it on"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10"/></svg></div>
+        <div class="it"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div>
+        <div class="it"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></div>
+      </nav>
+      <main class="main">
+        <h2>Add a paper</h2>
+        <p class="sub">Scanning works best on a phone. Add the photos or PDF you already have, or carry on from your phone.</p>
+        <div class="cols">
+          <div class="drop" id="dz">
+            <div class="art" aria-hidden="true"><b></b><b></b><b></b></div>
+            <h3 id="dztitle">Drop photos or a PDF here</h3>
+            <p>One page per photo works best. A PDF is split into pages for you.</p>
+            <button class="btn">Choose files</button>
+            <div class="fine">JPG, PNG, WebP, HEIC or PDF · up to 25 pages · you can also paste an image</div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="qr"><div class="qrbox"><div></div><span>QR placeholder</span></div>
+              <div><h4>Scan with your phone</h4><p>Open Axon on your phone, sign in, and tap Scan. Your papers appear in this account.</p></div></div>
+            </div>
+            <div class="card">
+              <h4>Add a link</h4><p>A shared paper or a hosted PDF.</p>
+              <div class="row"><input placeholder="Paste a link" aria-label="Link"><button>Add</button></div>
+            </div>
+            <div class="card">
+              <h4>Saved drafts</h4>
+              <div class="draftrow"><div>3 pages<br><small>Started yesterday · not submitted</small></div><span aria-hidden="true">›</span></div>
+              <div class="mockflag">Draft row is sample data.</div>
+            </div>
+          </div>
+        </div>
+        <p class="mockflag" style="margin-top:14px"><button id="over" style="min-height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--hairline);background:var(--surface);color:var(--label);font:inherit;cursor:pointer">Show drag-over state</button></p>
+      </main>
+    </div>
+  </div>
+</div>
+<script>
+const I={
+ x:'<svg viewBox="0 -960 960 960"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>',
+ more:'<svg viewBox="0 -960 960 960"><path d="M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z"/></svg>',
+ note:'<svg viewBox="0 -960 960 960"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h360v80H200v560h560v-360h80v360q0 33-23.5 56.5T760-120H200Zm120-160v-80h320v80H320Zm0-120v-80h200v80H320Zm360-120v-120H560v-80h120v-120h80v120h120v80H760v120h-80Z"/></svg>'
+};
+const TILT=[-7,5,-3,8,-5];
+function stack(n,flagged,drop){
+ if(!n)return '<span></span>';
+ const vis=Math.min(n,4);let h='';
+ for(let i=0;i<vis;i++){
+  const top=i===vis-1;const bad=flagged&&i===vis-2;
+  h+=`<div class="sheetp ${bad?'bad':''} ${top&&drop?'land':''}" style="transform:rotate(${TILT[i]}deg) translate(${(i-1)*2}px,${(vis-1-i)*-1}px);z-index:${i}"></div>`;
+ }
+ return `<button class="stack ${flagged?'warn':''}" aria-label="${n} pages, ${flagged?'one needs a look, ':''}review pages">${h}<em>${n}</em></button>`;
+}
+const S={
+ search:{vf:'',strip:['','Fit all four page corners in frame'],n:0,auto:true,notes:'The strip says one measured thing at a time. This one means: a page-like shape has not been confirmed yet.'},
+ lock:{vf:'locked',strip:['ok','Page found. Hold still'],n:0,auto:true,lock:true,notes:'Corners turn blue and the shutter rim turns blue. In Auto the shot fires after the page holds still; the shutter works at any moment either way.'},
+ taken:{vf:'',strip:['ok','Page 3 saved. Turn to the next page'],n:3,auto:true,drop:true,notes:'The new page drops onto the stack, thrown at a slight angle, then rests. 220 ms, transform and opacity only, and none under reduced motion.'},
+ dark:{vf:'dark',strip:['warn','Too dark to see the page edges','Turn on light'],n:0,auto:true,notes:'Measured from the frame’s brightness. "Turn on light" appears only where the camera really has a torch (many Android phones; not iPhone Safari).'},
+ small:{vf:'small',strip:['warn','Move closer, the page is small'],n:1,auto:true,notes:'Measured from the largest page-like shape. Said only when that shape exists and is small.'},
+ stuck:{vf:'none',strip:['warn','Can’t find the page edges','Take photo'],n:1,auto:true,notes:'After 6 seconds with no lock. The shutter was never blocked. The photo opens with draggable corners so you mark the edges yourself.'},
+ flag:{vf:'',strip:['warn','Page 2 is blurry','Retake'],n:3,auto:true,flag:true,review:true,notes:'Done turns into Review, outlined in amber, when any page needs a look. If every page is fine it says Done and goes straight to reading.'},
+ review:{vf:'',strip:['warn','Page 2 is blurry','Retake'],n:3,auto:true,flag:true,review:true,sheet:'review',notes:'Only pages that need a look are asked about; fine pages stay quiet. Retake is the main action; you can still read the paper as it is.'},
+ more:{vf:'',strip:['','Fit all four page corners in frame'],n:1,auto:false,sheet:'more',notes:'Manual mode: the pill goes hollow and the camera never auto-fires. Import, link, torch and drafts live here.'}
+};
+function phone(k){
+ const s=S[k];
+ const done=!s.n?'<button class="done" disabled>Done</button>':s.review?'<button class="done review">Review · '+s.n+'</button>':'<button class="done">Done · '+s.n+'</button>';
+ document.getElementById('phone').innerHTML=`
+ <div class="top"><button class="circ" aria-label="Close scanner">${I.x}</button>
+  <button class="autopill" ${s.auto?'':'data-off'} aria-pressed="${s.auto}"><i></i>${s.auto?'Auto':'Manual'}</button><span class="grow"></span>
+  <button class="circ" aria-label="Saved drafts, 1">${I.note}<span class="dot"></span></button>
+  <button class="circ" aria-label="More">${I.more}</button></div>
+ <div class="vf ${s.vf}"><div class="paper"></div><div class="guide"><i></i><i></i><i></i><i></i></div><small>Camera placeholder</small></div>
+ <div class="strip ${s.strip[0]}" role="status"><span class="g"></span><span>${s.strip[1]}</span>${s.strip[2]?`<button class="act">${s.strip[2]}</button>`:''}</div>
+ <div class="dock">${stack(s.n,s.flag,s.drop)}<button class="shutter ${s.lock?'lock':''}" aria-label="Take this page"><span></span></button>${done}</div>
+ ${s.sheet==='review'?`<div class="sheet"><h2>1 page needs a look</h2><p>The other 2 are clear.</p><div class="grid">
+   <div class="pg bad"><div class="th"></div><b>Page 2</b><span class="why">Blurry. Words may not read clearly</span><button>Retake</button></div>
+   <div class="pg"><div class="th"></div><b>Page 3</b>Clear<button>View</button></div></div>
+   <button class="full">Retake page 2</button><button class="full ghost">Read as it is</button></div>`:''}
+ ${s.sheet==='more'?`<div class="sheet menu"><h2>More</h2><button>Import photos or a PDF <small>JPG, PNG, WebP, HEIC, PDF</small></button><button>Add a link</button><button>Saved drafts <small>1</small></button><button>Light <small>Off</small></button></div>`:''}`;
+}
+const table=`<h2>What changed from the live app</h2><table class="cmp">
+<tr><th>Today</th><th>Proposed</th></tr>
+<tr><td>Brackets appear only after a fragile corner tracker agrees, so most real frames never show them</td><td>Lock comes from whole-page detection that holds across frames; the tracker no longer decides</td></tr>
+<tr><td>Searching shows one fixed sentence forever</td><td>One measured reason at a time, and after 6 s a way forward</td></tr>
+<tr><td>Round shutter, tiny thumbnails in a tray</td><td>Navbar-capsule shutter, papers dropped on a stack</td></tr>
+<tr><td>Done always the same</td><td>Done goes to reading; Review appears only when a page needs a look</td></tr>
+<tr><td>Laptop gets a webcam viewfinder</td><td>A proper import screen with drag, drop, paste and phone hand-off</td></tr></table>`;
+function setNotes(k){document.getElementById('notes').innerHTML=table+`<h2>This state</h2><ul><li>${S[k]?S[k].notes:'Import-first. The page looks the same in light and dark. The QR is a placeholder.'}</li></ul>
+<h2>Kept from your layout</h2><ul><li>Drafts icon, Auto pill with its dot, and the three-dot menu in the top bar</li><li>Camera, strip, then the bottom bar with stack, shutter and Done</li></ul>
+<h2>Added to it</h2><ul><li>A close button at the top left. Your layout has no way out of the scanner.</li></ul>`}
+let cur='search';
+function go(k){
+ cur=k;
+ document.querySelectorAll('.toolbar [data-s]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===k)));
+ const d=k==='desk';
+ document.getElementById('stage').style.display=d?'none':'grid';
+ document.getElementById('desk').style.display=d?'block':'none';
+ if(!d){phone(k);setNotes(k)}
+}
+document.querySelector('.toolbar').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(b)go(b.dataset.s)});
+document.getElementById('theme').addEventListener('click',e=>{const l=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=l?'light':'dark';e.currentTarget.setAttribute('aria-pressed',String(l))});
+document.getElementById('replay').addEventListener('click',()=>go(cur==='taken'?'taken':'taken'));
+document.getElementById('over').addEventListener('click',()=>{const z=document.getElementById('dz');const on=z.classList.toggle('over');document.getElementById('dztitle').textContent=on?'Let go to add these pages':'Drop photos or a PDF here'});
+go(location.hash.slice(1)||'search');
+</script>
+</body>
+</html>

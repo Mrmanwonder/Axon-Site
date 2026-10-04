@@ -1,17 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { DraftsButton } from "../../src/ui/components/ScanDrafts";
 import Switch from "../../src/ui/components/Switch";
-
-test("scanner does not show a saved-drafts control when there are no drafts", () => {
-  render(<DraftsButton count={0} onOpen={vi.fn()} />);
-  expect(screen.queryByRole("button", { name: /saved draft/i })).toBeNull();
-});
-
-test("scanner exposes saved drafts only when there is something to resume", () => {
-  render(<DraftsButton count={1} onOpen={vi.fn()} />);
-  expect(screen.getByRole("button", { name: "Open 1 saved draft" })).toBeTruthy();
-});
 
 test("switch begins its optimistic move on pointer down with the requested press scale", () => {
   const onChange = vi.fn();

@@ -1,33 +1,41 @@
 # Axon
 
-A responsive web app that shows a Cambridge (CAIE) student exactly where their marks
-go — built from the original single-file device-frame prototype, now a real site rather
-than a scaled-down phone mockup.
+A responsive web app that shows a student exactly where their marks go: scan or import a
+marked paper, confirm what was read, and see where marks were lost and what to do
+differently. Read `Axon.md` first; it holds the product rules, the design language and the
+owner's decisions, and outranks this file.
 
-The curriculum is Cambridge only: IGCSE, AS and A Level. `src/curriculum.js` holds the
-stages, the class-level mapping and the syllabus codes, and is the one place to change
-if another board is ever added.
+Cambridge (IGCSE, AS and A Level) is the primary audience. The catalog also carries CBSE
+and IB Diploma. The database is the catalog authority; `src/curriculum.js` holds only
+taxonomy helpers, caching and formatting, and no subject list lives in application code.
 
 `src/ui/` is the React app. `src/` holds the data and scanning modules it imports,
 still plain ES modules — the scan stage modules are pure and have to keep running in
 the Web Worker and in Node under `harness/`.
 
-It must be **served**, not opened as a file — ES modules do not load over `file://`.
+It is a Vite app, so it must be served, not opened as a file.
 
 ```bash
-python3 -m http.server 8000   # then open http://localhost:8000
+npm ci
+npm run dev        # http://localhost:5173
+npm run build      # production build, with the config and bundle-budget checks
 ```
+
+The camera needs a secure context: `localhost`, or HTTPS. To try the scanner on a phone, use
+HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
+`adb reverse tcp:5173 tcp:5173`, then open `http://localhost:5173` on the phone.
 
 ## What works
 
-- **Auth** — passwordless: email or phone OTP, or Continue with Google. Only the
-  guardian holds credentials; the student is a profile under that
-  session. A provider sign-in skips nothing — see *Provider sign-in* below.
+- **Auth** — built today: email OTP, phone OTP, and Continue with Google. Decided but not
+  built yet: email and password alongside Google. Only the guardian holds credentials;
+  the student is a profile under that session. A provider sign-in skips nothing — see
+  *Provider sign-in* below.
 - **Onboarding** — the eight steps in order, with the legally load-bearing ones
   enforced: no student data before consent, consent itemised per purpose with optional
-  purposes off, payment after consent. The student profile collects a Cambridge stage
-  (IGCSE Year 10/11, AS, A Level) and subjects with their syllabus codes, and writes
-  both to the profile.
+  purposes off, payment after consent. The student profile collects a curriculum, stage
+  and subjects from the catalog (for Cambridge: IGCSE Year 10/11, AS, A Level, with
+  syllabus codes) and writes them to the profile.
 - **The app shell reads from that profile** — Home, Insights, Scan, Library and the
   Settings profile rows all render from the student's real rows. Where there is no data
   yet, the surface says so rather than showing the numbers this file was prototyped with:
@@ -42,16 +50,23 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - **Settings** — appearance, text size, reduce motion, reasoning, and notification
   switches all persist. The weekly-digest and improve-extraction switches write to the
   consent ledger instead of preferences, so turning one off is a recorded withdrawal.
-- **Capture** — a live viewfinder with page-edge detection, auto-capture when the page
-  holds still, glare blocking, and a per-page quality verdict delivered while the paper
-  is still in front of the student. Pages accumulate in a reorderable tray and are
-  written to IndexedDB before anything uploads, so an interrupted booklet resumes at the
-  first page that has not landed.
+- **Capture** — a live viewfinder on phones. Page detection is the scanic ML model
+  (DocCornerNet) running in a worker, with a whole-page lock, one guidance line at a time
+  tied to a measurement, Auto capture (on by default) and a shutter that is never
+  disabled by detection. A torch control (Auto, On, Off) shows only where the camera
+  reports one. Captured pages drop onto a paper stack; Done becomes Review when a page
+  needs a look, and Review offers Retake and Adjust edges (drag the four corners on the
+  original photo). Pages are written to IndexedDB before anything uploads, so an
+  interrupted booklet resumes at the first page that has not landed. Laptops get an
+  import screen (drop, paste, QR to continue on a phone) rather than a webcam. Detection
+  thresholds are first guesses until they are tuned on real phone footage.
 - **Ingestion** — upload from the gallery or files, or paste a link. Uploads take the
-  same road as captures rather than bypassing conditioning. The paper type is asked once
-  because it decides Tier 1 vs Tier 2.
-- **The pipeline** — the ten stages of `SCANNING_SYSTEM.md`: conditioning and red-layer
-  separation on device, then structure, content, mark attribution, reconciliation, tier
+  same road as captures rather than bypassing conditioning, but imported photos are not
+  yet page-detected or cropped. The paper type is asked once because it decides Tier 1
+  vs Tier 2.
+- **The pipeline** — the ten stages of `SCANNING_SYSTEM.md`: conditioning and teacher-ink
+  separation on device (today this isolates red ink only; teacher ink can be any colour,
+  which is a known gap), then structure, content, mark attribution, reconciliation, tier
   routing and explanation server-side, then review, then commit.
 - **Review** — required, not skippable, with unreadable and unsure questions first and
   every field shown against its own crop.
@@ -64,8 +79,10 @@ The harness runs and both gates are enforced, but until there are papers in it, 
 about the pipeline's accuracy is known rather than assumed. Neither gate has been met,
 because neither has been measured.
 
-**PDFs.** They reach storage but are not rasterised, so nothing reads them, and the app
-says so rather than accepting a file it cannot use. Photographs of the pages work.
+**PDFs and HEIC.** The import screen accepts photos only. PDFs are not rasterised, so
+nothing could read them, and the app says so rather than accepting a file it cannot use.
+PDF import is a priority (tracked in Linear under the scanner rebuild), as is accepting
+every common image type.
 
 **Links** are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over
 the bytes, so a server-side fetcher has to resolve them.
@@ -84,10 +101,11 @@ depends on the answer.
 ## The pipeline, in short
 
 Ten stages across three places. The device conditions each page and separates the
-teacher's red ink from the student's writing before anything is uploaded — mobile data
+teacher's ink from the student's writing before anything is uploaded — mobile data
 is the binding constraint on time-to-result far more often than server compute is, and
-the red mask is a map of every teacher mark on the page for the price of no model calls
-at all. The server then finds the questions on downscaled proxies with a small model,
+the ink mask is a map of the teacher marks on the page for the price of no model calls
+at all. Today that mask finds red ink only, and a teacher may mark in black, blue, pink or
+any other colour, so it must stop depending on hue (see the teacher-ink issue in Linear). The server then finds the questions on downscaled proxies with a small model,
 reads each question from its own crop with a frontier one, binds the marks to the
 questions, and checks the arithmetic against the total the teacher wrote.
 

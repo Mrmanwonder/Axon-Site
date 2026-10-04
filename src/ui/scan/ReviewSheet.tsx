@@ -217,7 +217,7 @@ export default function ReviewSheet() {
                   onClick={closeReview}>
           <MaterialSymbol name="back" />
         </PressBox>
-        <div className="rvtitle">{review.title}</div>
+        <h1 className="rvtitle">{review.title}</h1>
         <PressBox as="button" type="button" className="rvsave"
                   disabled={!!review.saving || hasDraft} aria-busy={review.saving || undefined}
                   onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>

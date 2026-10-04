@@ -55,6 +55,12 @@ test('production host configuration carries transport protections', () => {
   assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /worker-src 'self' blob: data:/);
+  // The self-hosted ONNX runtime compiles WebAssembly; that needs this token
+  // (not 'unsafe-eval') in all three CSP copies.
+  assert.match(cloudflareHeaders, /script-src[^\n]+'wasm-unsafe-eval'/);
+  assert.match(netlify, /script-src[^\n]+'wasm-unsafe-eval'/);
+  assert.match(read('src/index.ts'), /script-src[^\n]+'wasm-unsafe-eval'/);
+  assert.match(cloudflareHeaders, /\/scan-ml\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
   assert.match(cloudflareHeaders, /\/share\/\*\s+X-Robots-Tag: noindex, nofollow/);
   assert.match(netlify, /for = "\/share\/\*"[\s\S]*?X-Robots-Tag = "noindex, nofollow"/);
   assert.match(cloudflareHeaders, /\/assets\/\*\s+Cache-Control: public, max-age=31556952, immutable/);
