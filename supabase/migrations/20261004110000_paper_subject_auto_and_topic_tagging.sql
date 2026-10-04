@@ -215,6 +215,8 @@ begin
 end;
 $function$;
 
+revoke all on function private.on_run_triage_subject() from public, anon, authenticated;
+
 create trigger extraction_run_auto_subject
   after insert or update of tier_routing on public.extraction_run
   for each row
@@ -419,6 +421,8 @@ begin
   return null;
 end;
 $function$;
+
+revoke all on function private.on_paper_subject_change() from public, anon, authenticated;
 
 create trigger paper_subject_retag
   after update of subject_offering_id on public.paper

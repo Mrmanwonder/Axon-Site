@@ -56,6 +56,7 @@ async function setup() {
   // The original verified-subject trigger and its strict constraint, as live before these migrations.
   await db.exec(`
     create function private.sync_paper_verified_subject() returns trigger language plpgsql as $$ begin return new; end $$;
+    revoke all on function private.sync_paper_verified_subject() from public; -- as in production
     create trigger paper_sync_verified_subject before insert or update of assessment_identity_id, subject_offering_id, subject_display_snapshot,
       subject_external_code_snapshot, subject_identity_source, subject_identity_confidence, subject_verified_at
       on public.paper for each row execute function private.sync_paper_verified_subject();
@@ -150,6 +151,18 @@ test("tagging queue: claim once, accept only the claimed syllabus, retag on subj
   assert.deepEqual(await claim(), [{ r: "90000000-0000-0000-0000-000000000001", d: "60000000-0000-0000-0000-000000000002" }]);
   // A late finish for the old syllabus is ignored.
   assert.equal((await finish([{ topic_id: "70000000-0000-0000-0000-000000000001", confidence: "likely" }])).rows[0].n, 0);
+});
+
+test("no SECURITY DEFINER function from these migrations keeps a client or PUBLIC execute grant it should not have", async () => {
+  const db = await setup();
+  const leaks = await db.query(`
+    select n.nspname || '.' || p.proname as fn
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where p.prosecdef and n.nspname in ('public','private')
+       and p.proname not in ('set_paper_subject','student_scope_allows')
+       and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))
+     order by 1`);
+  assert.deepEqual(leaks.rows.map((r) => r.fn), []);
 });
 
 test("the service functions are not callable by students", async () => {

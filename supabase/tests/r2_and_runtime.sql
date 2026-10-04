@@ -306,7 +306,8 @@ do $$
 declare v_stages integer; v_training integer;
 begin
   select count(*) into v_stages from public.model_route;
-  perform public._t('every stage has a route', v_stages = 6, format('%s routes', v_stages));
+  -- 7 since topic_tag (syllabus map, 4 Oct 2026).
+  perform public._t('every stage has a route', v_stages = 7, format('%s routes', v_stages));
 
   select count(*) into v_training from public.model_route where allow_training;
   -- Nothing in the codebase writes this column. A route that needs it is a route
