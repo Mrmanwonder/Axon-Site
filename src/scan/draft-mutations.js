@@ -32,6 +32,7 @@ export async function mutateDraft(draft, reduce) {
     });
   } finally { closeLocalDatabase(db); }
   if (epoch !== localDataEpoch()) throw new Error('This draft was cleared. Start a new scan.');
+  for (const key of Object.keys(draft)) if (!(key in fresh)) delete draft[key];
   Object.assign(draft, fresh); stampDraft(draft); return result;
 }
 export async function saveDraft(draft) {

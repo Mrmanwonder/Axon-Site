@@ -102,16 +102,15 @@ notify pgrst,'reload schema';
 -- A true retake must clear the old capture's original; an unchanged manifest
 -- retry must preserve an independently attached original.
 do $$
-declare v_definition text;
+declare
+ v_definition text;
+ v_pattern text := 'original_key[[:space:]]*=[[:space:]]*coalesce[(][[:space:]]*excluded[.]original_key[[:space:]]*,[[:space:]]*paper_page[.]original_key[[:space:]]*[)]';
 begin
-  select pg_catalog.pg_get_functiondef(p.oid) into v_definition
-    from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.proname='submit_paper';
-  if v_definition is null or position('original_key = coalesce(excluded.original_key,paper_page.original_key)' in v_definition)=0 then
+  select pg_catalog.pg_get_functiondef('public.submit_paper(uuid,public.paper_type,public.paper_tier,date,text,jsonb,uuid,numeric,numeric,text,uuid)'::regprocedure) into v_definition;
+  if v_definition is null or v_definition !~ v_pattern then
     raise exception 'submit_paper original association changed; review this migration';
   end if;
-  execute replace(v_definition,
-    'original_key = coalesce(excluded.original_key,paper_page.original_key)',
+  execute pg_catalog.regexp_replace(v_definition,v_pattern,
     'original_key = case when paper_page.r2_key is distinct from excluded.r2_key then excluded.original_key else coalesce(excluded.original_key,paper_page.original_key) end');
 end; $$;
 
