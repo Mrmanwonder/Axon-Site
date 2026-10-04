@@ -98,3 +98,10 @@ test('pool enforces 2/3/4/6 in-flight limits and deterministic results', async (
     assert.equal(max, limit); assert.equal(results[7].ok, false); assert.equal(results[24].value, 48);
   }
 });
+
+test('reordering remints page-bound originals while preserving their local bytes', async()=>{
+  const draft=booklet(2),model=fixture(draft);await model.run();
+  const reordered=renumberPages([draft.pages[1],draft.pages[0]]);
+  assert.ok(reordered.every(p=>p.original instanceof Blob&&!p.original_key&&!p.r2_key&&!p.uploaded));
+  assert.deepEqual(await Promise.all(reordered.map(p=>p.original.text())),['original','original']);
+});

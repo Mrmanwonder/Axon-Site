@@ -7,9 +7,8 @@
 // physically present at that moment and will not be again.
 //
 // So pages are written to IndexedDB as they are taken, before anything is
-// uploaded, and each page records whether it has reached storage yet. Resuming
-// picks up at the first page that has not — per page, with no re-capture and no
-// re-upload of what already landed.
+// uploaded. Issued capabilities and confirmed files are stored independently;
+// recovery confirms uncertain transfers before resending any bytes.
 
 import { openDraftDatabase, closeLocalDatabase, localDataEpoch } from '../local-data.js';
 const STORE = 'drafts';

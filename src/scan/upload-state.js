@@ -2,10 +2,11 @@ import { ASSET_FIELDS, assetState, processingReady, backupComplete, revisionOf, 
 export function renumberPages(pages) {
   return pages.map((page, i) => {
     if (page.page_number === i + 1) return page;
-    const raw = assetState(page, 'raw');
     return { ...page, page_number: i + 1, upload_revision: newRevision(),
-      upload_assets: raw.status === 'confirmed' ? { raw } : {}, uploaded: false,
-      r2_key: null, mask_key: null, thumb_key: null, original_key: raw.status === 'confirmed' ? raw.key : null };
+      // Canonical asset names and server-issued bindings include page number.
+      // Retain all bytes but remint assets whose page position changed.
+      upload_assets: {}, uploaded: false,
+      r2_key: null, mask_key: null, thumb_key: null, original_key: null };
   });
 }
 export function applyAssetUpdates(fresh, updates) {
