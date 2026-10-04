@@ -25,7 +25,7 @@ function NavDemo() {
 function AnswerDemo() {
   return <AnswerBlockView
     block={{ notation_profile: "math", raw_text: "x + 1", lines: [{ role: "working", segments: [{ type: "prose", text: "x + 1", annotations: [], bbox: { x: 0, y: 0, w: 10, h: 10 } }] }] }}
-    rawText="x + 1" recognition={true}
+    rawText="x + 1" recognition={true} onPick={() => {}}
   />;
 }
 

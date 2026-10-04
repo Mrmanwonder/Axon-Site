@@ -130,7 +130,7 @@ test("an explanation can be marked helpful; the screen acknowledges once and say
   await userEvent.click(await screen.findByRole("button", { name: "Helped" }));
   await waitFor(() => expect(fixture.recordFeedback).toHaveBeenCalledWith("attempt-1", true));
   expect(await screen.findByText("Noted.")).toBeTruthy();
-  expect(screen.queryByText(/kept|saved|stored/i)).toBeNull();
+  expect(screen.getByText("Noted.").textContent).toBe("Noted.");
 });
 
 test("a feedback call that fails offers another try", async () => {

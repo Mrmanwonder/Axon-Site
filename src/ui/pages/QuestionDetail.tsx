@@ -25,9 +25,11 @@ import { useApp } from "../data/AppProvider";
 import { deleteQuestion, explainRetry, paperTypeLabel, providerKeyForStudent, recordExplanationFeedback } from "../data/modules";
 import type { StudentAttempt } from "../data/modules";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
-import Crop from "../components/Crop";
+import SourceEvidence from "../components/SourceEvidence";
+import MaterialSymbol from "../components/MaterialSymbol";
+import { paperIdentity, paperReading, partPath } from "../data/paperReading";
+import "../styles/PaperReading.css";
 import AnswerBlockView from "../components/AnswerBlock";
-import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import PageSkeleton from "../components/PageSkeleton";
 import MathText from "../components/MathText";
@@ -117,7 +119,6 @@ export default function QuestionDetail() {
   const { paper, error, reload } = usePaperResource(student?.id, paperId);
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
-  const [picked, setPicked] = useState<Segment | null>(null);
 
   const attempt: StudentAttempt | undefined = paper?.student_attempt.find((a) => a.id === qId);
   const [retrying, setRetrying] = useState(false);
@@ -176,6 +177,9 @@ export default function QuestionDetail() {
   // attempt back to the region it came from, and page_spans carries the box.
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
   const span = region?.page_spans?.[0];
+  const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
+  const readingPart = paperReading(paper).parts.find(p => p.attempt.id === attempt.id);
+  const questionLabel = readingPart?.label ?? partPath(null, null);
 
   // Three-valued, and read from the region rather than inferred: "unknown" is a
   // real state and must not be shown as a clean read.
@@ -209,21 +213,19 @@ export default function QuestionDetail() {
   };
 
   return (
-    <div style={{ padding: "0 0 32px" }}>
+    <div className="question-reading">
+      <nav aria-label="Question breadcrumb"><Link to={paths.library}>Library</Link><span aria-hidden="true"> / </span><Link to={paths.paper(paperId!)}>{identity.title}</Link></nav>
       <div className="rvhead detailhead" style={{ position: "static" }}>
         <Link to={paths.paper(paperId!)} className="rvback" aria-label="Back to the paper">
-          <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"
-               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5 8 12l7 7" />
-          </svg>
+          <MaterialSymbol name="back" />
         </Link>
-        <div className="rvtitle">{paperTypeLabel(paper.type, providerKeyForStudent(student))}</div>
+        <div className="rvtitle">{identity.title}</div>
         <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
 
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
         <div className="qhead">
-          <span className="t1">{attempt.question_label || "This question"}</span>
+          <h1 className="t1">{questionLabel}</h1>
           <span className={"conf " + attempt.extraction_confidence}>
             {CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
           </span>
@@ -234,17 +236,8 @@ export default function QuestionDetail() {
           )}
         </div>
 
-        {/* Hard rule 4: an unreadable crop says so, never a silent gap. */}
-        <div className="qcrop">
-          <Crop paperId={paperId} pageNumber={span?.page} box={span?.box} highlight={picked?.bbox ?? null} />
-        </div>
-
-        {attempt.question_text && (
-          <div className="qfield">
-            <div className="k">Question</div>
-            <div className="v"><AcademicText text={attempt.question_text} /></div>
-          </div>
-        )}
+        <div className="qfield"><div className="k">Printed question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
+        <SourceEvidence paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />
 
         {/* Not "Your answer". The crop above is the student's answer; this is
             what we made of it, and the live data shows what that can cost —
@@ -254,8 +247,15 @@ export default function QuestionDetail() {
           block={attempt.answer_block}
           rawText={attempt.student_answer}
           recognition={recognition}
-          onPick={setPicked}
         />
+
+        <div className="qfield"><div className="k">Teacher’s mark</div><div className="v">{attempt.marks_awarded == null ? "Not read" : numMark(attempt.marks_awarded)}{attempt.max_marks != null ? ` out of ${numMark(attempt.max_marks)}` : " · Maximum not read"}</div></div>
+        {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
+
+        <div className="qfield">
+          <div className="k">Marked from</div>
+          <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
+        </div>
 
         {/* How this question is answered, one tap below the student's own, in
             the same step shape so the two can be read against each other.
@@ -321,13 +321,6 @@ export default function QuestionDetail() {
             )}
           </div>
         )}
-
-        {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
-
-        <div className="qfield">
-          <div className="k">Marked from</div>
-          <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
-        </div>
 
         {loss?.cause && (
           <div className="qfield">

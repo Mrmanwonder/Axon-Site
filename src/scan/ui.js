@@ -838,9 +838,7 @@ function paintReview() {
   const paper = S.review.paper;
 
   host.renderReview({
-    title: paper?.subject
-      ? `${paper.subject} · ${paperTypes().find((t) => t.value === paper.type)?.label ?? ''}`.trim()
-      : paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review',
+    title: paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review paper',
     lead: S.review.lead,
     delta: S.review.delta,
     noTotal: S.review.noTotal,
@@ -860,6 +858,12 @@ function paintReview() {
       marksAwarded: q.marksAwarded,
       marksAvailable: q.marksAvailable,
       answer: q.answer,
+      questionText: q.questionText,
+      answerBlock: q.answerBlock,
+      identityNote: q.identityNote,
+      markStep: q.markStep,
+      paperId: q.paperId,
+      pageNumbers: q.pageNumbers,
       remark: q.remark,
       crop: q.crop,
       pageNumber: q.pageNumber,
@@ -870,8 +874,14 @@ function paintReview() {
     })),
   }, {
     onMark: async (id, value) => {
-      try { await correctMark(id, value); await refreshReview(); }
-      catch (e) { toast(e.message, 'warn'); }
+      if (!S.review?.questions.some(q => q.id === id)) throw new Error('This review has changed. Open the current question again.');
+      await correctMark(id, value);
+      await refreshReview();
+    },
+    onAnswer: async (id, value) => {
+      if (!S.review?.questions.some(q => q.id === id)) throw new Error('This review has changed. Open the current question again.');
+      await correctAnswer(id, value);
+      await refreshReview();
     },
     onAction: (id, action) => handleReviewAction(id, action),
     onConfirmClean: async () => {
@@ -907,8 +917,7 @@ function handleReviewAction(id, action) {
       input: { label: "Your answer", id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
       onConfirm: async (value) => {
-        try { await correctAnswer(id, value ?? ''); await refreshReview(); }
-        catch (e) { toast(e.message, 'warn'); }
+        await correctAnswer(id, value ?? ''); await refreshReview();
       },
     });
     return;

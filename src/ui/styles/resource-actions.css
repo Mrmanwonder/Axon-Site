@@ -1,0 +1,68 @@
+/* AXO-137: actual 44px controls, readable labels, local Google SVG glyphs.
+   Specificity exceeds legacy circular detail actions, including their narrow
+   breakpoint. This file changes only ResourceActions, never global tokens/nav. */
+.resourceactions.material-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+.resourceactions.material-actions .resourceaction.material-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-tile);
+  background: var(--surface-sunk);
+  color: var(--label);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+}
+.resourceactions.material-actions .material-action::after {
+  content: none;
+}
+.resourceactions.material-actions .material-action svg.material-symbol {
+  width: var(--material-symbol-size, 22px);
+  height: var(--material-symbol-size, 22px);
+}
+.material-actions .material-action-label {
+  white-space: nowrap;
+}
+.resourceactions.material-actions .material-action.danger {
+  border-color: color-mix(in srgb, var(--attention) 28%, var(--hairline));
+}
+.resourceactions.material-actions .material-action.danger .material-symbol {
+  color: var(--attention);
+}
+.resourceactions.material-actions .material-action.active {
+  background: var(--accent-wash);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--hairline));
+}
+.resourceactions.material-actions .material-action.active .material-symbol {
+  color: var(--accent);
+}
+.resourceactions.material-actions .material-action.unknown {
+  border-style: dashed;
+  color: var(--label);
+}
+.resourceactions.material-actions .material-action:enabled:hover {
+  background: var(--accent-wash);
+}
+.resourceactions.material-actions .material-action:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.resourceactions.material-actions .material-action:disabled {
+  opacity: .65;
+  cursor: default;
+}
+

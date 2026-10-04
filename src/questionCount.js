@@ -34,17 +34,21 @@ const byReadingOrder = (a, b) => {
  * @param {Array<{order_index?: number, label: string|null, page: number|null, y: number|null, evidence: boolean}>} regions
  *   evidence is true when the region carries a mark, an answer or question text.
  */
-export function countQuestions(regions) {
+export function projectQuestionRegions(regions) {
   const tops = new Set();
   const used = new Set();
   let prevQ = null;
   let prevPage = null;
   let parts = 0;
   let unassigned = 0;
+  const entries = [];
 
   for (const region of [...regions].sort(byReadingOrder)) {
     const { q, part } = parseQuestionLabel(region.label);
     const page = region.page ?? null;
+    let question = q;
+    let inherited = false;
+    const counted = q !== null || part !== null || !!region.evidence;
 
     if (q === null && part === null) {
       if (region.evidence) { parts += 1; unassigned += 1; }
@@ -62,6 +66,8 @@ export function countQuestions(regions) {
           && page - prevPage >= 0 && page - prevPage <= 1
           && !used.has(`${prevQ}:${part}`)) {
         used.add(`${prevQ}:${part}`);
+        question = prevQ;
+        inherited = true;
         prevPage = page;
       } else {
         unassigned += 1;
@@ -69,12 +75,27 @@ export function countQuestions(regions) {
         prevPage = null;
       }
     }
+    entries.push({ region, question, part, inherited, counted });
   }
 
   return {
-    questions_total: tops.size,
-    parts_total: parts,
-    unassigned_parts: unassigned,
-    raw_region_count: regions.length,
+    entries,
+    counts: {
+      questions_total: tops.size,
+      parts_total: parts,
+      unassigned_parts: unassigned,
+      raw_region_count: regions.length,
+    },
   };
+}
+
+/** Count and reading/grouping surfaces consume the same assignment decision. */
+export function countQuestions(regions) {
+  return projectQuestionRegions(regions).counts;
+}
+
+/** Display only; takes the shared projection's assignment, never changes storage. */
+export function questionDisplayPath(question, part) {
+  const suffix = part ? (part.startsWith('(') ? part : `(${part[0]})${part.slice(1)}`) : '';
+  return question == null ? `Unassigned part${suffix ? ` ${suffix}` : ''}` : `Question ${question}${suffix}`;
 }

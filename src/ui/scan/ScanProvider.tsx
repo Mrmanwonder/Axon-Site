@@ -16,6 +16,7 @@ import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import type { SheetConfig } from "../components/SheetProvider";
 import type { CropBox } from "../components/Crop";
+import type { AnswerBlock } from "../data/modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
 export type TrayPage = {
@@ -54,9 +55,15 @@ export type ReviewQuestion = {
   marksAwarded?: number | null;
   marksAvailable?: number | null;
   answer?: string | null;
+  questionText?: string | null;
+  answerBlock?: AnswerBlock | null;
+  identityNote?: string | null;
+  markStep?: number;
   remark?: string | null;
   crop?: { paperId: string; page: number; box: CropBox } | null;
   pageNumber?: number;
+  paperId?: string;
+  pageNumbers?: number[];
   unreadableReason?: string | null;
   alternatives?: number[];
   allocationUnusable?: boolean;
@@ -76,7 +83,8 @@ export type ReviewModel = {
 } | null;
 
 export type ReviewHandlers = {
-  onMark: (id: string, value: number) => void;
+  onMark: (id: string, value: number) => void | Promise<void>;
+  onAnswer?: (id: string, value: string) => void | Promise<void>;
   onAction: (id: string, action: string) => void;
   onConfirmClean: () => void;
   onSave: () => void;

@@ -1,0 +1,15 @@
+.source-evidence { --source-secondary:color-mix(in srgb,var(--label) 76%,var(--bg)); min-width:0; margin:16px 0; color:var(--label); }
+.source-heading { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; }
+.source-heading h3 { margin:0; font-size:16px; font-weight:600; }
+.source-heading span,.source-caption { font-size:14px; line-height:1.5; color:var(--source-secondary); }
+.source-tools { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.source-tools button,.source-unavailable button,.source-tools select { min-height:44px; border:1px solid var(--hairline); border-radius:10px; background:var(--field); color:var(--label); font:inherit; padding:9px 12px; }
+.source-tools button { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+.source-tools button[aria-pressed=true] { background:var(--accent-wash); border-color:var(--accent); }
+.source-tools button:disabled { opacity:.5; }
+.source-tools label { display:flex; gap:8px; align-items:center; }
+.source-tools :focus-visible,.source-page-frame:focus-visible,.source-unavailable button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.source-page-frame { width:100%; max-height:min(70vh,720px); overflow:auto; border:1px solid var(--hairline); border-radius:12px; background:var(--field); overscroll-behavior:contain; }
+.source-page-frame img { display:block; height:auto; max-width:none; }
+.source-unavailable { padding:16px; border:1px solid var(--hairline); border-radius:12px; }
+.source-caption { margin:10px 0 0; }

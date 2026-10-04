@@ -65,7 +65,7 @@ export const clearStudentScope = async () => {
 };
 export const takeProviderError = () => null;
 export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
-export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
+export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();
 export async function readConsentState() { if (scenario === "consent-error") throw new Error("Ledger unavailable"); return {}; }
@@ -117,3 +117,19 @@ export const avatarRenderFor = () => ({
 });
 export const avatarStyleFor = avatarRenderFor;
 export const initialFor = (name?: string) => name?.trim().charAt(0).toUpperCase() || "?";
+
+// Source fixtures exercise actual reading components; no external mutations occur.
+export const readPaper = async () => {
+  if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
+  const { readingFixture } = await import("./reading-fixture");
+  return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };
+};
+export const activeAcademicShare = async () => null;
+export const createAcademicShare = async () => { throw new Error("Share creation is outside this illustrative fixture."); };
+export const revokeAcademicShare = async () => {};
+export const presentAcademicShare = async () => {};
+export const academicShareUrl = () => "";
+export const deletePaper = async () => { throw new Error("Deletion is outside this illustrative fixture."); };
+export const deleteQuestion = deletePaper;
+export const explainRetry = async () => {};
+export const recordExplanationFeedback = async () => ({});

@@ -522,6 +522,12 @@ export type PaperPage = {
 export type QuestionRegionRef = {
   /** Absent on offline copies cached before the tutor needed it. */
   id?: string;
+  order_index?: number;
+  question_label?: string | null;
+  question_text?: string | null;
+  student_answer?: string | null;
+  marks_awarded?: number | null;
+  marks_available?: number | null;
   run_id: string;
   /** queued | running | done | skipped | failed. The machine reason is deliberately not selected: it is not user copy. */
   explain_status: string | null;
@@ -544,6 +550,14 @@ export type PaperDetail = {
   type: string;
   tier: string | null;
   date_taken: string;
+  /** Existing date_taken is an added-on date, not evidence of an exam date. */
+  created_at?: string;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  subject_identity_source?: string | null;
+  subject_identity_confidence?: string | null;
+  subject_verified_at?: string | null;
   subject: string | null;
   reported_total: number | null;
   stated_maximum: number | null;

@@ -262,6 +262,9 @@ test("review mark radios follow native keyboard behavior and closed review is ab
   await expect(selected).toBeChecked();
   await selected.focus();
   await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "2", exact: true })).toBeChecked();
+  expect(await page.evaluate(() => (window as typeof window & { __markChoice?: number }).__markChoice)).toBeUndefined();
+  await page.getByRole("button", { name: "Save teacher’s mark" }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __markChoice?: number }).__markChoice)).toBe(2);
 
   await page.goto("/tests/browser/index.html?view=review&scenario=closed");

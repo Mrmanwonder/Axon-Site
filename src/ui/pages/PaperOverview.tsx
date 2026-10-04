@@ -14,12 +14,15 @@
 
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
-import Chevron from "../components/Chevron";
+import MaterialSymbol from "../components/MaterialSymbol";
+import AcademicText from "../components/AcademicText";
+import { paperIdentity, paperReading } from "../data/paperReading";
+import "../styles/PaperReading.css";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
 import { deletePaper, paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import { numMark } from "../data/causes";
-import { isPartialTotal, totalNote } from "../data/paperTotals";
+import { totalNote } from "../data/paperTotals";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
 import { tutorEntryVisible } from "../data/tutor";
@@ -63,9 +66,8 @@ export default function PaperOverview() {
   if (!paper) return <PageSkeleton variant="paper" label="Loading paper…" />;
 
   const attempts = paper.student_attempt;
-  const marksRows = attempts.filter((a) => a.marks_awarded != null && a.max_marks != null);
-  const sumAwarded = marksRows.reduce((t, a) => t + Number(a.marks_awarded), 0);
-  const sumAvailable = marksRows.reduce((t, a) => t + Number(a.max_marks), 0);
+  const reading = paperReading(paper);
+  const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
 
   const requestDelete = () => {
     if (!paperId) return;
@@ -87,88 +89,38 @@ export default function PaperOverview() {
     });
   };
 
-  return (
-    <>
-      <div className="greet detailgreet">
-        <div className="detailcopy">
-          <h1>{paperTypeLabel(paper.type, providerKeyForStudent(student))}</h1>
-          <div className="sub">
-            {paper.subject ? `${paper.subject} · ` : ""}
-            {new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-            {stale ? " · offline copy" : ""}
-          </div>
-        </div>
-        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
-      </div>
-
-      {marksRows.length > 0 && (
-        <div className="card" style={{ padding: "16px 18px", marginTop: 4 }}>
-          <div className="t1" style={{ fontSize: 15, color: "var(--label-2)" }}>
-            {marksRows.length} of {attempts.length} part{attempts.length === 1 ? "" : "s"} marked
-          </div>
-          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", marginTop: 4 }}>
-            {isPartialTotal(paper) && (
-              <span className="subnote" style={{ fontSize: 13, fontWeight: 500, marginRight: 6 }}>at least</span>
-            )}
-            {numMark(sumAwarded)}<span style={{ color: "var(--label-3)", fontWeight: 500 }}>/{numMark(sumAvailable)}</span>
-          </div>
-
-          {/* We never assert our reading is right against the paper's own
-              total — we state both and let the student judge. */}
-          {totalNote(paper) && (
-            <div className="subnote" style={{ marginTop: 10 }}>{totalNote(paper)}</div>
-          )}
-          {paper.reconciled === false && paper.reported_total != null && (
-            <div className="subnote" style={{ marginTop: 10 }}>
-              Our reading adds up to {numMark(sumAwarded)}, and the total on your paper is{" "}
-              {numMark(Number(paper.reported_total))} — worth a look at the questions below.
-            </div>
-          )}
-        </div>
-      )}
-
-      {tutorEntryVisible() && attempts.length > 0 && (
-        <div style={{ margin: "12px var(--gutter) 0" }}>
-          <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost" style={{ display: "inline-flex" }}>
-            Ask the tutor about this paper
-          </Link>
-        </div>
-      )}
-
-      <div className="sectitle">Questions</div>
-      <div className="list">
-        {!attempts.length && (
-          <div className="srow noicon">
-            <div className="lbl">
-              Nothing to show yet
-              <small>This paper hasn&rsquo;t produced any readable questions.</small>
-            </div>
-          </div>
-        )}
-
-        {attempts.map((a) => (
-          <PressBox
-            as={Link}
-            key={a.id}
-            to={paths.question(paperId!, a.id)}
-            className="row"
-            data-interactive=""
-          >
-            <div className="b">
-              <div className="t1">{a.question_label || "Question"}</div>
-              <div className="t2">
-                <span className={"conf " + a.extraction_confidence}>
-                  {CONF_LABEL[a.extraction_confidence] ?? a.extraction_confidence}
-                </span>
-                {a.marks_awarded != null && a.max_marks != null && (
-                  <span>{numMark(a.marks_awarded)}/{numMark(a.max_marks)}</span>
-                )}
-              </div>
-            </div>
-            <Chevron />
-          </PressBox>
-        ))}
-      </div>
-    </>
+  const renderPart = (part: typeof reading.parts[number], sharedStem?: string | null) => (
+    <PressBox as={Link} key={part.attempt.id} to={paths.question(paperId!, part.attempt.id)} className="paper-part" data-interactive="">
+      <div className="paper-part-copy">
+        <div className="paper-part-heading"><span>{part.label}</span><span className={"conf " + part.attempt.extraction_confidence}>{CONF_LABEL[part.attempt.extraction_confidence] ?? part.attempt.extraction_confidence}</span></div>
+        {part.page != null && <div className="paper-secondary">Page {part.page}{part.inherited ? " · Parent linked by source order; printed label has no parent number" : ""}</div>}
+        {part.stem && part.stem !== sharedStem ? <div className="paper-prompt"><AcademicText text={part.stem} /></div> : !part.stem && <div className="paper-secondary">Printed question not read. Inspect the saved page.</div>}
+        <div className="paper-secondary">Teacher’s mark: {part.attempt.marks_awarded == null ? "Not read" : numMark(part.attempt.marks_awarded)}{part.attempt.max_marks != null ? ` out of ${numMark(part.attempt.max_marks)}` : " · Maximum not read"}</div>
+      </div><MaterialSymbol name="chevron" />
+    </PressBox>
   );
+  return <div className="paper-reading">
+    <nav aria-label="Paper breadcrumb"><Link to={paths.library}>Library</Link><span aria-hidden="true"> / </span><span>Paper</span></nav>
+    <header className="paper-heading">
+      <div><h1>{identity.title}</h1><p className="paper-secondary">{identity.subject}</p><p className="paper-secondary">{identity.examDate} · {identity.added}{stale ? " · offline copy" : ""}</p></div>
+      <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
+    </header>
+    <section className="paper-summary" aria-label="Marks and coverage">
+      <h2>Marks lost</h2>
+      <p className="paper-loss">{reading.scored.length ? `${reading.partial ? "At least " : ""}${numMark(reading.lost)} mark${reading.lost === 1 ? "" : "s"} lost` : "Marks not available"}</p>
+      {reading.scored.length > 0 && <p>From {reading.scored.length} scored part{reading.scored.length === 1 ? "" : "s"} · Teacher’s marks as read: {numMark(reading.awarded)} out of {numMark(reading.maximum)}</p>}
+      {reading.partial && <p className="paper-secondary">Some parts are missing readable or confirmed marks. This is a partial reading.</p>}
+      {totalNote(paper) && <p className="paper-secondary">{totalNote(paper)}</p>}
+      {reading.counts ? <p className="paper-secondary">Stored source coverage: {reading.counts.questions_total} question{reading.counts.questions_total === 1 ? "" : "s"} · {reading.counts.parts_total} part{reading.counts.parts_total === 1 ? "" : "s"} · {reading.counts.unassigned_parts} unassigned · {reading.counts.raw_region_count} raw region{reading.counts.raw_region_count === 1 ? "" : "s"}. {attempts.length} saved part{attempts.length === 1 ? "" : "s"}.</p>
+        : <p className="paper-secondary">{attempts.length} saved part{attempts.length === 1 ? "" : "s"}. Source counts unavailable in this copy.</p>}
+      {paper.reconciled === false && paper.reported_total != null && <p className="paper-secondary">Our reading adds up to {numMark(reading.awarded)}; the total printed on your paper is {numMark(Number(paper.reported_total))}. Compare the source before accepting either reading.</p>}
+    </section>
+    {!!paper.page_unreadable.length && <section className="paper-recovery" aria-label="Unreadable pages"><h2>{paper.page_unreadable.length} page{paper.page_unreadable.length === 1 ? "" : "s"} couldn’t be read</h2>{paper.page_unreadable.map(page => <p key={page.page_number}>Page {page.page_number}: {page.reason}</p>)}<p className="paper-secondary">These source records remain unreadable. Opening a saved part lets you inspect its page; this does not create a new confirmation task.</p></section>}
+    {tutorEntryVisible() && attempts.length > 0 && <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost">Ask the tutor about this paper</Link>}
+    <section aria-label="Saved questions"><h2>Questions</h2>
+      {!attempts.length && <p>No saved parts to show yet. Source coverage above may include readings that have not been saved.</p>}
+      {reading.groups.map(group => <section className="paper-group" key={group.question} aria-label={`Question ${group.question}`}><h3>Question {group.question}</h3>{group.sharedStem && <div className="paper-shared-stem"><AcademicText text={group.sharedStem} /></div>}{group.items.map(part => renderPart(part, group.sharedStem))}</section>)}
+      {!!reading.unassigned.length && <section className="paper-group" aria-label="Unassigned parts"><h3>Unassigned parts</h3><p className="paper-secondary">The source does not establish these parts’ parent questions.</p>{reading.unassigned.map(part => renderPart(part))}</section>}
+    </section>
+  </div>;
 }

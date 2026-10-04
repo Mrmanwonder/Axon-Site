@@ -1,22 +1,29 @@
-const closed = new URLSearchParams(location.search).get("scenario") === "closed";
-
+import { useState } from "react";
+const params = new URLSearchParams(location.search);
+const scenario = params.get("scenario");
+const styled = location.pathname.includes("paper-reading");
 export function useScan() {
-  return {
-    reviewOpen: !closed,
-    closeReview() {},
-    review: {
-      title: "Review paper",
-      outstanding: 1,
-      cleanCount: 0,
-      saveLabel: "1 left to check",
-      questions: [{
-        id: "question", label: "Question 1", tier: "unsure", confirmed: false,
-        marksAwarded: 1, marksAvailable: 2, answer: "x + 1", alternatives: [0, 1, 2],
-      }],
-    },
+  const [open, setOpen] = useState(scenario !== "closed");
+  const [questions, setQuestions] = useState<any[]>(() => [{
+    id: "question", label: styled ? "Question 1(a)" : "Question 1", tier: scenario === "unreadable" ? "unreadable" : "unsure", confirmed: scenario === "completed",
+    marksAwarded: scenario === "unreadable" ? null : 1, marksAvailable: scenario === "large" ? 40 : scenario === "unknown" ? null : 2,
+    answer: styled ? "X | 0 | 1 | 2 | 3\nP | 1/4 | 3/8 | 1/4 | 1/8" : "x + 1",
+    questionText: styled ? "State the possible values of X using the printed probability distribution." : null,
+    paperId: styled ? "fixture" : undefined, pageNumber: styled ? 1 : undefined, pageNumbers: styled ? [1, 2] : [],
+    crop: styled ? { paperId: "fixture", page: 1, box: { x: 30, y: 90, w: 720, h: 260 } } : null,
+  }]);
+  const outstanding = questions.filter(q => !q.confirmed).length;
+  return { reviewOpen: open, closeReview() { setOpen(false); },
+    review: { title: "Review paper", outstanding, cleanCount: 0, saveLabel: outstanding ? `${outstanding} left to check` : "Save to Library", questions },
     reviewHandlers: {
-      onMark(_id: string, value: number) { (window as typeof window & { __markChoice?: number }).__markChoice = value; },
-      onAction() {}, onConfirmClean() {}, onSave() {},
+      async onMark(id: string, value: number) {
+        if (scenario === "save-failed") throw new Error("The teacher mark could not be saved. Your draft is still here.");
+        (window as typeof window & { __markChoice?: number }).__markChoice = value;
+        setQuestions(previous => previous.map(q => q.id === id ? { ...q, marksAwarded: value, confirmed: false } : q));
+      },
+      async onAnswer(id: string, answer: string) { setQuestions(previous => previous.map(q => q.id === id ? { ...q, answer, confirmed: false } : q)); },
+      onAction(id: string, action: string) { if (action === "confirm") setQuestions(previous => previous.map(q => q.id === id ? { ...q, confirmed: true } : q)); },
+      onConfirmClean() {}, onSave() {},
     },
   };
 }

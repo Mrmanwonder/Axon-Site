@@ -23,14 +23,18 @@
    · **Nothing is locked because we were confident.**
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
-import Crop from "../components/Crop";
+import SourceEvidence from "../components/SourceEvidence";
+import MaterialSymbol from "../components/MaterialSymbol";
+import TeacherMarkControl from "./TeacherMarkControl";
+import "../styles/review-reading.css";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
 const AcademicText = lazy(() => import("../components/AcademicText"));
+const AnswerBlockView = lazy(() => import("../components/AnswerBlock"));
 
 function RichText({ text }: { text: string }) {
   return (
@@ -55,13 +59,32 @@ function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean 
 }
 
 function Question({
-  q, onAction, onMark,
+  q, onAction, onMark, onAnswer, onBlocked,
 }: {
   q: ReviewQuestion;
   onAction: (id: string, action: string) => void;
-  onMark: (id: string, value: number) => void;
+  onMark: (id: string, value: number) => void | Promise<void>;
+  onAnswer?: (id: string, value: string) => void | Promise<void>;
+  onBlocked: (id: string, blocked: boolean) => void;
 }) {
   const attention = !q.confirmed && q.tier !== "confident";
+  const [editing, setEditing] = useState(false);
+  const [answerDraft, setAnswerDraft] = useState(q.answer ?? "");
+  const [answerBusy, setAnswerBusy] = useState(false);
+  const answerFlight = useRef(false);
+  const [markBusy, setMarkBusy] = useState(false);
+  const [markDirty, setMarkDirty] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
+  const answerInputId = useId();
+  const blocked = answerBusy || markBusy || markDirty || editing;
+  useEffect(() => { onBlocked(q.id, blocked); return () => onBlocked(q.id, false); }, [q.id, blocked, onBlocked]);
+  async function saveAnswer() {
+    if (!onAnswer || answerFlight.current) return;
+    answerFlight.current = true; setAnswerBusy(true); setAnswerError(null);
+    try { await onAnswer(q.id, answerDraft); setEditing(false); }
+    catch (cause) { setAnswerError(cause instanceof Error ? cause.message : "Your answer was not saved. Try again."); }
+    finally { answerFlight.current = false; setAnswerBusy(false); }
+  }
 
   const conf = q.confirmed
     ? <span className="conf confirmed">You confirmed</span>
@@ -72,9 +95,9 @@ function Question({
       : <span className="conf likely">Read cleanly</span>;
 
   return (
-    <div className="qcard" data-attention={attention ? "1" : undefined}>
+    <section className="qcard" aria-label={q.label || "This question"} data-attention={attention ? "1" : undefined}>
       <div className="qhead">
-        <span className="t1">{q.label || "This question"}</span>
+        <h2 className="t1">{q.label || "This question"}</h2>
         {conf}
         {q.marksAwarded != null && q.marksAvailable != null && (
           <span className="qmarks">
@@ -83,49 +106,42 @@ function Question({
         )}
       </div>
 
-      {/* Hard rule 4: an unreadable crop says so and shows why. It is never
-          quietly dropped, and never filled with a plausible guess. */}
+      <Field k="Printed question" v={q.questionText} steps />
+      {q.identityNote && <p className="review-draft-note">{q.identityNote}</p>}
+      <div className="review-reading-grid">
       <div className="qcrop">
-        <Crop
-          paperId={q.crop?.paperId}
-          pageNumber={q.crop?.page}
+        <SourceEvidence
+          paperId={q.crop?.paperId ?? q.paperId}
+          pageNumber={q.crop?.page ?? q.pageNumber}
+          pageNumbers={q.pageNumbers}
           box={q.crop?.box}
           missing={q.unreadableReason || "We could not show this part of the page."}
         />
       </div>
 
-      {/* Hard rule 4 again, on the mark rather than the crop. A part whose
-          allocation did not read as a whole number gets no grid: rounding it
-          offered a mark above the allocation, which the typed rung then
-          refused. The gap is named rather than left blank, and it points at
-          the rung that still works. */}
+      <div className="review-fields">
+      <Suspense fallback={<Field k="What Axon read" v={q.answer} steps />}><AnswerBlockView block={q.answerBlock ?? null} rawText={q.answer ?? null} recognition={null} /></Suspense>
+      {editing && <div className="review-answer-editor">
+        <label htmlFor={answerInputId}>Edit answer transcription</label>
+        <p>Copy what you wrote, including line breaks. This does not change the teacher’s mark.</p>
+        <textarea id={answerInputId} rows={5} value={answerDraft} disabled={answerBusy} onChange={event => setAnswerDraft(event.target.value)} />
+        <div className="qacts"><button type="button" className="qact" disabled={answerBusy} onClick={() => void saveAnswer()}>{answerBusy ? "Saving answer…" : "Save answer transcription"}</button>
+          <button type="button" className="qact" disabled={answerBusy} onClick={() => { setEditing(false); setAnswerDraft(q.answer ?? ""); setAnswerError(null); }}>Cancel edit</button></div>
+        {answerError && <p role="alert">{answerError}</p>}
+      </div>}
+      <div className="qfield"><div className="k">Teacher’s mark as read</div><div className="v">{q.marksAwarded == null ? "Not read" : num(q.marksAwarded)}{q.marksAvailable != null ? ` out of ${num(q.marksAvailable)}` : " · Maximum not read"}</div></div>
+      {q.remark && <Field k="Your teacher wrote" v={q.remark} steps />}
       {q.allocationUnusable && (
         <div className="qfield">
           <div className="k">How many marks this question is worth</div>
           <div className="v empty">
-            We couldn&rsquo;t read this as a whole number of marks, so we&rsquo;re not guessing at the
-            options. Type the mark your teacher wrote, or rescan this page.
+            The allocation does not fit this paper’s mark steps. Copy the teacher’s mark from the source; check the allocation or rescan this page.
           </div>
         </div>
       )}
 
-      {!!q.alternatives?.length && (
-        <>
-          <div className="qfield"><div className="k">Which number did your teacher write?</div></div>
-          <div className="qalts" role="radiogroup" aria-label="Which number did your teacher write?">
-            {q.alternatives.map((a) => (
-              <label key={a} className={"qalt" + (a === q.marksAwarded ? " on" : "")}>
-                <input type="radio" name={`mark-${q.id}`} value={a} checked={a === q.marksAwarded}
-                  onChange={() => { hapticTick(); onMark(q.id, a); }} />
-                {num(a)}
-              </label>
-            ))}
-          </div>
-        </>
-      )}
-
-      <Field k="Your answer" v={q.answer} steps />
-      {q.remark && <Field k="Your teacher wrote" v={q.remark} steps />}
+      {!q.confirmed && <p className="review-pending"><MaterialSymbol name="attention" size={20} />{q.unreadableReason ?? (attention ? "Some readings are uncertain. Compare each field with the saved page." : "Check all readings against the saved page before confirming.")}</p>}
+      <TeacherMarkControl id={q.id} awarded={q.marksAwarded} available={q.marksAvailable} step={q.markStep} allocationUnusable={q.allocationUnusable} onSave={onMark} onBusy={setMarkBusy} onDraft={setMarkDirty} />
 
       {q.explanation?.cause && (
         <div className="qfield">
@@ -155,17 +171,17 @@ function Question({
       <div className="qacts">
         {!q.confirmed && (
           <PressBox as="button" type="button" className="qact accent"
-                    onClick={() => { hapticTick(); onAction(q.id, "confirm"); }}>
-            That&rsquo;s right
+                    disabled={blocked} onClick={() => { hapticTick(); onAction(q.id, "confirm"); }}>
+            <MaterialSymbol name="confirmed" size={20} />Confirm all readings
           </PressBox>
         )}
         <PressBox as="button" type="button" className="qact"
-                  onClick={() => { hapticTick(); onAction(q.id, "type"); }}>
-          Fix this
+                  disabled={answerBusy || markBusy} onClick={() => { hapticTick(); if (onAnswer) { setAnswerDraft(q.answer ?? ""); setAnswerError(null); setEditing(true); } else onAction(q.id, "type"); }}>
+          <MaterialSymbol name="edit" size={20} />Edit answer transcription
         </PressBox>
         <PressBox as="button" type="button" className="qact"
-                  onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
-          Rescan this page
+                  disabled={blocked} onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
+          <MaterialSymbol name="rescan" size={20} />Rescan this page
         </PressBox>
         {q.explanation?.cause && !q.causeRejected && (
           <PressBox as="button" type="button" className="qact"
@@ -174,12 +190,20 @@ function Question({
           </PressBox>
         )}
       </div>
-    </div>
+      {(markDirty || editing) && <p className="review-draft-note">Save or cancel the field edit before confirming this question.</p>}
+      </div></div>
+    </section>
   );
 }
 
 export default function ReviewSheet() {
   const { review, reviewHandlers, reviewOpen, closeReview } = useScan();
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+  const onBlocked = useCallback((id: string, blocked: boolean) => setBlockedIds(previous => {
+    if (previous.has(id) === blocked) return previous;
+    const next = new Set(previous); if (blocked) next.add(id); else next.delete(id); return next;
+  }), []);
+  const hasDraft = blockedIds.size > 0;
 
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => { if (reviewOpen) root.current?.focus(); }, [reviewOpen]);
@@ -191,14 +215,11 @@ export default function ReviewSheet() {
       <div className="rvhead">
         <PressBox as="button" type="button" className="rvback" aria-label="Back"
                   onClick={closeReview}>
-          <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"
-               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5 8 12l7 7" />
-          </svg>
+          <MaterialSymbol name="back" />
         </PressBox>
         <div className="rvtitle">{review.title}</div>
         <PressBox as="button" type="button" className="rvsave"
-                  disabled={!!review.saving} aria-busy={review.saving || undefined}
+                  disabled={!!review.saving || hasDraft} aria-busy={review.saving || undefined}
                   onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>
           Save
         </PressBox>
@@ -226,7 +247,7 @@ export default function ReviewSheet() {
         {review.questions.map((q) => (
           <Question key={q.id} q={q}
                     onAction={reviewHandlers.onAction}
-                    onMark={reviewHandlers.onMark} />
+                    onMark={reviewHandlers.onMark} onAnswer={reviewHandlers.onAnswer} onBlocked={onBlocked} />
         ))}
 
         {/* Every question still has to be confirmed before the paper can be
@@ -241,6 +262,7 @@ export default function ReviewSheet() {
               </div>
             </div>
             <PressBox as="button" type="button" className="qact accent"
+                      disabled={hasDraft || !!review.saving}
                       onClick={() => { hapticFirm(); reviewHandlers.onConfirmClean(); }}>
               These look right
             </PressBox>
@@ -256,7 +278,7 @@ export default function ReviewSheet() {
         <div style={{ margin: "20px var(--gutter) 4px" }}>
           <PressBox as="button" type="button" className="btn primary"
                     data-waiting={review.outstanding || review.saving ? "1" : undefined}
-                    disabled={!!review.saving} aria-busy={review.saving || undefined}
+                    disabled={!!review.saving || hasDraft} aria-busy={review.saving || undefined}
                     onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>
             {review.saveLabel}
           </PressBox>

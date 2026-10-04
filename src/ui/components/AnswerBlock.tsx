@@ -37,7 +37,7 @@ const ANNOTATION_CLASS: Record<string, string> = {
 
 function SegmentView({
   seg, onPick, picked,
-}: { seg: Segment; onPick: (s: Segment) => void; picked: boolean }) {
+}: { seg: Segment; onPick?: (s: Segment) => void; picked: boolean }) {
   const cls = ["seg", ...seg.annotations.map((a) => ANNOTATION_CLASS[a]).filter(Boolean)];
   if (picked) cls.push("picked");
   // Below this the transcription is uncertain enough to say so inline, rather
@@ -54,7 +54,7 @@ function SegmentView({
 
   // Only a segment that knows where it came from is tappable — otherwise the
   // tap would promise a highlight it cannot deliver.
-  if (!seg.bbox) return <span className={cls.join(" ")}>{body}</span>;
+  if (!seg.bbox || !onPick) return <span className={cls.join(" ")}>{body}</span>;
   return (
     <button
       type="button"
@@ -113,7 +113,7 @@ export default function AnswerBlockView({
           {lines.map((line, i) => (
             <div key={i} className={"aline role-" + line.role}>
               {line.segments.map((seg, j) => (
-                <SegmentView key={j} seg={seg} onPick={pick} picked={picked === seg} />
+                <SegmentView key={j} seg={seg} onPick={onPick ? pick : undefined} picked={picked === seg} />
               ))}
             </div>
           ))}
