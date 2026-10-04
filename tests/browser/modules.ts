@@ -146,6 +146,7 @@ export const readPaper = async () => ({
   },
 });
 export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
+export const relabelAttempt = async () => {};
 export const activeAcademicShare = async () => null;
 export const academicShareUrl = (token: string) => `https://example.invalid/share#token=${token}`;
 export const createAcademicShare = async () => ({ share_id: "s", resource_type: "paper", expires_at: "2099-01-01", token: "t" });

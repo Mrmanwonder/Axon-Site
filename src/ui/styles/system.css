@@ -178,9 +178,11 @@
     background:var(--surface-sunk);color:var(--label-2);border:.5px solid var(--hairline);
     cursor:pointer;will-change:transform;}
   .resourceaction svg{width:24px;height:24px;}
-  /* Amber, not red, and softened toward the neutral so it is findable without outranking Share. */
-  .resourceaction.danger{color:color-mix(in srgb,var(--attention) 84%,var(--label-2));
-    border-color:color-mix(in srgb,var(--attention) 20%,var(--hairline));}
+  /* The same amber as a bad scan (owner, 4 Oct 2026): the attention colour at
+     full strength on its own wash, as Share wears the accent on its wash.
+     Amber, never red: red is the sign-out row only. */
+  .resourceaction.danger{color:var(--attention);background:var(--attention-wash);
+    border-color:var(--attention-rim);}
   .resourceaction.active{color:var(--accent);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 34%,transparent);}
   .resourceaction.unknown{color:var(--label-3);border-style:dashed;}
   .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
@@ -294,9 +296,15 @@
   .qhead .t1{font-size:15.5px;font-weight:600;letter-spacing:-.018em;flex:1;}
   .qmarks{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
   .qmarks small{font-size:12px;color:var(--label-3);font-weight:500;margin-left:2px;}
+  /* No height cap on the window: a 200px cap with centred content showed the
+     middle slice of any taller region, so crops looked random (owner, 4 Oct
+     2026). The frame keeps the region's own shape and shrinks to fit instead. */
   .qcrop{margin:0 16px;border-radius:14px;overflow:hidden;background:var(--surface-sunk);
-    border:.5px solid var(--hairline);max-height:200px;display:flex;align-items:center;justify-content:center;}
+    border:.5px solid var(--hairline);}
+  .qcrop .cropframe{width:min(100%, calc(var(--crop-ar, 1.4) * 440px));margin:0 auto;}
   .qcrop img{width:100%;display:block;object-fit:cover;}
+  .qcrop .qcrop-more{border-top:.5px solid var(--hairline);}
+  .qcrop .qcrop-page{padding:8px 12px 6px;font-size:12px;color:var(--label-3);}
   /* The crop itself: the page image, blown up and shifted so one region fills
      the frame. Cut in CSS rather than on a canvas — src/scan/crops.js says why.
      `overflow:hidden` is the cut; the inline aspect-ratio is the region's own,
@@ -1285,6 +1293,8 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
     .shared-learning__section{padding:15px;}
     .shared-score{padding:15px;}
   }
+/* Destructive, not alarming: the attention amber on its wash (red is the sign-out row only). */
+.btn.danger-soft{color:var(--attention);background:var(--attention-wash);}
 
 /* Sheet motion (4 Oct 2026, owner): sheets rise from the bottom edge and fall
    back to it. Keyframes win over the inline `transform: none` that pins a
