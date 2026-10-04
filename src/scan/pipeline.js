@@ -18,6 +18,7 @@
 // left; a spinner tells them nothing, and a generic bar tells them something
 // false. There is no bar and no spinner anywhere in here.
 
+import { uploadTiming } from './upload-telemetry.js';
 import { watchRun } from './run-watch.js';
 import { sb } from '../supabase.js';
 import { createPaper, tierForType, uploadScannedPage } from '../papers.js';
@@ -134,7 +135,7 @@ const page = {
 if (replacing !== null) {
   draft.pages = draft.pages.map((p) => (p.page_number === replacing
                                         ? { ...p, ...page, page_number: replacing, uploaded: false } : p));
-  await saveDraft(draft);
+  await timing.measure('persistence', () => saveDraft(draft));
 } else {
   await addPage(draft, page);
 }
@@ -195,23 +196,37 @@ async function waitForReview(runId, say) {
  *
  * @param {(event: {stage:string, message:string, page?:number, of?:number}) => void} onProgress
  */
-export async function ingest({ studentId, draft, paperType, dateTaken, onProgress }) {
+export async function ingest({ studentId, draft, paperType, dateTaken, onProgress, sendStartedAt, onTelemetry }) {
+  const timing = uploadTiming({ startedAt: sendStartedAt, emit: onTelemetry });
+  let submission; let paperId;
+  const total = draft.pages.length;
   const say = (stage, message, extra = {}) => onProgress?.({ stage, message, ...extra });
+  try {
 
 if (!draft.pages.length) throw new Error('There are no pages to send yet.');
+const pending = await timing.measure('planning', () => {
+  const objects = draft.pages.flatMap(p => [
+    { kind: 'page', blob: p.blob }, { kind: 'mask', blob: p.mask },
+    { kind: 'thumb', blob: p.thumb },
+    { kind: 'raw', blob: p.original && CAPTURE.UPLOAD_EXTENSIONS[p.original_type || p.original.type || 'image/jpeg'] ? p.original : null },
+  ].filter(o => o.blob));
+  timing.count(objects, draft.pages.length);
+  return pendingPages(draft);
+});
+
 
 // ── the paper row ────────────────────────────────────────────────────────
 
-let paperId = draft.paper_id;
+paperId = draft.paper_id;
   const type = paperType ?? draft.paper_type;
   const taken = dateTaken ?? new Date().toISOString().slice(0, 10);
 
 if (!paperId) {
-  const paper = await createPaper({ studentId, type, dateTaken: taken, requestId: draft.id });
+  const paper = await timing.measure('paper_create', () => createPaper({ studentId, type, dateTaken: taken, requestId: draft.id }));
   paperId = paper.id;
   draft.paper_id = paperId;
   draft.paper_type = paper.type;
-  await saveDraft(draft);
+  await timing.measure('persistence', () => saveDraft(draft));
 }
 
 // A retry after a dropped connection must submit the same paper the same
@@ -219,17 +234,15 @@ if (!paperId) {
 // first one. One id, made once, kept for the life of the draft.
 if (!draft.idempotency_key) {
   draft.idempotency_key = draft.id;
-  await saveDraft(draft);
+  await timing.measure('persistence', () => saveDraft(draft));
 }
 
 // ── stages 0-2 are already done; upload what has not landed ──────────────
 
-const pending = pendingPages(draft);
-  const total = draft.pages.length;
   for (const page of pending) {
     say('upload', `Sending page ${page.page_number} of ${total}`, { page: page.page_number, of: total });
-    const uploaded = await uploadScannedPage({ studentId, paperId, page });
-    await markUploaded(draft, page.page_number, uploaded);
+    const uploaded = await uploadScannedPage({ studentId, paperId, page, timing });
+    await timing.measure('persistence', () => markUploaded(draft, page.page_number, uploaded));
   }
 
 const pages = draft.pages.map((p) => ({
@@ -260,7 +273,7 @@ const pages = draft.pages.map((p) => ({
 // ── hand the booklet to the pipeline ─────────────────────────────────────
 
 say('structure', `Finding the questions across ${total} page${total === 1 ? '' : 's'}`);
-  const submission = await submitPaper({
+  submission = await timing.measure('submit', () => submitPaper({
     student_id: studentId,
     type,
     tier: tierForType(type),
@@ -268,7 +281,9 @@ say('structure', `Finding the questions across ${total} page${total === 1 ? '' :
     paper_id: paperId,
     idempotency_key: draft.idempotency_key,
     pages,
-  });
+  }, timing.retry));
+  timing.finish(null, submission.queued);
+  } catch (error) { timing.finish(error); throw error; }
 
 // ── watch it move through triage, structure, content and reconciliation ──
 
