@@ -1022,6 +1022,7 @@ function handleReviewAction(id, action) {
     return;
   }
   if (action === 'rescan') {
+    if (!Number.isInteger(question.pageNumber) || question.pageNumber < 1) { toast('This reading has no source page to retake.', 'warn'); return; }
     if (!S.draft) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,

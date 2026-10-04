@@ -179,10 +179,10 @@ function Question({
                   disabled={answerBusy || markBusy} onClick={() => { hapticTick(); if (onAnswer) { setAnswerDraft(q.answer ?? ""); setAnswerError(null); setEditing(true); } else onAction(q.id, "type"); }}>
           <MaterialSymbol name="edit" size={20} />Edit answer transcription
         </PressBox>
-        <PressBox as="button" type="button" className="qact"
+        {Number.isInteger(q.pageNumber) && Number(q.pageNumber) > 0 && <PressBox as="button" type="button" className="qact"
                   disabled={blocked} onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
           <MaterialSymbol name="rescan" size={20} />Rescan this page
-        </PressBox>
+        </PressBox>}
         {q.explanation?.cause && !q.causeRejected && (
           <PressBox as="button" type="button" className="qact"
                     onClick={() => { hapticTick(); onAction(q.id, "cause"); }}>

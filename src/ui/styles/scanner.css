@@ -556,13 +556,14 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 /* ── the import screen (laptops and desktops) ───────────────────────────── */
 
 .sc-desk {
+  --desk-secondary: color-mix(in srgb, var(--label) 76%, var(--bg));
   max-width: 1040px;
   margin: 0 auto;
   padding: 8px var(--gutter) 40px;
 }
 
 .sc-desk h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
-.sc-desk-sub { margin: 0 0 26px; max-width: 60ch; color: color-mix(in srgb, var(--label) 76%, var(--bg)); }
+.sc-desk-sub { margin: 0 0 26px; max-width: 60ch; color: var(--desk-secondary); }
 .sc-desk-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 980px) { .sc-desk-cols { grid-template-columns: minmax(0, 1fr); } }
 
@@ -582,7 +583,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 
 .sc-drop[data-over="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
 .sc-drop h2 { margin: 0 0 4px; font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
-.sc-drop p { margin: 0 0 18px; color: var(--label-2); }
+.sc-drop p { margin: 0 0 18px; color: var(--desk-secondary); }
 .sc-drop .sc-fine { margin: 16px 0 0; font-size: 13px; }
 
 .sc-pile { position: relative; width: 170px; height: 150px; margin-bottom: 22px; }
@@ -627,7 +628,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 }
 
 .sc-card h3 { margin: 0 0 4px; font-size: 17px; font-weight: 650; }
-.sc-card p { margin: 0 0 12px; font-size: 14px; color: var(--label-2); }
+.sc-card p { margin: 0 0 12px; font-size: 14px; color: var(--desk-secondary); }
 .sc-card p:last-child { margin-bottom: 0; }
 .sc-phone { display: flex; gap: 16px; align-items: center; }
 .sc-phone p { margin: 0; }
@@ -651,10 +652,10 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 .sc-thumb[data-flagged="true"] { outline: 2px dashed var(--amber); outline-offset: 2px; }
 .sc-thumb span { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; font-weight: 700; }
 
-.sc-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--label-2); }
+.sc-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--desk-secondary); }
 .sc-card-row .sc-done { background: var(--sc-fill); }
 .sc-card-row .sc-done:disabled { background: var(--surface-sunk); color: var(--label-2); }
-.sc-card-row .sc-done[data-kind="review"] { background: transparent; border-color: var(--amber); color: var(--amber); }
+.sc-card-row .sc-done[data-kind="review"] { background: transparent; border-color: var(--amber); color: color-mix(in srgb, var(--amber) 70%, var(--label)); }
 
 .sc-drafts { margin: 0; padding: 0; list-style: none; }
 .sc-drafts li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-top: .5px solid var(--hairline); color: var(--label); }

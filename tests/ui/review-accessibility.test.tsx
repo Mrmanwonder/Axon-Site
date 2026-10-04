@@ -74,3 +74,8 @@ test("answer edits preserve line breaks and survive a failed save", async () => 
   expect((editor as HTMLTextAreaElement).value).toBe("x + 1\n= 2");
   expect(onAnswer).toHaveBeenCalledWith("question", "x + 1\n= 2");
 });
+
+test("a review without a source page does not offer an invented page-retake action", () => {
+  render(<ReviewSheet />);
+  expect(screen.queryByRole("button", {name: "Rescan this page"})).toBeNull();
+});
