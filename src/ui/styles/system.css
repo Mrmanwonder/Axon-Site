@@ -1296,19 +1296,84 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
 /* Destructive, not alarming: the attention amber on its wash (red is the sign-out row only). */
 .btn.danger-soft{color:var(--attention);background:var(--attention-wash);}
 
-/* Sheet motion (4 Oct 2026, owner): sheets rise from the bottom edge and fall
-   back to it. Keyframes win over the inline `transform: none` that pins a
-   resting sheet. Transform and opacity only. */
-@keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
-@keyframes sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+/* Sheet motion (owner, 4 Oct 2026: "Apple-like, not bouncy").
+   Present: the sheet rises on the iOS sheet curve, a critically damped spring
+   expressed as a bezier. It leaves fast and lands long, with no overshoot.
+   The scrim fades on a plain ease so the sheet, not the dimming, leads.
+   Dismiss: shorter, accelerating away; the scrim clears with it.
+   Keyframes win over the inline `transform: none` that pins a resting sheet.
+   Transform and opacity only. */
+:root {
+  --ease-sheet: cubic-bezier(.32, .72, 0, 1);
+  --ease-sheet-out: cubic-bezier(.4, 0, .2, 1);
+  --sheet-in: 440ms;
+  --sheet-out: 300ms;
+}
+@keyframes sheet-in { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
+@keyframes sheet-out { from { transform: none; } to { transform: translate3d(0, 100%, 0); } }
 @keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
-dialog[open] > .sheet { animation: sheet-in .28s cubic-bezier(.2, .9, .25, 1) both; }
-dialog[open]::backdrop { animation: scrim-in .24s ease both; }
-dialog.is-closing > .sheet { animation: sheet-out .2s cubic-bezier(.4, 0, 1, 1) both; }
-dialog.is-closing::backdrop { animation: scrim-out .2s ease both; }
+dialog[open] > .sheet { animation: sheet-in var(--sheet-in) var(--ease-sheet) both; }
+dialog[open]::backdrop { animation: scrim-in 320ms ease-out both; }
+dialog.is-closing > .sheet { animation: sheet-out var(--sheet-out) var(--ease-sheet-out) both; }
+dialog.is-closing::backdrop { animation: scrim-out var(--sheet-out) ease-in both; }
+.sheet:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   dialog[open] > .sheet, dialog[open]::backdrop, dialog.is-closing > .sheet, dialog.is-closing::backdrop { animation: none; }
 }
 [data-motion="reduce"] dialog[open] > .sheet, [data-motion="reduce"] dialog[open]::backdrop,
 [data-motion="reduce"] dialog.is-closing > .sheet, [data-motion="reduce"] dialog.is-closing::backdrop { animation: none; }
+
+/* Glide segment: the onboarding Class/Board selector, reusable (GlideSegment.tsx).
+   Values match CurriculumEditor.css so the two read as one control. */
+.gseg {
+  --gseg-n: 3;
+  --gseg-i: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--gseg-n), minmax(0, 1fr));
+  padding: 2px;
+  border: .5px solid color-mix(in srgb, var(--hairline) 72%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-sunk) 92%, transparent);
+  isolation: isolate;
+}
+.gseg-pill {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--gseg-n));
+  border: .5px solid color-mix(in srgb, var(--hairline) 72%, transparent);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  transform: translate3d(calc(var(--gseg-i) * 100%), 0, 0);
+  transition: transform 220ms cubic-bezier(.1, .9, .2, 1), background var(--d-theme) ease;
+  will-change: transform;
+}
+.gseg button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--label-3);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, transform 120ms cubic-bezier(.1, .9, .2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+.gseg button[aria-pressed="true"] { color: var(--label); font-weight: var(--fw-semibold); }
+.gseg button:active { transform: scale(.94); }
+.gseg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .gseg-pill, .gseg button { transition: none; } }
+[data-motion="reduce"] .gseg-pill, [data-motion="reduce"] .gseg button { transition: none; }

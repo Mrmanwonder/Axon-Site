@@ -21,7 +21,8 @@ import type { TorchMode } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
-import Dialog, { useDialogDismiss } from "../components/Dialog";
+import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
+import GlideSegment from "../components/GlideSegment";
 import { DraftAlert } from "../components/ScanDrafts";
 import CameraLevel from "../scan/CameraLevel";
 import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
@@ -62,8 +63,8 @@ export default function Scan() {
   const navigate = useNavigate();
   const desk = useDeskMode();
   const [menuOpen, setMenuOpen] = useState(false);
-  // The scanner opens by rising into place and closes by settling away
-  // (transform and opacity, 260 ms in, 180 ms out; instant under reduced motion).
+  // The scanner fades up and its controls settle in; it closes by fading out
+  // (scanner.css; 200 ms out, instant under reduced motion).
   const [leaving, setLeaving] = useState(false);
   const closeScanner = () => {
     if (leaving) return;
@@ -71,7 +72,7 @@ export default function Scan() {
       || matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) { navigate(paths.home); return; }
     setLeaving(true);
-    window.setTimeout(() => navigate(paths.home), 180);
+    window.setTimeout(() => navigate(paths.home), 200);
   };
   const cameraApp = useRef<HTMLInputElement>(null);
 
@@ -131,7 +132,8 @@ export default function Scan() {
             value: draft.id,
           }))
         : undefined,
-      primary: "Done",
+      // Nothing to choose: one way out, not Done beside Cancel.
+      acknowledge: drafts.length ? undefined : "OK",
       onChoice: (id) => draftsHandlers.onResume?.(id),
     });
   };
@@ -158,7 +160,7 @@ export default function Scan() {
     if (hint.tone === "attention" && hint.reason) {
       if (hint.action === "torch" && torch?.supported) {
         return { tone: "attention", text: hint.hint,
-          action: { label: "Turn on light", run: () => setTorchMode("on") } };
+          action: { label: "Turn on torch", run: () => setTorchMode("on") } };
       }
       if (hint.reason === "nothing" || hint.reason === "engine") {
         return { tone: "attention", text: hint.hint,
@@ -196,7 +198,7 @@ export default function Scan() {
             capsule whose "on" state is the tab bar's pill. Line glyphs at the
             tab bar's weight, so the camera reads as the same app. */}
         <div className="sc-top">
-          <PressBox as="button" type="button" className="sc-circ sc-glass" aria-label="Close scanner"
+          <PressBox as="button" type="button" className="sc-circ sc-close" aria-label="Close scanner"
                     onClick={closeScanner}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
           </PressBox>
@@ -204,7 +206,7 @@ export default function Scan() {
           <div className="sc-tools sc-glass">
             <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
                       aria-pressed={auto} onClick={() => { hapticTick(); setAutoCapture(!auto); }}>
-              Auto
+              <span>Auto</span>
             </PressBox>
             <PressBox as="button" type="button" className="sc-circ"
                       aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
@@ -303,15 +305,11 @@ export default function Scan() {
               <Chevron />
             </PressBox>
             {torch?.supported && (
-              <div className="srow noicon sc-light" role="group" aria-label="Light">
-                <div className="lbl">Light{torch.error && <small role="alert">{torch.error}</small>}</div>
-                <div className="seg">
-                  {(["auto", "on", "off"] as TorchMode[]).map((mode) => (
-                    <button type="button" key={mode} aria-pressed={torch.mode === mode}
-                            className={torch.mode === mode ? "on" : undefined}
-                            onClick={() => setTorchMode(mode)}>{TORCH_LABEL[mode]}</button>
-                  ))}
-                </div>
+              <div className="srow noicon sc-torch">
+                <div className="lbl">Torch{torch.error && <small role="alert">{torch.error}</small>}</div>
+                <GlideSegment label="Torch" value={torch.mode as TorchMode}
+                              options={(["auto", "on", "off"] as TorchMode[]).map((mode) => ({ value: mode, label: TORCH_LABEL[mode] }))}
+                              onChange={(mode) => { hapticTick(); setTorchMode(mode); }} />
               </div>
             )}
           </div>
@@ -330,11 +328,10 @@ export default function Scan() {
 /** The More sheet's body. Every row leaves through the sheet's exit motion first. */
 function MoreMenu({ then, children }: { then: (fn: () => void) => void; children: (go: (fn: () => void) => void) => React.ReactNode }) {
   const dismiss = useDialogDismiss();
-  const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), 210); };
-  return <>
-    {children(go)}
-    <div className="acts"><button type="button" className="btn plain" onClick={dismiss}>Close</button></div>
-  </>;
+  // No Close row: the sheet closes by tapping outside it or Escape, like the
+  // system's own action sheets. A row closes the sheet first, then acts.
+  const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), SHEET_EXIT_MS + 10); };
+  return <>{children(go)}</>;
 }
 
 function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {

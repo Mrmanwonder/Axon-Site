@@ -59,7 +59,7 @@ test.describe("camera screen on a phone", () => {
     await open(page, "dark");
     await shot(page, "m-dark");
     await expect(page.locator(".sc-strip")).toHaveAttribute("data-tone", "attention");
-    await page.getByRole("button", { name: "Turn on light" }).click();
+    await page.getByRole("button", { name: "Turn on torch" }).click();
     expect(await calls(page, "setTorchMode")).toEqual([["on"]]);
   });
 
@@ -131,15 +131,40 @@ test.describe("camera screen on a phone", () => {
     await shot(page, "m-more");
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("button", { name: /Import photos/ })).toBeVisible();
-    await expect(dialog.getByRole("group", { name: "Light" })).toBeVisible();
+    await expect(dialog.getByRole("group", { name: "Torch" })).toBeVisible();
+    // No Close row: the sheet closes from outside it or with Escape.
+    await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(0);
+    // Safari once scrolled the dialog to reveal a focused button while the sheet
+    // was still rising, stranding it mid-screen. Once landed, the sheet sits on
+    // the bottom edge, the dialog is unscrolled, and no button holds focus.
+    await page.waitForTimeout(600);
+    const landed = await page.evaluate(() => {
+      const d = document.querySelector("dialog")!;
+      const sheet = d.querySelector(".sheet")!.getBoundingClientRect();
+      return { bottom: sheet.bottom, height: window.innerHeight, scroll: d.scrollTop,
+        focused: document.activeElement?.tagName };
+    });
+    expect(landed.scroll).toBe(0);
+    expect(Math.abs(landed.bottom - landed.height)).toBeLessThan(1);
+    expect(landed.focused).not.toBe("BUTTON");
     await dialog.getByRole("button", { name: "On", exact: true }).click();
     expect(await calls(page, "setTorchMode")).toEqual([["on"]]);
+  });
+
+  test("saved drafts with nothing saved offers one way out", async ({ page }) => {
+    await open(page, "search");
+    await page.getByRole("button", { name: "Saved drafts" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "OK" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "OK" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
   test("the light control is absent where the camera has no torch", async ({ page }) => {
     await open(page, "search");
     await page.getByRole("button", { name: "More" }).click();
-    await expect(page.getByRole("group", { name: "Light" })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Torch" })).toHaveCount(0);
   });
 
   test("every control is at least 44px and the page has no red", async ({ page }) => {
