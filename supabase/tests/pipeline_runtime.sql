@@ -38,6 +38,14 @@ insert into public.student (id, guardian_id, first_name, class_level, age_band) 
 
 -- ── idempotent submit ──────────────────────────────────────────────────────
 
+-- The browser creates its paper before requesting server-issued upload intents.
+insert into public.paper(id,student_id,type,tier,date_taken,subject,idempotency_key)
+values ('aaaaaaaa-0000-4000-8000-0000000000a9','aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-01','Physics','99999999-0000-4000-8000-000000000001');
+-- Trusted fixture represents /upload-intent followed by successful R2 HEAD.
+insert into public.upload(paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,confirmed)
+values ('aaaaaaaa-0000-4000-8000-0000000000a9','aaaaaaaa-0000-4000-8000-000000000002','image','derived','aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/1-abc.webp','image/webp',100,true),
+ ('aaaaaaaa-0000-4000-8000-0000000000a9','aaaaaaaa-0000-4000-8000-000000000002','image','derived','aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/mask/1-abc.png','image/png',100,true),
+ ('aaaaaaaa-0000-4000-8000-0000000000a9','aaaaaaaa-0000-4000-8000-000000000002','image','derived','aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/2-def.webp','image/webp',100,true);
 -- Production /paper-submit calls submit_paper through the guardian's user JWT.
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"pipeline-student"}';
@@ -50,18 +58,18 @@ begin
     'aaaaaaaa-0000-4000-8000-000000000002', 'unit_test', 'tier_1', '2026-08-01', 'Physics',
     jsonb_build_array(
       jsonb_build_object('page_number', 1, 'r2_bucket', 'derived',
-                         'r2_key', 's/p/page/1-abc.webp', 'mask_key', 's/p/mask/1-abc.png',
+                         'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/1-abc.webp', 'mask_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/mask/1-abc.png',
                          'preprocess_version', 'v2', 'quality_verdict', 'ok'),
       jsonb_build_object('page_number', 2, 'r2_bucket', 'derived',
-                         'r2_key', 's/p/page/2-def.webp', 'preprocess_version', 'v2')),
+                         'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/2-def.webp', 'preprocess_version', 'v2')),
     '99999999-0000-4000-8000-000000000001');
 
   -- The same submit again, as a flaky connection would send it.
   v_b := public.submit_paper(
     'aaaaaaaa-0000-4000-8000-000000000002', 'unit_test', 'tier_1', '2026-08-01', 'Physics',
     jsonb_build_array(
-      jsonb_build_object('page_number', 1, 'r2_bucket', 'derived', 'r2_key', 's/p/page/1-abc.webp'),
-      jsonb_build_object('page_number', 2, 'r2_bucket', 'derived', 'r2_key', 's/p/page/2-def.webp')),
+      jsonb_build_object('page_number', 1, 'r2_bucket', 'derived', 'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/1-abc.webp'),
+      jsonb_build_object('page_number', 2, 'r2_bucket', 'derived', 'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/page/2-def.webp')),
     '99999999-0000-4000-8000-000000000001');
 
   select count(*) into v_papers from public.paper
@@ -76,12 +84,12 @@ begin
   perform public._t('a retried submit creates one paper', v_papers = 1, format('%s papers', v_papers));
   perform public._t('a retried submit does not double the pages', v_pages = 2, format('%s pages', v_pages));
   perform public._t('a retried submit reuses the run in flight', v_runs = 1, format('%s runs', v_runs));
-  perform public._t('the first submit says it created it', (v_a ->> 'created')::boolean);
-  perform public._t('the second says it did not', not (v_b ->> 'created')::boolean);
+  perform public._t('the first submit creates the run for the uploaded draft', (v_a ->> 'run_created')::boolean);
+  perform public._t('the second does not create another run', not (v_b ->> 'run_created')::boolean);
   perform public._t('the page keys survived the round trip',
                     exists (select 1 from public.paper_page
                              where paper_id = (v_a ->> 'paper_id')::uuid
-                               and page_number = 1 and mask_key = 's/p/mask/1-abc.png'));
+                               and page_number = 1 and mask_key = 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a9/mask/1-abc.png'));
 end $$;
 
 do $$ begin begin

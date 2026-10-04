@@ -110,6 +110,18 @@ select public._t('unchanged submission reuses the fresh run',
  (select result->>'run_id' from audit_submit));
 
 select public.commit_extraction_run('aaaaaaaa-0000-4000-8000-0000000000b3');
+do $ begin
+  begin
+    insert into public.region_explanation(region_id,run_id,student_id,tier,cause,marks_lost,body,do_this_next,model_version,prompt_version,grounding_status)
+    values ('aaaaaaaa-0000-4000-8000-0000000000c5','aaaaaaaa-0000-4000-8000-0000000000b2','aaaaaaaa-0000-4000-8000-000000000002','tier_1','procedural_slip',1,'Wrong run','Check','fixture','fixture','complete');
+    perform public._t('late synchronization rejects a mismatched run',false);
+  exception when insufficient_privilege then perform public._t('late synchronization rejects a mismatched run',true); end;
+end $;
+insert into public.region_explanation(region_id,run_id,student_id,tier,cause,marks_lost,body,do_this_next,model_version,prompt_version,grounding_status)
+values ('aaaaaaaa-0000-4000-8000-0000000000c5','aaaaaaaa-0000-4000-8000-0000000000b3','aaaaaaaa-0000-4000-8000-000000000002','tier_1','procedural_slip',1,'Owned late explanation','Check','fixture','fixture','complete');
+select public._t('an owned late explanation still reaches the committed card',
+ exists(select 1 from public.mark_loss_event where ai_explanation='Owned late explanation'));
+
 select public._t('commit recomputes the corrected marks mismatch',
  (select reconciled=false and total_awarded=6 from public.paper where id='aaaaaaaa-0000-4000-8000-0000000000a3'));
 do $$ begin
@@ -128,6 +140,13 @@ do $$ begin
   exception when insufficient_privilege then perform public._t('client cannot reset commit authority',true); end;
 end $$;
 reset role;
+do $ begin
+  begin
+    update public.question_region set committed_attempt_id=(select id from public.student_attempt where paper_id='aaaaaaaa-0000-4000-8000-0000000000a3' limit 1)
+      where id='aaaaaaaa-0000-4000-8000-0000000000c3';
+    perform public._t('database also rejects cross-paper pointer forgery',false);
+  exception when foreign_key_violation then perform public._t('database also rejects cross-paper pointer forgery',true); end;
+end $;
 select public._t('one commit produces exactly one attempt',
  (select count(*)=1 from public.student_attempt where paper_id='aaaaaaaa-0000-4000-8000-0000000000a3'));
 -- Simulate a legacy poisoned row under trusted fixture ownership. Deletion
