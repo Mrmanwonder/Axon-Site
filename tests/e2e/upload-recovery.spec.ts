@@ -59,3 +59,56 @@ test('erasure and explicit deletion reject late upload persistence without recre
     return {deleted,erased,count:(await d.listDrafts('s')).length};
   });expect(result).toEqual({deleted:true,erased:true,count:0});
 });
+
+test('submitted originals survive review and app reload; retry attaches without retransmitting confirmed bytes',async({page})=>{
+  let failAttach=true,puts=0,attachments=0,nonce=0;
+  const arrived=new Set<string>();
+  await page.route('**/src/scan/functions.js*',route=>route.fulfill({contentType:'application/javascript',body:
+    `async function post(path,body,options={}){const r=await fetch('/upload-fixture'+path,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'},signal:options.signal});const data=await r.json();if(!r.ok)throw Object.assign(new Error('fixture failure'),{status:r.status,body:data});return data;}
+    export const uploadIntent=(body,options)=>post('/intent',body,options);
+    export const uploadComplete=(body,options)=>post('/complete',body,options);
+    export const attachOriginals=(body,options)=>post('/attach',body,options);
+    export const submitPaper=(body,options)=>post('/submit',body,options);
+    export async function putObject(url,blob,type,options={}){const r=await fetch(url,{method:'PUT',body:blob,signal:options.signal});if(!r.ok)throw Object.assign(new Error('put failed'),{status:r.status});}`}));
+  await page.route('**/upload-fixture/**',async route=>{
+    const req=route.request(),path=new URL(req.url()).pathname;
+    if(req.method()==='PUT'){puts++;arrived.add(decodeURIComponent(path.split('/put/')[1]));await route.fulfill({status:200,body:''});return;}
+    const body=req.postDataJSON();let result:any={},status=200;
+    if(path.endsWith('/intent'))result={objects:body.objects.map(o=>{const key=o.kind+'/'+o.name+'-'+(++nonce);return {...o,key,bucket:o.kind==='raw'?'originals':'derived',url:'http://127.0.0.1:5174/upload-fixture/put/'+encodeURIComponent(key)};}).reverse()};
+    if(path.endsWith('/complete')){result={confirmed:body.uploads.filter(o=>arrived.has(o.key)).map(o=>o.key),missing:body.uploads.filter(o=>!arrived.has(o.key)).map(o=>({key:o.key,reason:'that file did not arrive'}))};status=result.missing.length?409:200;}
+    if(path.endsWith('/submit'))result={run_id:'run',queued:true};
+    if(path.endsWith('/attach')){attachments++;if(failAttach){status=503;result={error:'try again'};}else result={attached:body.pages.map(p=>({page_number:p.page_number,key:p.original_key}))};}
+    await route.fulfill({status,contentType:'application/json',body:JSON.stringify(result)});
+  });
+  const id=await page.evaluate(async()=>{
+    const d=await import('/src/scan/drafts.js'),f=await import('/src/scan/functions.js'),{sendDraft}=await import('/src/scan/send-draft.js');
+    const draft=await d.createDraft({id:crypto.randomUUID(),studentId:'s',paperType:'unit_test'});
+    await d.addPage(draft,{blob:new Blob(['page'],{type:'image/jpeg'}),mask:new Blob(['mask']),thumb:new Blob(['thumb']),original:new Blob(['original'],{type:'image/jpeg'})});
+    await sendDraft({studentId:'s',draft,mode:'batch',earlySubmit:true},{...d,newId:()=>crypto.randomUUID(),tierForType:()=> 'tier_1',createPaper:async()=>({id:'paper',type:'unit_test'}),transport:f});
+    const backups=await import('/src/scan/original-backups.js');await backups.finishDraftReview(draft);
+    try{await backups.resumeOriginalBackups(draft);}catch{}
+    const saved=await d.readDraft(draft.id);
+    if(!saved||!saved.review_saved||!saved.submission||saved.pages[0].upload_assets.raw.status!=='confirmed'||await saved.pages[0].original.text()!=='original')throw new Error('Pending backup was not retained');
+    return draft.id;
+  });
+  expect(puts).toBe(4);expect(attachments).toBe(1);
+  failAttach=false;await page.reload();
+  const remaining=await page.evaluate(async id=>{
+    const d=await import('/src/scan/drafts.js'),backups=await import('/src/scan/original-backups.js');
+    const draft=await d.readDraft(id);await backups.resumeOriginalBackups(draft);
+    return d.readDraft(id);
+  },id);
+  expect(remaining).toBeUndefined();expect(puts).toBe(4);expect(attachments).toBe(2);
+});
+test('accepted retake clears the frozen manifest while uncertain submissions remain immutable',async({page})=>{
+  const result=await page.evaluate(async()=>{
+    const d=await import('/src/scan/drafts.js'),draft=await d.createDraft({id:crypto.randomUUID(),studentId:'s'});
+    await d.addPage(draft,{blob:new Blob(['p'],{type:'image/jpeg'})});
+    await d.mutateDraft(draft,fresh=>{fresh.submission_started={paper_id:'p'};});
+    let uncertain=false;try{await d.replacePage(draft,1,{blob:new Blob(['retake'],{type:'image/jpeg'})});}catch{uncertain=true;}
+    await d.mutateDraft(draft,fresh=>{fresh.submission={run_id:'run',queued:true};});
+    await d.replacePage(draft,1,{blob:new Blob(['retake'],{type:'image/jpeg'})});
+    return {uncertain,frozen:Boolean(draft.submission_started),submitted:Boolean(draft.submission),image:await draft.pages[0].blob.text()};
+  });
+  expect(result).toEqual({uncertain:true,frozen:false,submitted:false,image:'retake'});
+});
