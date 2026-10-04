@@ -193,7 +193,7 @@ export default function PaperOverview() {
           {/* We never assert our reading is right against the paper's own
               total — we state both and let the student judge. */}
           {totalNote(paper) && <div className="subnote po-note">{totalNote(paper)}</div>}
-          {paper.reconciled === false && paper.reported_total != null && (
+          {marksRows.length > 0 && paper.reported_total != null && Math.abs(sumAwarded - Number(paper.reported_total)) > 0.0001 && (
             <div className="subnote po-note">
               Our reading adds up to {numMark(sumAwarded)}, and the total on your paper is{" "}
               {numMark(Number(paper.reported_total))} — worth a look at the questions below.

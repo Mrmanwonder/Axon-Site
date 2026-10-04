@@ -65,16 +65,23 @@ export function spring(
     finish();
     return;
   }
-  const dt = 1 / 60;
   const startedAt = performance.now();
+  let lastAt = startedAt;
 
   const step = (now: number) => {
     if (reduced()) {
       finish();
       return;
     }
-    s.vel += (-stiffness * (s.pos - to) - damping * s.vel) * dt;
-    s.pos += s.vel * dt;
+    // Integrate elapsed wall time with bounded substeps for stable damping.
+    const elapsed = Math.min(0.05, Math.max(0, (now - lastAt) / 1000));
+    lastAt = now;
+    const steps = Math.max(1, Math.ceil(elapsed * 240));
+    const dt = elapsed / steps;
+    for (let i = 0; i < steps; i++) {
+      s.vel += (-stiffness * (s.pos - to) - damping * s.vel) * dt;
+      s.pos += s.vel * dt;
+    }
     onUpdate(s.pos, s.vel);
 
     const stillMoving = Math.abs(s.vel) > .015 || Math.abs(s.pos - to) > .015;
