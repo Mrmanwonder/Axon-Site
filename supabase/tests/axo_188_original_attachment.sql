@@ -111,6 +111,21 @@ do $$ begin
  exception when insufficient_privilege then perform public._t('stale issued capture rejected',true);end;
 end $$;
 reset role;
+-- Legacy confirmed page intents may use only their exact canonical binding.
+update public.upload set asset_kind=null,page_number=null,page_revision=null,page_key=null where asset_kind='page' and page_number=5;
+update public.paper_page set conditioning_meta='{"upload_revision":"legacy-5"}' where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=5;
+update public.upload set page_revision='legacy-5' where asset_kind='raw' and page_number=5;
+set local role service_role;
+select public._t('legacy confirmed page binding remains resumable',jsonb_array_length(public.attach_paper_originals(
+ 'aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-0000000000a1',public._attachment(5,'legacy-5'))->'attached')=1);
+reset role;
+update public.upload set r2_key='aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p3-original-capture.heic',
+ content_type='image/heic' where asset_kind='raw' and page_number=3;
+set local role service_role;
+select public._t('supported unchanged HEIC original attaches',jsonb_array_length(public.attach_paper_originals(
+ 'aaaaaaaa-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-0000000000a1',public._attachment(3,null,
+ 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p3-original-capture.heic'))->'attached')=1);
+reset role;
 -- Exercise the public authenticated handoff as well as its service attachment.
 insert into private.student_scope_session(guardian_id,auth_session_id,student_id,expires_at)
 values ('aaaaaaaa-0000-4000-8000-000000000001','original-test','aaaaaaaa-0000-4000-8000-000000000002',now()+interval '15 minutes');
