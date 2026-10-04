@@ -71,7 +71,7 @@ begin
       and u.r2_bucket='derived' and u.r2_key=v_upload.page_key
       and ((u.asset_kind='page' and u.page_number=v_number and u.page_revision=v_upload.page_revision)
         or (u.asset_kind is null and v_upload.page_revision='legacy-'||v_number::text
-          and u.r2_key like p_student_id::text||'/'||p_paper_id::text||'/page/p'||v_number::text||'-%')))) then
+          and u.r2_key like p_student_id::text||'/'||p_paper_id::text||'/page/p'||v_number::text||'-%'))) then
       raise exception 'Original binding was not issued for this capture' using errcode='42501';
     end if;
     -- A refreshed page capability can have a different nonce for the same
@@ -81,7 +81,7 @@ begin
       and u.r2_bucket='derived' and u.r2_key=v_page.r2_key and u.confirmed
       and ((u.asset_kind='page' and u.page_number=v_number and u.page_revision=v_upload.page_revision)
         or (u.asset_kind is null and u.r2_key=v_upload.page_key and v_upload.page_revision='legacy-'||v_number::text
-          and u.r2_key like p_student_id::text||'/'||p_paper_id::text||'/page/p'||v_number::text||'-%')))) then
+          and u.r2_key like p_student_id::text||'/'||p_paper_id::text||'/page/p'||v_number::text||'-%'))) then
       raise exception 'Conditioned page binding is unconfirmed' using errcode='42501';
     end if;
     if v_page.original_key is not null and v_page.original_key <> v_key then
@@ -143,7 +143,7 @@ begin
        and u.r2_bucket='derived' and u.r2_key=new.r2_key and u.confirmed
        and ((u.asset_kind='page' and u.page_number=new.page_number and u.page_revision=v_upload.page_revision)
          or (u.asset_kind is null and u.r2_key=v_upload.page_key and v_upload.page_revision='legacy-'||new.page_number::text
-           and u.r2_key like new.student_id::text||'/'||new.paper_id::text||'/page/p'||new.page_number::text||'-%'))))
+           and u.r2_key like new.student_id::text||'/'||new.paper_id::text||'/page/p'||new.page_number::text||'-%')))
   ) then raise exception 'Original does not match this capture' using errcode='42501'; end if;
   return new;
 end; $$;

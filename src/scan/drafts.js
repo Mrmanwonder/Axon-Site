@@ -55,7 +55,7 @@ export async function readDraft(id) {
   const db = await open();
   const draft = await tx(db, 'readonly', (store) => store.get(id));
   if (draft && Date.now() - draft.updated_at > DRAFT_RETENTION_MS) { await deleteDraft(id); return null; }
-  return stamp(draft);
+  return stamp(decodeDraft(draft));
 }
 
 export async function listDrafts(studentId) {

@@ -71,7 +71,7 @@ export async function movePage(draft, from, to) {
   }); return draft;
 }
 export async function replacePage(draft, number, page) {
-  const captured = structuredClone(page);
+  const captured = await encodeCapturedPage(page);
   await mutateDraft(draft, fresh => {
     // An accepted, reviewable paper may explicitly retake a page. An uncertain
     // submission remains frozen until its exact request has been resolved.
