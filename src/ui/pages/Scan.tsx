@@ -14,7 +14,6 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from "react";
-import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { TorchMode } from "../scan/ScanProvider";
@@ -30,10 +29,7 @@ import ImportDesk from "../scan/ImportDesk";
 import { useDeskMode } from "../scan/useDeskMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick } from "../lib/haptics";
-import {
-  CheckSymbol, CloseSymbol, CropFreeSymbol, DraftSymbol, FlashlightSymbol, InfoSymbol, LinkSymbol,
-  MoreHorizSymbol, PhotoCameraSymbol, PhotoLibrarySymbol,
-} from "../components/MaterialSymbols";
+import { CheckSymbol, CropFreeSymbol, InfoSymbol } from "../components/MaterialSymbols";
 import Chevron from "../components/Chevron";
 import { paths } from "../app/paths";
 import "../styles/scanner.css";
@@ -183,26 +179,37 @@ export default function Scan() {
   return (
     <>
       <div className="sc" data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
+        {/* The top bar wears the navigation bar's material, the same as the
+            shutter below it: close on its own, and the three tools in one
+            capsule whose "on" state is the tab bar's pill. Line glyphs at the
+            tab bar's weight, so the camera reads as the same app. */}
         <div className="sc-top">
-          <PressBox as="button" type="button" className="sc-circ" aria-label="Close scanner"
+          <PressBox as="button" type="button" className="sc-circ sc-glass" aria-label="Close scanner"
                     onClick={() => navigate(paths.home)}>
-            <CloseSymbol size={22} />
-          </PressBox>
-          <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
-                    aria-pressed={auto} onClick={() => setAutoCapture(!auto)}>
-            <i aria-hidden="true" />{auto ? "Auto" : "Manual"}
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
           </PressBox>
           <span className="sc-grow" />
-          <PressBox as="button" type="button" className="sc-circ"
-                    aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
-                    onClick={openDrafts}>
-            <DraftSymbol size={22} />
-            {draftsCount > 0 && <span className="dot" aria-hidden="true" />}
-          </PressBox>
-          <PressBox as="button" type="button" className="sc-circ" aria-label="More"
-                    aria-haspopup="dialog" onClick={() => { hapticTick(); setMenuOpen(true); }}>
-            <MoreHorizSymbol size={22} />
-          </PressBox>
+          <div className="sc-tools sc-glass">
+            <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
+                      aria-pressed={auto} onClick={() => { hapticTick(); setAutoCapture(!auto); }}>
+              Auto
+            </PressBox>
+            <PressBox as="button" type="button" className="sc-circ"
+                      aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
+                      onClick={openDrafts}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 3.75h6.6L18.25 8.4V19a1.25 1.25 0 0 1-1.25 1.25H7A1.25 1.25 0 0 1 5.75 19V5A1.25 1.25 0 0 1 7 3.75Z" />
+                <path d="M13.25 3.9V8.75h4.85" /><path d="M9 13h6M9 16.25h4" />
+              </svg>
+              {draftsCount > 0 && <span className="dot" aria-hidden="true" />}
+            </PressBox>
+            <PressBox as="button" type="button" className="sc-circ" aria-label="More"
+                      aria-haspopup="dialog" onClick={() => { hapticTick(); setMenuOpen(true); }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="dots">
+                <circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" />
+              </svg>
+            </PressBox>
+          </div>
         </div>
 
         {/* The ids are load-bearing: system.css sizes the video and the overlay
@@ -258,21 +265,34 @@ export default function Scan() {
 
       {menuOpen && (
         <Dialog title="More" busy={false} onClose={() => setMenuOpen(false)} className="sc-menu">
-          <div className="sc-menu-list">
-            <MenuRow icon={<PhotoLibrarySymbol size={20} />} title="Import photos" sub="From your files"
-                     onClick={() => closeMenuThen(addPaper)} />
-            <MenuRow icon={<PhotoCameraSymbol size={20} />} title="Use your camera app"
-                     sub="Take a photo with your phone’s own camera"
-                     onClick={() => closeMenuThen(() => cameraApp.current?.click())} />
-            <MenuRow icon={<LinkSymbol size={20} />} title="Add a link" sub="A shared PDF or drive file"
-                     onClick={() => closeMenuThen(addLink)} />
-            <MenuRow icon={<DraftSymbol size={20} />} title="Saved drafts"
-                     sub={draftsCount ? `${draftsCount} on this device` : "None yet"}
-                     onClick={() => closeMenuThen(openDrafts)} />
+          {/* The Settings list, verbatim: plain rows, a label with its note
+              under it, a chevron where the row leads somewhere, and the app's
+              segmented control for a three-way choice. */}
+          <div className="list sc-menu-list">
+            <PressBox as="button" type="button" className="srow noicon" data-interactive=""
+                      onClick={() => closeMenuThen(addPaper)}>
+              <div className="lbl">Import photos<small>From your gallery or files</small></div>
+              <Chevron />
+            </PressBox>
+            <PressBox as="button" type="button" className="srow noicon" data-interactive=""
+                      onClick={() => closeMenuThen(() => cameraApp.current?.click())}>
+              <div className="lbl">Use your camera app<small>Take the photo with your phone’s own camera</small></div>
+              <Chevron />
+            </PressBox>
+            <PressBox as="button" type="button" className="srow noicon" data-interactive=""
+                      onClick={() => closeMenuThen(addLink)}>
+              <div className="lbl">Add a link<small>A shared PDF or drive file</small></div>
+              <Chevron />
+            </PressBox>
+            <PressBox as="button" type="button" className="srow noicon" data-interactive=""
+                      onClick={() => closeMenuThen(openDrafts)}>
+              <div className="lbl">Saved drafts</div>
+              <div className="aux">{draftsCount || "None"}</div>
+              <Chevron />
+            </PressBox>
             {torch?.supported && (
-              <div className="sc-light" role="group" aria-label="Light">
-                <span className="ic" aria-hidden="true"><FlashlightSymbol size={20} /></span>
-                <span className="lb">Light</span>
+              <div className="srow noicon sc-light" role="group" aria-label="Light">
+                <div className="lbl">Light{torch.error && <small role="alert">{torch.error}</small>}</div>
                 <div className="seg">
                   {(["auto", "on", "off"] as TorchMode[]).map((mode) => (
                     <button type="button" key={mode} aria-pressed={torch.mode === mode}
@@ -280,7 +300,6 @@ export default function Scan() {
                             onClick={() => setTorchMode(mode)}>{TORCH_LABEL[mode]}</button>
                   ))}
                 </div>
-                {torch.error && <small role="alert">{torch.error}</small>}
               </div>
             )}
           </div>
@@ -295,18 +314,6 @@ export default function Scan() {
 
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
-  );
-}
-
-function MenuRow({ icon, title, sub, onClick }: {
-  icon: React.ReactNode; title: string; sub: string; onClick: () => void;
-}) {
-  return (
-    <button type="button" className="sc-mrow" onClick={onClick}>
-      <span className="ic" aria-hidden="true">{icon}</span>
-      <span className="tx"><span className="ti">{title}</span><small>{sub}</small></span>
-      <Chevron />
-    </button>
   );
 }
 

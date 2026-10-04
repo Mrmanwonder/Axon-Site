@@ -21,7 +21,7 @@ import {
   releaseCamera, requestCamera, requestContinuousFocus, requestFallbackCaptureResolution,
 } from './camera.js';
 import { DETECTOR } from './detector.js';
-import { GUIDE, chooseGuidance, quadTouchesEdge } from './guidance.js';
+import { GUIDE, chooseGuidance, looksLikePaper, quadTouchesEdge } from './guidance.js';
 import { quadFill, quadSize } from './geometry.js';
 import { createLock } from './lock.js';
 import { focusWindowRect, skewDegrees } from './quality.js';
@@ -584,7 +584,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
     signals.glare = reply.exposure ? reply.exposure.glare : null;
     signals.edgeContrast = reply.signals?.edgeContrast ?? null;
 
-    const quadNorm = detection.status === 'found' && detection.quad
+    // A confident shape that is darker than everything around it (a keyboard,
+    // a laptop lid) is not followed: no lock, no Auto. The shutter still works.
+    const paper = looksLikePaper(reply.signals?.interior ?? null);
+    const quadNorm = detection.status === 'found' && detection.quad && paper
       ? detection.quad.map((p) => ({ x: p.x / reply.width, y: p.y / reply.height }))
       : null;
     const before = snapshot.phase;

@@ -144,6 +144,7 @@ function EdgeEditor({ pageNumber, sourceOf, apply, onDone, onClose }: {
   useEffect(() => {
     if (!source) return;
     let cancelled = false;
+    let copyUrl: string | null = null;
     const url = URL.createObjectURL(source.blob);
     const image = new Image();
     image.onload = async () => {
@@ -152,23 +153,36 @@ function EdgeEditor({ pageNumber, sourceOf, apply, onDone, onClose }: {
         const { createCornerEditor } = await import("scanic");
         if (cancelled || !host.current) return;
         const w = image.naturalWidth, h = image.naturalHeight;
+        // The editor and its magnifier work in the pixels of the image they are
+        // given, and scanic's magnifier never zooms below 1.1x of those. Handed
+        // a 12 MP photo shown at phone width, it magnified the corner about
+        // twenty times on screen: sensor noise, not a page corner (owner's
+        // phone, 4 Oct 2026). So the editor gets a copy at the screen's own
+        // resolution, and corners are scaled back to the photo on the way out.
+        const scale = editScale(host.current, w, h);
+        const shown = scale < 1 ? await scaledCopy(image, scale) : image;
+        if (shown instanceof HTMLImageElement && shown !== image) copyUrl = shown.src;
+        if (cancelled || !host.current) return;
         const inset = (f: number) => [
           { x: w * f, y: h * f }, { x: w * (1 - f), y: h * f },
           { x: w * (1 - f), y: h * (1 - f) }, { x: w * f, y: h * (1 - f) },
         ];
+        const toShown = (q: Point[]) => q.map((p) => ({ x: p.x * scale, y: p.y * scale }));
+        const toPhoto = (q: Point[]) => q.map((p) => ({ x: p.x / scale, y: p.y / scale }));
         editor.current = createCornerEditor({
           container: host.current,
-          image,
-          corners: toCorners(source.quad ?? inset(0.08)),
+          image: shown,
+          corners: toCorners(toShown(source.quad ?? inset(0.08))),
           toolbar: { enabled: false },
           nudges: { enabled: false },
           theme: { accent: "#3A86FF", handleSize: 22 },
+          magnifier: { size: 120, zoom: 2.5 },
           onConfirm: async (corners: Corners) => {
             if (confirmed.current) return;
             confirmed.current = true;
             setWorking(true); setError(null);
             try {
-              await apply(toQuad(corners));
+              await apply(toPhoto(toQuad(corners)));
               onDone(); onClose();
             } catch (cause) {
               confirmed.current = false;
@@ -189,6 +203,7 @@ function EdgeEditor({ pageNumber, sourceOf, apply, onDone, onClose }: {
       editor.current?.destroy();
       editor.current = null;
       URL.revokeObjectURL(url);
+      if (copyUrl) URL.revokeObjectURL(copyUrl);
     };
     // The editor is created once per opened page; callbacks close over refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,4 +228,24 @@ function EdgeEditor({ pageNumber, sourceOf, apply, onDone, onClose }: {
       </div>
     </Dialog>
   );
+}
+
+/** Scale (at most 1) that brings the photo to the editor box at device resolution. */
+export function editScale(host: HTMLElement | null, width: number, height: number): number {
+  const dpr = Math.min(globalThis.devicePixelRatio || 1, 3);
+  const boxW = (host?.clientWidth || 360) * dpr, boxH = (host?.clientHeight || 480) * dpr;
+  return Math.min(1, Math.max(boxW / width, boxH / height));
+}
+
+async function scaledCopy(image: HTMLImageElement, scale: number): Promise<HTMLImageElement | HTMLCanvasElement> {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) return canvas;
+  const copy = new Image();
+  copy.src = URL.createObjectURL(blob);
+  await copy.decode().catch(() => undefined);
+  return copy;
 }

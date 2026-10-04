@@ -19,10 +19,12 @@ export const GUIDE = Object.freeze({
   DARK_P95: 120,
   /** A page covering less than this share of the view is "small". */
   SMALL_FILL: 0.35,
-  /** The same, when the still is a sensor photograph (ImageCapture, ~12 MP) rather
-      than a video frame: a page at a quarter of the view is still about 2000 px
-      long on the photo, above the conditioning refusal line (1600 px). */
-  SMALL_FILL_NATIVE: 0.22,
+  /** The same, when the still is a sensor photo. Measured on the owner's phone
+      (3000x4000 stills, 3 Oct 2026): fill 0.26 gave a 2020 px page and fill
+      0.33 a 2290 px page, both under the 2400 px target, so each was upscaled
+      and sharpened ("Page sharpened for readability"). 0.22 made that worse;
+      the page needs about a third of the view to arrive at full size. */
+  SMALL_FILL_NATIVE: 0.34,
   /** Mean luminance step across the quad's edges (0–255) that counts as a real page
       edge. Without one, a small quad may sit inside a page that overfills the frame. */
   EDGE_CONTRAST: 10,
@@ -37,6 +39,10 @@ export const GUIDE = Object.freeze({
   BLURRY: QUALITY.BLUR_FAIL,
   /** Nothing page-like for this long: say so and point to the shutter. */
   NOTHING_MS: 6000,
+  /** A quad whose inside is this much darker (median luma, 0-255) than its
+      surroundings, and also below PAPER_LIGHT, is not followed as a page. */
+  PAPER_DARKER_BY: 20,
+  PAPER_LIGHT: 120,
 });
 
 /**
@@ -112,6 +118,17 @@ export function chooseGuidance(s) {
 }
 
 /** A corner within `margin` of the frame edge on either axis (normalised quad). */
+/**
+ * Could this quad be paper? False only on evidence: the inside is clearly
+ * darker than what surrounds it AND not light in its own right. Unknown (null)
+ * is not evidence and passes.
+ */
+export function looksLikePaper(interior) {
+  if (!interior) return true;
+  const darker = interior.inside < interior.outside - GUIDE.PAPER_DARKER_BY;
+  return !(darker && interior.inside < GUIDE.PAPER_LIGHT);
+}
+
 export function quadTouchesEdge(quad, margin = GUIDE.EDGE_MARGIN) {
   return quad.some((p) => p.x <= margin || p.x >= 1 - margin || p.y <= margin || p.y >= 1 - margin);
 }

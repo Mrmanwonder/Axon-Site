@@ -19,4 +19,4 @@ Path geometry is embedded in the existing `src/ui/components/MaterialSymbols.tsx
 The `rescan` API name uses the `document_scanner` glyph; `confirmed` uses `check_circle`; `attention` uses `error`. Status meaning always also appears as text. Attention/Delete use Axon's existing amber role; no new red UI is introduced.
 
 
-Integration addendum: the shared renderer reuses the scanner’s existing check_circle glyph from @material-symbols/svg-400 0.47.6 (outlined). The confirmed-row blob above records the original review asset, which is no longer embedded.
+Integration addendum: main’s scanner glyphs and the review subset use one renderer. The confirmed state uses the original check_circle review asset listed above; main removed its unused scanner counterpart.
