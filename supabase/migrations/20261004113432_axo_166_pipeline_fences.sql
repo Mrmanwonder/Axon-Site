@@ -172,3 +172,59 @@ end; $$;
 
 revoke execute on function public.advance_after_structure(uuid) from public, anon, authenticated;
 grant execute on function public.advance_after_structure(uuid) to service_role;
+
+create or replace function public.advance_after_crop(p_run_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  v_paper   uuid;
+  v_pending integer;
+  v_regions uuid[];
+begin
+  perform private.run_lock(p_run_id);
+  select paper_id into v_paper from public.extraction_run where id = p_run_id;
+  if v_paper is null then return jsonb_build_object('advanced', false); end if;
+
+  select count(*) into v_pending from public.paper_page
+   where paper_id = v_paper and crop_status in ('pending', 'running');
+  if v_pending > 0 then return jsonb_build_object('advanced', false); end if;
+
+  if (select status from public.extraction_run where id=p_run_id) = 'content' then
+    select array_agg(id order by order_index) into v_regions from public.question_region
+      where run_id=p_run_id and extract_status in ('pending','running');
+    return jsonb_build_object('advanced',false,'enqueue_content',coalesce(to_jsonb(v_regions),'[]'::jsonb),
+      'enqueue_reconcile',coalesce(array_length(v_regions,1),0)=0);
+  elsif (select status from public.extraction_run where id = p_run_id) <> 'cropping' then
+    return jsonb_build_object('advanced', false);
+  end if;
+
+  perform public.run_advance(p_run_id, 'content');
+
+  select array_agg(id order by order_index) into v_regions
+    from public.question_region
+   where run_id = p_run_id and extract_status = 'pending';
+
+  return jsonb_build_object(
+    'advanced', true,
+    'enqueue_content', coalesce(to_jsonb(v_regions), '[]'::jsonb),
+    'enqueue_reconcile', coalesce(array_length(v_regions, 1), 0) = 0);
+end; $$;
+
+
+-- Every issued PUT capability also has a deferred staging cleanup, after URL expiry.
+alter table public.r2_deletion add column if not exists not_before timestamptz not null default now();
+create or replace function public.claim_deletions(p_limit integer default 5)
+returns table(id bigint,bucket text,prefix text,key text,attempts integer)
+language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+  return query update public.r2_deletion d set attempts=d.attempts+1
+    where d.id in (select c.id from public.r2_deletion c
+      where c.done_at is null and c.attempts<20 and c.not_before<=now()
+      order by c.created_at for update skip locked limit p_limit)
+    returning d.id,d.bucket,d.prefix,d.key,d.attempts;
+end; $$;
+revoke all on function public.claim_deletions(integer) from public,anon,authenticated;
+grant execute on function public.claim_deletions(integer) to service_role;

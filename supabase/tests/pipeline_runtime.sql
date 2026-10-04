@@ -149,8 +149,8 @@ begin
   select public.advance_after_structure(v_run) into v_advance;
   perform public._t('a second call does not advance it again',
                     not (v_advance ->> 'advanced')::boolean);
-  perform public._t('and does not ask for reconciliation twice',
-                    v_advance -> 'enqueue_reconcile' is null);
+  perform public._t('and preserves reconciliation dispatch for a failed queue send',
+                    (v_advance ->> 'enqueue_reconcile')::boolean);
 end $$;
 
 -- ── terminal is terminal ───────────────────────────────────────────────────

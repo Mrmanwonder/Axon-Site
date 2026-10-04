@@ -173,13 +173,13 @@ select public._t('an owned late explanation still reaches the committed card',
  exists(select 1 from public.mark_loss_event where ai_explanation='Owned late explanation'));
 
 
-do $ begin
+do $$ begin
  begin
   perform public.submit_paper('aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-03','Physics',
    '[{"page_number":1},{"page_number":2}]','aaaaaaaa-0000-4000-8000-000000000088',null,null,'1.0.0','aaaaaaaa-0000-4000-8000-0000000000a3');
   perform public._t('saved paper page-set edits are rejected',false);
  exception when insufficient_privilege then perform public._t('saved paper page-set edits are rejected',true); end;
-end $;
+end $$;
 
 select public._t('a recovered page marker cannot make a complete committed total partial',
  (select total_partial=false from public.paper where id='aaaaaaaa-0000-4000-8000-0000000000a3'));

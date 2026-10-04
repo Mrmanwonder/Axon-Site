@@ -84,11 +84,6 @@ jobs:
       # rows every suite's fixtures insert into actually resolve, then applies
       # every migration in supabase/migrations/ from a clean database — the
       # same schema this project runs in production.
-      - name: Generate pipeline fence migration with the Supabase CLI
-        run: |
-          supabase migration new axo_166_pipeline_fences
-          cp scripts/axo-166-pipeline-fences.sql "$(find supabase/migrations -name '*_axo_166_pipeline_fences.sql')"
-
       - name: Start local Supabase stack and apply migrations
         run: |
           supabase start
