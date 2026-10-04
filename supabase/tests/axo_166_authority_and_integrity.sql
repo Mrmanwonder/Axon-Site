@@ -148,7 +148,11 @@ select public._t('a retired worker cannot complete the replacement page',
 select public._t('the current structure worker can durably finish its own page',
  (public.pipeline_write((select (result->>'run_id')::uuid from audit_removed),'structure',
  jsonb_build_object('page_id',(select id from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' limit 1),
- 'patch',jsonb_build_object('structure_status','done')))->>'applied')::boolean);
+ 'patch',jsonb_build_object('structure_status','done'),
+ 'regions','[{"id":"aaaaaaaa-0000-4000-8000-0000000000d1","order_index":0,"page_spans":[{"page":1,"box":{"x":1,"y":1,"w":10,"h":10}}],"question_label":"Q1","question_label_box":{"page":1,"x":1,"y":1,"w":10,"h":10},"confidence_tier":"unsure"}]'::jsonb,
+ 'teacher_marks','[]'::jsonb))->>'applied')::boolean);
+select public._t('structure evidence and completion persist atomically',
+ exists(select 1 from public.question_region where id='aaaaaaaa-0000-4000-8000-0000000000d1'));
 update public.extraction_run set status='needs_review' where id=(select (result->>'run_id')::uuid from audit_removed);
 select public._t('a late same-run reconcile cannot overwrite review totals or confidence',
  not (public.pipeline_write((select (result->>'run_id')::uuid from audit_removed),'reconcile_result',
@@ -157,6 +161,40 @@ select public._t('a late same-run reconcile cannot overwrite review totals or co
 update public.extraction_run set status='content' where id='aaaaaaaa-0000-4000-8000-0000000000b2';
 select public._t('structure retry redispatches pending content after durable advancement',
  jsonb_array_length(public.advance_after_structure('aaaaaaaa-0000-4000-8000-0000000000b2')->'enqueue_content')=2);
+
+select public._t('a late structure result cannot replace evidence once review is ready',
+ not (public.pipeline_write((select (result->>'run_id')::uuid from audit_removed),'structure',
+ jsonb_build_object('page_id',(select id from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' limit 1),
+ 'patch',jsonb_build_object('structure_status','done'),'regions','[]'::jsonb))->>'applied')::boolean
+ and exists(select 1 from public.question_region where id='aaaaaaaa-0000-4000-8000-0000000000d1'));
+select public._t('content evidence persists while its phase is active',
+ (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b2','content',
+ '{"region_id":"aaaaaaaa-0000-4000-8000-0000000000c3","patch":{"extract_status":"done","student_answer":"machine"}}')->>'applied')::boolean);
+update public.extraction_run set status='needs_review' where id='aaaaaaaa-0000-4000-8000-0000000000b2';
+update public.question_region set student_answer='Human correction' where id='aaaaaaaa-0000-4000-8000-0000000000c3';
+select public._t('late duplicate content cannot overwrite the human answer',
+ not (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b2','content',
+ '{"region_id":"aaaaaaaa-0000-4000-8000-0000000000c3","patch":{"extract_status":"done","student_answer":"stale machine"}}')->>'applied')::boolean
+ and (select student_answer='Human correction' from public.question_region where id='aaaaaaaa-0000-4000-8000-0000000000c3'));
+insert into public.extraction_run(id,paper_id,student_id,pipeline_version,status)
+ values('aaaaaaaa-0000-4000-8000-0000000000b4','aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','fixture','content');
+select public._t('empty content dispatch can reach the explicit no-questions reconcile failure',
+ (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','reconcile_start')->>'applied')::boolean
+ and (select status='reconciliation' from public.extraction_run where id='aaaaaaaa-0000-4000-8000-0000000000b4'));
+insert into public.r2_deletion(bucket,key,not_before) values('derived','fixture/pending',now()+interval '20 minutes');
+select public._t('cleanup never claims a still-live PUT capability',
+ not exists(select 1 from public.claim_deletions(1000) where key='fixture/pending'));
+insert into public.upload(id,paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,confirmed)
+ values('aaaaaaaa-0000-4000-8000-0000000000e1','aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','image','derived',
+ 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/page/sealed.jpg','image/jpeg',100,true);
+insert into public.r2_deletion(bucket,key,unconfirmed_upload_id)
+ values('derived','fixture/canonical','aaaaaaaa-0000-4000-8000-0000000000e1');
+select public._t('deferred orphan cleanup preserves confirmed canonical objects',
+ not exists(select 1 from public.claim_deletions(1000) where key='fixture/canonical'));
+delete from public.upload where id='aaaaaaaa-0000-4000-8000-0000000000e1';
+select public._t('canonical cleanup remains durable after its ledger is erased',
+ exists(select 1 from public.claim_deletions(1000) where key='fixture/canonical'));
+
 set local role authenticated;
 
 select public.commit_extraction_run('aaaaaaaa-0000-4000-8000-0000000000b3');

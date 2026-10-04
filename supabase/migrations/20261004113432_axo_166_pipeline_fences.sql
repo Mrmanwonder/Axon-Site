@@ -4,6 +4,8 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
   v_run public.extraction_run;
   v_page public.paper_page;
+  v_region public.question_region;
+  v_region_patch public.question_region;
   v_page_id uuid := nullif(p_args->>'page_id','')::uuid;
   v_paper_id uuid;
   v_patch jsonb := coalesce(p_args->'patch','{}'::jsonb);
@@ -18,7 +20,9 @@ begin
     (p_stage='triage' and v_run.status::text in ('queued','triaging')) or
     (p_stage='structure' and v_run.status::text='structure') or
     (p_stage='crop' and v_run.status::text='cropping') or
-    (p_stage='reconcile_start' and v_run.status::text in ('attribution','reconciliation')) or
+    (p_stage='content' and v_run.status::text='content') or
+    (p_stage='reconcile_start' and (v_run.status::text in ('attribution','reconciliation')
+      or (v_run.status::text='content' and not exists(select 1 from public.question_region where run_id=p_run_id and extract_status in ('pending','running'))))) or
     (p_stage='reconcile_result' and v_run.status::text='reconciliation')
   ) then return jsonb_build_object('applied',false,'status',v_run.status); end if;
 
@@ -26,11 +30,35 @@ begin
     select * into v_page from public.paper_page
       where id=v_page_id and paper_id=v_run.paper_id and student_id=v_run.student_id for update;
     if v_page.id is null then return jsonb_build_object('applied',false); end if;
+    if p_stage='structure' and v_page.structure_status in ('done','failed','unreadable') then
+      return jsonb_build_object('applied',false);
+    end if;
     if p_stage='structure' then
       if coalesce(v_patch->>'structure_status','') not in ('running','done','failed','unreadable') then
         raise exception 'Invalid structure state' using errcode='22023';
       end if;
       if v_patch->>'structure_status'='done' then
+        -- Replace this page's evidence and stamp completion in one fenced transaction.
+        if p_args ? 'regions' then
+          delete from public.teacher_mark where run_id=p_run_id and page_number=v_page.page_number;
+          delete from public.question_region where run_id=p_run_id
+            and (page_spans->0->>'page')::integer=v_page.page_number;
+          insert into public.question_region(id,run_id,paper_id,student_id,order_index,page_spans,
+            question_label,question_label_box,confidence_tier,continues_from_previous,needs_review)
+          select r.id,p_run_id,v_run.paper_id,v_run.student_id,r.order_index,r.page_spans,
+            r.question_label,r.question_label_box,coalesce(r.confidence_tier,'unsure'),
+            coalesce(r.continues_from_previous,false),coalesce(r.needs_review,false)
+            from jsonb_populate_recordset(null::public.question_region,p_args->'regions') r;
+          if exists(select 1 from jsonb_array_elements(coalesce(p_args->'teacher_marks','[]'::jsonb)) m
+            where m->>'region_id' is not null and not exists(select 1 from public.question_region r
+              where r.id=(m->>'region_id')::uuid and r.run_id=p_run_id and r.paper_id=v_run.paper_id)) then
+            raise exception 'Teacher marks must refer to this run' using errcode='42501';
+          end if;
+          insert into public.teacher_mark(run_id,paper_id,student_id,region_id,page_number,box,shape,mark_class,metrics,confidence_tier)
+          select p_run_id,v_run.paper_id,v_run.student_id,m.region_id,v_page.page_number,m.box,m.shape,m.mark_class,
+            m.metrics,coalesce(m.confidence_tier,'unsure')
+            from jsonb_populate_recordset(null::public.teacher_mark,coalesce(p_args->'teacher_marks','[]'::jsonb)) m;
+        end if;
         delete from public.page_unreadable where paper_id=v_run.paper_id
           and student_id=v_run.student_id and page_number=v_page.page_number;
       elsif p_args->>'unreadable_reason' is not null then
@@ -46,7 +74,36 @@ begin
       update public.paper_page set crop_status=(jsonb_populate_record(null::public.paper_page,v_patch)).crop_status
         where id=v_page.id;
     end if;
+  elsif p_stage='content' then
+    select * into v_region from public.question_region
+      where id=(p_args->>'region_id')::uuid and run_id=p_run_id
+        and paper_id=v_run.paper_id and student_id=v_run.student_id for update;
+    if v_region.id is null or v_region.extract_status not in ('pending','running') then
+      return jsonb_build_object('applied',false);
+    end if;
+    if coalesce(v_patch->>'extract_status','') not in ('running','done','failed') then
+      raise exception 'Invalid content state' using errcode='22023';
+    end if;
+    v_region_patch := jsonb_populate_record(v_region,v_patch);
+    update public.question_region set
+      question_label=v_region_patch.question_label,question_label_box=v_region_patch.question_label_box,
+      question_text=v_region_patch.question_text,question_text_box=v_region_patch.question_text_box,
+      student_answer=v_region_patch.student_answer,student_answer_box=v_region_patch.student_answer_box,
+      marks_awarded=v_region_patch.marks_awarded,marks_awarded_box=v_region_patch.marks_awarded_box,
+      marks_available=v_region_patch.marks_available,marks_available_box=v_region_patch.marks_available_box,
+      teacher_remark=v_region_patch.teacher_remark,teacher_remark_box=v_region_patch.teacher_remark_box,
+      answer_block=v_region_patch.answer_block,confidence_signals=v_region_patch.confidence_signals,
+      confidence_tier=v_region_patch.confidence_tier,needs_review=v_region_patch.needs_review,
+      region_type=v_region_patch.region_type,extract_status=v_region_patch.extract_status,updated_at=now()
+      where id=v_region.id;
+    if v_patch ? 'marks_awarded' and v_region_patch.marks_awarded_box is not null then
+      update public.teacher_mark set value=v_region_patch.marks_awarded
+        where region_id=v_region.id and run_id=p_run_id and mark_class='marginal_number' and value is null;
+    end if;
   elsif p_stage='triage' then
+    update public.paper set assessment_identity_id=nullif(p_args->>'assessment_identity_id','')::uuid
+      where id=v_run.paper_id and student_id=v_run.student_id;
+    update public.extraction_run set tier_routing=p_args->'tier_routing' where id=p_run_id;
     update public.paper_page set structure_status='pending',crop_status='pending',
       layer_fallback=case when p_args->>'fallback'='non_red_marking' and layer_fallback is null
                           then 'non_red_marking' else layer_fallback end
@@ -216,6 +273,7 @@ end; $$;
 
 -- Every issued PUT capability also has a deferred staging cleanup, after URL expiry.
 alter table public.r2_deletion add column if not exists not_before timestamptz not null default now();
+alter table public.r2_deletion add column if not exists unconfirmed_upload_id uuid;
 create or replace function public.claim_deletions(p_limit integer default 5)
 returns table(id bigint,bucket text,prefix text,key text,attempts integer)
 language plpgsql security definer set search_path=public,pg_temp as $$
@@ -223,6 +281,8 @@ begin
   return query update public.r2_deletion d set attempts=d.attempts+1
     where d.id in (select c.id from public.r2_deletion c
       where c.done_at is null and c.attempts<20 and c.not_before<=now()
+        and (c.unconfirmed_upload_id is null or not exists(select 1 from public.upload u
+             where u.id=c.unconfirmed_upload_id and u.confirmed))
       order by c.created_at for update skip locked limit p_limit)
     returning d.id,d.bucket,d.prefix,d.key,d.attempts;
 end; $$;
