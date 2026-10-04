@@ -76,7 +76,7 @@ export function spring(
     // Integrate elapsed wall time with bounded substeps for stable damping.
     const elapsed = Math.min(0.05, Math.max(0, (now - lastAt) / 1000));
     lastAt = now;
-    const steps = Math.max(1, Math.ceil(elapsed * 240));
+    const steps = Math.max(1, Math.ceil(elapsed * 240 - 1e-9));
     const dt = elapsed / steps;
     for (let i = 0; i < steps; i++) {
       s.vel += (-stiffness * (s.pos - to) - damping * s.vel) * dt;

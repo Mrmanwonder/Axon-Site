@@ -120,6 +120,11 @@ jobs:
           done
           exit $status
 
+      - name: Verify concurrent authenticated saves against local Postgres
+        run: node scripts/audit-commit-concurrency.mjs
+        env:
+          AXON_LOCAL_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
       - name: Verify commit-totals repair in a rolled-back local fixture
         run: |
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \

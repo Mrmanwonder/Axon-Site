@@ -844,7 +844,8 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 
 // ── review ─────────────────────────────────────────────────────────────────
 
-async function openReview(runId, intent = null) {
+async function openReview(runId, intent = null, recovery = null) {
+  if (recovery === null) { ++S.reviewRecovery; S.reviewDraft = null; }
   if (S.runId !== runId) S.explanationsStarted = false;
   const epoch = S.epoch;
 
@@ -892,6 +893,7 @@ export async function resumeDraftReview(routeId) {
     if (epoch !== S.epoch || recovery !== S.reviewRecovery || !run) return { state: 'gone' };
   }
 
+  S.reviewDraft = draft;
   // Recover an on-device draft opportunistically so "Rescan this page" becomes
   // available when possible, but do not make the actual review wait for it.
   if (!draft) {
@@ -911,9 +913,8 @@ export async function resumeDraftReview(routeId) {
 
   const regions = await regionsForRun(run.id);
   if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
-  S.reviewDraft = draft;
   S.regions = regions;
-  await openReview(run.id);
+  await openReview(run.id, null, recovery);
   // The SQL gate is idempotent too, but do not make a duplicate request when a
   // resumed run has already crossed into explanation generation.
   S.explanationsStarted = ['explaining', 'ready'].includes(run.status);
