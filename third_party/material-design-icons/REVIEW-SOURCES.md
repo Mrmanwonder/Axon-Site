@@ -2,7 +2,7 @@
 
 Nine static SVG glyphs from Google's [Material Design Icons repository](https://github.com/google/material-design-icons/tree/master/symbols/web), obtained 3 October 2026. Licensed under Apache License 2.0; the complete upstream license is in [LICENSE](LICENSE). Copyright and source remain with Google and the upstream contributors.
 
-Only path geometry is embedded in `src/ui/components/MaterialSymbol.tsx`. Geometry and the 24px optical-size viewBox are unmodified. Axon's changes are a React wrapper, currentColor, 20/22/24px sizing, and decorative accessibility attributes. Parent controls provide visible labels and accessible names. No icon font, full library, sprite, or runtime network request is included. Existing navigation icons remain unchanged.
+Path geometry is embedded in the existing `src/ui/components/MaterialSymbols.tsx` renderer; `MaterialSymbol.tsx` only re-exports its generic API. Geometry and the 24px optical-size viewBox are unmodified. Axon's changes are a React wrapper, currentColor, 20/22/24px sizing, and decorative accessibility attributes. Parent controls provide visible labels and accessible names. No icon font, full library, sprite, or runtime network request is included. Existing navigation icons remain unchanged.
 
 | Axon name | Upstream SVG | Git blob SHA |
 | --- | --- | --- |
@@ -19,4 +19,4 @@ Only path geometry is embedded in `src/ui/components/MaterialSymbol.tsx`. Geomet
 The `rescan` API name uses the `document_scanner` glyph; `confirmed` uses `check_circle`; `attention` uses `error`. Status meaning always also appears as text. Attention/Delete use Axon's existing amber role; no new red UI is introduced.
 
 
-The shared renderer uses the existing scanner check_circle glyph for confirmed state.
+Integration addendum: the shared renderer reuses the scanner’s existing check_circle glyph from @material-symbols/svg-400 0.47.6 (outlined). The confirmed-row blob above records the original review asset, which is no longer embedded.

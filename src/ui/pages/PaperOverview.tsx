@@ -95,6 +95,7 @@ export default function PaperOverview() {
       <h2>Marks lost</h2>
       <p className="paper-loss">{reading.scored.length ? `${reading.partial ? "At least " : ""}${numMark(reading.lost)} mark${reading.lost === 1 ? "" : "s"} lost` : "Marks not available"}</p>
       {reading.scored.length > 0 && <p>From {reading.scored.length} scored part{reading.scored.length === 1 ? "" : "s"} · Teacher’s marks as read: {numMark(reading.awarded)} out of {numMark(reading.maximum)}</p>}
+      <p className="paper-secondary">Scored coverage: {reading.scored.length} of {reading.leaves.length} leaf parts.</p>
       {reading.partial && <p className="paper-secondary">Some parts are missing readable or confirmed marks. This is a partial reading.</p>}
       {totalNote(paper) && <p className="paper-secondary">{totalNote(paper)}</p>}
       {reading.counts ? <p className="paper-secondary">Stored source coverage: {reading.counts.questions_total} question{reading.counts.questions_total === 1 ? "" : "s"} · {reading.counts.parts_total} part{reading.counts.parts_total === 1 ? "" : "s"} · {reading.counts.unassigned_parts} unassigned · {reading.counts.raw_region_count} raw region{reading.counts.raw_region_count === 1 ? "" : "s"}. {attempts.length} saved part{attempts.length === 1 ? "" : "s"}.</p>

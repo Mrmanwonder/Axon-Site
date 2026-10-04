@@ -132,6 +132,7 @@ test("the pictured paper renders as grouped questions with an honest unassigned 
   expect(await screen.findByRole("heading", { level: 1, name: "Class test" })).toBeTruthy();
   expect(screen.getByText("Subject not confirmed")).toBeTruthy();
   expect(screen.getByText(/Added 7 Sept?/)).toBeTruthy();
+  expect(screen.getByText("Scored coverage: 7 of 7 leaf parts.")).toBeTruthy();
   expect(screen.getByText("2 questions · 7 saved parts · 3 parts not placed under a question")).toBeTruthy();
   expect(screen.getByText(/Teacher.s marks as read: 15 out of 22/)).toBeTruthy();
 
