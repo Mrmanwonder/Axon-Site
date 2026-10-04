@@ -66,7 +66,8 @@ export default function PaperStack({ pages, onOpen, disabled = false }: {
   );
 }
 
-/** Done reads the paper; Review appears instead when any page needs a look. */
+/** Done reads the paper; Review appears instead when any page needs a look.
+    No count on the button: the stack beside it already carries it. */
 export function DoneButton({ pages, busy, onDone, onReview }: {
   pages: TrayPage[]; busy: boolean; onDone: () => void; onReview: () => void;
 }) {
@@ -78,15 +79,15 @@ export function DoneButton({ pages, busy, onDone, onReview }: {
   if (flagged) {
     return (
       <button type="button" className="sc-done" data-kind="review" disabled={busy || preparing}
-              onClick={onReview}>
-        Review · {pages.length}
+              aria-label={`Review ${pages.length} page${pages.length === 1 ? "" : "s"}`} onClick={onReview}>
+        Review
       </button>
     );
   }
   return (
     <button type="button" className="sc-done" disabled={busy || preparing} aria-busy={busy || undefined}
-            onClick={onDone}>
-      Done · {pages.length}
+            aria-label={`Done, read ${pages.length} page${pages.length === 1 ? "" : "s"}`} onClick={onDone}>
+      Done
     </button>
   );
 }

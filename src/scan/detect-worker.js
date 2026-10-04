@@ -63,6 +63,51 @@ function frameSignals(frame) {
  * fall outside the frame are skipped (unknown, not zero); null when fewer than
  * six pairs could be taken.
  */
+/**
+ * Is the inside of the quad plausibly paper? Paper is the light thing in the
+ * picture: it is at least as bright as what surrounds it, or bright in its own
+ * right. A laptop keyboard or a dark book cover is a confident four-cornered
+ * shape that is clearly darker than its surroundings, and the model will call
+ * it a page (owner's phone, 4 Oct 2026). Relative, not absolute: an absolute
+ * brightness gate once dropped real pages in dim rooms (AXO-144), so a dim page
+ * that is still the brightest thing in view passes.
+ *
+ * Returns { inside, outside } median luma or null when it cannot be measured.
+ */
+function interiorLight(frame, quad) {
+  const { data, width, height } = frame;
+  const at = (x, y) => {
+    const xx = Math.round(x), yy = Math.round(y);
+    if (xx < 0 || yy < 0 || xx >= width || yy >= height) return null;
+    const i = (yy * width + xx) * 4;
+    return (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+  };
+  const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const inside = [];
+  for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+    const top = lerp(quad[0], quad[1], i / 10), bottom = lerp(quad[3], quad[2], i / 10);
+    const p = lerp(top, bottom, j / 10);
+    const v = at(p.x, p.y);
+    if (v !== null) inside.push(v);
+  }
+  const cx = quad.reduce((a, p) => a + p.x, 0) / 4;
+  const cy = quad.reduce((a, p) => a + p.y, 0) / 4;
+  const outside = [];
+  for (let e = 0; e < 4; e++) {
+    const a = quad[e], b = quad[(e + 1) % 4];
+    for (let k = 1; k <= 8; k++) {
+      const p = lerp(a, b, k / 9);
+      const dx = p.x - cx, dy = p.y - cy, len = Math.hypot(dx, dy) || 1;
+      const off = Math.max(6, Math.min(width, height) * 0.06);
+      const v = at(p.x + dx / len * off, p.y + dy / len * off);
+      if (v !== null) outside.push(v);
+    }
+  }
+  if (inside.length < 40 || outside.length < 8) return null;
+  const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  return { inside: median(inside), outside: median(outside) };
+}
+
 function edgeContrast(frame, quad) {
   const { data, width, height } = frame;
   const luma = (x, y) => {
@@ -124,6 +169,7 @@ async function handle({ kind, id, bitmap, quad, assetBaseUrl: base }) {
     const detection = await detectPage(frame, { assetBaseUrl });
     const exposure = detection.quad ? measureQuad(frame, detection.quad) : null;
     signals.edgeContrast = detection.quad ? edgeContrast(frame, detection.quad) : null;
+    signals.interior = detection.quad ? interiorLight(frame, detection.quad) : null;
     return { id, ok: true, detection, signals, exposure, width: frame.width, height: frame.height };
   }
   if (kind === 'measure') {
