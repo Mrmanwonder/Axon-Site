@@ -50,7 +50,7 @@ test.describe("camera screen on a phone", () => {
     await shot(page, "m-saved");
     await expect(page.getByRole("button", { name: "3 pages. Review pages" })).toBeVisible();
     await expect(page.locator(".sc-sheet")).toHaveCount(3);
-    await expect(page.locator(".sc-done")).toHaveText("Done · 3");
+    await expect(page.locator(".sc-done")).toHaveText("Done");
     await page.locator(".sc-done").click();
     expect(await calls(page, "onDone")).toHaveLength(1);
   });
@@ -79,7 +79,7 @@ test.describe("camera screen on a phone", () => {
     await expect(page.locator(".sc-strip .t")).toContainText("Page 2: Blurry");
     await expect(page.locator(".sc-sheet[data-flagged=true]")).toHaveCount(1);
     await expect(page.getByRole("button", { name: /3 pages, 1 needs a look/ })).toBeVisible();
-    await expect(page.locator(".sc-done")).toHaveText("Review · 3");
+    await expect(page.locator(".sc-done")).toHaveText("Review");
     await page.getByRole("button", { name: "Retake" }).first().click();
     expect(await calls(page, "onRetake")).toEqual([[2]]);
   });
@@ -239,7 +239,7 @@ test.describe("import screen on a laptop", () => {
     await open(page, "desk-pages");
     await shot(page, "d-pages");
     await expect(page.getByRole("region", { name: "This paper" })).toBeVisible();
-    await expect(page.locator(".sc-card-row .sc-done")).toHaveText("Review · 3");
+    await expect(page.locator(".sc-card-row .sc-done")).toHaveText("Review");
     await expect(page.getByRole("button", { name: "Page 2, needs a look" })).toBeVisible();
     const result = await new AxeBuilder({ page }).analyze();
     expect(result.violations.map((v) => v.id)).toEqual([]);

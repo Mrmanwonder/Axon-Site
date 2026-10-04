@@ -37,6 +37,10 @@ export const GUIDE = Object.freeze({
   BLURRY: QUALITY.BLUR_FAIL,
   /** Nothing page-like for this long: say so and point to the shutter. */
   NOTHING_MS: 6000,
+  /** A quad whose inside is this much darker (median luma, 0-255) than its
+      surroundings, and also below PAPER_LIGHT, is not followed as a page. */
+  PAPER_DARKER_BY: 20,
+  PAPER_LIGHT: 120,
 });
 
 /**
@@ -112,6 +116,17 @@ export function chooseGuidance(s) {
 }
 
 /** A corner within `margin` of the frame edge on either axis (normalised quad). */
+/**
+ * Could this quad be paper? False only on evidence: the inside is clearly
+ * darker than what surrounds it AND not light in its own right. Unknown (null)
+ * is not evidence and passes.
+ */
+export function looksLikePaper(interior) {
+  if (!interior) return true;
+  const darker = interior.inside < interior.outside - GUIDE.PAPER_DARKER_BY;
+  return !(darker && interior.inside < GUIDE.PAPER_LIGHT);
+}
+
 export function quadTouchesEdge(quad, margin = GUIDE.EDGE_MARGIN) {
   return quad.some((p) => p.x <= margin || p.x >= 1 - margin || p.y <= margin || p.y >= 1 - margin);
 }

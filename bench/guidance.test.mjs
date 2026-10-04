@@ -137,3 +137,15 @@ test('a page at a quarter of the view is not "small" when the still is a sensor 
   assert.equal(chooseGuidance({ ...s, nativeStill: false }).reason, 'small');
   assert.equal(chooseGuidance({ ...s, nativeStill: true }).reason, null);
 });
+
+test('a dark shape darker than its surroundings is not followed as a page', async () => {
+  const { looksLikePaper } = await import('../src/scan/guidance.js');
+  // Measured on the owner's screenshot (4 Oct 2026): a laptop keyboard locked as a page.
+  assert.equal(looksLikePaper({ inside: 74, outside: 103 }), false);
+  // A page in a dim room is still the lightest thing in view.
+  assert.equal(looksLikePaper({ inside: 97, outside: 92 }), true);
+  // White paper on a white desk: no darker than the desk.
+  assert.equal(looksLikePaper({ inside: 205, outside: 210 }), true);
+  // Unknown is not evidence.
+  assert.equal(looksLikePaper(null), true);
+});
