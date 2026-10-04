@@ -270,7 +270,30 @@ test('torch is offered only where the camera exposes it, and a refusal is shown,
   expect(f.capture.torch.error).toMatch(/torch busy/);
 });
 
-for (const failure of ['stall', 'throw', 'decode']) {
+test('one slow native still falls back for that shot only; a second stall demotes the session', async () => {
+  const takePhoto = vi.fn(() => new Promise<Blob>(() => {}));
+  vi.stubGlobal('ImageCapture', class { getPhotoCapabilities() { return Promise.resolve(caps); } takePhoto = takePhoto; });
+  const f = await fixture();
+  await f.capture.start(f.stream);
+  showFrame(f.video);
+  const first = f.capture.shoot();
+  await vi.advanceTimersByTimeAsync(4500);
+  expect(await first).toMatchObject({ capturePath: 'canvas-grab', auto: false });
+  expect(f.capture.capturePath).toBe('image-capture');
+  const afterFirst = takePhoto.mock.calls.length;
+  const second = f.capture.shoot();
+  await vi.advanceTimersByTimeAsync(4500);
+  expect(await second).toMatchObject({ capturePath: 'canvas-grab' });
+  expect(takePhoto.mock.calls.length).toBeGreaterThan(afterFirst);
+  expect(f.capture.capturePath).toBe('canvas-grab');
+  const afterSecond = takePhoto.mock.calls.length;
+  const third = f.capture.shoot();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(await third).toMatchObject({ capturePath: 'canvas-grab' });
+  expect(takePhoto).toHaveBeenCalledTimes(afterSecond);
+});
+
+for (const failure of ['throw', 'decode']) {
   test(`native still ${failure} demotes once; the next manual shot uses canvas without repeating the failure`, async () => {
     const takePhoto = vi.fn(() => {
       if (failure === 'stall') return new Promise(() => {});

@@ -19,6 +19,10 @@ export const GUIDE = Object.freeze({
   DARK_P95: 120,
   /** A page covering less than this share of the view is "small". */
   SMALL_FILL: 0.35,
+  /** The same, when the still is a sensor photograph (ImageCapture, ~12 MP) rather
+      than a video frame: a page at a quarter of the view is still about 2000 px
+      long on the photo, above the conditioning refusal line (1600 px). */
+  SMALL_FILL_NATIVE: 0.22,
   /** Mean luminance step across the quad's edges (0–255) that counts as a real page
       edge. Without one, a small quad may sit inside a page that overfills the frame. */
   EDGE_CONTRAST: 10,
@@ -49,6 +53,7 @@ export const GUIDE = Object.freeze({
  * @property {number} searchingMs                            how long no page-like shape was seen
  * @property {{ supported: boolean }} torch
  * @property {boolean} auto
+ * @property {boolean} [nativeStill]                       the still is a sensor photo, not a video frame
  */
 
 /**
@@ -87,7 +92,8 @@ export function chooseGuidance(s) {
   if (s.touchesEdge) return attention('cutoff', 'Move back so the whole page fits');
   // "Small" is only said when a real edge was measured under the quad. A quad
   // inside a page that overfills the frame is not a small page.
-  if (s.fill < GUIDE.SMALL_FILL && s.edgeContrast !== null && s.edgeContrast >= GUIDE.EDGE_CONTRAST) {
+  const smallFill = s.nativeStill ? GUIDE.SMALL_FILL_NATIVE : GUIDE.SMALL_FILL;
+  if (s.fill < smallFill && s.edgeContrast !== null && s.edgeContrast >= GUIDE.EDGE_CONTRAST) {
     return attention('small', 'Move closer, the page is small');
   }
   if (s.motion !== null && s.motion > GUIDE.SHAKY_MOTION) return attention('shaky', 'Hold still');

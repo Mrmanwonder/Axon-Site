@@ -212,7 +212,13 @@ export function blurScore(gray, width, height) {
  */
 export function focusWindowRect(quad, frameWidth, frameHeight, pageLongEdge, target) {
   if (!pageLongEdge || !target) return null;
-  const size = Math.round(target * pageLongEdge / QUALITY.MEASURE_LONG_EDGE);
+  // Never upsample. A page smaller than MEASURE_LONG_EDGE in the frame (every
+  // page in a 1280x720 tracking stream) would be enlarged before the Laplacian,
+  // and the score would measure the interpolation, not the page: a sharp page
+  // read as "blurry" for as long as it was held, and Auto never fired. Below
+  // the canonical scale the window is read 1:1, which is lenient (a sharp page
+  // scores higher at a smaller scale) and still catches real shake.
+  const size = Math.max(target, Math.round(target * pageLongEdge / QUALITY.MEASURE_LONG_EDGE));
   if (size < 2 || size > frameWidth || size > frameHeight) return null;
 
   let sumX = 0, sumY = 0;

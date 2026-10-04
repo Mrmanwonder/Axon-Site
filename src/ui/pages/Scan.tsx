@@ -14,6 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { TorchMode } from "../scan/ScanProvider";
@@ -29,6 +30,11 @@ import ImportDesk from "../scan/ImportDesk";
 import { useDeskMode } from "../scan/useDeskMode";
 import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick } from "../lib/haptics";
+import {
+  CheckSymbol, CloseSymbol, CropFreeSymbol, DraftSymbol, FlashlightSymbol, InfoSymbol, LinkSymbol,
+  MoreHorizSymbol, PhotoCameraSymbol, PhotoLibrarySymbol,
+} from "../components/MaterialSymbols";
+import Chevron from "../components/Chevron";
 import { paths } from "../app/paths";
 import "../styles/scanner.css";
 
@@ -180,7 +186,7 @@ export default function Scan() {
         <div className="sc-top">
           <PressBox as="button" type="button" className="sc-circ" aria-label="Close scanner"
                     onClick={() => navigate(paths.home)}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            <CloseSymbol size={22} />
           </PressBox>
           <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
                     aria-pressed={auto} onClick={() => setAutoCapture(!auto)}>
@@ -190,16 +196,12 @@ export default function Scan() {
           <PressBox as="button" type="button" className="sc-circ"
                     aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
                     onClick={openDrafts}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M7 5.5h8.5a2 2 0 0 1 2 2V18" /><path d="M5.5 8.5h8.5a2 2 0 0 1 2 2v8H7.5a2 2 0 0 1-2-2z" />
-            </svg>
+            <DraftSymbol size={22} />
             {draftsCount > 0 && <span className="dot" aria-hidden="true" />}
           </PressBox>
           <PressBox as="button" type="button" className="sc-circ" aria-label="More"
                     aria-haspopup="dialog" onClick={() => { hapticTick(); setMenuOpen(true); }}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="5.5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="18.5" r="1.7" />
-            </svg>
+            <MoreHorizSymbol size={22} />
           </PressBox>
         </div>
 
@@ -227,7 +229,10 @@ export default function Scan() {
         </div>
 
         <div className="sc-strip" data-tone={strip.tone} role="status" aria-live="polite">
-          <span className="g" aria-hidden="true" />
+          <span className="g" aria-hidden="true">
+            {strip.tone === "locked" ? <CheckSymbol size={18} />
+              : strip.tone === "attention" ? <InfoSymbol size={18} /> : <CropFreeSymbol size={18} />}
+          </span>
           <span className="t">{strip.text}</span>
           {strip.action && (
             <button type="button" className="act" onClick={() => { hapticTick(); strip.action!.run(); }}>
@@ -254,22 +259,24 @@ export default function Scan() {
       {menuOpen && (
         <Dialog title="More" busy={false} onClose={() => setMenuOpen(false)} className="sc-menu">
           <div className="sc-menu-list">
-            <button type="button" onClick={() => closeMenuThen(addPaper)}>
-              Import photos <small>From your files</small>
-            </button>
-            <button type="button" onClick={() => closeMenuThen(() => cameraApp.current?.click())}>
-              Use your camera app <small>Take a photo with your phone’s own camera</small>
-            </button>
-            <button type="button" onClick={() => closeMenuThen(addLink)}>Add a link</button>
-            <button type="button" onClick={() => closeMenuThen(openDrafts)}>
-              Saved drafts <small>{draftsCount || "None"}</small>
-            </button>
+            <MenuRow icon={<PhotoLibrarySymbol size={20} />} title="Import photos" sub="From your files"
+                     onClick={() => closeMenuThen(addPaper)} />
+            <MenuRow icon={<PhotoCameraSymbol size={20} />} title="Use your camera app"
+                     sub="Take a photo with your phone’s own camera"
+                     onClick={() => closeMenuThen(() => cameraApp.current?.click())} />
+            <MenuRow icon={<LinkSymbol size={20} />} title="Add a link" sub="A shared PDF or drive file"
+                     onClick={() => closeMenuThen(addLink)} />
+            <MenuRow icon={<DraftSymbol size={20} />} title="Saved drafts"
+                     sub={draftsCount ? `${draftsCount} on this device` : "None yet"}
+                     onClick={() => closeMenuThen(openDrafts)} />
             {torch?.supported && (
               <div className="sc-light" role="group" aria-label="Light">
-                <span>Light</span>
-                <div>
+                <span className="ic" aria-hidden="true"><FlashlightSymbol size={20} /></span>
+                <span className="lb">Light</span>
+                <div className="seg">
                   {(["auto", "on", "off"] as TorchMode[]).map((mode) => (
                     <button type="button" key={mode} aria-pressed={torch.mode === mode}
+                            className={torch.mode === mode ? "on" : undefined}
                             onClick={() => setTorchMode(mode)}>{TORCH_LABEL[mode]}</button>
                   ))}
                 </div>
@@ -288,6 +295,18 @@ export default function Scan() {
 
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
+  );
+}
+
+function MenuRow({ icon, title, sub, onClick }: {
+  icon: React.ReactNode; title: string; sub: string; onClick: () => void;
+}) {
+  return (
+    <button type="button" className="sc-mrow" onClick={onClick}>
+      <span className="ic" aria-hidden="true">{icon}</span>
+      <span className="tx"><span className="ti">{title}</span><small>{sub}</small></span>
+      <Chevron />
+    </button>
   );
 }
 

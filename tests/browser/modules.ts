@@ -81,8 +81,11 @@ export const signOut = async () => {
 export async function listPapers() { await wait(); return { data: [], stale: false }; }
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
-export const analyticsReadiness = async () => ({ data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" });
-export const lossByCause = async () => ({ data: {} });
+// `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
+export const analyticsReadiness = async () => scenario === "patterns"
+  ? { data: { papers_counted: 4, questions_counted: 25, has_enough_data: true }, stale: false }
+  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" };
+export const lossByCause = async () => ({ data: scenario === "patterns" ? { incomplete: 6, misread_question: 2, procedural_slip: 1 } : {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
 export const providerKeyForStudent = (s?: { provider_key?: string | null } | null) => s?.provider_key ?? null;

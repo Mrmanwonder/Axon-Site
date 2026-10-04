@@ -94,10 +94,13 @@ export default function Insights() {
     </div>
 
     {!filtered.length && papers.length > 0 ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no evidence for this combination yet.</p><button onClick={() => { setSubject("all"); setType("all"); setRange("all"); setTier("all"); }}>Clear filters</button></div> : <div className="igrid">
-      <section className="isection">
+      {/* Coverage is a progress bar towards the first pattern. Once the evidence
+          is there it has nothing left to say, so it goes; the sample size moves
+          onto the breakdown it qualifies (every headline insight shows its own). */}
+      {!readiness.has_enough_data && <section className="isection">
         <div className="sectitle">Coverage</div>
-        <div className="card coveragecard"><div className="coveragehead"><strong>{readiness.papers_counted} of {THRESHOLD} papers</strong><span>{readiness.has_enough_data ? "Patterns ready" : "Building evidence"}</span></div><div className="covertrack"><i style={{width: `${Math.min(100, readiness.papers_counted / THRESHOLD * 100)}%`}} /></div><p>{readiness.has_enough_data ? `${readiness.questions_counted} confirmed questions are behind this view.` : `Scan ${Math.max(0, THRESHOLD - readiness.papers_counted)} more comparable paper${THRESHOLD - readiness.papers_counted === 1 ? "" : "s"} before Axon calls anything a pattern.`}</p>{!readiness.has_enough_data && <PressBox as="button" type="button" className="miniadd" onClick={addPaper}>Add a paper</PressBox>}</div>
-      </section>
+        <div className="card coveragecard"><div className="coveragehead"><strong>{Math.min(readiness.papers_counted, THRESHOLD)} of {THRESHOLD} papers</strong><span>Building evidence</span></div><div className="covertrack"><i style={{width: `${Math.min(100, readiness.papers_counted / THRESHOLD * 100)}%`}} /></div><p>{`Scan ${Math.max(0, THRESHOLD - readiness.papers_counted)} more comparable paper${THRESHOLD - readiness.papers_counted === 1 ? "" : "s"} before Axon calls anything a pattern.`}</p><PressBox as="button" type="button" className="miniadd" onClick={addPaper}>Add a paper</PressBox></div>
+      </section>}
 
       <section className="isection">
         <div className="sectitle">Trend</div>
@@ -106,7 +109,7 @@ export default function Insights() {
 
       <section className="isection">
         <div className="sectitle">Why marks are lost</div>
-        {!allEvidence ? <EvidenceGap title="No cause breakdown for this filter">The current aggregate cannot be narrowed safely to this selection yet. Axon won&rsquo;t show the all-paper total as if it matched.</EvidenceGap> : !readiness.has_enough_data ? <EvidenceGap title="This breakdown needs more evidence">A couple of questions can describe one bad day, not a pattern. Axon will show causes after four comparable papers.</EvidenceGap> : !total ? <EvidenceGap title="Nothing to break down yet">No confirmed marks lost were found in this evidence.</EvidenceGap> : <div className="card causecard"><div className="causebar">{entries.map(([c,m]) => <i key={c} style={{flex:m,background:CAUSE[c].hue}} />)}</div><div className="causegrid">{entries.map(([c,m]) => <div className="cz" key={c}><span className="sw2" style={{background:CAUSE[c].hue}}/><span className="n">{CAUSE[c].label}</span><span className="v">{m}</span></div>)}</div><p className="widgetnote">Confirmed teacher marks only. Colours identify kinds, not severity.</p></div>}
+        {!allEvidence ? <EvidenceGap title="No cause breakdown for this filter">The current aggregate cannot be narrowed safely to this selection yet. Axon won&rsquo;t show the all-paper total as if it matched.</EvidenceGap> : !readiness.has_enough_data ? <EvidenceGap title="This breakdown needs more evidence">A couple of questions can describe one bad day, not a pattern. Axon will show causes after four comparable papers.</EvidenceGap> : !total ? <EvidenceGap title="Nothing to break down yet">No confirmed marks lost were found in this evidence.</EvidenceGap> : <div className="card causecard"><div className="causebar">{entries.map(([c,m]) => <i key={c} style={{flex:m,background:CAUSE[c].hue}} />)}</div><div className="causegrid">{entries.map(([c,m]) => <div className="cz" key={c}><span className="sw2" style={{background:CAUSE[c].hue}}/><span className="n">{CAUSE[c].label}</span><span className="v">{m}</span></div>)}</div><p className="widgetnote">{total} marks lost with a cause · {readiness.questions_counted} confirmed questions · {readiness.papers_counted} papers. Unsure causes count once you check them. Colours identify kinds, not severity.</p></div>}
       </section>
 
       <section className="isection"><div className="sectitle">Question types</div><EvidenceGap title="Command-word view isn&rsquo;t ready yet">Questions do not yet store a reliable command word. Axon won&rsquo;t infer which kinds cost marks from loose text.</EvidenceGap></section>

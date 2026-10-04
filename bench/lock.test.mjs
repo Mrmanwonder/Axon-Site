@@ -51,11 +51,14 @@ test('one odd detection does not shake a locked page; repeated ones replace it',
   const lock = createLock();
   for (let t = 0; t <= 140; t += 70) lock.observe(t, PAGE);
   const other = rect(0.05, 0.05, 0.25, 0.25);
-  assert.equal(lock.observe(210, other).phase, 'locked');
-  assert.equal(lock.observe(280, other).phase, 'locked');
-  const third = lock.observe(350, other);
-  assert.equal(third.phase, 'candidate', 'third disagreement swaps to the new page as a fresh candidate');
-  assert.ok(quadIoU(third.quad, other) > 0.99);
+  assert.ok(LOCK.DISAGREE_TO_REPLACE >= 2, 'a single odd detection must never replace a locked page');
+  let t = 210;
+  for (let i = 1; i < LOCK.DISAGREE_TO_REPLACE; i++, t += 70) {
+    assert.equal(lock.observe(t, other).phase, 'locked');
+  }
+  const last = lock.observe(t, other);
+  assert.equal(last.phase, 'candidate', 'enough disagreements swap to the new page as a fresh candidate');
+  assert.ok(quadIoU(last.quad, other) > 0.99);
 });
 
 test('a candidate is replaced at once by a different page', () => {

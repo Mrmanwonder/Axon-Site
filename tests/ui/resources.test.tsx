@@ -107,3 +107,14 @@ test("slow cache completion cannot replace the live result", async () => {
   expect(screen.getByText("ready:live paper")).toBeTruthy();
   expect(screen.queryByText(/older paper/)).toBeNull();
 });
+test("Coverage shows while evidence builds and disappears once patterns are ready", async () => {
+  mocks.analytics.mockResolvedValue({ data: { papers_counted: 2, questions_counted: 9, has_enough_data: false }, stale: false });
+  const first = mount(<Insights />);
+  expect(await screen.findByText("Coverage")).toBeTruthy();
+  first.unmount();
+  mocks.analytics.mockResolvedValue({ data: { papers_counted: 5, questions_counted: 25, has_enough_data: true }, stale: false });
+  mount(<Insights />);
+  await screen.findByText("Why marks are lost");
+  expect(screen.queryByText("Coverage")).toBeNull();
+  expect(screen.queryByText(/of 4 papers/)).toBeNull();
+});
