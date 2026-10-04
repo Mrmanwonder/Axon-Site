@@ -74,6 +74,11 @@ if (params.get("view") === "scan-screen") {
   document.head.append(style);
   root.render(<MemoryRouter initialEntries={["/scan"]}><ToastProvider><AppProvider><SheetProvider>
     <main className="view on" data-screen="scan"><Scan /></main></SheetProvider></AppProvider></ToastProvider></MemoryRouter>);
+} else if (params.get("view") === "nav") {
+  const router = createMemoryRouter([{ path: "*", element: <ToastProvider><AppProvider><SheetProvider><NavDemo /></SheetProvider></AppProvider></ToastProvider> }], {
+    initialEntries: [params.get("route") ?? "/"],
+  });
+  root.render(<RouterProvider router={router} />);
 } else if (params.get("view") === "route-errors") {
   const router = createMemoryRouter([{
     path: "/", errorElement: <AppRouteErrorBoundary />, children: [

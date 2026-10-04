@@ -28,13 +28,22 @@ function rowsOrThrow(result) {
   return result.data ?? [];
 }
 
+function recoverCachedRequest(map, key) {
+  const pending = map.get(key);
+  return pending.catch(error => {
+    if (map.get(key) === pending) map.delete(key);
+    throw error;
+  });
+}
+
 export async function getProviders() {
   if (!cache.providers) {
     cache.providers = sb.from('curriculum_provider')
       .select('id,key,name')
       .eq('active', true)
       .order('name')
-      .then(rowsOrThrow);
+      .then(rowsOrThrow)
+      .catch(error => { cache.providers = null; throw error; });
   }
   return cache.providers;
 }
@@ -58,7 +67,7 @@ async function programmeByKey(key) {
         return result.data;
       }));
   }
-  return cache.programmeByKey.get(key);
+  return recoverCachedRequest(cache.programmeByKey, key);
 }
 
 async function stageByKey(key) {
@@ -73,7 +82,7 @@ async function stageByKey(key) {
         return result.data;
       }));
   }
-  return cache.stageByKey.get(key);
+  return recoverCachedRequest(cache.stageByKey, key);
 }
 
 export async function getProgrammes(providerKey) {
@@ -85,9 +94,13 @@ export async function getProgrammes(providerKey) {
         .eq('active', true)
         .order('label')
         .then(rowsOrThrow)
+        .then(rows => {
+          for (const row of rows) cache.programmeByKey.set(row.key, Promise.resolve(row));
+          return rows;
+        })
     ));
   }
-  return cache.programmes.get(providerKey);
+  return recoverCachedRequest(cache.programmes, providerKey);
 }
 
 export async function getStages(programmeKey) {
@@ -99,9 +112,13 @@ export async function getStages(programmeKey) {
         .eq('active', true)
         .order('sort_order')
         .then(rowsOrThrow)
+        .then(rows => {
+          for (const row of rows) cache.stageByKey.set(row.key, Promise.resolve(row));
+          return rows;
+        })
     ));
   }
-  return cache.stages.get(programmeKey);
+  return recoverCachedRequest(cache.stages, programmeKey);
 }
 
 export async function getSubjectOfferings({ programmeKey, stageKey }) {
@@ -121,7 +138,7 @@ export async function getSubjectOfferings({ programmeKey, stageKey }) {
         .then(rowsOrThrow);
     }));
   }
-  return cache.offerings.get(cacheKey);
+  return recoverCachedRequest(cache.offerings, cacheKey);
 }
 
 export function filterSubjectOfferings(offerings, query) {
