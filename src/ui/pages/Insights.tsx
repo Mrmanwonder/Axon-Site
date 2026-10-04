@@ -30,7 +30,7 @@ import PageSkeleton from "../components/PageSkeleton";
 import Disclose from "../components/Disclose";
 import { useInsights } from "../data/useInsights";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
-import { PATTERN_PAPERS, subjectOf, ALL_FILTERS } from "../data/insights";
+import { PATTERN_PAPERS, MIN_COMMAND_WORD_QUESTIONS, subjectOf, ALL_FILTERS } from "../data/insights";
 import type { Cause, ErrorType, InsightFilters, InsightsModel, QuestionRef, Tally } from "../data/insights";
 import { paths } from "../app/paths";
 import "../styles/insights.css";
@@ -341,8 +341,10 @@ function Body({ model, describe, addPaper, filtered }: {
       <div className="sectitle">Command words</div>
       {model.commandWords.rows.length ? <div className="card tallycard">
         <MoreList shown={3} noun="command words" items={model.commandWords.rows.map((r) => <TallyRow key={r.word} label={r.word} tally={r} describe={describe} />)} />
-        <p className="widgetnote">Marks lost on questions by the instruction word they used. Only questions that lost marks are tagged, so this shows where marks went, not how often you get a kind right. {model.commandWords.coverage.tagged} of {plural(model.commandWords.coverage.total, "explained question")} carry a command word.</p>
-      </div> : <EvidenceGap title="No command words recorded">None of the explained questions in this evidence carry a command word yet. Axon doesn&rsquo;t guess one from loose text.</EvidenceGap>}
+        <p className="widgetnote">Marks lost on questions by the instruction word they used. Only questions that lost marks are tagged, so this shows where marks went, not how often you get a kind right. {model.commandWords.coverage.tagged} of {plural(model.commandWords.coverage.total, "explained question")} carry a command word; a word is shown once it covers {MIN_COMMAND_WORD_QUESTIONS} questions.</p>
+      </div> : <EvidenceGap title="No command word repeats yet">{model.commandWords.coverage.tagged
+        ? `A command word is shown once it covers ${MIN_COMMAND_WORD_QUESTIONS} questions that lost marks. None does yet (${model.commandWords.coverage.tagged} of ${model.commandWords.coverage.total} explained questions carry one).`
+        : "None of the explained questions in this evidence carry a command word yet. Axon doesn’t guess one from loose text."}</EvidenceGap>}
     </section>
 
     <section className="isection">
