@@ -30,7 +30,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useNavigation } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { AvatarDisc } from "../components/AvatarPicker";
 import { destinations, activeIndex } from "../app/nav";
@@ -46,7 +46,8 @@ type Rect = { x: number; y: number; w: number; h: number };
 export default function TabNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const current = activeIndex(pathname);
+  const navigation = useNavigation();
+  const current = activeIndex(navigation.location?.pathname ?? pathname);
 
   /* The Settings tab wears the student's face rather than an icon. It used to
      wear a hardcoded capital "M" — not the student's initial, not their

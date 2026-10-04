@@ -57,6 +57,7 @@ export type Student = {
   programme_id?: string | null;
   stage_id?: string | null;
   curriculum_version?: string | null;
+  school_pathway?: "ib_school_igcse" | null;
   provider_key?: string | null;
   provider_label?: string | null;
   programme_key?: string | null;

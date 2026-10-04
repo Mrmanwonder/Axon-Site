@@ -113,6 +113,7 @@ type AppValue = {
   /** Save normalized curriculum identity and subject selections atomically. */
   updateStudentProfile: (profile: {
     firstName: string;
+    schoolPathway?: "ib_school_igcse" | null;
     programmeKey: string;
     stageKey: string;
     avatarKey: string;
@@ -396,6 +397,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [profiles, guardian, student]);
   const updateStudentProfile = useCallback(async (profile: {
     firstName: string;
+    schoolPathway?: "ib_school_igcse" | null;
     programmeKey: string;
     stageKey: string;
     avatarKey: string;
@@ -406,6 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       p_student_id: student.id,
       p_first_name: profile.firstName,
       p_programme_key: profile.programmeKey,
+      p_school_pathway: profile.schoolPathway ?? null,
       p_stage_key: profile.stageKey,
       p_avatar_key: profile.avatarKey,
       p_subjects: profile.subjects.map(item => ({
