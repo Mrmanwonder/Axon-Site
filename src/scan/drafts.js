@@ -14,6 +14,7 @@ import { openDraftDatabase, closeLocalDatabase, localDataEpoch } from '../local-
 const STORE = 'drafts';
 export const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const open = openDraftDatabase;
+import { decodeDraft } from './draft-codec.js';
 import { stampDraft as stamp } from './draft-mutations.js';
 
 function tx(db, mode, fn) {
@@ -47,7 +48,7 @@ export async function createDraft({ id, studentId, paperType }) {
     pages: [],
   };
   await tx(db, 'readwrite', (store) => store.add(draft));
-  return stamp(draft);
+  return stamp(decodeDraft(draft));
 }
 
 export async function readDraft(id) {
@@ -64,7 +65,7 @@ export async function listDrafts(studentId) {
   return (all ?? [])
   .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
   .filter((d) => d.student_id === studentId && d.pages.length)
-  .sort((a, b) => b.updated_at - a.updated_at).map(stamp);
+  .sort((a, b) => b.updated_at - a.updated_at).map(d => stamp(decodeDraft(d)));
 }
 
 export { saveDraft, mutateDraft, addPage, removePage, movePage, replacePage, markUploaded, pendingPages,

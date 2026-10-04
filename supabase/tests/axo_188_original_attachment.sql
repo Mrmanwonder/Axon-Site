@@ -122,12 +122,12 @@ select public.submit_paper('aaaaaaaa-0000-4000-8000-000000000002','unit_test','t
 select public._t('unchanged frozen submit preserves the independently attached original',
  (select original_key='aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p1-original-capture.jpg'
  from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1));
-do $ begin
+do $$ begin
  begin update public.paper_page set original_key='aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a1/raw/p1-original-other.jpg'
  where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1;
  perform public._t('direct authenticated original replacement rejected',false);
  exception when insufficient_privilege then perform public._t('direct authenticated original replacement rejected',true);end;
-end $;
+end $$;
 reset role;
 insert into public.upload(paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,etag,confirmed,asset_kind,page_number,page_revision)
 values('aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','image','derived',

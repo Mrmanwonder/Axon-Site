@@ -113,15 +113,18 @@ test('accepted retake clears the frozen manifest while uncertain submissions rem
   expect(result).toEqual({uncertain:true,frozen:false,submitted:false,image:'retake'});
 });
 
-test('native IndexedDB can commit and reload captured Blob bytes without losing MIME',async({page})=>{
-  const result=await page.evaluate(async()=>{
-    const local=await import('/src/local-data.js'),db=await local.openDraftDatabase(),id=crypto.randomUUID();
-    let writeError=null;
-    try {await new Promise<void>((resolve,reject)=>{
-      const tx=db.transaction('drafts','readwrite'),request=tx.objectStore('drafts').put({id,student_id:'blob-probe',updated_at:Date.now(),pages:[{page_number:1,blob:new Blob(['probe'],{type:'image/jpeg'})}]});
-      request.onerror=()=>reject(request.error);tx.oncomplete=()=>resolve();tx.onabort=()=>reject(tx.error??new Error('Native Blob write aborted without an error'));
-    });}catch(error){writeError=String(error);}
-    local.closeLocalDatabase(db);
-    return {writeError};
-  });expect(result.writeError).toBeNull();
+
+test('draft bytes preserve original MIME across native IndexedDB transactions and reloads',async({page})=>{
+  const id=await page.evaluate(async()=>{
+    const d=await import('/src/scan/drafts.js'),draft=await d.createDraft({id:crypto.randomUUID(),studentId:'blob-probe'});
+    await d.addPage(draft,{blob:new Blob(['page'],{type:'image/jpeg'}),mask:new Blob(['mask'],{type:'image/png'}),
+      original:new Blob(['unchanged original'],{type:'image/heic'})});
+    return draft.id;
+  });
+  await page.reload();
+  const result=await page.evaluate(async id=>{
+    const d=await import('/src/scan/drafts.js'),draft=await d.readDraft(id),page=draft.pages[0];
+    return {original:await page.original.text(),mime:page.original.type,page:await page.blob.text(),mask:await page.mask.text()};
+  },id);
+  expect(result).toEqual({original:'unchanged original',mime:'image/heic',page:'page',mask:'mask'});
 });

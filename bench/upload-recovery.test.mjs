@@ -16,7 +16,7 @@ for (const count of [1, 5, 10, 25]) {
     assert.equal(pendingUploadPlan(draft).length, 0);
     assert.ok(draft.pages.every(processingReady)); assert.ok(draft.pages.every(backupComplete));
     assert.ok(draft.pages.every(p => p.r2_key.includes('/page/') && p.mask_key.includes('/mask/') && p.thumb_key.includes('/thumb/') && p.original_key.includes('/raw/')));
-    assert.equal(model.calls.filter(c => c[0] === 'intent').length, Math.ceil(count / 10) + Math.ceil(count / 32));
+    assert.equal(model.calls.filter(c => c[0] === 'intent').length, count * 4 <= 32 ? 1 : Math.ceil(count / 10) + Math.ceil(count / 32));
   });
 }
 test('mixed optional assets and old drafts never fabricate optional confirmation', async () => {
@@ -44,7 +44,7 @@ test('lost confirmation response resumes canonical bytes without a second PUT', 
   model.transport.uploadComplete = async body => { const r = await actual(body); if (fail) { fail = false; throw Object.assign(new Error('database unavailable'), { status: 500 }); } return r; };
   await assert.rejects(model.run()); assert.equal(draft.pages[0].upload_assets.page.status, 'uploaded');
   await model.run(); assert.equal(model.puts.get('p1'), 1); assert.equal(model.puts.get('p1-mask'), 1);
-  assert.ok(model.calls.filter(c => c[0] === 'complete').length >= 3);
+  assert.ok(model.calls.filter(c => c[0] === 'complete').length >= 2);
 });
 test('expiry recovery confirms failed capability before refreshing only missing objects', async () => {
   const draft = booklet(1), model = fixture(draft); model.fail('mask', 403); await model.run();
@@ -104,4 +104,20 @@ test('reordering remints page-bound originals while preserving their local bytes
   const reordered=renumberPages([draft.pages[1],draft.pages[0]]);
   assert.ok(reordered.every(p=>p.original instanceof Blob&&!p.original_key&&!p.r2_key&&!p.uploaded));
   assert.deepEqual(await Promise.all(reordered.map(p=>p.original.text())),['original','original']);
+});
+
+test('resuming a legacy confirmed page retains its key and uploads only missing optional files',async()=>{
+  const draft=booklet(1);draft.pages[0].upload_revision='legacy-1';draft.pages[0].upload_assets={};draft.pages[0].uploaded=true;
+  draft.pages[0].r2_key='student/paper/page/p1-old.jpg';draft.pages[0].r2_bucket='derived';
+  const model=fixture(draft);await model.run();
+  assert.equal(model.puts.has('p1'),false);
+  assert.equal(draft.pages[0].r2_key,'student/paper/page/p1-old.jpg');
+  const raw=model.calls.filter(c=>c[0]==='intent').flatMap(c=>c[1].objects).find(o=>o.kind==='raw');
+  assert.equal(raw.page_key,'student/paper/page/p1-old.jpg');assert.equal(raw.page_revision,'legacy-1');
+});
+test('one small window prioritizes every critical asset before any archival original',async()=>{
+  const draft=booklet(3),model=fixture(draft),order=[];const actual=model.transport.putObject;
+  model.transport.putObject=async (...args)=>{order.push(model.issued.get(args[0]).kind);return actual(...args);};
+  await model.run();assert.equal(model.calls.filter(c=>c[0]==='intent').length,1);
+  assert.deepEqual(order.slice(0,9),['thumb','page','mask','thumb','page','mask','thumb','page','mask']);
 });

@@ -39,7 +39,10 @@ export async function uploadDraftAssets({ draft, studentId, paperId, criticalOnl
     ['thumb', 'page', 'mask', 'raw'].indexOf(a.kind) - ['thumb', 'page', 'mask', 'raw'].indexOf(b.kind));
   const critical = mode === 'batch' ? objects.filter(o => o.critical) : objects;
   const original = mode === 'batch' ? objects.filter(o => !o.critical) : [];
-  const windows = [...splitUploadPlanIntoWindows(critical, mode === 'legacy' ? 4 : maxObjects),
+  // Small booklets use one capability window, with every critical asset queued
+  // first. Larger transfers keep originals in later windows to bound URL age.
+  const small = mode === 'batch' && objects.length <= maxObjects && objects.reduce((n, o) => n + o.bytes, 0) <= 8 * 1024 * 1024;
+  const windows = small ? (objects.length ? [objects] : []) : [...splitUploadPlanIntoWindows(critical, mode === 'legacy' ? 4 : maxObjects),
     ...splitUploadPlanIntoWindows(original, maxObjects)];
   report();
   async function confirm(items, allowAbsent = false) {

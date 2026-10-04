@@ -1,4 +1,5 @@
 import { openDraftDatabase, closeLocalDatabase, localDataEpoch } from '../local-data.js';
+import { encodeCapturedPage, decodeDraft } from './draft-codec.js';
 import { ASSET_FIELDS, assetState, processingReady, backupComplete, revisionOf, newRevision } from './upload-plan.js';
 import { applyAssetUpdates, renumberPages as renumber } from './upload-state.js';
 export function stampDraft(draft) {
@@ -33,7 +34,7 @@ export async function mutateDraft(draft, reduce) {
   } finally { closeLocalDatabase(db); }
   if (epoch !== localDataEpoch()) throw new Error('This draft was cleared. Start a new scan.');
   for (const key of Object.keys(draft)) if (!(key in fresh)) delete draft[key];
-  Object.assign(draft, fresh); stampDraft(draft); return result;
+  Object.assign(draft, decodeDraft(fresh)); stampDraft(draft); return result;
 }
 export async function saveDraft(draft) {
   const incoming = structuredClone(draft), revisions = draft._revisions;
@@ -53,7 +54,7 @@ export async function saveDraft(draft) {
 }
 const editable = draft => { if (draft.submission_started || draft.submission) throw new Error('This paper may already be submitted. Start a new draft to change its pages.'); };
 export async function addPage(draft, page) {
-  const captured = structuredClone(page);
+  const captured = await encodeCapturedPage(page);
   await mutateDraft(draft, fresh => {
     editable(fresh);
     fresh.pages.push({ ...captured, page_number: fresh.pages.length + 1, upload_revision: newRevision(), upload_assets: {}, uploaded: false });
