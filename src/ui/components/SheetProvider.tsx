@@ -10,7 +10,7 @@ import { createContext, startTransition, useCallback, useContext, useEffect, use
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-import Dialog from "./Dialog";
+import Dialog, { useDialogDismiss } from "./Dialog";
 
 export type SheetChoice = {
   label: string;
@@ -107,9 +107,15 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
       <div className="acts">
         {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
-        <button type="button" className="btn plain" disabled={busy} onClick={closeSheet}>Cancel</button>
+        <SheetCancel busy={busy} fallback={closeSheet} />
       </div>
     </Dialog>}
   </Ctx.Provider>;
 
+}
+
+/** Cancel leaves the way the sheet arrived. */
+function SheetCancel({ busy, fallback }: { busy: boolean; fallback: () => void }) {
+  const dismiss = useDialogDismiss(fallback);
+  return <button type="button" className="btn plain" disabled={busy} onClick={dismiss}>Cancel</button>;
 }

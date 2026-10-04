@@ -32,3 +32,11 @@ test("--signout is consumed only by the sign-out row and the theme alias", () =>
   }
   expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/app.css"]);
 });
+
+import { isTablet } from "../../src/ui/scan/useDeskMode";
+test("tablets are told apart from laptops", () => {
+  expect(isTablet("Mozilla/5.0 (Linux; Android 14; SM-X910) AppleWebKit/537.36 Chrome/129 Safari/537.36", 10)).toBe(true);
+  expect(isTablet("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15", 5)).toBe(true);
+  expect(isTablet("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15", 0)).toBe(false);
+  expect(isTablet("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/129 Safari/537.36", 10)).toBe(false);
+});

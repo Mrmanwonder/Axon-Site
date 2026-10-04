@@ -89,7 +89,7 @@ test.describe("camera screen on a phone", () => {
     await shot(page, "m-review");
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("heading", { name: "1 page needs a look" })).toBeVisible();
-    await expect(dialog.getByText("The other 2 are clear.")).toBeVisible();
+    await expect(dialog.getByText("The other 2 can be read.")).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Retake page 2" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Adjust edges" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Read as it is" })).toBeVisible();
@@ -252,5 +252,17 @@ test.describe("import screen on a laptop", () => {
     await expect(zone).toHaveAttribute("data-over", "true");
     await expect(page.getByText("Let go to add these pages")).toBeVisible();
     await shot(page, "d-over");
+  });
+});
+
+test.describe("tablets keep the camera", () => {
+  test.use({ viewport: { width: 1024, height: 1366 }, hasTouch: true, isMobile: false,
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" });
+  test("an iPad with a trackpad (reports as a Mac with touch) gets the camera, not the import screen", async ({ page }) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 }));
+    await open(page, "search");
+    await expect(page.locator(".sc")).toBeVisible();
+    await expect(page.locator(".sc-desk")).toHaveCount(0);
+    await shot(page, "t-ipad");
   });
 });
