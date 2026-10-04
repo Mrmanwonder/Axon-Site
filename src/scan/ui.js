@@ -19,7 +19,13 @@ import { providerKeyForStudent } from '../curriculum.js';
 import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
 
+import { preloadUploadPolicy } from './upload-policy.js';
+import { backupComplete } from './upload-plan.js';
+import { cancelOriginalBackups, resumeOriginalBackups, resumeStudentBackups, finishDraftReview } from './original-backups.js';
+
 const MAX_PENDING_CAPTURES = 2;
+let sendController = null;
+let removeOnlineListener = () => {};
 
 function paperTypes() {
   return paperTypesFor(providerKeyForStudent(S.ctx?.student));
@@ -71,6 +77,21 @@ export function initScanUI(ctx, surfaces = {}) {
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
+  void preloadUploadPolicy();
+  removeOnlineListener();
+  const studentId = ctx.student.id, epoch = S.epoch;
+  const backupNotice = progress => {
+    if (epoch === S.epoch && S.ctx?.student?.id === studentId) toast(progress.message, progress.complete ? undefined : 'warn');
+  };
+  const resumeBackups = () => {
+    if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+    void preloadUploadPolicy();
+    void resumeStudentBackups(studentId, backupNotice).catch(() => {});
+  };
+  globalThis.addEventListener?.('online', resumeBackups);
+  removeOnlineListener = () => globalThis.removeEventListener?.('online', resumeBackups);
+  resumeBackups();
+
   // Review re-entry is server state and must not wait for IndexedDB. On some
   // browsers a blocked/slow local draft store can leave listDrafts() pending
   // indefinitely; before this change that also kept ensureScan() pending, so a
@@ -83,6 +104,8 @@ export function initScanUI(ctx, surfaces = {}) {
 }
 
 export function resetScan() {
+  sendController?.abort(); sendController = null;
+  cancelOriginalBackups(); removeOnlineListener();
   ++S.epoch;
   ++S.reviewRecovery;
   S.reviewDraft = null;
@@ -654,7 +677,7 @@ async function restoreDraft() {
   const epoch = S.epoch;
   const drafts = await listDrafts(S.ctx.student.id);
   if (epoch !== S.epoch) return;
-  const latest = drafts[0];
+  const latest = drafts.find(d => !d.submission);
   if (!latest) return;
   host.draftToast(
     { id: latest.id, pages: latest.pages.length },
@@ -670,7 +693,7 @@ async function paintDrafts() {
   host.renderDrafts(
     drafts.map((d) => ({
       id: d.id,
-      title: d.paper_type
+      title: d.submission && !d.pages.every(backupComplete) ? 'Original backup pending' : d.paper_type
         ? paperTypes().find((t) => t.value === d.paper_type)?.label ?? 'Paper'
         : 'Unfinished paper',
       pages: d.pages.length,
@@ -688,6 +711,7 @@ async function discardDraft(id) {
   if (S.submitting || S.busy) return;
   const draft = await readDraft(id);
   if (!draft || draft.student_id !== S.ctx?.student?.id) return;
+  if (draft.submission && !draft.pages.every(backupComplete)) return toast('Original backups are still pending. Reconnect and resume this draft.', 'warn');
   await deleteDraft(id);
   if (S.draft?.id === id) { S.draft = null; S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); await paintTray(); }
   host.draftToast(null, { onResume: resumeDraft });
@@ -699,6 +723,14 @@ async function resumeDraft(id) {
   host.draftToast(null, { onResume: resumeDraft });
   const draft = await readDraft(id);
   if (!draft || draft.student_id !== S.ctx?.student?.id || S.submitting) return;
+  if (draft.submission) {
+    const epoch = S.epoch;
+    void resumeOriginalBackups(draft, undefined, progress => {
+      if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn');
+    }).then(() => paintDrafts()).catch(() => {});
+    toast('Your paper is submitted. Checking its original backups.');
+    return;
+  }
   S.draft = draft;
   S.retaking = null;
 
@@ -758,6 +790,7 @@ async function run(paperType, sendStartedAt = performance.now()) {
   S.submitting = true;
   host.submissionBusy(true);
   const epoch = S.epoch;
+  const controller = new AbortController(); sendController = controller;
   const intent = host.navigationIntent();
   let recoverCamera = true;
   stopCamera();
@@ -791,7 +824,9 @@ async function run(paperType, sendStartedAt = performance.now()) {
       paperType,
       sendStartedAt,
       onTelemetry: host.uploadTelemetry,
-      onProgress: ({ stage, message }) => { current = stage; paint(message); },
+      signal: controller.signal,
+      onBackupProgress: progress => { if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn'); },
+      onProgress: ({ stage, message }) => { if (epoch === S.epoch) { current = stage; paint(message); } },
     });
 
     if (epoch !== S.epoch) return;
@@ -829,6 +864,7 @@ async function run(paperType, sendStartedAt = performance.now()) {
     await openReview(result.runId, intent);
 
   } catch (error) {
+    if (epoch !== S.epoch) return;
     host.renderProgress({
       heading: 'That did not finish',
       now: error.message || 'Something went wrong reading this paper.',
@@ -1035,6 +1071,7 @@ function handleReviewAction(id, action) {
       primary: 'Take it again',
       onConfirm: () => {
         if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) return;
+        cancelOriginalBackups();
         S.draft = S.reviewDraft;
         host.closeReview();
         releaseCrops();
@@ -1109,7 +1146,7 @@ async function save() {
     ++S.reviewRecovery;
     S.reviewDraft = null;
     if (savedDraft) {
-      await deleteDraft(savedDraft.id);
+      await finishDraftReview(savedDraft);
       if (epoch !== S.epoch) return;
       if (S.draft?.id === savedDraft.id) {
       S.draft = null;

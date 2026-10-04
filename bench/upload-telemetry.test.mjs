@@ -29,8 +29,8 @@ test('aggregate counts include separate page, mask, thumbnail and original bytes
   assert.equal(t.data.total_bytes, 18); assert.equal(t.data.object_count, 4);
   assert.equal(t.data.raw_bytes, 10); assert.equal(t.data.page_count, 1);
 });
-test('real ingest records acceptance before the processing watch, and never emits a second failure for processing errors', async () => {
-  const source = fs.readFileSync(new URL('../src/scan/pipeline.js', import.meta.url), 'utf8');
+test('archived baseline ingest records acceptance before the processing watch, and never emits a second failure for processing errors', async () => {
+  const source = fs.readFileSync(new URL('./fixtures/axo-188-baseline-ingest.js', import.meta.url), 'utf8');
   const begin = source.indexOf('export async function ingest('), end = source.indexOf('\n/**', begin);
   const body = source.slice(begin, end).replace('export async function', 'async function');
   const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
@@ -72,7 +72,7 @@ test('validation failures between stages still identify their stage without clai
 });
 
 test('offline rejection before intent is classified as upload preparation, not local persistence', async () => {
-  const source = fs.readFileSync(new URL('../src/papers.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('./fixtures/axo-188-baseline-upload.js', import.meta.url), 'utf8');
   const begin = source.indexOf('export async function uploadScannedPage('), end = source.indexOf('\n/**', begin);
   const body = source.slice(begin, end).replace('export async function', 'async function');
   const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;

@@ -8,7 +8,7 @@ test('deleting schoolwork purges cached results and student drafts, and rejects 
     const { LocalDataService } = await import('/src/local-data.js');
     await cache.putCached('paper:student:paper', { answer: 'private schoolwork' });
     const draft = await drafts.createDraft({ id: crypto.randomUUID(), studentId: 'student', paperType: null });
-    draft.pages.push({ page_number: 1, blob: new Uint8Array([1, 2, 3]).buffer }); await drafts.saveDraft(draft);
+    await drafts.addPage(draft, { blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }) });
     await LocalDataService.clearStudent('student');
     let rejected = false; try { await drafts.saveDraft(draft); } catch { rejected = true; }
     return { cached: await cache.getCached('paper:student:paper'), drafts: (await drafts.listDrafts('student')).length, rejected };
