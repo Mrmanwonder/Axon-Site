@@ -140,5 +140,5 @@ select public._t('a true retake clears the prior capture original',
  (select original_key is null and conditioning_meta->>'upload_revision'='retake-revision'
  from public.paper_page where paper_id='aaaaaaaa-0000-4000-8000-0000000000a1' and page_number=1));
 reset role;
-select count(*) filter (where not passed) as failed,count(*) as total from public._r;
+select count(*) as total,count(*) filter (where passed) as passed,count(*) filter (where not passed or passed is null) as failed from public._r;
 rollback;

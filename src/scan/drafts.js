@@ -28,7 +28,7 @@ function tx(db, mode, fn) {
       reject(error);
       return;
     }
-    transaction.oncomplete = () => { closeLocalDatabase(db); resolve(result.result ?? result); };
+    transaction.oncomplete = () => { closeLocalDatabase(db); resolve(result?.result); };
     transaction.onerror = transaction.onabort = () => { closeLocalDatabase(db); reject(transaction.error); };
 
   });

@@ -186,3 +186,18 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "::warning title=Migration applies on merge::This PR changes supabase/migrations/. Merging applies it to production via migrate.yml; apply it before merging any code that reads it."
+
+  upload-browser-recovery:
+    name: Native upload recovery (Chromium and WebKit)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.head_ref == 'codex/axo-188-resumable-batch-uploads'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test tests/e2e/upload-recovery.spec.ts tests/e2e/local-data.spec.ts tests/e2e/student-scope-household.spec.ts --retries=0
