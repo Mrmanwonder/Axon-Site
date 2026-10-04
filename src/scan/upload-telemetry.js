@@ -4,7 +4,7 @@ export const UPLOAD_KINDS = ['page', 'mask', 'thumb', 'raw'];
 /** @returns {Record<string, any>} */
 export function sanitizeUploadTelemetry(input = {}) {
   const out = {};
-  const numeric = ['page_count', 'object_count', 'total_bytes', 'retry_count', 'send_to_ingest_ms', 'send_to_submit_ms',
+  const numeric = ['page_count', 'object_count', 'total_bytes', 'retry_count', 'send_to_ingest_ms', 'send_to_submit_ms', 'send_to_failure_ms',
     ...UPLOAD_STAGES.map(s => `${s}_ms`), ...UPLOAD_KINDS.flatMap(k => [`${k}_count`, `${k}_bytes`])];
   for (const key of numeric) if (Number.isFinite(input[key]) && input[key] >= 0) out[key] = Math.round(input[key]);
   if (['legacy', 'batch'].includes(input.mode)) out.mode = input.mode;
@@ -17,6 +17,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
   const start = startedAt ?? now();
   const data = { mode, retry_count: 0, send_to_ingest_ms: now() - start };
   let ended = false;
+  let activeStage = 'planning';
   return {
     data,
     count(objects, pages) {
@@ -30,6 +31,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
     },
     retry() { data.retry_count++; },
     async measure(stage, action) {
+      activeStage = stage;
       const at = now();
       try { return await action(); }
       catch (error) { data.failure_stage ??= stage; throw error; }
@@ -37,7 +39,8 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
     },
     finish(error, queued) {
       if (ended) return; ended = true;
-      data.send_to_submit_ms = now() - start;
+      data[error ? 'send_to_failure_ms' : 'send_to_submit_ms'] = now() - start;
+      if (error) data.failure_stage ??= activeStage;
       if (error) data.failure_kind = error.name === 'AbortError' ? 'cancelled'
         : globalThis.navigator?.onLine === false ? 'offline'
         : error.status === 401 ? 'auth' : error.status >= 500 ? 'server'

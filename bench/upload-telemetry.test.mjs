@@ -60,3 +60,13 @@ test('real ingest records acceptance before the processing watch, and never emit
   assert.equal(events[0][1].queued, false);
   assert.ok(!JSON.stringify(events).includes('private'));
 });
+
+test('validation failures between stages still identify their stage without claiming submission acceptance', async () => {
+  const events = []; let clock = 0;
+  const t = uploadTiming({ now: () => clock, emit: (...e) => events.push(e) });
+  await t.measure('intent', () => { clock += 7; });
+  clock += 2; t.finish(new Error('invalid capability'));
+  assert.equal(events[0][1].failure_stage, 'intent');
+  assert.equal(events[0][1].send_to_failure_ms, 9);
+  assert.equal('send_to_submit_ms' in events[0][1], false);
+});

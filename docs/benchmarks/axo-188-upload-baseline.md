@@ -6,7 +6,7 @@ A send attempt emits exactly one terminal custom event: `paper_send_completed` w
 
 The optional PostHog callback checks the existing separate analytics consent each time. It accepts only the two send events and allowlisted aggregate numeric fields. It never supplies student/paper/draft/run ids, object keys, presigned URLs, filenames, exception messages, answers or academic text. Normal PostHog SDK context remains subject to the existing privacy configuration.
 
-Durations in milliseconds: send-to-ingest, paper creation, planning, upload intents, PUT transfers, confirmation, IndexedDB persistence, submit, and send-to-acceptance. Serial stage durations sum across pages. Retries count actual network retries in the upload/API transport, not attempts guessed from error text.
+Durations in milliseconds: send-to-ingest, paper creation, planning, upload intents, PUT transfers, confirmation, IndexedDB persistence, submit, and send-to-acceptance. Failed handoffs record send-to-failure rather than claiming an acceptance time. Serial stage durations sum across pages. Retries count actual network retries in the upload/API transport, not attempts guessed from error text.
 Object counts and bytes report the supported assets present in the local draft by page/mask/thumb/raw kind. These are booklet composition counts, not claims that bytes were transferred on this attempt; already-uploaded pages can be reused. Failure classification is coarse and does not include raw error text.
 
 ## Current evidence
