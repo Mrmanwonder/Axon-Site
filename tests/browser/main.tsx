@@ -39,10 +39,11 @@ function AuditMotionDemo() {
   </Disclose></div>;
 }
 function AnswerDemo() {
-  return <AnswerBlockView
-    block={{ notation_profile: "math", raw_text: "x + 1", lines: [{ role: "working", segments: [{ type: "prose", text: "x + 1", annotations: [], bbox: { x: 0, y: 0, w: 10, h: 10 } }] }] }}
-    rawText="x + 1" recognition={true}
-  />;
+  const [picked, setPicked] = React.useState<number | null>(null);
+  return <><AnswerBlockView
+    block={{ source_space: "page_pixels_v1", notation_profile: "math", raw_text: "x + 1", lines: [{ role: "working", segments: [{ type: "prose", text: "x + 1", annotations: [], bbox: { page: 2, x: 0, y: 0, w: 10, h: 10 } }] }] }}
+    rawText="x + 1" recognition={true} onPick={segment => setPicked(segment?.bbox?.page ?? null)}
+  /><output aria-label="Selected source page">{picked ?? "none"}</output></>;
 }
 
 function StudentScopeHouseholdDemo() {

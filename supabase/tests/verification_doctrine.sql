@@ -124,9 +124,9 @@ select public._t('a paper resolves to exactly one canonical run',
 do $$
 declare v_run uuid := gen_random_uuid();
 begin
-  insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication)
+  insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication, status)
   values (v_run,'cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002','test',
-          '{"blocks_commit":true,"blocked_reason":"adjudication reported misidentified question labels"}');
+          '{"blocks_commit":true,"blocked_reason":"adjudication reported misidentified question labels"}', 'needs_review');
   insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
                                       marks_awarded, marks_awarded_box, marks_available, marks_available_box, confidence_tier, needs_review, student_confirmed_at, created_at)
   values (v_run,'cccccccc-0000-4000-8000-000000000004','cccccccc-0000-4000-8000-000000000002',0,'c','{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}',3,'{"page":1,"x":40,"y":100,"w":60,"h":40}','confident',false,now(), now());
@@ -142,8 +142,8 @@ end $$;
 do $$
 declare v_run uuid := gen_random_uuid();
 begin
-  insert into public.extraction_run (id, paper_id, student_id, pipeline_version)
-  values (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002','test');
+  insert into public.extraction_run (id, paper_id, student_id, pipeline_version, status)
+  values (v_run,'cccccccc-0000-4000-8000-000000000005','cccccccc-0000-4000-8000-000000000002','test','needs_review');
   -- created_at before the index cutoff, so this exercises the commit gate
   -- rather than being refused at insert time.
   insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
@@ -165,8 +165,8 @@ declare v_run uuid := gen_random_uuid(); v_paper uuid := gen_random_uuid();
 begin
   insert into public.paper (id, student_id, type, tier, date_taken)
   values (v_paper,'cccccccc-0000-4000-8000-000000000002','unit_test','tier_1','2026-09-01');
-  insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication)
-  values (v_run, v_paper,'cccccccc-0000-4000-8000-000000000002','test','{"cause":"ok"}');
+  insert into public.extraction_run (id, paper_id, student_id, pipeline_version, adjudication, status)
+  values (v_run, v_paper,'cccccccc-0000-4000-8000-000000000002','test','{"cause":"ok"}', 'ready');
   insert into public.question_region (run_id, paper_id, student_id, order_index, question_label, question_label_box,
                                       marks_awarded, marks_awarded_box, marks_available, marks_available_box, confidence_tier, needs_review,
                                       student_confirmed_at, answer_block, created_at)
