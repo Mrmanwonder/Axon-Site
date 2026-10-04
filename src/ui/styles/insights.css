@@ -1,0 +1,84 @@
+/* Insights modules. Role tokens only; no new colours, red never used.
+   Text a student needs to read uses --label or --label-2 (--label-3 falls
+   under 4.5:1 on some light surfaces). Marks stay well under 28px. */
+
+/* Shared system text sits on --label-3, which fails 4.5:1 here. On Insights
+   every one of these lines is something the student reads to trust a claim,
+   so they move up a step. Scoped to this screen; the system default is untouched. */
+.greet.insightsgreet .sub, .igrid .sectitle, .igrid .widgetnote, .igrid .coveragehead span,
+.igrid .coveragecard p, .igrid .evidencegap p, .igrid .sparkcol span, .igrid .unknownmark { color: var(--label-2); }
+
+.lede { margin: 0 0 14px; font-size: 14.5px; line-height: 1.5; color: var(--label); letter-spacing: -.01em; }
+.trendlede { margin: 30px 0 0; }
+.trendcard .hd .v.neutral { color: var(--label-2); font-weight: 600; }
+
+/* Before your next paper */
+.checkcard { padding: 18px; }
+.checkcard ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.checkcard li { display: grid; grid-template-columns: 9px minmax(0, 1fr); gap: 12px; align-items: start; }
+.checkcard li .sw2 { width: 9px; height: 9px; border-radius: 3px; margin-top: 7px; }
+.checkcard .t { font-size: 15.5px; line-height: 1.45; font-weight: 600; letter-spacing: -.015em; color: var(--label); }
+.checkcard .src { display: inline-flex; align-items: center; min-height: 44px; margin: 2px 0 -10px; font-size: 13px; color: var(--accent); font-weight: 550; }
+
+/* Tally rows: one claim, its sample, its questions */
+.tallycard, .sharecard { padding: 6px 18px 16px; }
+.tallycard > .lede, .sharecard > .lede { margin-top: 12px; }
+.tallyrow, .sharerow { padding: 13px 0; border-bottom: .5px solid var(--hairline); }
+.tallyrow:last-of-type, .sharerow:last-of-type { border-bottom: 0; }
+.tallyrow .top, .sharerow .top { display: flex; align-items: baseline; gap: 9px; }
+.tallyrow .top .sw2 { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; align-self: center; }
+.tallyrow .n, .sharerow .n { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.012em; color: var(--label); overflow-wrap: anywhere; }
+.tallyrow .v, .sharerow .v { font-size: 15px; font-weight: 650; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tallyrow .v small { margin-left: 5px; font-size: 12px; font-weight: 500; color: var(--label-2); }
+.sharerow .v { font-size: 13.5px; font-weight: 600; color: var(--label-2); }
+.tallyrow .meta, .sharerow .meta, .tallycard > .meta { margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.tallyrow .meta.def { color: var(--label-2); }
+.tallyrow .disclose { margin-top: 8px; }
+.tallyrow .disclose .toggle { padding: 10px 0; min-height: 44px; font-size: 13px; }
+.tallycard .disclose { border-top: .5px solid var(--hairline); }
+
+.sharerow .track { height: 6px; margin-top: 9px; border-radius: 3px; overflow: hidden; background: var(--surface-sunk); }
+.sharerow .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .8; }
+
+/* Cause groups */
+.groupline { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: -4px 0 4px; font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+
+/* Fading causes: the student's own record, stated plainly */
+.fading { padding: 12px 0 2px; }
+.fading p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: var(--label-2); }
+.fading strong { color: var(--label); font-weight: 600; }
+
+/* The questions a claim rests on */
+.evlist { list-style: none; margin: 0; padding: 0 0 4px; }
+.evrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; color: var(--label); }
+.evrow .q { font-size: 13.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.evrow .p { font-size: 12.5px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evrow .m { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.evrow .m small { margin-left: 4px; font-size: 11.5px; font-weight: 500; color: var(--label-2); }
+
+/* Below the threshold */
+.unlockcard { padding: 18px; }
+.unlockcard ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 13.5px; line-height: 1.45; color: var(--label-2); }
+
+/* Home · the one supported focus, quoted from the student's own question */
+.focuscard { margin-top: 12px; padding: 20px; }
+.focuscard .line { font-size: clamp(16.5px, 4.4vw, 20px); font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--label); }
+.focuscard .why { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.focuscard .why .sw2 { width: 9px; height: 9px; border-radius: 3px; }
+.focuscard .actions { display: flex; flex-wrap: wrap; gap: 0 20px; }
+.focuscard .textaction { min-height: 44px; margin-top: 6px; }
+
+/* Compact cause list: kind, sample, marks. Meanings and questions sit behind one disclosure each. */
+.causelist { list-style: none; margin: 4px 0 0; padding: 0; }
+.causelist li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 9px 0; border-bottom: .5px solid var(--hairline); }
+.causelist li:last-child { border-bottom: 0; }
+.causelist .sw2 { width: 9px; height: 9px; border-radius: 3px; align-self: center; }
+.causelist .n { font-size: 14px; font-weight: 600; color: var(--label); letter-spacing: -.01em; }
+.causelist .n small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 450; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.causelist .v { font-size: 15px; font-weight: 650; color: var(--label); font-variant-numeric: tabular-nums; }
+.causecard .disclose .toggle { min-height: 44px; font-size: 13px; }
+.causedefs { margin: 0 0 6px; display: grid; gap: 9px; }
+.causedefs dt { font-size: 13px; font-weight: 600; color: var(--label); }
+.causedefs dd { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--label-2); }
+.morelist .disclose { margin-top: 0; }
+.morelist .tallyrow:first-child { padding-top: 4px; }
