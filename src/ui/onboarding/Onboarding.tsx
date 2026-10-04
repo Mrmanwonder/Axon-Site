@@ -468,7 +468,7 @@ export default function Onboarding() {
 
   if (step === "otp") {
     return (
-      <Shell {...shellProps} title={/^[+\d]/.test(contact) ? "Check your messages" : "Check your email"}>
+      <Shell {...shellProps} title={contact.includes("@") ? "Check your email" : "Check your messages"}>
         <Err message={error} />
         <div className="obfields">
           {/* inputMode="numeric" is what makes autoComplete="one-time-code"
