@@ -28,7 +28,9 @@ import type { AppDropdownOption } from "../components/AppDropdown";
 import { useIngestion } from "../data/useIngestion";
 import PageSkeleton from "../components/PageSkeleton";
 import Disclose from "../components/Disclose";
-import { useInsights } from "../data/useInsights";
+import { useInsights, useSyllabusMaps } from "../data/useInsights";
+import SyllabusMap from "../components/SyllabusMap";
+import type { SyllabusMaps } from "../data/syllabusMap";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import { PATTERN_PAPERS, subjectOf, ALL_FILTERS } from "../data/insights";
 import type { Cause, ErrorType, InsightFilters, InsightsModel, QuestionRef, Tally } from "../data/insights";
@@ -137,6 +139,7 @@ export default function Insights() {
   const [filters, setFilters] = useState<InsightFilters>(ALL_FILTERS);
   const set = (k: keyof InsightFilters) => (v: string) => setFilters((f) => ({ ...f, [k]: v }));
   const { state, model, stale } = useInsights(filters);
+  const syllabus = useSyllabusMaps(filters);
 
   const subjects = useMemo(() => {
     const fromPapers = papers.map((p) => subjectOf(p)).filter((s): s is string => !!s);
@@ -179,14 +182,32 @@ export default function Insights() {
 
     {model.evidence.papers === 0 && filtered && papers.length > 0
       ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no confirmed evidence for this combination yet.</p><button onClick={() => setFilters(ALL_FILTERS)}>Clear filters</button></div>
-      : <Body model={model} describe={describe} addPaper={addPaper} filtered={filtered} />}
+      : <Body model={model} describe={describe} addPaper={addPaper} filtered={filtered}
+          syllabus={<SyllabusSection maps={syllabus.maps} state={syllabus.state} describe={describe} subject={filters.subject === "all" ? null : filters.subject} />} />}
 
     {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis.</div>}
   </>;
 }
 
-function Body({ model, describe, addPaper, filtered }: {
-  model: InsightsModel; describe: (r: QuestionRef) => string; addPaper: () => void; filtered: boolean;
+function SyllabusSection({ maps, state, describe, subject }: {
+  maps: SyllabusMaps | null; state: string; describe: (r: QuestionRef) => string; subject: string | null;
+}) {
+  return <section className="isection isection-wide">
+    <div className="sectitle">Syllabus map</div>
+    {!maps ? (state === "failed"
+      ? <EvidenceGap title="Syllabus map unavailable">Axon couldn&rsquo;t load the syllabus right now. Your papers are unaffected.</EvidenceGap>
+      : <div className="card heatcard" role="status" aria-label="Loading syllabus map"><p className="lede">Loading the syllabus…</p></div>)
+      : maps.maps.length ? <SyllabusMap data={maps} describe={describe} initialSubject={subject} />
+      : <EvidenceGap title="No syllabus map yet">
+          {maps.withoutSyllabus.length
+            ? `The official syllabus for ${maps.withoutSyllabus.join(", ")} isn’t available in Axon yet. Topics will appear here once it is.`
+            : "Add your subjects in Settings and Axon will lay your papers out on their official syllabus."}
+        </EvidenceGap>}
+  </section>;
+}
+
+function Body({ model, describe, addPaper, filtered, syllabus }: {
+  model: InsightsModel; describe: (r: QuestionRef) => string; addPaper: () => void; filtered: boolean; syllabus: React.ReactNode;
 }) {
   const ev = model.evidence;
   const evidenceLine = `${plural(ev.questions, "confirmed question")} · ${plural(ev.papers, "paper")}`;
@@ -218,6 +239,7 @@ function Body({ model, describe, addPaper, filtered }: {
           <p className="widgetnote">Each paper you scan already has its own explanations in Library.</p>
         </div>
       </section>
+      {syllabus}
     </div>;
   }
 
@@ -273,6 +295,8 @@ function Body({ model, describe, addPaper, filtered }: {
         No cause has cost marks in two different papers of the same subject in this evidence. {evidenceLine}.
       </EvidenceGap>}
     </section>
+
+    {syllabus}
 
     {/* 3 · Where marks go, by kind. */}
     <section className="isection">

@@ -16,7 +16,9 @@
 
 import { useMemo } from "react";
 import { useResource, isStale } from "./useResource";
-import { insightEvidence } from "./modules";
+import { insightEvidence, syllabusMapData } from "./modules";
+import { buildSyllabusMaps } from "./syllabusMap";
+import type { SyllabusMapInput } from "./syllabusMap";
 import { useApp } from "./AppProvider";
 import { getCached } from "../../cache.js";
 import { buildInsights } from "./insights";
@@ -62,4 +64,23 @@ export function useInsights(filters: InsightFilters): InsightsRead {
     [evidence, papers, filters.subject, filters.type, filters.tier, filters.range],
   );
   return { state: libraryPending ? "loading" : resource.state, model, stale: isStale(resource), reload };
+}
+
+/** The per-subject syllabus maps, filtered like the rest of Insights. */
+export function useSyllabusMaps(filters: InsightFilters) {
+  const { student, papers } = useApp();
+  const { resource: evidenceResource, libraryPending } = useInsightEvidence();
+  const signature = useMemo(() => librarySignature(papers as InsightPaper[]), [papers]);
+  const { resource } = useResource<SyllabusMapInput>(student?.id ? `syllabus:${student.id}#${signature}` : null, async () => {
+    const r = await syllabusMapData(student!.id);
+    return { data: r.data, stale: r.stale };
+  }, async () => (await getCached(`syllabus:${student!.id}`)) as SyllabusMapInput | null);
+  const attempts = evidenceResource.data?.attempts ?? null;
+  const maps = useMemo(
+    () => (resource.data && attempts && !libraryPending
+      ? buildSyllabusMaps({ data: resource.data, papers: papers as InsightPaper[], attempts, filters })
+      : null),
+    [resource.data, attempts, libraryPending, papers, filters.subject, filters.type, filters.tier, filters.range],
+  );
+  return { state: libraryPending ? "loading" as const : resource.state, maps, stale: isStale(resource) };
 }

@@ -83,7 +83,9 @@ const INSIGHT_PAPERS = [
   ["ip1", "Physics", "2026-05-12", 40, 27], ["ip2", "Mathematics", "2026-06-02", 50, 38], ["ip3", "Physics", "2026-07-08", 40, 29],
   ["ip4", "Mathematics", "2026-08-11", 50, 41], ["ip5", "Physics", "2026-09-03", 40, 33], ["ip6", "Physics", "2026-09-24", 40, 34],
 ].map(([id, subject, date, available, awarded]) => ({
-  id, subject, type: "unit_test", tier: "tier_1", date_taken: date, created_at: date,
+  id, subject, subject_display_snapshot: subject, subject_offering_id: subject === "Physics" ? "off-phys" : "off-math",
+  subject_identity_source: "triage", subject_identity_confidence: "auto",
+  type: "unit_test", tier: "tier_1", date_taken: date, created_at: date,
   total_available: available, total_awarded: awarded, total_partial: false, student_attempt: [{ count: 6 }],
 }));
 function insightFixture() {
@@ -109,6 +111,47 @@ function insightFixture() {
   }
   return { attempts, losses };
 }
+// Syllabus map fixture: an invented two-unit syllabus (no board text), Physics only.
+function syllabusFixture() {
+  const doc = { id: "doc-phys", provider_key: "cambridge", syllabus_code: "0000", title: "Example Physics", version_label: "2026",
+    valid_from_year: 2026, valid_to_year: 2026, source_url: "https://example.test/syllabus.pdf", fetched_at: "2026-10-04T00:00:00Z" };
+  const rows: Record<string, unknown>[] = [];
+  let order = 0;
+  const unit = (code: string, title: string, topics: [string, string, string[]][]) => {
+    rows.push({ id: `u${code}`, document_id: doc.id, parent_id: null, code, kind: "unit", title, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+    for (const [tc, tt, objectives] of topics) {
+      rows.push({ id: `t${tc}`, document_id: doc.id, parent_id: `u${code}`, code: tc, kind: "topic", title: tt, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+      objectives.forEach((o, i) => rows.push({ id: `o${tc}.${i + 1}`, document_id: doc.id, parent_id: `t${tc}`, code: `${tc}.${i + 1}`, kind: "objective", title: o, objective_text: o, notes_text: i === 0 ? "Example note for this objective." : null, group_title: null, qualification_scope: "AS", sort_order: order++ }));
+    }
+  };
+  unit("1", "Forces and motion", [
+    ["1.1", "Newton's laws", ["state the first example law", "apply the second example law to a moving body"]],
+    ["1.2", "Momentum", ["define example momentum", "use conservation in a collision"]],
+    ["1.3", "Energy transfers", ["describe example energy stores", "calculate efficiency"]],
+    ["1.4", "Circular motion", ["describe example circular motion"]],
+  ]);
+  unit("2", "Waves", [
+    ["2.1", "Wave properties", ["describe example waves"]],
+    ["2.2", "Superposition", ["explain example interference"]],
+  ]);
+  const evidence: Record<string, unknown>[] = [];
+  const { attempts } = insightFixture();
+  const topicFor: Record<string, string> = { "1(b)": "o1.1.2", "3(a)": "o1.3.1", "3(b)": "o1.2.1", "2": "o1.2.2" };
+  for (const a of attempts as { id: string; paper_id: string; question_label: string; max_marks: number; marks_awarded: number }[]) {
+    if (!a.paper_id || !["ip1", "ip3", "ip5", "ip6"].includes(a.paper_id) || !topicFor[a.question_label]) continue;
+    evidence.push({ attempt_id: a.id, paper_id: a.paper_id, topic_id: topicFor[a.question_label], document_id: doc.id, is_primary: true, max_marks: a.max_marks, marks_awarded: a.marks_awarded });
+  }
+  return {
+    subjects: [
+      { subject: "Physics", subject_offering_id: "off-phys", display_name_snapshot: "Physics", external_code_snapshot: "0000" },
+      { subject: "Mathematics", subject_offering_id: "off-math", display_name_snapshot: "Mathematics", external_code_snapshot: "0001" },
+    ],
+    links: [{ subject_offering_id: "off-phys", document_id: doc.id }],
+    documents: [doc], topics: rows, evidence,
+  };
+}
+export const syllabusMapData = async () => ({ data: scenario === "insights" ? syllabusFixture() : { subjects: [], links: [], documents: [], topics: [], evidence: [] }, stale: false });
+export const setPaperSubject = async () => {};
 export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : [], stale: false }; }
 export const insightEvidence = async () => ({ data: scenario === "insights" ? insightFixture() : { attempts: [], losses: [] }, stale: scenario === "cached" });
 export const paperProgress = async () => new Map();

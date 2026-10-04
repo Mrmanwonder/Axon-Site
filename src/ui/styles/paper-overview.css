@@ -39,3 +39,8 @@
 @media (max-width: 420px) {
   .po-mark-none { max-width: 7ch; }
 }
+
+/* Subject: the student can change what triage set; an official assessment's subject is fixed. */
+.po-subject { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 4px var(--gutter, 16px) 12px; }
+.po-subject .k { font-size: 13px; font-weight: 600; color: var(--po-secondary); }
+.po-subject .hint { flex-basis: 100%; font-size: 12.5px; color: var(--po-secondary); }

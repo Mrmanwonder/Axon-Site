@@ -82,3 +82,57 @@
 .causedefs dd { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--label-2); }
 .morelist .disclose { margin-top: 0; }
 .morelist .tallyrow:first-child { padding-top: 4px; }
+
+/* Syllabus map. Shade = share of marks lost (--heat-0..4). Early evidence is
+   the light bordered form; untested is a dashed outline, never a colour. */
+.heatcard { padding: 16px 18px; }
+.heathead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.heathead .subj { font-size: 14.5px; font-weight: 650; color: var(--label); }
+.heathead .cov { font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.heatlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 2px 0 12px; font-size: 12px; color: var(--label-2); }
+.heatlegend .ramp, .heatlegend .key { display: inline-flex; align-items: center; gap: 4px; }
+.heatlegend .ramp span:first-child { margin-right: 4px; }
+.heatlegend .ramp span:last-child { margin-left: 4px; }
+.heatlegend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.heatlegend .key i { margin-right: 4px; }
+.heat { background: transparent; }
+.heat.l0 { background: var(--heat-0); }
+.heat.l1 { background: var(--heat-1); }
+.heat.l2 { background: var(--heat-2); }
+.heat.l3 { background: var(--heat-3); }
+.heat.l4 { background: var(--heat-4); color: var(--heat-ink-4); }
+.heat.l4 .ct, .heat.l4 .cq { color: var(--heat-ink-4); }
+.heat.untested { border: 1px dashed var(--label-3); background: transparent; }
+.heat.early { border: 1px solid var(--accent); }
+.heat.early:not(.l0):not(.l1):not(.l2):not(.l3):not(.l4) { background: var(--accent-wash); }
+.heatunit { padding: 10px 0 4px; border-top: .5px solid var(--hairline); }
+.heatunit:first-of-type { border-top: 0; }
+.uname { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 600; color: var(--label); margin-bottom: 8px; }
+.uname span { color: var(--label-2); font-variant-numeric: tabular-nums; }
+.uname em { font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--label-2); margin-left: auto; }
+.heatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.heatcell { position: relative; min-height: 64px; padding: 8px 8px 7px; border-radius: 10px; text-align: left; display: flex; flex-direction: column; gap: 3px; color: var(--label); transition: transform var(--d-state) var(--spring); }
+.heatcell:active { transform: scale(.97); }
+.heatcell.on { outline: 2px solid var(--label); outline-offset: 2px; }
+.heatcell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.heatcell .cc { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.heatcell .ct { font-size: 11.5px; line-height: 1.25; color: var(--label); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.heatcell.untested .ct, .heatcell.untested .cc { color: var(--label-2); }
+.heatcell .cq { position: absolute; top: 7px; right: 8px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.heatdetail { margin: 10px 0 6px; padding: 14px; border-radius: 12px; background: var(--surface-sunk); }
+.heatdetail .hdtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.heatdetail .code { font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.heatdetail h3 { margin: 2px 0 0; font-size: 15.5px; letter-spacing: -.015em; color: var(--label); }
+.heatdetail .v { font-size: 15px; font-weight: 650; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--label); }
+.heatdetail .v small { display: block; font-size: 11.5px; font-weight: 500; color: var(--label-2); }
+.heatdetail .meta { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--label-2); }
+.objlabel { margin: 14px 0 6px; font-size: 11.5px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--label-2); }
+.objgroup { margin: 8px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--label); }
+.objlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.objlist li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 13px; line-height: 1.45; color: var(--label-2); }
+.objlist li.hit { color: var(--label); }
+.objlist .oc { font-variant-numeric: tabular-nums; font-weight: 600; }
+.objlist .on { display: block; margin-top: 2px; font-size: 12px; color: var(--label-2); }
+.objlist .oq { grid-column: 2; font-size: 12px; font-weight: 600; color: var(--accent); }
+.heatdetail .widgetnote a { color: var(--accent); }
+@media (min-width: 768px) { .igrid .isection-wide { grid-column: 1 / -1; } }
