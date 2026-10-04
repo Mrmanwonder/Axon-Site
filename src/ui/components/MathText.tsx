@@ -217,8 +217,34 @@ function firstBareCommand(text: string): { index: number; value: string } | null
   return { index: match.index, value: text.slice(match.index, cursor) };
 }
 
+/**
+ * A run of bare LaTeX in prose, with no $ or \( \) around it: what the reader
+ * sometimes stores for a printed question ("gives \sum(x-c) = 642, \quad
+ * \sum(x-c)^2 = 32\,460, where c is a constant"). Starts at the first command
+ * and extends over tokens that can only be maths (commands, numbers, single
+ * letters, operators, brackets); the first ordinary word ("where") ends it.
+ */
+const MATH_TOKEN = /\\[A-Za-z]+\*?|\\[,;:! ]|[0-9]+(?:\.[0-9]+)?|[A-Za-z](?![A-Za-z])|[+\-=*/^_()[\]{}<>|!'.,]|\s+/y;
+function firstBareLatexRun(text: string): { index: number; value: string } | null {
+  const start = text.search(/\\[A-Za-z]+/);
+  if (start < 0) return null;
+  let cursor = start;
+  for (;;) {
+    MATH_TOKEN.lastIndex = cursor;
+    const match = MATH_TOKEN.exec(text);
+    if (!match || !match[0].length) break;
+    cursor += match[0].length;
+  }
+  let value = text.slice(start, cursor);
+  value = value.replace(/[\s,.;:]+$/, "");
+  if (!/\\[A-Za-z]+/.test(value) || REFUSED.test(value)) return null;
+  return { index: start, value };
+}
+
 function firstLegacyMatch(text: string): { index: number; value: string } | null {
   let best: { index: number; value: string } | null = firstBareCommand(text);
+  const run = firstBareLatexRun(text);
+  if (run && (!best || run.index < best.index || (run.index === best.index && run.value.length > best.value.length))) best = run;
   for (const pattern of LEGACY_PATTERNS) {
     pattern.lastIndex = 0;
     const match = pattern.exec(text);

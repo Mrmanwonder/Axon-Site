@@ -16,6 +16,8 @@ import { useApp } from "../data/AppProvider";
 import type { ProgressRow } from "../data/modules";
 import { paths } from "../app/paths";
 import PageSkeleton from "../components/PageSkeleton";
+import { usePaperDelete } from "../data/usePaperDelete";
+import { useOptionalSheetControls } from "../components/SheetProvider";
 
 type WorkTask = {
   key: string;
@@ -305,9 +307,7 @@ export default function PaperReview() {
     return (
       <div style={{ padding: "16px var(--text-gutter)" }}>
         <p className="subnote">{result.reason || "We could not finish reading this paper."}</p>
-        <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex", marginTop: 12 }}>
-          Back to Library
-        </Link>
+        <FailedPaperActions paperId={draftId} />
       </div>
     );
   }
@@ -315,9 +315,31 @@ export default function PaperReview() {
   return (
     <div style={{ padding: "16px var(--text-gutter)" }}>
       <p className="subnote">We couldn&rsquo;t find this paper to review. It may have been removed.</p>
-      <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex", marginTop: 12 }}>
-        Back to Library
-      </Link>
+      <FailedPaperActions paperId={draftId} />
     </div>
+  );
+}
+
+/** A paper that never read still belongs to the student, so it can be deleted
+    from here rather than sitting in the Library for good (owner, 4 Oct 2026).
+    Delete is offered only while the paper is still in the Library. */
+function FailedPaperActions({ paperId }: { paperId: string | undefined }) {
+  const { papers } = useApp();
+  const sheets = useOptionalSheetControls();
+  const listed = !!paperId && (papers ?? []).some((p) => p.id === paperId);
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+      <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex" }}>Back to Library</Link>
+      {listed && sheets && <DeletePaperButton paperId={paperId!} />}
+    </div>
+  );
+}
+
+function DeletePaperButton({ paperId }: { paperId: string }) {
+  const requestDelete = usePaperDelete();
+  return (
+    <button type="button" className="btn ghost danger-soft" onClick={() => requestDelete(paperId)}>
+      Delete this paper
+    </button>
   );
 }

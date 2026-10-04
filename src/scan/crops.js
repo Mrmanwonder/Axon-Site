@@ -62,7 +62,9 @@ export function pageImageUrl(paperId, pageNumber, { force = false } = {}) {
  * place the page's real pixel size is known on the client.
  */
 export function paddedBox(box, naturalWidth, naturalHeight, pad = 0.05) {
-  const padX = box.w * pad, padY = box.h * pad;
+  // Vertically, at least about one ruled line (1.5% of the page) of context:
+  // a 5% pad of a short region cut through the line of print above it.
+  const padX = box.w * pad, padY = Math.max(box.h * pad, naturalHeight * 0.015);
   const x = Math.max(0, box.x - padX);
   const y = Math.max(0, box.y - padY);
   const w = Math.min(naturalWidth - x, box.w + padX * 2);
@@ -86,7 +88,7 @@ export function cropStyles(box, naturalWidth, naturalHeight, pad = 0.05) {
   const b = paddedBox(box, naturalWidth, naturalHeight, pad);
   if (!b) return null;
   return {
-    frame: { aspectRatio: `${b.w} / ${b.h}` },
+    frame: { aspectRatio: `${b.w} / ${b.h}`, '--crop-ar': String(+(b.w / b.h).toFixed(4)) },
     image: {
       width: `${(naturalWidth / b.w) * 100}%`,
       transform: `translate(${(-b.x / naturalWidth) * 100}%, ${(-b.y / naturalHeight) * 100}%)`,

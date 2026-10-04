@@ -36,6 +36,11 @@ type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => voi
 
 const Ctx = createContext<SheetValue | null>(null);
 
+/** For components that can live outside the provider (tests, isolated screens). */
+export function useOptionalSheetControls(): SheetValue | null {
+  return useContext(Ctx);
+}
+
 export function useSheetControls(): SheetValue {
   const v = useContext(Ctx);
   if (!v) throw new Error("useSheetControls called outside SheetProvider");

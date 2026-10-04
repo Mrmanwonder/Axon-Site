@@ -71,7 +71,7 @@ test("no printed total, every mark read: labelled as added up by Axon, never as 
 test("no printed total with an unreadable mark: the figure is shown as at least, and says why", async () => {
   fixture.readPaper.mockResolvedValue({ data: paper({ total_partial: true, total_awarded: 4, total_available: 5 }), stale: false, offline: false });
   mount();
-  expect(await screen.findByText(/some marks could not be read, so this is at least what was awarded/i)).toBeTruthy();
+  expect(await screen.findByText(/some marks couldn’t be read, so more may have been lost/i)).toBeTruthy();
   expect(screen.getByText(/^at least$/i)).toBeTruthy();
 });
 

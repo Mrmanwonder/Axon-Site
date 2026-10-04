@@ -22,7 +22,7 @@ for (const width of [360, 390, 768, 1024, 1440]) {
       await expect(page.getByRole("heading", { level: 1, name: "Test paper" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 2, name: "Question 1" })).toBeVisible();
       await expect(page.getByRole("heading", { level: 2, name: "Unassigned parts" })).toBeVisible();
-      await expect(page.getByText("2 questions · 7 parts · 3 parts not placed under a question")).toBeVisible();
+      await expect(page.getByText(/2 questions · 7 parts/)).toBeVisible();
 
       // No horizontal document overflow, and every full part path stays on screen.
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);

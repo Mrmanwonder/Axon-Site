@@ -130,10 +130,11 @@ test("the pictured paper renders as grouped questions with an honest unassigned 
   mount();
 
   expect(await screen.findByRole("heading", { level: 1, name: "Class test" })).toBeTruthy();
-  expect(screen.getByText("Subject not confirmed")).toBeTruthy();
+  expect(screen.getByText("Subject not identified")).toBeTruthy();
   expect(screen.getByText(/Dated 7 Sep/)).toBeTruthy();
-  expect(screen.getByText("2 questions · 7 parts · 3 parts not placed under a question")).toBeTruthy();
-  expect(screen.getByText(/Teacher’s marks: 15 of 22/)).toBeTruthy();
+  expect(screen.getByText("15 of 22 from your teacher · 2 questions · 7 parts")).toBeTruthy();
+  // The overview no longer badges settled rows; that state lives on the question.
+  expect(screen.queryByText("Confirmed by you")).toBeNull();
 
   const q1 = screen.getByRole("heading", { level: 2, name: "Question 1" }).closest("section")!;
   expect(within(q1).getAllByRole("link")).toHaveLength(3);
@@ -166,4 +167,11 @@ test("a needs-checking part is the next action and links to that exact part", as
   const link = await screen.findByRole("link", { name: "Open 2" });
   expect(link.getAttribute("href")).toBe("/library/paper-1/a2");
   expect(screen.getByText("Needs checking")).toBeTruthy();
+});
+
+test("an unassigned part can be placed under a question by hand", async () => {
+  fixture.readPaper.mockResolvedValue({ data: { ...base, ...pictured }, stale: false, offline: false });
+  mount();
+  const loose = (await screen.findByRole("heading", { level: 2, name: "Unassigned parts" })).closest("section")!;
+  expect(within(loose).getAllByRole("button", { name: "Place under a question" })).toHaveLength(3);
 });
