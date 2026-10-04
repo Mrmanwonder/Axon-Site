@@ -76,13 +76,90 @@ export const cameraSupported = () => !!navigator.mediaDevices?.getUserMedia;
 
 let pending = null;
 
+const MAIN_CAMERA_KEY = 'axon.scan.mainCamera';
+const NOT_MAIN = /ultra|wide[\s-]?angle|0\.5|tele|zoom|macro|depth|tof|infra|\bir\b|dual|triple|desk ?view|virtual|obs\b/i;
+const FRONT = /front|user|selfie|facetime/i;
+const BACK = /back|rear|environment/i;
+
+/**
+ * The phone's main (1x, wide) rear camera, chosen from labelled devices.
+ *
+ * `facingMode: environment` lets the browser pick any rear lens. On phones with
+ * three or four of them that has meant the ultra-wide (soft corners, barrel
+ * distortion) or a telephoto (too close to fit a page). Labels exist only after
+ * permission is granted. Pure, so it is tested in Node.
+ *
+ * iOS: "Back Camera" is the main lens; "Back Dual/Triple Camera" are virtual
+ * devices that switch lenses on their own. Android Chrome: "camera2 N, facing
+ * back", where the main sensor is the lowest-numbered back camera.
+ *
+ * @param {{kind:string, deviceId:string, label:string}[]} devices
+ * @returns {string|null} deviceId, or null when nothing can be told apart
+ */
+export function pickMainCamera(devices) {
+  const back = (devices ?? []).filter((d) => d.kind === 'videoinput' && d.label
+    && !FRONT.test(d.label) && BACK.test(d.label));
+  if (!back.length) return null;
+  const score = (d) => {
+    const label = d.label.trim();
+    if (/^back camera$/i.test(label)) return -1000;
+    const index = Number(/camera2?\s*(\d+)/i.exec(label)?.[1] ?? 50);
+    return (NOT_MAIN.test(label) ? 500 : 0) + index;
+  };
+  const best = [...back].sort((a, b) => score(a) - score(b))[0];
+  return NOT_MAIN.test(best.label) && back.length > 1 ? null : best.deviceId;
+}
+
+function rememberedCamera() {
+  try { return globalThis.localStorage?.getItem(MAIN_CAMERA_KEY) || null; } catch { return null; }
+}
+function rememberCamera(id) {
+  try { if (id) globalThis.localStorage?.setItem(MAIN_CAMERA_KEY, id); } catch { /* storage is a convenience */ }
+}
+
+function constraintsFor(deviceId) {
+  if (!deviceId) return CAMERA_CONSTRAINTS;
+  const { facingMode, ...video } = CAMERA_CONSTRAINTS.video;
+  return { ...CAMERA_CONSTRAINTS, video: { ...video, deviceId: { exact: deviceId } } };
+}
+
+/** Open the rear camera, then move to the main lens if the browser picked another. */
+async function openMainCamera() {
+  const remembered = rememberedCamera();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraintsFor(remembered));
+  } catch (error) {
+    if (!remembered || error?.name === 'NotAllowedError') throw error;
+    rememberCamera('');
+    stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+  }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const main = pickMainCamera(devices);
+    const current = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+    if (main && current && main !== current) {
+      stream.getTracks().forEach((t) => t.stop());
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraintsFor(main));
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+      }
+    }
+    rememberCamera(stream.getVideoTracks()[0]?.getSettings?.().deviceId ?? main);
+  } catch {
+    // Choosing a lens is an improvement, never a reason to have no camera.
+  }
+  return stream;
+}
+
 /** Start the camera and hand the same promise to every caller. */
 export function requestCamera() {
   if (!cameraSupported()) {
     return Promise.reject(Object.assign(new Error('no camera on this device'), { name: 'NotFoundError' }));
   }
   if (!pending) {
-    const request = navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
+    const request = openMainCamera()
       .catch((error) => {
         // A released permission request can reject after a new visit starts.
         if (pending === request) pending = null;

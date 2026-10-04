@@ -1,13 +1,44 @@
-import { useEffect, useId, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-/** The browser owns modal focus, background inertness and the Escape event. */
+/* Sheets rise from the bottom edge and fall back to it (transform and opacity
+   only, 280 ms in, 200 ms out; nothing under reduced motion). The browser still
+   owns modal focus, background inertness and the Escape event. Anything inside
+   the sheet that closes it should call `useDialogDismiss()` so it leaves the
+   same way it arrived instead of vanishing. */
+
+const EXIT_MS = 200;
+const reducedMotion = () => document.documentElement.dataset.motion === "reduce"
+  || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+const DismissCtx = createContext<(() => void) | null>(null);
+
+/** Close the enclosing sheet with its exit motion. Falls back to `fallback` outside a Dialog. */
+export function useDialogDismiss(fallback?: () => void): () => void {
+  const dismiss = useContext(DismissCtx);
+  return dismiss ?? fallback ?? (() => {});
+}
+
 export default function Dialog({ title, description, busy = false, onClose, children, restoreFocus, className = "" }: {
   title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode; restoreFocus?: HTMLElement | null; className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+  const [closing, setClosing] = useState(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const timer = useRef<number | null>(null);
+
+  const dismiss = useCallback(() => {
+    if (timer.current !== null) return;
+    if (reducedMotion()) { closeRef.current(); return; }
+    setClosing(true);
+    timer.current = window.setTimeout(() => { timer.current = null; closeRef.current(); }, EXIT_MS);
+  }, []);
+
+  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+
   useEffect(() => {
     const dialog = ref.current!;
     const trigger = restoreFocus ?? document.activeElement as HTMLElement | null;
@@ -21,6 +52,7 @@ export default function Dialog({ title, description, busy = false, onClose, chil
     };
   }, []);
   return <dialog ref={ref} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
+    className={closing ? "is-closing" : undefined}
     onKeyDown={event => {
       if (event.key !== "Tab") return;
       const controls = [...event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex='0']")];
@@ -29,13 +61,15 @@ export default function Dialog({ title, description, busy = false, onClose, chil
       event.preventDefault();
       controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
     }}
-    aria-busy={busy || undefined} onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}
-    onClick={event => { if (event.target === event.currentTarget && !busy) onClose(); }}
+    aria-busy={busy || undefined} onCancel={event => { event.preventDefault(); if (!busy) dismiss(); }}
+    onClick={event => { if (event.target === event.currentTarget && !busy) dismiss(); }}
     style={{ padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", background: "transparent", border: 0, color: "inherit" }}>
-    <div className={`sheet ${className}`.trim()} style={{ transform: "none" }}>
-      <h4 id={titleId}>{title}</h4>
-      {description && <div className="body" id={descriptionId}>{description}</div>}
-      {children}
-    </div>
+    <DismissCtx.Provider value={dismiss}>
+      <div className={`sheet ${className}`.trim()} style={{ transform: "none" }}>
+        <h4 id={titleId}>{title}</h4>
+        {description && <div className="body" id={descriptionId}>{description}</div>}
+        {children}
+      </div>
+    </DismissCtx.Provider>
   </dialog>;
 }
