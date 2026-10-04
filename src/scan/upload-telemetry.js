@@ -30,6 +30,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
       }
     },
     retry() { data.retry_count++; },
+    stage(stage) { activeStage = stage; },
     async measure(stage, action) {
       activeStage = stage;
       const at = now();

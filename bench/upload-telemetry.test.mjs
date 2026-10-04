@@ -70,3 +70,18 @@ test('validation failures between stages still identify their stage without clai
   assert.equal(events[0][1].send_to_failure_ms, 9);
   assert.equal('send_to_submit_ms' in events[0][1], false);
 });
+
+test('offline rejection before intent is classified as upload preparation, not local persistence', async () => {
+  const source = fs.readFileSync(new URL('../src/papers.js', import.meta.url), 'utf8');
+  const begin = source.indexOf('export async function uploadScannedPage('), end = source.indexOf('\n/**', begin);
+  const body = source.slice(begin, end).replace('export async function', 'async function');
+  const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+  const invoke = new AsyncFunction('requireOnline', 'args', body + '\nreturn uploadScannedPage(args);');
+  const events = []; const t = uploadTiming({ emit: (...e) => events.push(e) });
+  await t.measure('persistence', () => {});
+  let failure;
+  try { await invoke(() => { throw new Error('offline'); }, { timing: t }); }
+  catch (error) { failure = error; }
+  assert.ok(failure); t.finish(failure);
+  assert.equal(events[0][1].failure_stage, 'intent');
+});

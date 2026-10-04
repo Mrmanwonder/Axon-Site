@@ -151,6 +151,7 @@ const { data, error } = await sb
 * @returns {{r2_bucket:string, r2_key:string, mask_key:string|null, bytes:number}}
 */
 export async function uploadScannedPage({ studentId, paperId, page, timing }) {
+  timing?.stage?.('intent');
   requireOnline('Uploading');
   const measure = (stage, fn) => timing ? timing.measure(stage, fn) : fn();
 
