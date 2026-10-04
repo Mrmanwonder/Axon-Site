@@ -1,0 +1,19 @@
+name: Audit 166 verification
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  migration-name:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - name: Generate the authority migration with the Supabase CLI
+        run: |
+          if ! find supabase/migrations -name '*_axo_166_authority_and_commit_integrity.sql' -print -quit | grep -q .; then
+            supabase migration new axo_166_authority_and_commit_integrity
+          fi
+          find supabase/migrations -name '*_axo_166_authority_and_commit_integrity.sql' -print
