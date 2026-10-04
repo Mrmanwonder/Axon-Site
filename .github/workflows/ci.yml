@@ -180,16 +180,3 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "::warning title=Migration applies on merge::This PR changes supabase/migrations/. Merging applies it to production via migrate.yml; apply it before merging any code that reads it."
-
-  upload-migration-name:
-    name: Allocate AXO-188 migration filename
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.head_ref == 'codex/axo-188-resumable-batch-uploads'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-        with:
-          version: 2.117.0
-      - run: |
-          supabase migration new axo188_original_attachment
-          find supabase/migrations -name '*_axo188_original_attachment.sql' -printf 'AXO188_MIGRATION=%f\n'
