@@ -28,7 +28,7 @@ export async function mutateDraft(draft, reduce) {
         } catch (error) { failure = error; transaction.abort(); }
       };
       transaction.oncomplete = resolve;
-      transaction.onerror = transaction.onabort = () => reject(failure ?? transaction.error ?? new Error('Could not save this draft.'));
+      transaction.onerror = transaction.onabort = event => reject(failure ?? event.target?.error ?? transaction.error ?? new Error('Could not save this draft.'));
     });
   } finally { closeLocalDatabase(db); }
   if (epoch !== localDataEpoch()) throw new Error('This draft was cleared. Start a new scan.');
