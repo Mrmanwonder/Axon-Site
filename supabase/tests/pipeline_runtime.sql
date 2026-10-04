@@ -321,6 +321,10 @@ end; end $$;
 reset role;
 
 -- ── AXO-101 failed-paper resubmit is single-flight ─────────────────────────
+insert into public.paper(id,student_id,type,tier,date_taken,subject,idempotency_key)
+values ('aaaaaaaa-0000-4000-8000-0000000000a8','aaaaaaaa-0000-4000-8000-000000000002','unit_test','tier_1','2026-08-02','Chemistry','99999999-0000-4000-8000-000000000099');
+insert into public.upload(paper_id,student_id,kind,r2_bucket,r2_key,content_type,bytes,confirmed)
+values ('aaaaaaaa-0000-4000-8000-0000000000a8','aaaaaaaa-0000-4000-8000-000000000002','image','derived','aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a8/page/1.webp','image/webp',100,true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated","session_id":"pipeline-student"}';
 
@@ -339,7 +343,7 @@ begin
     jsonb_build_array(jsonb_build_object(
       'page_number', 1,
       'r2_bucket', 'derived',
-      'r2_key', 's/retry/page/1.webp',
+      'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a8/page/1.webp',
       'preprocess_version', 'v2'
     )),
     '99999999-0000-4000-8000-000000000099'
@@ -359,7 +363,7 @@ begin
     jsonb_build_array(jsonb_build_object(
       'page_number', 1,
       'r2_bucket', 'derived',
-      'r2_key', 's/retry/page/1.webp',
+      'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a8/page/1.webp',
       'preprocess_version', 'v2'
     )),
     '99999999-0000-4000-8000-000000000100',
@@ -372,7 +376,7 @@ begin
     jsonb_build_array(jsonb_build_object(
       'page_number', 1,
       'r2_bucket', 'derived',
-      'r2_key', 's/retry/page/1.webp',
+      'r2_key', 'aaaaaaaa-0000-4000-8000-000000000002/aaaaaaaa-0000-4000-8000-0000000000a8/page/1.webp',
       'preprocess_version', 'v2'
     )),
     '99999999-0000-4000-8000-000000000101',

@@ -40,6 +40,16 @@ begin
   foreach v_field in array array['r2_key','mask_key','thumb_key','original_key'] loop
     v_key := v_new ->> v_field;
     if v_key is null then continue; end if;
+    if not private.asset_key_owned(v_key, new.student_id, new.paper_id) then
+      raise exception 'Page asset does not belong to this paper' using errcode = '42501';
+    end if;
+    -- INSERT triggers run before ON CONFLICT chooses its UPDATE branch. Permit
+    -- unchanged legacy assets already attached to this exact scoped page.
+    if tg_op = 'INSERT' and exists (
+      select 1 from public.paper_page p where p.paper_id = new.paper_id
+        and p.student_id = new.student_id and p.page_number = new.page_number
+        and to_jsonb(p) ->> v_field = v_key and p.r2_bucket is not distinct from new.r2_bucket
+    ) then continue; end if;
     if tg_op = 'UPDATE' and v_key is not distinct from (v_old ->> v_field)
        and new.student_id = old.student_id and new.paper_id = old.paper_id
        and new.r2_bucket is not distinct from old.r2_bucket then continue; end if;
@@ -60,6 +70,10 @@ for each row execute function private.guard_page_assets();
 create or replace function private.guard_region_authority()
 returns trigger language plpgsql set search_path = '' as $$
 begin
+  if current_user in ('authenticated', 'anon') and tg_op = 'UPDATE'
+     and (new.paper_id is distinct from old.paper_id or new.student_id is distinct from old.student_id) then
+    raise exception 'Run ownership is immutable' using errcode = '42501';
+  end if;
   if current_user in ('authenticated', 'anon') and (
     (tg_op = 'INSERT' and (new.committed_attempt_id is not null or new.crop_key is not null or new.cropmask_key is not null))
     or (tg_op = 'UPDATE' and (new.committed_attempt_id is distinct from old.committed_attempt_id
@@ -217,7 +231,7 @@ declare
   v_dupes     integer;
   v_skipped   integer := 0;
 begin
-  select * into v_run from public.extraction_run where id = p_run_id for update;
+  select * into v_run from public.extraction_run where id = p_run_id;
   if v_run.id is null then
     raise exception 'no such extraction run' using errcode = 'P0002';
   end if;
@@ -226,10 +240,16 @@ begin
      and not private.student_scope_allows(v_run.student_id) then
     raise exception 'active student scope required' using errcode = '42501';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(v_run.paper_id::text, 0));
+  select * into v_run from public.extraction_run where id = p_run_id for update;
+  if v_run.id is null then raise exception 'no such extraction run' using errcode = 'P0002'; end if;
   if v_run.committed_at is not null then
     raise exception 'this run is already committed' using errcode = '23505';
   end if;
 
+  if v_run.status not in ('needs_review', 'explaining', 'ready') then
+    raise exception 'This run is no longer ready to save' using errcode = '42501';
+  end if;
   select * into v_paper from public.paper where id = v_run.paper_id;
 
   perform 1 from public.question_region where run_id = p_run_id for update;
@@ -410,6 +430,7 @@ begin
   end if;
 
   if v_paper.id is not null then
+    perform pg_advisory_xact_lock(hashtextextended(v_paper.id::text, 0));
     update public.paper set
       type = p_type,
       tier = p_tier,
@@ -429,6 +450,9 @@ begin
      where idempotency_key = p_idempotency_key
        and student_id = p_student_id;
 
+    if v_paper.id is not null then
+      perform pg_advisory_xact_lock(hashtextextended(v_paper.id::text, 0));
+    end if;
     if v_paper.id is null then
       begin
         insert into public.paper (
