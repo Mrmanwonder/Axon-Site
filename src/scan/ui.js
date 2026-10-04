@@ -89,7 +89,10 @@ export function initScanUI(ctx, surfaces = {}) {
     void resumeStudentBackups(studentId, backupNotice).catch(() => {});
   };
   globalThis.addEventListener?.('online', resumeBackups);
-  removeOnlineListener = () => globalThis.removeEventListener?.('online', resumeBackups);
+  const policyTimer = setInterval(() => {
+    if (epoch === S.epoch && S.ctx?.student?.id === studentId) void preloadUploadPolicy();
+  }, 20000);
+  removeOnlineListener = () => { clearInterval(policyTimer); globalThis.removeEventListener?.('online', resumeBackups); };
   resumeBackups();
 
   // Review re-entry is server state and must not wait for IndexedDB. On some

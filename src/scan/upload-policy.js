@@ -17,6 +17,7 @@ export async function preloadUploadPolicy(signal) {
   return pending;
 }
 export function policyForDraft(id) {
+  if (Date.now() - loadedAt >= 30000) { void preloadUploadPolicy(); return { mode: 'legacy', earlySubmit: false }; }
   const cohort = cohortFor(id), batch = cohort < policy.batch_percent;
   return { mode: batch ? 'batch' : 'legacy', earlySubmit: batch && cohort < policy.originals_percent };
 }
