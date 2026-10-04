@@ -17,10 +17,11 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_paper_id::text,0));
   select * into v_run from public.extraction_run where id=p_run_id for update;
   if not (
-    (p_stage='triage' and v_run.status::text in ('queued','triaging')) or
+    (p_stage in ('triage','triage_start','triage_reject') and v_run.status::text in ('queued','triaging')) or
     (p_stage='structure' and v_run.status::text='structure') or
     (p_stage='crop' and v_run.status::text='cropping') or
     (p_stage='content' and v_run.status::text='content') or
+    (p_stage='adjudicate' and v_run.status::text='adjudicating') or
     (p_stage='reconcile_start' and (v_run.status::text in ('attribution','reconciliation')
       or (v_run.status::text='content' and not exists(select 1 from public.question_region where run_id=p_run_id and extract_status in ('pending','running'))))) or
     (p_stage='reconcile_result' and v_run.status::text='reconciliation')
@@ -109,6 +110,22 @@ begin
                           then 'non_red_marking' else layer_fallback end
       where paper_id=v_run.paper_id and student_id=v_run.student_id;
     v_next := 'structure';
+  elsif p_stage='adjudicate' then
+    if exists (select 1 from jsonb_array_elements(coalesce(p_args->'confidence','[]'::jsonb)) item
+      left join public.question_region r on r.id=(item->>'id')::uuid
+      where r.id is null or r.run_id<>p_run_id or r.paper_id<>v_run.paper_id or r.student_id<>v_run.student_id) then
+      raise exception 'Confidence rows must belong to this run' using errcode='42501';
+    end if;
+    perform public.apply_region_confidence(coalesce(p_args->'confidence','[]'::jsonb));
+    if p_args ? 'adjudication' then
+      update public.extraction_run set adjudication=p_args->'adjudication' where id=p_run_id;
+      if coalesce((p_args->'adjudication'->>'blocks_commit')::boolean,false) then
+        update public.question_region set needs_review=true where run_id=p_run_id;
+      end if;
+    end if;
+    v_next := 'needs_review';
+  elsif p_stage='triage_start' then v_next := 'triaging';
+  elsif p_stage='triage_reject' then v_next := 'rejected';
   elsif p_stage='reconcile_result' then
     if exists (select 1 from jsonb_array_elements(coalesce(p_args->'confidence','[]'::jsonb)) item
       left join public.question_region r on r.id=(item->>'id')::uuid
@@ -134,7 +151,7 @@ begin
   end if;
 
   if v_next is not null then
-    if p_stage not in ('triage','reconcile_start','reconcile_result') then
+    if p_stage not in ('triage','triage_start','triage_reject','reconcile_start','reconcile_result','adjudicate') then
       raise exception 'This stage cannot transition the run' using errcode='22023';
     end if;
     perform public.run_advance(p_run_id,
