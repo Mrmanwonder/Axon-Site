@@ -169,7 +169,7 @@ select public._t('a late structure result cannot replace evidence once review is
  and exists(select 1 from public.question_region where id='aaaaaaaa-0000-4000-8000-0000000000d1'));
 select public._t('content evidence persists while its phase is active',
  (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b2','content',
- '{"region_id":"aaaaaaaa-0000-4000-8000-0000000000c3","patch":{"extract_status":"done","student_answer":"machine"}}')->>'applied')::boolean);
+ '{"region_id":"aaaaaaaa-0000-4000-8000-0000000000c3","patch":{"extract_status":"done","student_answer":"machine","student_answer_box":{"page":1,"x":1,"y":1,"w":10,"h":10}}}')->>'applied')::boolean);
 update public.extraction_run set status='needs_review' where id='aaaaaaaa-0000-4000-8000-0000000000b2';
 update public.question_region set student_answer='Human correction' where id='aaaaaaaa-0000-4000-8000-0000000000c3';
 select public._t('late duplicate content cannot overwrite the human answer',
