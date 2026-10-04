@@ -27,3 +27,23 @@ New captures persist ArrayBuffer bytes plus MIME and restore Blobs on read. This
 `node bench/upload-reference.mjs` executes the archived pre-batch ingest/upload functions and the new real send scheduler against virtual shared bandwidth, RTT jitter, 4-ms persistence and deterministic connection loss. It covers 1/5/10/25 pages, mixed optional files, five network profiles and concurrency 2/3/4/6, with 21 samples per combination. JSON output and CI artifacts disclose assumptions.
 
 The transport model does not include physical device memory/CPU, TCP dynamics, real R2 sealing, actual database write latency or production failures. Concurrency 3 remains provisional pending those measurements. No absolute production SLO or rollout promotion is claimed.
+
+### Recorded reference result
+
+Controlled model, 10-page paper with all four assets; p95 seconds across 21 deterministic samples:
+
+| Network | Archived serial | Batch, concurrency 3 | Processing first, concurrency 3 |
+| --- | ---: | ---: | ---: |
+| Fast Wi-Fi | 9.86 | 7.46 | 1.40 |
+| High-latency Wi-Fi | 21.69 | 12.37 | 4.11 |
+| Typical 4G | 43.68 | 35.63 | 5.44 |
+| Throttled uplink | 177.47 | 161.72 | 23.21 |
+| Lossy 4G | 44.63 | 36.48 | 6.27 |
+
+The typical 4G model reduces send-to-submit p95 from 43.68 s to 35.63 s with batching alone, and to 5.44 s when originals are deferred. Originals remain retained until independently attached; the latter figure measures processing handoff, not completion of the backup. These results are simulated, and do not establish production SLOs. See `bench/results/axo-188-reference.json` for every sample profile and assumption.
+
+### Validation and deployment evidence
+
+Client validation at `7b825d53bb9e960075fb5c015bc233aee21ecf8f`: [CI run](https://github.com/Mrmanwonder/Axon-Site/actions/runs/37221790610) passed build/typecheck, 222 Node tests, 291 UI tests, 19 DB harness tests, 198 browser tests (22 intentionally skipped), 42 accessibility tests, all SQL suites and contract parity. A separate zero-retry run passed all 24 targeted recovery tests in Chromium and WebKit.
+
+Backend [PR 156](https://github.com/Mrmanwonder/axon-backend/pull/156) merged and [main deployment](https://github.com/Mrmanwonder/axon-backend/actions/runs/37221951090) passed, including the API worker. The CLI-allocated migration `20261004171548_axo188_original_attachment.sql` was applied to the live database; its ledger version is `20261004174820` under the same migration name. Live privileges confirm neither anonymous nor authenticated browser roles may execute the attachment RPC, while service_role may. Both rollout percentages remain 0.
