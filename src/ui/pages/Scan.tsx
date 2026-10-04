@@ -14,13 +14,14 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { TorchMode } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
-import Dialog from "../components/Dialog";
+import Dialog, { useDialogDismiss } from "../components/Dialog";
 import { DraftAlert } from "../components/ScanDrafts";
 import CameraLevel from "../scan/CameraLevel";
 import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
@@ -61,6 +62,17 @@ export default function Scan() {
   const navigate = useNavigate();
   const desk = useDeskMode();
   const [menuOpen, setMenuOpen] = useState(false);
+  // The scanner opens by rising into place and closes by settling away
+  // (transform and opacity, 260 ms in, 180 ms out; instant under reduced motion).
+  const [leaving, setLeaving] = useState(false);
+  const closeScanner = () => {
+    if (leaving) return;
+    const reduced = document.documentElement.dataset.motion === "reduce"
+      || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) { navigate(paths.home); return; }
+    setLeaving(true);
+    window.setTimeout(() => navigate(paths.home), 180);
+  };
   const cameraApp = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -174,18 +186,18 @@ export default function Scan() {
   const shutterOff = !live || submitting || pendingCaptureCount >= 2;
   const draftsCount = drafts.length;
 
-  const closeMenuThen = (fn: () => void) => { setMenuOpen(false); window.setTimeout(fn, 0); };
+  const closeMenuThen = (fn: () => void) => { window.setTimeout(fn, 0); };
 
   return (
     <>
-      <div className="sc" data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
+      <div className={"sc" + (leaving ? " is-leaving" : "")} data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
         {/* The top bar wears the navigation bar's material, the same as the
             shutter below it: close on its own, and the three tools in one
             capsule whose "on" state is the tab bar's pill. Line glyphs at the
             tab bar's weight, so the camera reads as the same app. */}
         <div className="sc-top">
           <PressBox as="button" type="button" className="sc-circ sc-glass" aria-label="Close scanner"
-                    onClick={() => navigate(paths.home)}>
+                    onClick={closeScanner}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
           </PressBox>
           <span className="sc-grow" />
@@ -265,27 +277,27 @@ export default function Scan() {
 
       {menuOpen && (
         <Dialog title="More" busy={false} onClose={() => setMenuOpen(false)} className="sc-menu">
-          {/* The Settings list, verbatim: plain rows, a label with its note
-              under it, a chevron where the row leads somewhere, and the app's
-              segmented control for a three-way choice. */}
-          <div className="list sc-menu-list">
+          <MoreMenu then={closeMenuThen}>{(then) => (<>
+          {/* Rows straight on the sheet, divided by hairlines, the way the
+              app's other sheets list things: no card inside the overlay. */}
+          <div className="sc-menu-list">
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(addPaper)}>
+                      onClick={() => then(addPaper)}>
               <div className="lbl">Import photos<small>From your gallery or files</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(() => cameraApp.current?.click())}>
+                      onClick={() => then(() => cameraApp.current?.click())}>
               <div className="lbl">Use your camera app<small>Take the photo with your phone’s own camera</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(addLink)}>
+                      onClick={() => then(addLink)}>
               <div className="lbl">Add a link<small>A shared PDF or drive file</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(openDrafts)}>
+                      onClick={() => then(openDrafts)}>
               <div className="lbl">Saved drafts</div>
               <div className="aux">{draftsCount || "None"}</div>
               <Chevron />
@@ -303,10 +315,8 @@ export default function Scan() {
               </div>
             )}
           </div>
-          <div className="acts">
-            <button type="button" className="btn plain" onClick={() => setMenuOpen(false)}>Close</button>
-          </div>
-        </Dialog>
+          </>)}</MoreMenu>
+</Dialog>
       )}
 
       {review}
@@ -315,6 +325,16 @@ export default function Scan() {
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
   );
+}
+
+/** The More sheet's body. Every row leaves through the sheet's exit motion first. */
+function MoreMenu({ then, children }: { then: (fn: () => void) => void; children: (go: (fn: () => void) => void) => React.ReactNode }) {
+  const dismiss = useDialogDismiss();
+  const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), 210); };
+  return <>
+    {children(go)}
+    <div className="acts"><button type="button" className="btn plain" onClick={dismiss}>Close</button></div>
+  </>;
 }
 
 function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {

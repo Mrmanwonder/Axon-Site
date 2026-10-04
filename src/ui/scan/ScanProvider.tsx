@@ -16,6 +16,7 @@ import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import type { SheetConfig } from "../components/SheetProvider";
 import type { CropBox } from "../components/Crop";
+import { captureUploadTelemetry } from '../lib/analytics';
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
 export type TrayPage = {
@@ -258,6 +259,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
       {
         toast: (m: string, tone?: "neutral" | "warn") => toast(m, tone),
         submissionBusy: setSubmitting,
+        uploadTelemetry: captureUploadTelemetry,
         scannerState: setScanState,
         navigationIntent: () => locationRef.current.key,
         tick: hapticTick,

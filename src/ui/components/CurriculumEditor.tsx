@@ -24,6 +24,8 @@ export type CurriculumSubjectChoice = {
 
 export type CurriculumSelection = {
   providerKey: "cambridge" | "cbse" | "ib" | "";
+  /** School pathway is separate from the canonical exam provider. */
+  schoolPathway?: "ib_school_igcse" | null;
   programmeKey: string;
   stageKey: string;
   subjects: CurriculumSubjectChoice[];
@@ -38,7 +40,7 @@ const CLASS_LEVELS = [9, 10, 11, 12] as const;
 const BOARD_LABELS: Record<Exclude<CurriculumSelection["providerKey"], "">, string> = {
   cambridge: "Cambridge",
   cbse: "CBSE",
-  ib: "IBDP",
+  ib: "IB",
 };
 
 function inferredClass(stage: CurriculumStage) {
@@ -116,18 +118,20 @@ export default function CurriculumEditor({
   onChange: (next: CurriculumSelection) => void;
   disabled?: boolean;
 }) {
+  const schoolProvider = value.schoolPathway === "ib_school_igcse" ? "ib" : value.providerKey;
   const [stageChoices, setStageChoices] = useState<StageChoice[]>([]);
   const [offerings, setOfferings] = useState<SubjectOffering[]>([]);
   const [loadingStages, setLoadingStages] = useState(false);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [preferredClass, setPreferredClass] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    if (!value.providerKey) {
+    if (!schoolProvider) {
       setStageChoices([]);
       return;
     }
@@ -135,7 +139,10 @@ export default function CurriculumEditor({
     setLoadingStages(true);
     setCatalogError(null);
     (async () => {
-      const programmes = await getProgrammes(value.providerKey);
+      const primary = await getProgrammes(schoolProvider);
+      const programmes = schoolProvider === "ib"
+        ? [...primary, ...(await getProgrammes("cambridge")).filter(p => p.key === "cambridge_igcse")]
+        : primary;
       const stages = await Promise.all(programmes.map(async programme => ({
         programme,
         stages: await getStages(programme.key),
@@ -148,7 +155,7 @@ export default function CurriculumEditor({
       if (!cancelled) setCatalogError("The curriculum catalog could not be loaded.");
     }).finally(() => { if (!cancelled) setLoadingStages(false); });
     return () => { cancelled = true; };
-  }, [value.providerKey]);
+  }, [schoolProvider, catalogAttempt]);
 
   const selectedStage = useMemo(() => stageChoices.find(choice =>
     choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey
@@ -187,12 +194,14 @@ export default function CurriculumEditor({
     if (nextClass && nextClass !== preferredClass) setPreferredClass(nextClass);
     onChange({
       ...value,
+      providerKey: fallback.programme.key === "cambridge_igcse" ? "cambridge" : schoolProvider,
+      schoolPathway: schoolProvider === "ib" && fallback.programme.key === "cambridge_igcse" ? "ib_school_igcse" : null,
       programmeKey: fallback.programme.key,
       stageKey: fallback.stage.key,
       subjects: [],
     });
   }, [
-    loadingStages, onChange, preferredClass, selectedStage, stageByClass,
+    loadingStages, onChange, preferredClass, selectedStage, stageByClass, schoolProvider,
     stageChoices, value,
   ]);
 
@@ -202,6 +211,7 @@ export default function CurriculumEditor({
       setOfferings([]);
       return;
     }
+    setOfferings([]);
     setLoadingSubjects(true);
     setCatalogError(null);
     getSubjectOfferings({ programmeKey: value.programmeKey, stageKey: value.stageKey })
@@ -209,7 +219,7 @@ export default function CurriculumEditor({
       .catch(() => { if (!cancelled) setCatalogError("Subjects could not be loaded."); })
       .finally(() => { if (!cancelled) setLoadingSubjects(false); });
     return () => { cancelled = true; };
-  }, [value.programmeKey, value.stageKey]);
+  }, [value.programmeKey, value.stageKey, catalogAttempt]);
 
   const selectedIds = useMemo(() => new Set(value.subjects.map(item => item.offering.id)), [value.subjects]);
   const selectedById = useMemo(() => new Map(value.subjects.map(item => [item.offering.id, item])), [value.subjects]);
@@ -218,13 +228,13 @@ export default function CurriculumEditor({
   const activeClass = selectedStage ? inferredClass(selectedStage.stage) ?? preferredClass ?? 11 : preferredClass ?? 11;
   const classIndex = Math.max(0, CLASS_LEVELS.indexOf(activeClass as typeof CLASS_LEVELS[number]));
   // No board selected (unresolved identity) is shown as no board selected, not Cambridge.
-  const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(value.providerKey as typeof PROVIDER_KEYS[number]));
+  const boardIndex = Math.max(0, PROVIDER_KEYS.indexOf(schoolProvider as typeof PROVIDER_KEYS[number]));
 
   const chooseProvider = (providerKey: "cambridge" | "cbse" | "ib") => {
-    if (disabled || providerKey === value.providerKey) return;
+    if (disabled || providerKey === schoolProvider) return;
     hapticTick();
     const currentClass = preferredClass ?? activeClass ?? 11;
-    const nextClass = providerKey === "ib" && currentClass < 11 ? 11 : currentClass;
+    const nextClass = currentClass;
     setPreferredClass(nextClass);
     setStageChoices([]);
     setOfferings([]);
@@ -242,6 +252,8 @@ export default function CurriculumEditor({
     if (choice.programme.key === value.programmeKey && choice.stage.key === value.stageKey) return;
     onChange({
       ...value,
+      providerKey: choice.programme.key === "cambridge_igcse" ? "cambridge" : schoolProvider,
+      schoolPathway: schoolProvider === "ib" && choice.programme.key === "cambridge_igcse" ? "ib_school_igcse" : null,
       programmeKey: choice.programme.key,
       stageKey: choice.stage.key,
       subjects: [],
@@ -316,13 +328,13 @@ export default function CurriculumEditor({
           aria-label="Board"
           style={{ "--active-index": boardIndex } as CSSProperties}
         >
-          {value.providerKey && <span className="curriculum-selector-glider" aria-hidden="true" />}
+          {schoolProvider && <span className="curriculum-selector-glider" aria-hidden="true" />}
           {PROVIDER_KEYS.map(key => (
             <button
               key={key}
               type="button"
               aria-label={providerLabel(key)}
-              aria-pressed={value.providerKey === key}
+              aria-pressed={schoolProvider === key}
               disabled={disabled}
               onClick={() => chooseProvider(key)}
             >
@@ -332,6 +344,11 @@ export default function CurriculumEditor({
         </div>
       </div>
     </div>
+
+    {value.schoolPathway === "ib_school_igcse" && <p className="subnote" role="status">
+      IB school · Cambridge IGCSE exams. Choose the Cambridge syllabus codes used by your school.
+      IB Diploma (SL/HL) is available in Classes 11–12.
+    </p>}
 
     <div className="curriculum-subject-heading">
       <div className="sectitle">Subjects</div>
@@ -406,6 +423,9 @@ export default function CurriculumEditor({
       )}
     </div>
 
-    {catalogError && <div className="curriculum-error" role="alert">{catalogError}</div>}
+    {catalogError && <div className="curriculum-error" role="alert">{catalogError}
+      <button type="button" className="btn plain" disabled={disabled || loadingStages || loadingSubjects}
+        onClick={() => setCatalogAttempt(attempt => attempt + 1)}>Try loading again</button>
+    </div>}
   </div>;
 }

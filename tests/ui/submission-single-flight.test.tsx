@@ -5,6 +5,8 @@ const fixture = vi.hoisted(() => ({
   ingest: vi.fn(),
   listDrafts: vi.fn(),
   readDraft: vi.fn(),
+  deleteDraft: vi.fn(),
+  finishDraftReview: vi.fn(),
   releaseCrops: vi.fn(),
   loadReview: vi.fn(),
   commitRun: vi.fn(),
@@ -27,11 +29,16 @@ vi.mock("../../src/scan/pipeline.js", () => ({
 }));
 vi.mock("../../src/scan/drafts.js", () => ({
   createDraft: vi.fn(),
-  deleteDraft: vi.fn(),
+  deleteDraft: fixture.deleteDraft,
   listDrafts: fixture.listDrafts,
   movePage: vi.fn(),
   readDraft: fixture.readDraft,
   removePage: vi.fn(),
+}));
+vi.mock("../../src/scan/upload-policy.js", () => ({ preloadUploadPolicy: vi.fn() }));
+vi.mock("../../src/scan/original-backups.js", () => ({
+  cancelOriginalBackups: vi.fn(), resumeStudentBackups: vi.fn().mockResolvedValue([]),
+  resumeOriginalBackups: vi.fn().mockResolvedValue(undefined), finishDraftReview: fixture.finishDraftReview,
 }));
 vi.mock("../../src/scan/review.js", () => ({
   commitRun: fixture.commitRun, confirmQuestion: vi.fn(), confirmQuestions: vi.fn(),
@@ -230,4 +237,53 @@ test("ten rapid Read actions submit once and a recoverable rejection permits ret
 
   await read();
   expect(fixture.ingest).toHaveBeenCalledTimes(2);
+});
+
+test("saving a server review without a local draft preserves another unfinished capture", async () => {
+  const draftA = { id: "draft-a", paper_id: "paper-a", student_id: "student", pages: [] };
+  fixture.listDrafts.mockResolvedValue([draftA]);
+  fixture.readDraft.mockResolvedValue(draftA);
+  fixture.currentRunForPaper.mockResolvedValue({ id: "run-b", status: "needs_review" });
+  fixture.regionsForRun.mockResolvedValue([]);
+  fixture.loadReview.mockResolvedValue({ paper: { id: "paper-b", type: "unit_test" }, outstanding: 0, cleanUnconfirmed: [], questions: [] });
+  fixture.commitRun.mockResolvedValue({ attempts_committed: 1 });
+  fixture.startExplanations.mockResolvedValue(undefined);
+  fixture.watchExplanations.mockResolvedValue(undefined);
+  let resume!: (id: string) => Promise<void>;
+  let save!: () => Promise<void>;
+  const renderTray = vi.fn();
+  initScanUI({ student: { id: "student" } }, {
+    draftToast: (_draft: unknown, handlers: any) => { resume = handlers.onResume; },
+    renderTray, renderDrafts: vi.fn(),
+    renderReview: (_model: unknown, handlers: any) => { save = handlers.onSave; },
+  });
+  await waitFor(() => expect(resume).toBeDefined());
+  await resume("draft-a");
+  await resumeDraftReview("paper-b");
+  await save();
+  expect(fixture.deleteDraft).not.toHaveBeenCalled();
+});
+
+test("a delayed draft lookup cannot replace the next review's matching draft", async () => {
+  const pending = deferred<any[]>();
+  fixture.listDrafts.mockResolvedValue([]);
+  fixture.currentRunForPaper.mockImplementation(async paper => ({ id: `run-${paper}`, status: "needs_review" }));
+  fixture.regionsForRun.mockResolvedValue([]);
+  fixture.loadReview.mockImplementation(async run => ({ paper: { id: run.slice(4), type: "unit_test" }, outstanding: 0, cleanUnconfirmed: [], questions: [] }));
+  fixture.commitRun.mockResolvedValue({ attempts_committed: 1 });
+  fixture.startExplanations.mockResolvedValue(undefined);
+  fixture.watchExplanations.mockResolvedValue(undefined);
+  let save!: () => Promise<void>;
+  initScanUI({ student: { id: "student" } }, { renderReview: (_m: unknown, h: any) => { save = h.onSave; } });
+  await Promise.resolve();
+  fixture.listDrafts.mockReturnValueOnce(pending.promise);
+  await resumeDraftReview("paper-a");
+  const draftB = { id: "draft-b", paper_id: "paper-b", student_id: "student", pages: [] };
+  fixture.listDrafts.mockResolvedValue([draftB]);
+  await resumeDraftReview("paper-b");
+  pending.resolve([{ id: "draft-a", paper_id: "paper-a", student_id: "student", pages: [] }]);
+  await Promise.resolve();
+  await save();
+  expect(fixture.finishDraftReview).toHaveBeenCalledWith(expect.objectContaining({ id: "draft-b" }));
+  expect(fixture.finishDraftReview).not.toHaveBeenCalledWith(expect.objectContaining({ id: "draft-a" }));
 });

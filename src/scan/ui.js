@@ -19,7 +19,13 @@ import { providerKeyForStudent } from '../curriculum.js';
 import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
 
+import { preloadUploadPolicy } from './upload-policy.js';
+import { backupComplete } from './upload-plan.js';
+import { cancelOriginalBackups, resumeOriginalBackups, resumeStudentBackups, finishDraftReview } from './original-backups.js';
+
 const MAX_PENDING_CAPTURES = 2;
+let sendController = null;
+let removeOnlineListener = () => {};
 
 function paperTypes() {
   return paperTypesFor(providerKeyForStudent(S.ctx?.student));
@@ -34,6 +40,8 @@ const S = {
   visible: false,
   autoCapture: true,
   draft: null,
+  reviewDraft: null,
+  reviewRecovery: 0,
   thumbs: new Map(),
   placeholders: new Map(),
   run: null,
@@ -69,6 +77,24 @@ export function initScanUI(ctx, surfaces = {}) {
   host = { ...host, ...surfaces };
   if (!ctx.student) return;
 
+  void preloadUploadPolicy();
+  removeOnlineListener();
+  const studentId = ctx.student.id, epoch = S.epoch;
+  const backupNotice = progress => {
+    if (epoch === S.epoch && S.ctx?.student?.id === studentId) toast(progress.message, progress.complete ? undefined : 'warn');
+  };
+  const resumeBackups = () => {
+    if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+    void preloadUploadPolicy();
+    void resumeStudentBackups(studentId, backupNotice).catch(() => {});
+  };
+  globalThis.addEventListener?.('online', resumeBackups);
+  const policyTimer = setInterval(() => {
+    if (epoch === S.epoch && S.ctx?.student?.id === studentId) void preloadUploadPolicy();
+  }, 20000);
+  removeOnlineListener = () => { clearInterval(policyTimer); globalThis.removeEventListener?.('online', resumeBackups); };
+  resumeBackups();
+
   // Review re-entry is server state and must not wait for IndexedDB. On some
   // browsers a blocked/slow local draft store can leave listDrafts() pending
   // indefinitely; before this change that also kept ensureScan() pending, so a
@@ -81,7 +107,11 @@ export function initScanUI(ctx, surfaces = {}) {
 }
 
 export function resetScan() {
+  sendController?.abort(); sendController = null;
+  cancelOriginalBackups(); removeOnlineListener();
   ++S.epoch;
+  ++S.reviewRecovery;
+  S.reviewDraft = null;
   clearTimeout(refreshTimer);
   refreshTimer = null;
   detachSurface();
@@ -650,7 +680,7 @@ async function restoreDraft() {
   const epoch = S.epoch;
   const drafts = await listDrafts(S.ctx.student.id);
   if (epoch !== S.epoch) return;
-  const latest = drafts[0];
+  const latest = drafts.find(d => !d.submission);
   if (!latest) return;
   host.draftToast(
     { id: latest.id, pages: latest.pages.length },
@@ -666,7 +696,7 @@ async function paintDrafts() {
   host.renderDrafts(
     drafts.map((d) => ({
       id: d.id,
-      title: d.paper_type
+      title: d.submission && !d.pages.every(backupComplete) ? 'Original backup pending' : d.paper_type
         ? paperTypes().find((t) => t.value === d.paper_type)?.label ?? 'Paper'
         : 'Unfinished paper',
       pages: d.pages.length,
@@ -684,6 +714,7 @@ async function discardDraft(id) {
   if (S.submitting || S.busy) return;
   const draft = await readDraft(id);
   if (!draft || draft.student_id !== S.ctx?.student?.id) return;
+  if (draft.submission && !draft.pages.every(backupComplete)) return toast('Original backups are still pending. Reconnect and resume this draft.', 'warn');
   await deleteDraft(id);
   if (S.draft?.id === id) { S.draft = null; S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); await paintTray(); }
   host.draftToast(null, { onResume: resumeDraft });
@@ -695,6 +726,14 @@ async function resumeDraft(id) {
   host.draftToast(null, { onResume: resumeDraft });
   const draft = await readDraft(id);
   if (!draft || draft.student_id !== S.ctx?.student?.id || S.submitting) return;
+  if (draft.submission) {
+    const epoch = S.epoch;
+    void resumeOriginalBackups(draft, undefined, progress => {
+      if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn');
+    }).then(() => paintDrafts()).catch(() => {});
+    toast('Your paper is submitted. Checking its original backups.');
+    return;
+  }
   S.draft = draft;
   S.retaking = null;
 
@@ -717,6 +756,7 @@ function unresolvedPage() {
 }
 
 function sendPaper() {
+  const sendStartedAt = performance.now();
   if (S.busy || S.placeholders.size) return toast('Wait for this page to finish preparing.');
   if (!S.draft?.pages.length) return toast('Take a page first.');
   if (S.retaking !== null) {
@@ -736,7 +776,7 @@ function sendPaper() {
   const type = S.draft.paper_type ?? S.pendingType;
   if (type) {
     S.pendingType = null;
-    return run(type);
+    return run(type, sendStartedAt);
   }
 
   host.openSheet({
@@ -744,15 +784,16 @@ function sendPaper() {
     body: 'This decides whether we can match it to an official marking scheme.',
     items: [],
     choices: paperTypes().map((t) => ({ label: t.label, value: t.value })),
-    onChoice: (value) => run(value),
+    onChoice: (value) => run(value, sendStartedAt),
   });
 }
 
-async function run(paperType) {
+async function run(paperType, sendStartedAt = performance.now()) {
   if (S.submitting || S.busy) return;
   S.submitting = true;
   host.submissionBusy(true);
   const epoch = S.epoch;
+  const controller = new AbortController(); sendController = controller;
   const intent = host.navigationIntent();
   let recoverCamera = true;
   stopCamera();
@@ -784,7 +825,11 @@ async function run(paperType) {
       studentId: S.ctx.student.id,
       draft: S.draft,
       paperType,
-      onProgress: ({ stage, message }) => { current = stage; paint(message); },
+      sendStartedAt,
+      onTelemetry: host.uploadTelemetry,
+      signal: controller.signal,
+      onBackupProgress: progress => { if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn'); },
+      onProgress: ({ stage, message }) => { if (epoch === S.epoch) { current = stage; paint(message); } },
     });
 
     if (epoch !== S.epoch) return;
@@ -822,6 +867,7 @@ async function run(paperType) {
     await openReview(result.runId, intent);
 
   } catch (error) {
+    if (epoch !== S.epoch) return;
     host.renderProgress({
       heading: 'That did not finish',
       now: error.message || 'Something went wrong reading this paper.',
@@ -840,13 +886,15 @@ const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 
 // ── review ─────────────────────────────────────────────────────────────────
 
-async function openReview(runId, intent = null) {
+async function openReview(runId, intent = null, recovery = null) {
+  if (recovery === null) { ++S.reviewRecovery; S.reviewDraft = null; }
   if (S.runId !== runId) S.explanationsStarted = false;
   const epoch = S.epoch;
 
   S.runId = runId;
   await refreshReview();
   if (epoch !== S.epoch || S.runId !== runId) return;
+  if (S.draft?.paper_id === S.review?.paper?.id) S.reviewDraft = S.draft;
   host.openReview(S.review?.paper?.id, intent);
 }
 
@@ -860,6 +908,8 @@ function readDraftWithin(id, ms = LEGACY_DRAFT_LOOKUP_MS) {
 }
 
 export async function resumeDraftReview(routeId) {
+  const recovery = ++S.reviewRecovery;
+  S.reviewDraft = null;
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   if (!studentId) return { state: 'gone' };
@@ -870,7 +920,7 @@ export async function resumeDraftReview(routeId) {
   let paperId = routeId;
   let draft = null;
   let run = await currentRunForPaper(paperId);
-  if (epoch !== S.epoch) return { state: 'gone' };
+  if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
 
   // Legacy scanner URLs used a local draft id. Only if the route id is not a
   // server paper do we ask IndexedDB to translate it — and even that fallback
@@ -878,20 +928,21 @@ export async function resumeDraftReview(routeId) {
   // loading state.
   if (!run) {
     draft = await readDraftWithin(routeId);
-    if (epoch !== S.epoch || (draft && draft.student_id !== studentId)) return { state: 'gone' };
+    if (epoch !== S.epoch || recovery !== S.reviewRecovery || (draft && draft.student_id !== studentId)) return { state: 'gone' };
     if (!draft?.paper_id) return { state: 'gone' };
     paperId = draft.paper_id;
     run = await currentRunForPaper(paperId);
-    if (epoch !== S.epoch || !run) return { state: 'gone' };
+    if (epoch !== S.epoch || recovery !== S.reviewRecovery || !run) return { state: 'gone' };
   }
 
+  S.reviewDraft = draft;
   // Recover an on-device draft opportunistically so "Rescan this page" becomes
   // available when possible, but do not make the actual review wait for it.
   if (!draft) {
     void listDrafts(studentId).then((drafts) => {
-      if (epoch !== S.epoch || S.ctx?.student?.id !== studentId) return;
+      if (epoch !== S.epoch || recovery !== S.reviewRecovery || S.ctx?.student?.id !== studentId) return;
       const local = drafts.find((item) => item.paper_id === paperId) ?? null;
-      if (local) S.draft = local;
+      if (local) S.reviewDraft = local;
     }).catch((error) => console.warn('[scan] local draft lookup failed during review', error));
   }
 
@@ -903,10 +954,9 @@ export async function resumeDraftReview(routeId) {
   if (!['needs_review', 'explaining', 'ready'].includes(run.status)) return { state: 'processing' };
 
   const regions = await regionsForRun(run.id);
-  if (epoch !== S.epoch) return { state: 'gone' };
-  S.draft = draft ?? S.draft;
+  if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
   S.regions = regions;
-  await openReview(run.id);
+  await openReview(run.id, null, recovery);
   // The SQL gate is idempotent too, but do not make a duplicate request when a
   // resumed run has already crossed into explanation generation.
   S.explanationsStarted = ['explaining', 'ready'].includes(run.status);
@@ -1013,7 +1063,7 @@ function handleReviewAction(id, action) {
     return;
   }
   if (action === 'rescan') {
-    if (!S.draft) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
+    if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,
       body: 'You retake one page, and we read the paper again with it.',
@@ -1023,6 +1073,9 @@ function handleReviewAction(id, action) {
       ],
       primary: 'Take it again',
       onConfirm: () => {
+        if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) return;
+        cancelOriginalBackups();
+        S.draft = S.reviewDraft;
         host.closeReview();
         releaseCrops();
         S.retaking = question.pageNumber;
@@ -1043,6 +1096,8 @@ async function save() {
   S.saving = true;
   const epoch = S.epoch;
   const runId = S.runId;
+  const paperId = S.review?.paper?.id;
+  const savedDraft = S.reviewDraft?.paper_id === paperId ? S.reviewDraft : null;
   const current = () => epoch === S.epoch && runId === S.runId;
   paintReview();
   try {
@@ -1091,9 +1146,12 @@ async function save() {
     S.explanationsStarted = false;
     S.retaking = null;
 
-    if (S.draft) {
-      await deleteDraft(S.draft.id);
+    ++S.reviewRecovery;
+    S.reviewDraft = null;
+    if (savedDraft) {
+      await finishDraftReview(savedDraft);
       if (epoch !== S.epoch) return;
+      if (S.draft?.id === savedDraft.id) {
       S.draft = null;
       S.thumbs.forEach((url) => URL.revokeObjectURL(url));
       S.thumbs.clear();
@@ -1106,6 +1164,8 @@ async function save() {
       // the viewfinder pointing at a deleted draft for the rest of the session.
 
       host.draftToast(null, { onResume: resumeDraft });
+      }
+      await paintDrafts();
     }
     await host.refreshLibrary();
   } catch (error) {

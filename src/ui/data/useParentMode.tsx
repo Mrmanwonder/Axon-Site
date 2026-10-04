@@ -41,7 +41,7 @@ export function useParentMode(contactOverride?: string | null) {
     const run = () => action();
 
     const askForCode = () => {
-      sendParentCode(contact)
+      return sendParentCode(contact)
         .then(() => {
           openSheet({
             title: "Check your messages",
@@ -74,7 +74,7 @@ export function useParentMode(contactOverride?: string | null) {
         onChoice: async (choice) => {
           if (choice !== "code") return;
           hapticFirm();
-          askForCode();
+          await askForCode();
         },
       });
     };

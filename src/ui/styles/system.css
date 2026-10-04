@@ -1295,3 +1295,20 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
   }
 /* Destructive, not alarming: the attention amber on its wash (red is the sign-out row only). */
 .btn.danger-soft{color:var(--attention);background:var(--attention-wash);}
+
+/* Sheet motion (4 Oct 2026, owner): sheets rise from the bottom edge and fall
+   back to it. Keyframes win over the inline `transform: none` that pins a
+   resting sheet. Transform and opacity only. */
+@keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-out { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
+dialog[open] > .sheet { animation: sheet-in .28s cubic-bezier(.2, .9, .25, 1) both; }
+dialog[open]::backdrop { animation: scrim-in .24s ease both; }
+dialog.is-closing > .sheet { animation: sheet-out .2s cubic-bezier(.4, 0, 1, 1) both; }
+dialog.is-closing::backdrop { animation: scrim-out .2s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  dialog[open] > .sheet, dialog[open]::backdrop, dialog.is-closing > .sheet, dialog.is-closing::backdrop { animation: none; }
+}
+[data-motion="reduce"] dialog[open] > .sheet, [data-motion="reduce"] dialog[open]::backdrop,
+[data-motion="reduce"] dialog.is-closing > .sheet, [data-motion="reduce"] dialog.is-closing::backdrop { animation: none; }

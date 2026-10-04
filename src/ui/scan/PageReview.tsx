@@ -1,3 +1,4 @@
+import type React from "react";
 /* ═══════════════════════════════════════════════════════════════════════════
    PAGE REVIEW
 
@@ -12,7 +13,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Dialog from "../components/Dialog";
+import Dialog, { useDialogDismiss } from "../components/Dialog";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { needsLook } from "./PaperStack";
 import { useScan } from "./ScanProvider";
@@ -60,9 +61,16 @@ export default function PageReview({ onClose }: { onClose: () => void }) {
   const title = flagged.length
     ? `${flagged.length} page${flagged.length === 1 ? "" : "s"} ${flagged.length === 1 ? "needs" : "need"} a look`
     : `${pages.length} page${pages.length === 1 ? "" : "s"}`;
+  // "Clear" only where it is true: a page with a note (small, a little glare)
+  // is readable but not clear, and saying otherwise above the note was a
+  // contradiction on the owner's phone (4 Oct 2026).
+  const noted = pages.filter((p) => !needsLook(p) && p.note).length;
   const body = flagged.length
-    ? (clear ? `The other ${clear} ${clear === 1 ? "is" : "are"} clear.` : undefined)
-    : "Every page looks clear.";
+    ? (clear ? `The other ${clear} can be read.` : undefined)
+    : noted
+      ? `All can be read. ${noted === pages.length ? "Each has" : `${noted} ${noted === 1 ? "has" : "have"}`} a note below.`
+      : "Every page looks clear.";
+
 
   return (
     <Dialog title={title} description={body} busy={busy || submitting} onClose={onClose} className="sc-review">
@@ -93,9 +101,9 @@ export default function PageReview({ onClose }: { onClose: () => void }) {
           <>
             <button type="button" className="btn primary" disabled={busy || submitting}
                     onClick={() => void act(() => trayHandlers.onDone?.())}>
-              Done · {pages.length}
+              Read {pages.length === 1 ? "this page" : `these ${pages.length} pages`}
             </button>
-            <button type="button" className="btn plain" onClick={onClose}>Keep scanning</button>
+            <DismissButton fallback={onClose}>Keep scanning</DismissButton>
           </>
         )}
       </div>
@@ -248,4 +256,10 @@ async function scaledCopy(image: HTMLImageElement, scale: number): Promise<HTMLI
   copy.src = URL.createObjectURL(blob);
   await copy.decode().catch(() => undefined);
   return copy;
+}
+
+/** Leaves the sheet with its exit motion. */
+function DismissButton({ fallback, children }: { fallback: () => void; children: React.ReactNode }) {
+  const dismiss = useDialogDismiss(fallback);
+  return <button type="button" className="btn plain" onClick={dismiss}>{children}</button>;
 }

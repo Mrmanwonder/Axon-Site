@@ -189,6 +189,7 @@ export default function Settings() {
 
       setProfileName(student.first_name);
       setProfileCurriculum({
+        schoolPathway: student.school_pathway ?? null,
         providerKey: identity.providerKey as CurriculumSelection["providerKey"],
         programmeKey: identity.programmeKey,
         stageKey: identity.stageKey,
@@ -217,6 +218,7 @@ export default function Settings() {
     try {
       await updateStudentProfile({
         firstName,
+        schoolPathway: profileCurriculum.schoolPathway ?? null,
         programmeKey: profileCurriculum.programmeKey,
         stageKey: profileCurriculum.stageKey,
         avatarKey: student?.avatar_seed ?? "dreamBloom",
@@ -353,7 +355,7 @@ export default function Settings() {
           </PressBox>
           <div className="srow noicon">
             <div className="lbl">Curriculum</div>
-            <div className="aux">{student ? (student.provider_label ?? providerLabel(student.provider_key)) : "—"}</div>
+            <div className="aux">{student?.school_pathway === "ib_school_igcse" ? "IB school · Cambridge IGCSE" : student ? (student.provider_label ?? providerLabel(student.provider_key)) : "—"}</div>
           </div>
           <div className="srow noicon">
             <div className="lbl">Stage</div>

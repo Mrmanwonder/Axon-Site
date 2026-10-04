@@ -98,6 +98,7 @@ function Harness({ initial }: { initial?: CurriculumSelection }) {
       providerKey: value.providerKey,
       programmeKey: value.programmeKey,
       stageKey: value.stageKey,
+      schoolPathway: value.schoolPathway,
       subjects: value.subjects.map(item => [item.offering.display_name, item.level]),
     })}</output>
   </>;
@@ -129,6 +130,33 @@ test("board and class determine the stage automatically while subjects stay inli
 
   expect(await screen.findByRole("button", { name: /Mathematics/ })).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+test("an IB school student can keep Classes 9 and 10 while using canonical IGCSE subjects", async () => {
+  const user = userEvent.setup();
+  render(<Harness initial={{ providerKey: "cambridge", programmeKey: "cambridge_igcse", stageKey: "cambridge_igcse_y10", subjects: [] }} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Class 9" }).getAttribute("aria-pressed")).toBe("true"));
+  await user.click(screen.getByRole("button", { name: "IB Diploma" }));
+  await waitFor(() => expect(screen.getByTestId("selection").textContent).toContain('"schoolPathway":"ib_school_igcse"'));
+  expect(screen.getByRole("button", { name: "Class 9" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByTestId("selection").textContent).toContain('"providerKey":"cambridge"');
+  expect(screen.getByTestId("selection").textContent).toContain('"programmeKey":"cambridge_igcse"');
+  await user.click(await screen.findByRole("button", { name: /Mathematics/ }));
+  expect(screen.queryByRole("group", { name: "Mathematics level" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Class 10" }));
+  await waitFor(() => expect(screen.getByTestId("selection").textContent).toContain('"stageKey":"cambridge_igcse_y11"'));
+  expect(screen.getByTestId("selection").textContent).toContain('"subjects":[]');
+  await user.click(screen.getByRole("button", { name: "Class 11" }));
+  await waitFor(() => expect(screen.getByTestId("selection").textContent).toContain('"providerKey":"ib"'));
+  expect(screen.getByTestId("selection").textContent).toContain('"stageKey":"ibdp_1"');
+  expect(screen.getByTestId("selection").textContent).toContain('"schoolPathway":null');
+});
+
+test("stored IB school IGCSE profiles reopen without changing class or exam provider", async () => {
+  render(<Harness initial={{ providerKey: "cambridge", schoolPathway: "ib_school_igcse", programmeKey: "cambridge_igcse", stageKey: "cambridge_igcse_y11", subjects: [] }} />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Class 10" }).getAttribute("aria-pressed")).toBe("true"));
+  expect(screen.getByRole("button", { name: "IB Diploma" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByTestId("selection").textContent).toContain('"providerKey":"cambridge"');
 });
 
 test("subject search opens inline from the Subjects heading and IB levels remain explicit", async () => {

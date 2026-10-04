@@ -1,3 +1,4 @@
+import { sanitizeUploadTelemetry } from '../../scan/upload-telemetry.js';
 export type AnalyticsConsent = "granted" | "denied" | null;
 
 export type AnalyticsEvent = {
@@ -251,4 +252,10 @@ export function initAnalytics() {
     if (current?.__SV === 1 && Array.isArray(current._i)) delete window.posthog;
   };
   document.head.appendChild(script);
+}
+
+/** Explicitly consented aggregate send timings, with a property allowlist. */
+export function captureUploadTelemetry(event: string, properties: Record<string, unknown>) {
+  if (getAnalyticsConsent() !== 'granted' || !['paper_send_completed', 'paper_send_failed'].includes(event)) return;
+  window.posthog?.capture?.(event, sanitizeUploadTelemetry(properties));
 }

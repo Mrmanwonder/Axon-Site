@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent, hasSensitiveAuthCallback } from "../../src/ui/lib/analytics";
+import { POSTHOG_PRIVACY_CONFIG, filterSensitiveAnalyticsEvent, hasSensitiveAuthCallback, captureUploadTelemetry } from "../../src/ui/lib/analytics";
 
 const event = (name: string, url: string, extra: Record<string, unknown> = {}) => ({
   event: name,
@@ -60,4 +60,34 @@ test("replay masking uses options PostHog actually honours (maskAllText is not o
   expect(POSTHOG_PRIVACY_CONFIG.mask_all_text).toBe(true);
   expect(POSTHOG_PRIVACY_CONFIG.mask_all_element_attributes).toBe(true);
   expect(POSTHOG_PRIVACY_CONFIG.opt_out_capturing_by_default).toBe(true);
+});
+
+test("paper send telemetry checks consent at emission and strips private properties", () => {
+  const consentKey = "axon.analytics-consent.v1";
+  const oldConsent = localStorage.getItem(consentKey);
+  const oldPosthog = window.posthog;
+  const calls: unknown[] = [];
+  window.posthog = { init() {}, capture: (event, properties) => { calls.push({ event, properties }); } };
+  try {
+    localStorage.removeItem(consentKey);
+    captureUploadTelemetry("paper_send_completed", { page_count: 10 });
+    localStorage.setItem(consentKey, "denied");
+    captureUploadTelemetry("paper_send_failed", { failure_stage: "intent" });
+    expect(calls).toHaveLength(0);
+    localStorage.setItem(consentKey, "granted");
+    captureUploadTelemetry("private-event", { page_count: 10 });
+    captureUploadTelemetry("paper_send_completed", {
+      page_count: 10, total_bytes: 42, mode: "legacy",
+      student_id: "private", key: "private", url: "private", answer: "private",
+      object_count: Number.POSITIVE_INFINITY,
+    });
+    expect(calls).toEqual([{ event: "paper_send_completed", properties: { page_count: 10, total_bytes: 42, mode: "legacy" } }]);
+    localStorage.setItem(consentKey, "denied");
+    captureUploadTelemetry("paper_send_failed", { failure_stage: "transfer" });
+    expect(calls).toHaveLength(1);
+  } finally {
+    window.posthog = oldPosthog;
+    if (oldConsent === null) localStorage.removeItem(consentKey);
+    else localStorage.setItem(consentKey, oldConsent);
+  }
 });

@@ -175,7 +175,10 @@ export default function QuestionDetail() {
   // provenance rule: committed_attempt_id is the one column that traces a saved
   // attempt back to the region it came from, and page_spans carries the box.
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
-  const span = region?.page_spans?.[0];
+  const sourcePick = attempt.answer_block?.source_space === "page_pixels_v1" ? picked?.bbox : null;
+  const span = (sourcePick?.page != null
+    ? region?.page_spans?.find(s => s.page === sourcePick.page)
+    : region?.page_spans?.[0]);
 
   // Three-valued, and read from the region rather than inferred: "unknown" is a
   // real state and must not be shown as a clean read.
@@ -246,7 +249,7 @@ export default function QuestionDetail() {
             <div key={`${s?.page ?? "none"}-${i}`} className={i ? "qcrop-more" : undefined}>
               {(region?.page_spans?.length ?? 0) > 1 && s && <div className="qcrop-page">Page {s.page}</div>}
               <Crop paperId={paperId} pageNumber={s?.page} box={s?.box}
-                    highlight={i === 0 ? picked?.bbox ?? null : null} />
+                    highlight={s && sourcePick?.page === s.page ? sourcePick : null} />
             </div>
           ))}
         </div>

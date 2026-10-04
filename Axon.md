@@ -131,7 +131,7 @@ The atomic unit is an **attempt at a question**, not a paper. Two tiers: Tier 1 
 
 **Icons.** Google Material Symbols (owner decision); licence file in `third_party/material-design-icons/`.
 
-**Motion.** Transform and opacity only. 120 ms for state changes, 200 ms for disclosure and transitions, 320 ms for the recompute after a correction (the signature moment). Honour `prefers-reduced-motion` and the in-app Reduce motion switch. **The capture flow has one motion, approved by the owner: a captured page drops onto the stack (220 ms, transform and opacity).** No other decorative motion during capture. Delight lives after a task finishes, never during one. No mascots, confetti or streaks.
+**Motion.** Transform and opacity only. 120 ms for state changes, 200 ms for disclosure and transitions, 320 ms for the recompute after a correction (the signature moment). Honour `prefers-reduced-motion` and the in-app Reduce motion switch. **The capture flow's motion, approved by the owner:** a captured page drops onto the stack (220 ms); sheets (More, page review, drafts) rise from the bottom edge and fall back to it (280 ms in, 200 ms out); the scanner rises into place when it opens and settles away when it closes (260 ms in, 180 ms out). Transform and opacity only, none under reduced motion. Nothing else moves during capture. Delight lives after a task finishes, never during one. No mascots, confetti or streaks.
 
 **Surfaces over live video.** Solid, not blurred or glass. Nothing floats over the paper except the corner brackets and the level line.
 
@@ -232,6 +232,7 @@ Backend, in `Mrmanwonder/axon-backend`: `npm run typecheck`, `npm test`, `npm ru
 - Paper dates: exam date if known, otherwise labelled as the upload date.
 - Project target 15 Oct 2026: a private beta of the core loop (scan, read, explain, review), not a public launch.
 - Scanner: close button top-left; page-drop animation welcome; Auto on by default; torch Auto, On, Off; no webcam on laptops; Done reads directly when all pages are fine, otherwise Review.
+- Scanner (4 Oct): use each device's main (1x) rear camera; tablets get the full-screen camera, never the laptop import screen; sheets and the scanner open and close with motion; More is a plain list on the sheet, no card inside it.
 - Teacher ink can be any colour (black, blue, red, pink, anything). Never assume or encode that it is red. In the interface red stays reserved for the sign-out row.
 - Sign-in: email/password will be built (alongside Google), as already decided.
 - Scanner follow-ups (3 Oct): importing accepts every common image type and PDFs (PDFs are crucial); the auto crop will be fine-tuned on real clips and Adjust edges stays part of the flow; landscape phones are not handled now and are a goal for the next release; a "warn" quality verdict is a note and does not flag a page (D25, owner delegated, option A); the `'wasm-unsafe-eval'` CSP entry is accepted for the ML runtime; the scanic and DocCornerNet licences are MIT (`third_party/scanic/NOTICE.md`).

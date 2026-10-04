@@ -150,8 +150,10 @@ const { data, error } = await sb
 * @param {{studentId:string, paperId:string, page:Object}} args
 * @returns {{r2_bucket:string, r2_key:string, mask_key:string|null, bytes:number}}
 */
-export async function uploadScannedPage({ studentId, paperId, page }) {
+export async function uploadScannedPage({ studentId, paperId, page, timing }) {
+  timing?.stage?.('intent');
   requireOnline('Uploading');
+  const measure = (stage, fn) => timing ? timing.measure(stage, fn) : fn();
 
 const pageType = page.blob.type || 'image/jpeg';
 
@@ -179,11 +181,11 @@ const wanted = [
     }
   }
 
-const intent = await uploadIntent({
+const intent = await measure('intent', () => uploadIntent({
   student_id: studentId,
   paper_id: paperId,
   objects: wanted.map((o) => ({ kind: o.kind, name: o.name, content_type: o.content_type, bytes: o.blob.size })),
-});
+}, timing?.retry));
 
 const minted = new Map();
   for (const want of wanted) {
@@ -198,10 +200,10 @@ const minted = new Map();
 
 const uploads = [];
   for (const [, object] of minted) {
-    await putObject(object.url, object.blob, object.content_type);
+    await measure('transfer', () => putObject(object.url, object.blob, object.content_type, timing?.retry));
     uploads.push({ key: object.key, bucket: object.bucket, bytes: object.blob.size });
   }
-  await uploadComplete({ paper_id: paperId, uploads });
+  await measure('confirmation', () => uploadComplete({ paper_id: paperId, uploads }, timing?.retry));
 
 const pageObj = minted.get('page');
   return {

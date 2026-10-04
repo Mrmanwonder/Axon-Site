@@ -4,6 +4,9 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const fixture = vi.hoisted(() => ({
+  session: { user: { id: "guardian", email: "parent@example.test" } } as { user: { id: string; email: string } } | null,
+  sendOtp: vi.fn(),
+  verifyOtp: vi.fn(),
   rpc: vi.fn(),
   from: vi.fn(),
   finish: vi.fn(),
@@ -15,7 +18,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock("../../src/ui/data/AppProvider", () => ({
   useApp: () => ({
-    session: { user: { id: "guardian", email: "parent@example.test" } },
+    session: fixture.session,
     providerError: null,
     finishOnboarding: fixture.finish,
   }),
@@ -44,7 +47,7 @@ vi.mock("../../src/ui/data/modules", () => {
   };
   return {
     sb: { rpc: fixture.rpc, from: fixture.from },
-    sendOtp: vi.fn(), verifyOtp: vi.fn(), currentSession: fixture.currentSession,
+    sendOtp: fixture.sendOtp, verifyOtp: fixture.verifyOtp, currentSession: fixture.currentSession,
     currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
     signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
     OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
@@ -79,6 +82,50 @@ vi.mock("../../src/ui/data/modules", () => {
 
 import Onboarding from "../../src/ui/onboarding/Onboarding";
 
+test("code entry opens before a slow send completes, with honest pending state and no duplicate requests", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  const sent = deferred<void>();
+  fixture.sendOtp.mockReturnValue(sent.promise);
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
+  await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
+  const send = screen.getByRole("button", { name: "Send me a code" });
+  for (let i = 0; i < 10; i++) fireEvent.click(send);
+  expect(screen.getByRole("heading", { name: "Check your email" })).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toContain("Sending a code");
+  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(fixture.sendOtp).toHaveBeenCalledTimes(1);
+  expect(fixture.verifyOtp).not.toHaveBeenCalled();
+  await act(async () => sent.resolve());
+  expect(screen.getByRole("status").textContent).toBe("Sent to parent@example.test.");
+  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.getByRole("button", { name: /Resend in/ })).toBeTruthy();
+});
+
+test("failed code delivery is visible and a retry is single-flight", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  fixture.sendOtp.mockRejectedValueOnce(new Error("delivery unavailable"));
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
+  await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
+  await userEvent.click(screen.getByRole("button", { name: "Send me a code" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("That code could not be sent");
+  expect(screen.getByRole("status").textContent).toContain("has not been sent");
+  const retry = screen.getByRole("button", { name: "Try sending again" });
+  const sent = deferred<void>();
+  fixture.sendOtp.mockReturnValue(sent.promise);
+  for (let i = 0; i < 10; i++) fireEvent.click(retry);
+  expect(fixture.sendOtp).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("status").textContent).toContain("Sending a code");
+  await act(async () => sent.resolve());
+  expect(screen.getByRole("status").textContent).toContain("Sent to");
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(done => { resolve = done; });
@@ -87,6 +134,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixture.session = { user: { id: "guardian", email: "parent@example.test" } };
   window.history.replaceState({}, "", "/?billing=success");
 });
 

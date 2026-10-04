@@ -18,12 +18,15 @@
 // left; a spinner tells them nothing, and a generic bar tells them something
 // false. There is no bar and no spinner anywhere in here.
 
+import { sendDraft } from './send-draft.js';
+import { policyForDraft } from './upload-policy.js';
+import { resumeOriginalBackups } from './original-backups.js';
 import { watchRun } from './run-watch.js';
 import { sb } from '../supabase.js';
-import { createPaper, tierForType, uploadScannedPage } from '../papers.js';
+import { createPaper, tierForType } from '../papers.js';
 import { processPage, makeProxy } from './device.js';
-import { addPage, markUploaded, pendingPages, saveDraft } from './drafts.js';
-import { pool, reviewComplete, submitPaper } from './functions.js';
+import { addPage, replacePage, mutateDraft, updateAssets, claimSendLease, touchSendLease, releaseSendLease, assertLease, startLeaseHeartbeat } from './drafts.js';
+import { pool, reviewComplete, submitPaper, uploadIntent, uploadComplete, putObject } from './functions.js';
 import { CAPTURE } from './contract.js';
 import { refusalFor } from './conditioning.js';
 
@@ -111,12 +114,8 @@ const page = {
   mask: processed.mask,
   // 512px, for triage. See CONDITIONING.THUMB_LONG_EDGE.
   thumb: processed.thumb,
-  // The bytes exactly as the camera or the file gave them: no warp, no
-  // resample, no re-encode. §7.6.4 — never discard the original, so mistakes
-  // are recoverable server-side. It is held in the draft only until it has
-  // been uploaded, and `markUploaded` drops it then; keeping originals for the
-  // life of an offline booklet would roughly triple its footprint on a phone
-  // that may not have the room.
+  // Keep the unchanged original locally until its confirmed server association
+  // is durable. Review completion alone must not discard a pending backup.
   original: original ?? null,
   original_type: original?.type ?? null,
   proxy,
@@ -134,7 +133,7 @@ const page = {
 if (replacing !== null) {
   draft.pages = draft.pages.map((p) => (p.page_number === replacing
                                         ? { ...p, ...page, page_number: replacing, uploaded: false } : p));
-  await saveDraft(draft);
+  await timing.measure('persistence', () => saveDraft(draft));
 } else {
   await addPage(draft, page);
 }
@@ -189,87 +188,28 @@ async function waitForReview(runId, say) {
 /**
  * Send a draft up and run the server stages over it.
  *
- * Resumable at page granularity: a draft that was half uploaded when the
- * connection dropped picks up at the first page that has not landed, and nothing
- * is captured or uploaded twice.
+ * Each confirmed file survives retry independently. Issued keys are saved
+ * before transferring bytes; uncertain transfers are confirmed before retry.
  *
  * @param {(event: {stage:string, message:string, page?:number, of?:number}) => void} onProgress
  */
-export async function ingest({ studentId, draft, paperType, dateTaken, onProgress }) {
+export async function ingest({ studentId, draft, paperType, dateTaken, onProgress, sendStartedAt, onTelemetry, signal, onBackupProgress }) {
   const say = (stage, message, extra = {}) => onProgress?.({ stage, message, ...extra });
-
-if (!draft.pages.length) throw new Error('There are no pages to send yet.');
-
-// ── the paper row ────────────────────────────────────────────────────────
-
-let paperId = draft.paper_id;
-  const type = paperType ?? draft.paper_type;
-  const taken = dateTaken ?? new Date().toISOString().slice(0, 10);
-
-if (!paperId) {
-  const paper = await createPaper({ studentId, type, dateTaken: taken, requestId: draft.id });
-  paperId = paper.id;
-  draft.paper_id = paperId;
-  draft.paper_type = paper.type;
-  await saveDraft(draft);
-}
-
-// A retry after a dropped connection must submit the same paper the same
-// way, or the server sees a second booklet rather than the rest of the
-// first one. One id, made once, kept for the life of the draft.
-if (!draft.idempotency_key) {
-  draft.idempotency_key = draft.id;
-  await saveDraft(draft);
-}
-
-// ── stages 0-2 are already done; upload what has not landed ──────────────
-
-const pending = pendingPages(draft);
-  const total = draft.pages.length;
-  for (const page of pending) {
-    say('upload', `Sending page ${page.page_number} of ${total}`, { page: page.page_number, of: total });
-    const uploaded = await uploadScannedPage({ studentId, paperId, page });
-    await markUploaded(draft, page.page_number, uploaded);
-  }
-
-const pages = draft.pages.map((p) => ({
-  page_number: p.page_number,
-  // Recorded, not assumed. This was the literal string 'upload' on every page
-  // ever submitted, camera captures included, which made the one question the
-  // scanner's own telemetry exists to answer — is the camera path ever taken —
-  // unanswerable (AXON_FIX_BRIEF.md §7.1). A draft written by an older build
-  // has no source kind to report and says 'upload', which is what it was
-  // recorded as; it is not re-guessed here.
-  source_kind: p.source_kind ?? p.meta?.source_kind ?? 'upload',
-  r2_bucket: p.r2_bucket,
-  r2_key: p.r2_key,
-  mask_key: p.mask_key ?? null,
-  original_key: p.original_key ?? null,
-  thumb_key: p.thumb_key ?? null,
-  bytes: p.bytes ?? p.blob?.size ?? null,
-  width: p.width,
-  height: p.height,
-  preprocess_version: p.meta?.preprocess_version,
-  quality_verdict: p.quality?.verdict,
-  quality_signals: p.quality?.signals,
-  conditioning_meta: p.meta,
-  layer_fallback: p.layer_fallback,
-  teacher_marks: p.teacher_marks,
-}));
-
-// ── hand the booklet to the pipeline ─────────────────────────────────────
-
-say('structure', `Finding the questions across ${total} page${total === 1 ? '' : 's'}`);
-  const submission = await submitPaper({
-    student_id: studentId,
-    type,
-    tier: tierForType(type),
-    date_taken: taken,
-    paper_id: paperId,
-    idempotency_key: draft.idempotency_key,
-    pages,
+  const policy = policyForDraft(draft.id);
+  const { paperId, submission } = await sendDraft({ studentId, draft, paperType, dateTaken, sendStartedAt,
+    onTelemetry, signal, ...policy,
+    onProgress: progress => say('upload', progress.message, progress),
+  }, {
+    newId: () => crypto.randomUUID(), createPaper, tierForType, mutateDraft, updateAssets,
+    claimSendLease, touchSendLease, releaseSendLease, assertLease, startLeaseHeartbeat,
+    transport: { uploadIntent, uploadComplete, putObject, submitPaper },
   });
-
+  const total = draft.pages.length;
+  say('structure', submission.queued ? 'Your paper is queued. Reading will start shortly.' : 'Your pages are accepted. Waiting for processing to be queued.');
+  // Original backups run independently of the processing watch.
+  void resumeOriginalBackups(draft, signal, onBackupProgress).catch(() => {
+    if (!signal?.aborted) onBackupProgress?.({ state: 'pending', message: 'Your paper is accepted. Original backups are still saved on this device and will resume when connected.' });
+  });
 // ── watch it move through triage, structure, content and reconciliation ──
 
 const run = await waitForReview(submission.run_id, say);

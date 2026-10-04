@@ -88,6 +88,7 @@ export function cropStyles(box, naturalWidth, naturalHeight, pad = 0.05) {
   const b = paddedBox(box, naturalWidth, naturalHeight, pad);
   if (!b) return null;
   return {
+    box: b,
     frame: { aspectRatio: `${b.w} / ${b.h}`, '--crop-ar': String(+(b.w / b.h).toFixed(4)) },
     image: {
       width: `${(naturalWidth / b.w) * 100}%`,

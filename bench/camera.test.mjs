@@ -25,3 +25,20 @@ test('video-frame fallback is higher resolution but capped at the practical 12MP
   assert.equal(FALLBACK_CAPTURE_HEIGHT, 3024);
   assert.ok(FALLBACK_CAPTURE_WIDTH * FALLBACK_CAPTURE_HEIGHT < 13_000_000);
 });
+
+test('the main rear camera is chosen over ultra-wide, telephoto and front lenses', async () => {
+  const { pickMainCamera } = await import('../src/scan/camera.js');
+  const d = (deviceId, label) => ({ kind: 'videoinput', deviceId, label });
+  // Android Chrome labels (OnePlus, Samsung, Pixel).
+  assert.equal(pickMainCamera([
+    d('f', 'camera2 1, facing front'), d('w', 'camera2 2, facing back'), d('m', 'camera2 0, facing back'),
+  ]), 'm');
+  // iOS Safari labels.
+  assert.equal(pickMainCamera([
+    d('u', 'Back Ultra Wide Camera'), d('t', 'Back Telephoto Camera'), d('m', 'Back Camera'),
+    d('x', 'Back Triple Camera'), d('f', 'Front Camera'),
+  ]), 'm');
+  // Nothing labelled (no permission yet) or no rear lens: no opinion.
+  assert.equal(pickMainCamera([d('a', ''), d('b', '')]), null);
+  assert.equal(pickMainCamera([d('f', 'Front Camera')]), null);
+});

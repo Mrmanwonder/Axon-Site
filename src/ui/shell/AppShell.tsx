@@ -12,20 +12,26 @@
 
 import { useApp } from "../data/AppProvider";
 import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import TabNav from "./TabNav";
 import Header from "./Header";
 import { activeIndex, destinations } from "../app/nav";
 import ReviewSheet from "../scan/ReviewSheet";
 import DocumentMeta from "../components/DocumentMeta";
+import SkeletonLoader from "../components/SkeletonLoader";
+import { skeletonVariantForPath } from "../components/PageSkeleton";
 
 export default function AppShell() {
   const { profileStale } = useApp();
   const { pathname } = useLocation();
+  const navigation = useNavigation();
+  const nextPath = navigation.location?.pathname;
+  const changingPage = navigation.state === "loading" && !!nextPath && nextPath !== pathname;
+  const displayedPath = changingPage ? nextPath! : pathname;
   const scrollRef = useRef<HTMLElement>(null);
   const [stuck, setStuck] = useState(false);
 
-  const i = activeIndex(pathname);
+  const i = activeIndex(displayedPath);
   const title = i >= 0 ? destinations[i].label : "";
 
   useEffect(() => {
@@ -62,7 +68,7 @@ export default function AppShell() {
         key={pathname}
       >
         {profileStale && <p role="status" className="subnote">Offline profile. Last available data.</p>}
-        <Outlet />
+        {changingPage ? <SkeletonLoader label={`Opening ${title || "page"}`} variant={skeletonVariantForPath(displayedPath)} /> : <Outlet />}
       </main>
 
       {/* Stage 9 lives above the shell: it is a screen, not a sheet, and it has

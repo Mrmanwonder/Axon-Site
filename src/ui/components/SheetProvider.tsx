@@ -10,7 +10,7 @@ import { createContext, startTransition, useCallback, useContext, useEffect, use
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-import Dialog from "./Dialog";
+import Dialog, { useDialogDismiss } from "./Dialog";
 
 export type SheetChoice = {
   label: string;
@@ -109,12 +109,18 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
       {cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
       {error && <p role="alert">{error}</p>}
-      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
+      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)} aria-busy={busy}>{busy ? "Working…" : choice.label}</button>)}</div>}
       <div className="acts">
         {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
-        <button type="button" className="btn plain" disabled={busy} onClick={closeSheet}>Cancel</button>
+        <SheetCancel busy={busy} fallback={closeSheet} />
       </div>
     </Dialog>}
   </Ctx.Provider>;
 
+}
+
+/** Cancel leaves the way the sheet arrived. */
+function SheetCancel({ busy, fallback }: { busy: boolean; fallback: () => void }) {
+  const dismiss = useDialogDismiss(fallback);
+  return <button type="button" className="btn plain" disabled={busy} onClick={dismiss}>Cancel</button>;
 }

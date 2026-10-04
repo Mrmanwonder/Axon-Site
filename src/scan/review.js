@@ -143,7 +143,7 @@ export async function loadReview(runId) {
     markRules,
     questions,
     pagesUnreadable: unreadable ?? [],
-    delta: deltaFor(run, paper),
+    delta: deltaFor(run, paper, regions ?? []),
     noTotal: noTotalFor(run),
     // Every headline shows its sample size; this is that screen's version of it.
     lead: reviewLeadFor(questions, pages ?? [], counts),
@@ -164,14 +164,17 @@ export async function loadReview(runId) {
 }
 
 
-function deltaFor(run, paper) {
-  if (run.reconciled !== false) return null;
+export function deltaFor(run, paper, regions) {
+  const readable = regions.filter(r => r.confidence_tier !== 'unreadable' && r.marks_awarded != null);
+  if (!readable.length) return null;
+  const awarded = readable.reduce((sum, r) => sum + Number(r.marks_awarded), 0);
   if (paper?.reported_total === null || paper?.reported_total === undefined) return null;
+  if (Math.abs(awarded - Number(paper.reported_total)) < 0.0001) return null;
   return {
     // The framing is fixed: our reading is what did not add up. The app never
     // tells a student their teacher cannot add.
     message: 'Our reading of this paper does not match the total on it. Worth checking the questions below.',
-    ours: Number(paper.total_awarded ?? 0),
+    ours: awarded,
     theirs: Number(paper.reported_total),
   };
 }
@@ -260,6 +263,7 @@ export async function correctAnswer(regionId, text) {
   const value = String(text ?? '').trim();
   const { error } = await sb.from('question_region').update({
     student_answer: value || null,
+    answer_block: null,
     student_answer_box: value ? (region.student_answer_box ?? spanBox(region.page_spans)) : null,
     student_confirmed_at: new Date().toISOString(),
     student_corrected: true,
