@@ -6,6 +6,7 @@ const fixture = vi.hoisted(() => ({
   listDrafts: vi.fn(),
   readDraft: vi.fn(),
   deleteDraft: vi.fn(),
+  finishDraftReview: vi.fn(),
   releaseCrops: vi.fn(),
   loadReview: vi.fn(),
   commitRun: vi.fn(),
@@ -33,6 +34,11 @@ vi.mock("../../src/scan/drafts.js", () => ({
   movePage: vi.fn(),
   readDraft: fixture.readDraft,
   removePage: vi.fn(),
+}));
+vi.mock("../../src/scan/upload-policy.js", () => ({ preloadUploadPolicy: vi.fn() }));
+vi.mock("../../src/scan/original-backups.js", () => ({
+  cancelOriginalBackups: vi.fn(), resumeStudentBackups: vi.fn().mockResolvedValue([]),
+  resumeOriginalBackups: vi.fn().mockResolvedValue(undefined), finishDraftReview: fixture.finishDraftReview,
 }));
 vi.mock("../../src/scan/review.js", () => ({
   commitRun: fixture.commitRun, confirmQuestion: vi.fn(), confirmQuestions: vi.fn(),
@@ -278,6 +284,6 @@ test("a delayed draft lookup cannot replace the next review's matching draft", a
   pending.resolve([{ id: "draft-a", paper_id: "paper-a", student_id: "student", pages: [] }]);
   await Promise.resolve();
   await save();
-  expect(fixture.deleteDraft).toHaveBeenCalledWith("draft-b");
-  expect(fixture.deleteDraft).not.toHaveBeenCalledWith("draft-a");
+  expect(fixture.finishDraftReview).toHaveBeenCalledWith(expect.objectContaining({ id: "draft-b" }));
+  expect(fixture.finishDraftReview).not.toHaveBeenCalledWith(expect.objectContaining({ id: "draft-a" }));
 });

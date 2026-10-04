@@ -16,12 +16,10 @@ test("multi-student household switches and sign-out never leak sibling local sta
     await cache.putCached("paper:student-b:private", { owner: "student-b", answer: "B private answer" });
 
     const a = await drafts.createDraft({ id: crypto.randomUUID(), studentId: "student-a", paperType: null });
-    a.pages.push({ page_number: 1, blob: new Uint8Array([1]).buffer });
-    await drafts.saveDraft(a);
+    await drafts.addPage(a, { page_number: 1, blob: new Uint8Array([1]).buffer });
 
     const b = await drafts.createDraft({ id: crypto.randomUUID(), studentId: "student-b", paperType: null });
-    b.pages.push({ page_number: 1, blob: new Uint8Array([2]).buffer });
-    await drafts.saveDraft(b);
+    await drafts.addPage(b, { page_number: 1, blob: new Uint8Array([2]).buffer });
   });
 
   await page.getByRole("button", { name: "Switch B" }).click();
@@ -80,8 +78,7 @@ test("multi-student household switches and sign-out never leak sibling local sta
     const drafts = await import("/src/scan/drafts.js");
     await cache.putCached("paper:student-a:after-switch", { private: true });
     const draft = await drafts.createDraft({ id: crypto.randomUUID(), studentId: "student-a", paperType: null });
-    draft.pages.push({ page_number: 1, blob: new Uint8Array([3]).buffer });
-    await drafts.saveDraft(draft);
+    await drafts.addPage(draft, { page_number: 1, blob: new Uint8Array([3]).buffer });
   });
 
   await page.getByRole("button", { name: "Sign out household" }).click();

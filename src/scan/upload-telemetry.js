@@ -10,7 +10,7 @@ export function sanitizeUploadTelemetry(input = {}) {
   if (['legacy', 'batch'].includes(input.mode)) out.mode = input.mode;
   if (UPLOAD_STAGES.includes(input.failure_stage)) out.failure_stage = input.failure_stage;
   if (['offline', 'cancelled', 'auth', 'network', 'server', 'local', 'other'].includes(input.failure_kind)) out.failure_kind = input.failure_kind;
-  if (typeof input.queued === 'boolean') out.queued = input.queued;
+  for (const key of ['queued', 'reused_submission', 'submit_accepted']) if (typeof input[key] === 'boolean') out[key] = input[key];
   return out;
 }
 export function uploadTiming({ startedAt, emit, now = () => performance.now(), mode = 'legacy' } = {}) {
@@ -18,6 +18,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
   const data = { mode, retry_count: 0, send_to_ingest_ms: now() - start };
   let ended = false;
   let activeStage = 'planning';
+  let acceptedAt;
   return {
     data,
     count(objects, pages) {
@@ -31,6 +32,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
     },
     retry() { data.retry_count++; },
     stage(stage) { activeStage = stage; },
+    markAccepted() { acceptedAt = now() - start; data.submit_accepted = true; },
     async measure(stage, action) {
       activeStage = stage;
       const at = now();
@@ -40,7 +42,7 @@ export function uploadTiming({ startedAt, emit, now = () => performance.now(), m
     },
     finish(error, queued) {
       if (ended) return; ended = true;
-      data[error ? 'send_to_failure_ms' : 'send_to_submit_ms'] = now() - start;
+      data[error ? 'send_to_failure_ms' : 'send_to_submit_ms'] = error ? now() - start : acceptedAt ?? now() - start;
       if (error) data.failure_stage ??= activeStage;
       if (error) data.failure_kind = error.name === 'AbortError' ? 'cancelled'
         : globalThis.navigator?.onLine === false ? 'offline'
