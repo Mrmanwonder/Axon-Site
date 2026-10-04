@@ -178,9 +178,29 @@ select public._t('late duplicate content cannot overwrite the human answer',
  and (select student_answer='Human correction' from public.question_region where id='aaaaaaaa-0000-4000-8000-0000000000c3'));
 insert into public.extraction_run(id,paper_id,student_id,pipeline_version,status)
  values('aaaaaaaa-0000-4000-8000-0000000000b4','aaaaaaaa-0000-4000-8000-0000000000a1','aaaaaaaa-0000-4000-8000-000000000002','fixture','content');
+-- Separate the mutation from assertions: an SQL InitPlan may read status first.
+create temporary table audit_empty as select public.pipeline_write(
+ 'aaaaaaaa-0000-4000-8000-0000000000b4','reconcile_start') result;
 select public._t('empty content dispatch can reach the explicit no-questions reconcile failure',
- (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','reconcile_start')->>'applied')::boolean
+ (select (result->>'applied')::boolean from audit_empty)
  and (select status='reconciliation' from public.extraction_run where id='aaaaaaaa-0000-4000-8000-0000000000b4'));
+update public.extraction_run set status='queued' where id='aaaaaaaa-0000-4000-8000-0000000000b4';
+select public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','triage_start');
+select public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','triage',
+ '{"assessment_identity_id":null,"tier_routing":{"assessment_identity_status":"unresolved"}}');
+select public._t('guarded triage binds metadata and advances before fanout',
+ (select status='structure' and tier_routing->>'assessment_identity_status'='unresolved'
+  from public.extraction_run where id='aaaaaaaa-0000-4000-8000-0000000000b4'));
+update public.extraction_run set status='adjudicating' where id='aaaaaaaa-0000-4000-8000-0000000000b4';
+select public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','adjudicate',
+ '{"confidence":[],"adjudication":{"cause":"ok"},"reason":"Fixture"}');
+select public._t('adjudication evidence and review transition persist together',
+ (select status='needs_review' and adjudication->>'cause'='ok'
+  from public.extraction_run where id='aaaaaaaa-0000-4000-8000-0000000000b4'));
+select public._t('a stale triage cannot restore metadata after review opens',
+ not (public.pipeline_write('aaaaaaaa-0000-4000-8000-0000000000b4','triage',
+ '{"tier_routing":{"assessment_identity_status":"stale"}}')->>'applied')::boolean);
+
 insert into public.r2_deletion(bucket,key,not_before) values('derived','fixture/pending',now()+interval '20 minutes');
 select public._t('cleanup never claims a still-live PUT capability',
  not exists(select 1 from public.claim_deletions(1000) where key='fixture/pending'));
