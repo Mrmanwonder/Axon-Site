@@ -2,7 +2,7 @@ import { beforeEach, afterEach, test, expect, vi } from 'vitest';
 const f=vi.hoisted(()=>({session:vi.fn(),refresh:vi.fn()}));
 vi.mock('../../src/supabase.js',()=>({currentSession:f.session,sb:{auth:{refreshSession:f.refresh}}}));
 vi.mock('../../src/config.js',()=>({MASTERY_API_URL:'https://api.test'}));
-import { uploadComplete, putObject } from '../../src/scan/functions.js';
+import { uploadIntent, uploadComplete, putObject } from '../../src/scan/functions.js';
 beforeEach(()=>{
   vi.clearAllMocks();f.session.mockResolvedValue({access_token:'expired',user:{id:'owner'}});
   f.refresh.mockResolvedValue({data:{session:{access_token:'fresh',user:{id:'owner'}}},error:null});
@@ -42,4 +42,33 @@ test('caller cancellation aborts active fetch and prevents refresh/retry',async(
   const pending=uploadComplete({paper_id:'p',uploads:[]},{signal:controller.signal});
   const assertion=expect(pending).rejects.toBeDefined();await vi.waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));
   controller.abort();await assertion;expect(fetch).toHaveBeenCalledTimes(1);expect(f.refresh).not.toHaveBeenCalled();
+});
+
+test('intent and PUTs survive JWT expiry at confirmation without a new capability or byte retransmission',async()=>{
+  const {uploadDraftAssets}=await import('../../src/scan/upload-runner.js');
+  const {applyAssetUpdates}=await import('../../src/scan/upload-state.js');
+  const {processingReady}=await import('../../src/scan/upload-plan.js');
+  const draft={id:'draft',student_id:'student',paper_id:'paper',pages:[{page_number:1,upload_revision:'capture-1',blob:new Blob(['page'],{type:'image/jpeg'}),mask:new Blob(['mask']),thumb:new Blob(['thumb']),upload_assets:{}}]};
+  const arrived=new Set<string>();let confirmationCalls=0;
+  const fetcher=vi.fn(async(url,init)=>{
+    if(String(url).endsWith('/upload-intent')){
+      const body=JSON.parse(init.body);return new Response(JSON.stringify({objects:body.objects.map(o=>({...o,key:'student/paper/'+o.kind+'/'+o.name,bucket:'derived',url:'https://r2.test/'+o.name}))}));
+    }
+    if(init.method==='PUT'){arrived.add(String(url).split('/').at(-1));return new Response('',{status:200});}
+    if(String(url).endsWith('/upload-complete')){
+      confirmationCalls++;if(confirmationCalls===1)return new Response('{}',{status:401});
+      expect(init.headers.Authorization).toBe('Bearer fresh');const body=JSON.parse(init.body);
+      expect(body.uploads.every(o=>arrived.has(o.key.split('/').at(-1)))).toBe(true);
+      return new Response(JSON.stringify({confirmed:body.uploads.map(o=>o.key),missing:[]}));
+    }
+    throw new Error('Unexpected request '+url);
+  });
+  vi.stubGlobal('fetch',fetcher);
+  const options={draft,studentId:'student',paperId:'paper',transport:{uploadIntent,uploadComplete,putObject},persist:async(current,updates)=>applyAssetUpdates(current,updates)};
+  await uploadDraftAssets(options);await uploadDraftAssets(options);
+  expect(processingReady(draft.pages[0])).toBe(true);expect(f.refresh).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls.filter(([url])=>String(url).endsWith('/upload-intent'))).toHaveLength(1);
+  expect(fetcher.mock.calls.filter(([_url,init])=>init.method==='PUT')).toHaveLength(3);
+  const confirms=fetcher.mock.calls.filter(([url])=>String(url).endsWith('/upload-complete'));
+  expect(confirms).toHaveLength(2);expect(confirms[1][1].body).toBe(confirms[0][1].body);
 });
