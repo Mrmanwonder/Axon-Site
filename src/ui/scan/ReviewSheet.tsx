@@ -109,7 +109,7 @@ function Question({
       <Field k="Printed question" v={q.questionText} steps />
       {q.identityNote && <p className="review-draft-note">{q.identityNote}</p>}
       <div className="review-reading-grid">
-      <div className="qcrop">
+      <div className="review-source">
         <SourceEvidence
           paperId={q.crop?.paperId ?? q.paperId}
           pageNumber={q.crop?.page ?? q.pageNumber}

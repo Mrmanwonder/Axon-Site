@@ -95,6 +95,9 @@ for (const width of [768, 1024, 1440]) {
     await page.setViewportSize({width, height: 900});
     await page.goto("/tests/browser/paper-reading.html?view=review&theme=light");
     await expect(page.getByRole("heading", {name: "Question 1(a)", exact: true})).toBeVisible();
+    await expect(page.getByRole("heading", {name: "Source on your paper", exact: true})).toBeVisible();
+    const clipped = await page.locator(".review-source").evaluate(el => el.scrollHeight > el.clientHeight + 1);
+    expect(clipped).toBe(false);
     const source = await page.locator(".source-evidence").boundingBox();
     const fields = await page.locator(".review-fields").boundingBox();
     expect(source).not.toBeNull(); expect(fields).not.toBeNull();

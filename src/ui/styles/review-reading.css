@@ -4,7 +4,7 @@
 .reviewsheet .qfield { margin:16px 0; }
 .reviewsheet .qfield .k { font-size:14px; line-height:1.5; }
 .reviewsheet .qfield .v { font-size:16px; line-height:1.65; overflow-wrap:anywhere; }
-.reviewsheet .qcrop { margin:0; }
+.review-source { min-width:0; }
 .review-reading-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:24px; align-items:start; }
 .review-fields { min-width:0; }
 .reviewsheet { --reading-secondary:color-mix(in srgb,var(--label) 76%,var(--bg)); }
