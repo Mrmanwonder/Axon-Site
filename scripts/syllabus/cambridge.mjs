@@ -31,6 +31,10 @@ const clean = (s) => s.replace(/\t/g, " ").replace(/\s+/g, " ").trim();
  */
 function splitAt(line, col) {
   if (col === null || line.length <= col - 6) return line.length;
+  // Nothing in the left column: the whole line is notes, even when it starts
+  // a character or two past the header's column.
+  const first = line.search(/\S/);
+  if (first >= col - 3) return first;
   let best = null;
   const gap = /\s{2,}/g;
   let m;
@@ -58,7 +62,9 @@ export function parseCambridgeSyllabus(text) {
   let style = null;
   let current = null; // objective being built
   let pendingGroup = null;
+  let pendingNotes = [];
   let blankRun = 0;
+  let textCol = null; // column where objective text starts under the current header
 
   const unitFor = (code, title) => {
     if (!units.has(code)) units.set(code, { code, title, scope, topics: new Map() });
@@ -124,6 +130,8 @@ export function parseCambridgeSyllabus(text) {
         }
         const n = line.search(NOTES_RE);
         notesCol = n >= 0 ? n : null;
+        pendingNotes = [];
+        textCol = line.search(/\S/);
         collecting = !!topic;
         continue;
       }
@@ -144,24 +152,51 @@ export function parseCambridgeSyllabus(text) {
       const l = left.trim();
       const r = right.trim();
 
+      // A capitalised line continues the objective above when the break falls
+      // inside a phrase: after "the", "of", "and" ..., or inside a name whose
+      // acronym follows ("Abstract Data / Types (ADT)").
+      const wrapped = (text) => {
+        if (!current || gapBefore > 0 || !current.parts.length) return false;
+        const before = current.parts[current.parts.length - 1].trim();
+        if (/\b(the|a|an|of|to|and|or|for|between|with|in|on|by|from|as|its|their)$/i.test(before)) return true;
+        const acr = text.match(/^((?:[A-Z][\w-]*\s+){0,4}?)\(([A-Z]{2,6})\)/);
+        if (!acr) return false;
+        const words = `${before} ${acr[1]}`.trim().split(/\s+/);
+        const initials = words.slice(-acr[2].length).map((w) => w[0]).join("");
+        return initials === acr[2] && acr[1].trim().split(/\s+/).filter(Boolean).length < acr[2].length;
+      };
       const bullet = l.match(/^[•▪●]\s*(.*)$/);
       const numbered = l.match(/^(\d{1,2})\s+(\S.*)$/);
-      if (!style) style = bullet ? "bullets" : numbered ? "numbered" : "plain";
+      // The first line under a header can be notes only; the layout is set by the first objective text.
+      if (!style && l) style = bullet ? "bullets" : numbered ? "numbered" : "plain";
+
+      // Plain layout only: a label set well right of the objective column (a
+      // table heading, the names under a diagram) is not an objective. It
+      // completes an objective that introduces it with a colon, else it is dropped.
+      const indent = left.search(/\S/);
+      if (style === "plain" && l && textCol !== null && indent >= textCol + 4) {
+        if (current && current.parts.some((part) => /:\s*$/.test(part))) current.parts.push(l);
+        if (r && current) current.notes.push(r);
+        continue;
+      }
 
       let startsNew = false;
       let body = l;
       if (style === "bullets" && bullet) { startsNew = true; body = bullet[1]; }
       else if (style === "numbered" && numbered && Number(numbered[1]) === topic.objectives.length + (current ? 2 : 1)) { startsNew = true; body = numbered[2]; }
-      else if (style === "plain" && l && /^[A-Z]/.test(l) && !/^[A-Z]{2,}\b/.test(l)) { startsNew = true; }
+      else if (style === "plain" && l && /^[A-Z]/.test(l) && !/^[A-Z]{2,}\b/.test(l) && !wrapped(l)) { startsNew = true; }
       else if (style === "plain" && l && /^[A-Z]{2,}\b/.test(l) && (!current || gapBefore > 0)) { startsNew = true; }
 
       if (startsNew) {
         close();
-        current = { code: null, text: "", parts: body ? [body] : [], notes: r ? [r] : [], group: pendingGroup, page: pageNo, subheadingCandidate: false };
+        current = { code: null, text: "", parts: body ? [body] : [], notes: [...pendingNotes, ...(r ? [r] : [])], group: pendingGroup, page: pageNo, subheadingCandidate: false };
+        pendingNotes = [];
         continue;
       }
       if (!current) {
-        if (r && topic.objectives.length) topic.objectives.at(-1).notes = clean(`${topic.objectives.at(-1).notes ?? ""} ${r}`);
+        // Notes printed level with or just above the first objective under a
+        // header belong to that objective.
+        if (r) pendingNotes.push(r);
         continue;
       }
       if (l) current.parts.push(l);
@@ -215,6 +250,10 @@ export function auditParse(parsed, text) {
       });
       if (!found) problems.push(`${o.code} words not found in order in the source: "${o.text.slice(0, 70)}"`);
       if (o.text.length < 8) problems.push(`${o.code} is suspiciously short: "${o.text}"`);
+      // What a broken extraction leaves behind: control characters, private-use
+      // glyphs, unmapped font codes, and MathType's ASCII stand-ins (ω as "~",
+      // × as "#", → as '"'), which never occur in board prose.
+      if (/[\u0000-\u0008\u000b-\u001f-~#"]|\(cid:\d+\)/.test(o.text)) problems.push(`${o.code} has an unmapped glyph: "${o.text.slice(0, 70)}"`);
       if (o.text.length > 800) problems.push(`${o.code} is suspiciously long (${o.text.length} chars)`);
     }
   }
