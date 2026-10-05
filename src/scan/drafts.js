@@ -67,19 +67,15 @@ export async function readDraft(id) {
   return draft ? stamp(decodeDraft(draft, result.assets, { strict: true })) : null;
 }
 
-async function loadPreviewAssets(drafts) {
-  const keys = new Set();
-  for (const draft of drafts) for (const page of (draft.pages ?? []).slice(0, 3)) {
-    const preferred = page.proxy?.axon_asset === 1 ? page.proxy : page.blob?.axon_asset === 1 ? page.blob : null;
-    if (preferred?.key) keys.add(preferred.key);
-  }
-  if (!keys.size) return [];
+async function loadDraftAssets(drafts) {
+  const ids = drafts.map(draft => draft.id);
+  if (!ids.length) return [];
   const db = await open();
   const requests = [];
   return tx(db, ASSET_STORE, 'readonly', transaction => {
-    const store = transaction.objectStore(ASSET_STORE);
-    for (const key of keys) requests.push(store.get(key));
-    return () => requests.map(request => request.result).filter(Boolean);
+    const index = transaction.objectStore(ASSET_STORE).index('draft');
+    for (const id of ids) requests.push(index.getAll(IDBKeyRange.only(id)));
+    return () => requests.flatMap(request => request.result ?? []);
   });
 }
 
@@ -92,10 +88,13 @@ export async function listDrafts(studentId) {
     .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
     .filter(draft => draft.student_id === studentId && draft.pages.length)
     .sort((a, b) => b.updated_at - a.updated_at);
-  const previews = await loadPreviewAssets(kept);
-  // List cards only need the first few preview images. Do not pull raw camera
-  // originals into memory merely to paint the Saved Papers strip.
-  return kept.map(draft => stamp(decodeDraft(structuredClone(draft), previews)));
+  // listDrafts is also the source for startup/online original-backup recovery,
+  // not merely UI cards. It therefore must faithfully hydrate every retained
+  // asset. Returning preview-only rows can turn an unhydrated original marker
+  // into `null`, making backupComplete() incorrectly conclude that no original
+  // ever existed and silently skip the deferred backup.
+  const assets = await loadDraftAssets(kept);
+  return kept.map(draft => stamp(decodeDraft(structuredClone(draft), assets, { strict: true })));
 }
 
 export { saveDraft, mutateDraft, addPage, removePage, movePage, replacePage, markUploaded, pendingPages,
