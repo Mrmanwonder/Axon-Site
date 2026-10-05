@@ -579,6 +579,7 @@ export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
 export const relabelAttempt = papersMod.relabelAttempt as unknown as (attemptId: string, label: string) => Promise<void>;
+export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subject: string) => Promise<void>;
 
 
 export type AcademicShareState = {

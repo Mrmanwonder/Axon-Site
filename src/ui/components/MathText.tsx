@@ -224,7 +224,8 @@ function firstBareCommand(text: string): { index: number; value: string } | null
  * and extends over tokens that can only be maths (commands, numbers, single
  * letters, operators, brackets); the first ordinary word ("where") ends it.
  */
-const MATH_TOKEN = /\\[A-Za-z]+\*?|\\[,;:! ]|[0-9]+(?:\.[0-9]+)?|[A-Za-z](?![A-Za-z])|[+\-=*/^_()[\]{}<>|!'.,]|\s+/y;
+// \text{...} and its kin carry words; take the whole braced group as one token.
+const MATH_TOKEN = /\\(?:text|mathrm|textbf|textit|mathbf|operatorname|mbox)\{[^{}]*\}|\\[A-Za-z]+\*?|\\[,;:! ]|[0-9]+(?:\.[0-9]+)?|[A-Za-z](?![A-Za-z])|[+\-=*/^_()[\]{}<>|!'.,]|\s+/y;
 function firstBareLatexRun(text: string): { index: number; value: string } | null {
   const start = text.search(/\\[A-Za-z]+/);
   if (start < 0) return null;

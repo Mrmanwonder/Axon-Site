@@ -1,4 +1,3 @@
-import type React from "react";
 /* ═══════════════════════════════════════════════════════════════════════════
    PAGE REVIEW
 
@@ -13,7 +12,7 @@ import type React from "react";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Dialog, { useDialogDismiss } from "../components/Dialog";
+import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import { needsLook } from "./PaperStack";
 import { useScan } from "./ScanProvider";
@@ -30,15 +29,11 @@ const toQuad = (c: Corners): Point[] => [c.topLeft, c.topRight, c.bottomRight, c
 export default function PageReview({ onClose }: { onClose: () => void }) {
   const { tray, trayHandlers, submitting } = useScan();
   const [adjusting, setAdjusting] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<number | null>(null);
 
-  const pages = useMemo(() => {
-    const real = tray.filter((p) => !p.pending || p.thumb);
-    return [...real.filter(needsLook), ...real.filter((p) => !needsLook(p))];
-  }, [tray]);
+  // Pages stay in paper order: the grid is the paper, not a to-do list.
+  const pages = useMemo(() => tray.filter((p) => !p.pending || p.thumb), [tray]);
   const flagged = pages.filter(needsLook);
-  const clear = pages.length - flagged.length;
-  const first = flagged[0];
 
   if (adjusting !== null) {
     return (
@@ -47,88 +42,131 @@ export default function PageReview({ onClose }: { onClose: () => void }) {
         sourceOf={trayHandlers.onAdjustSource}
         apply={async (quad) => { await trayHandlers.onAdjustApply?.(adjusting, quad); }}
         onDone={() => { setAdjusting(null); }}
-        onClose={onClose}
+        onClose={() => setAdjusting(null)}
       />
     );
   }
 
-  const act = async (fn: () => void | Promise<void>, close = true) => {
-    if (busy) return;
-    setBusy(true);
-    try { await fn(); if (close) onClose(); } finally { setBusy(false); }
-  };
+  const current = open !== null ? pages.find((p) => p.page_number === open) ?? null : null;
+  if (current) {
+    return (
+      <PageDetail page={current} count={pages.length} busy={submitting}
+        onBack={() => setOpen(null)}
+        onAdjust={() => { hapticTick(); setAdjusting(current.page_number); setOpen(null); }}
+        onRetake={() => { trayHandlers.onRetake?.(current.page_number); onClose(); }}
+        onKeep={async () => { await trayHandlers.onKeep?.(current.page_number); setOpen(null); }}
+        onMove={async (to) => { await trayHandlers.onMove?.(current.page_number, to); setOpen(to); }}
+        onRemove={async () => {
+          await trayHandlers.onRemove?.(current.page_number);
+          setOpen(null);
+          if (pages.length <= 1) onClose();
+        }} />
+    );
+  }
 
-  const title = flagged.length
-    ? `${flagged.length} page${flagged.length === 1 ? "" : "s"} ${flagged.length === 1 ? "needs" : "need"} a look`
-    : `${pages.length} page${pages.length === 1 ? "" : "s"}`;
-  // "Clear" only where it is true: a page with a note (small, a little glare)
-  // is readable but not clear, and saying otherwise above the note was a
-  // contradiction on the owner's phone (4 Oct 2026).
-  const noted = pages.filter((p) => !needsLook(p) && p.note).length;
+  const title = `${pages.length} page${pages.length === 1 ? "" : "s"}`;
+  // One line, only when something needs the student. Notes live on the page.
   const body = flagged.length
-    ? (clear ? `The other ${clear} can be read.` : undefined)
-    : noted
-      ? `All can be read. ${noted === pages.length ? "Each has" : `${noted} ${noted === 1 ? "has" : "have"}`} a note below.`
-      : "Every page looks clear.";
-
+    ? `${flagged.length === 1 ? `Page ${flagged[0].page_number} needs` : `${flagged.length} pages need`} a look. Tap a page to fix it.`
+    : undefined;
 
   return (
-    <Dialog title={title} description={body} busy={busy || submitting} onClose={onClose} className="sc-review">
-      <div className="sc-review-grid">
+    <Dialog title={title} description={body} busy={submitting} onClose={onClose} className="sc-review">
+      <ul className="sc-grid" aria-label="Pages">
         {pages.map((page) => (
-          <ReviewCard key={page.page_number} page={page} disabled={busy || submitting}
-            onRetake={() => act(() => trayHandlers.onRetake?.(page.page_number))}
-            onAdjust={() => { hapticTick(); setAdjusting(page.page_number); }}
-            onOptions={() => act(() => trayHandlers.onPage?.(page.page_number))} />
+          <li key={page.page_number}>
+            <button type="button" className="sc-tile" data-flagged={needsLook(page) ? "true" : undefined}
+                    disabled={submitting || page.pending}
+                    aria-label={`Page ${page.page_number}${needsLook(page) ? ", needs a look" : ""}`}
+                    onClick={() => { hapticTick(); setOpen(page.page_number); }}>
+              <span className="th">{page.thumb && <img src={page.thumb} alt="" />}</span>
+              <span className="n">{page.page_number}</span>
+              {needsLook(page) && <span className="look">Needs a look</span>}
+            </button>
+          </li>
         ))}
-      </div>
-      <div className="acts sc-review-acts">
-        {first ? (
-          <>
-            <button type="button" className="btn primary" disabled={busy || submitting}
-                    onClick={() => { hapticFirm(); void act(() => trayHandlers.onRetake?.(first.page_number)); }}>
-              Retake page {first.page_number}
-            </button>
-            <button type="button" className="btn plain" disabled={busy || submitting}
-                    onClick={() => void act(async () => {
-                      await trayHandlers.onKeepAll?.();
-                      trayHandlers.onDone?.();
-                    })}>
-              Read as it is
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" className="btn primary" disabled={busy || submitting}
-                    onClick={() => void act(() => trayHandlers.onDone?.())}>
-              Read {pages.length === 1 ? "this page" : `these ${pages.length} pages`}
-            </button>
-            <DismissButton fallback={onClose}>Keep scanning</DismissButton>
-          </>
-        )}
-      </div>
+      </ul>
+      <ReviewActions pages={pages.length} flagged={flagged.length} busy={submitting}
+        onRead={async () => {
+          if (flagged.length) await trayHandlers.onKeepAll?.();
+          trayHandlers.onDone?.();
+        }}
+        fallback={onClose} />
     </Dialog>
   );
 }
 
-function ReviewCard({ page, disabled, onRetake, onAdjust, onOptions }: {
-  page: TrayPage; disabled: boolean; onRetake: () => void; onAdjust: () => void; onOptions: () => void;
+/** Read leaves with the sheet's own exit, then sending starts behind it. */
+function ReviewActions({ pages, flagged, busy, onRead, fallback }: {
+  pages: number; flagged: number; busy: boolean; onRead: () => Promise<void> | void; fallback: () => void;
 }) {
-  const look = needsLook(page);
-  const why = page.retakeRequested && !page.flag ? "Waiting for the new photo" : page.flag?.reason;
+  const dismiss = useDialogDismiss(fallback);
+  const label = flagged ? "Read as it is" : `Read ${pages === 1 ? "this page" : `these ${pages} pages`}`;
   return (
-    <div className="sc-pg" data-flagged={look ? "true" : undefined}>
-      <div className="th">{page.thumb && <img src={page.thumb} alt={`Page ${page.page_number}`} />}</div>
-      <b>Page {page.page_number}</b>
-      <span className="why">{look ? why : (page.note ?? "Clear")}</span>
-      <div className="pgacts">
-        <button type="button" disabled={disabled} onClick={onRetake}>Retake</button>
-        {page.flag?.kind === "edges" && page.canAdjust && (
-          <button type="button" disabled={disabled} onClick={onAdjust}>Adjust edges</button>
-        )}
-        {!look && <button type="button" disabled={disabled} onClick={onOptions}>Options</button>}
-      </div>
+    <div className="acts sc-review-acts">
+      <button type="button" className="btn primary" disabled={busy || pages === 0}
+              onClick={() => { hapticFirm(); dismiss(); window.setTimeout(() => { void onRead(); }, SHEET_EXIT_MS); }}>
+        {label}
+      </button>
+      <button type="button" className="btn plain" onClick={dismiss}>Keep scanning</button>
     </div>
+  );
+}
+
+/** One page, large, with everything that can be done to it. */
+function PageDetail({ page, count, busy, onBack, onAdjust, onRetake, onKeep, onMove, onRemove }: {
+  page: TrayPage; count: number; busy: boolean;
+  onBack: () => void; onAdjust: () => void; onRetake: () => void; onKeep: () => Promise<void>;
+  onMove: (to: number) => Promise<void>; onRemove: () => Promise<void>;
+}) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [working, setWorking] = useState(false);
+  const look = needsLook(page);
+  const why = page.retakeRequested && !page.flag ? "Waiting for the new photo" : look ? page.flag?.reason : page.note;
+  const run = async (fn: () => Promise<void>) => {
+    if (working) return;
+    setWorking(true);
+    try { await fn(); } finally { setWorking(false); }
+  };
+  const off = busy || working;
+  return (
+    <Dialog title={`Page ${page.page_number}`} description={why ?? undefined} busy={off} onClose={onBack} className="sc-review sc-page">
+      <div className="sc-page-img" data-flagged={look ? "true" : undefined}>
+        {page.thumb && <img src={page.thumb} alt={`Page ${page.page_number}`} />}
+      </div>
+      <div className="sc-page-acts">
+        {page.canAdjust && (
+          <button type="button" className="btn ghost" disabled={off} onClick={onAdjust}>Adjust edges</button>
+        )}
+        <button type="button" className="btn ghost" disabled={off} onClick={() => { hapticTick(); onRetake(); }}>Retake</button>
+        {look && page.flag?.kind === "quality" && (
+          <button type="button" className="btn ghost" disabled={off} onClick={() => void run(onKeep)}>Keep as it is</button>
+        )}
+      </div>
+      {count > 1 && (
+        <div className="sc-page-move" role="group" aria-label="Order">
+          <button type="button" className="btn plain" disabled={off || page.page_number <= 1}
+                  onClick={() => void run(() => onMove(page.page_number - 1))}>Move earlier</button>
+          <button type="button" className="btn plain" disabled={off || page.page_number >= count}
+                  onClick={() => void run(() => onMove(page.page_number + 1))}>Move later</button>
+        </div>
+      )}
+      <div className="acts">
+        {confirmRemove ? (
+          <>
+            <button type="button" className="btn danger-soft" disabled={off} onClick={() => void run(onRemove)}>
+              Remove page {page.page_number}. The pages after it move up.
+            </button>
+            <button type="button" className="btn plain" disabled={off} onClick={() => setConfirmRemove(false)}>Keep it</button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="btn primary" disabled={off} onClick={onBack}>Back to all pages</button>
+            <button type="button" className="btn plain sc-remove" disabled={off} onClick={() => setConfirmRemove(true)}>Remove this page</button>
+          </>
+        )}
+      </div>
+    </Dialog>
   );
 }
 
@@ -259,7 +297,3 @@ async function scaledCopy(image: HTMLImageElement, scale: number): Promise<HTMLI
 }
 
 /** Leaves the sheet with its exit motion. */
-function DismissButton({ fallback, children }: { fallback: () => void; children: React.ReactNode }) {
-  const dismiss = useDialogDismiss(fallback);
-  return <button type="button" className="btn plain" onClick={dismiss}>{children}</button>;
-}

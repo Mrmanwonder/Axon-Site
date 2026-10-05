@@ -18,9 +18,16 @@ export async function uploadDraftAssets({ draft, studentId, paperId, criticalOnl
   transport, persist, guard = async () => {}, expiryRetries = 1 }) {
   const snapshot = draft.pages.map(p => ({ page_number: p.page_number, upload_revision: p.upload_revision }));
   const measure = (stage, work) => timing ? timing.measure(stage, work) : work();
+  // Progress is told in pages, the unit the student took. A page counts as sent
+  // once every file the reader needs for it is confirmed; the original photo is
+  // a backup and finishes later. (Owner, 5 Oct 2026: "48 files" for 12 pages.)
   const report = () => {
     const plan = buildUploadPlan(draft), confirmed = plan.filter(o => o.state.status === 'confirmed').length;
-    onProgress?.({ confirmed, total: plan.length, message: confirmed + ' of ' + plan.length + ' files confirmed. Your pages stay saved on this device.' });
+    const pages = new Map();
+    for (const o of plan) if (o.critical) pages.set(o.page_number, (pages.get(o.page_number) ?? true) && o.state.status === 'confirmed');
+    const total = draft.pages.length, sent = [...pages.values()].filter(Boolean).length;
+    onProgress?.({ confirmed, total: plan.length, pagesSent: sent, pagesTotal: total,
+      message: sent >= total ? `All ${total} ${total === 1 ? 'page' : 'pages'} sent` : `Sending page ${sent + 1} of ${total}` });
   };
   async function write(updates) {
     if (!updates.length) return;

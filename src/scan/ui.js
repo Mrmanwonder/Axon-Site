@@ -463,7 +463,31 @@ function renderTrayRows() {
     onKeepAll: keepAllFlagged,
     onAdjustSource: adjustSource,
     onAdjustApply: adjustApply,
+    onRemove: removePageAt,
+    onMove: movePageAt,
   });
+}
+
+async function repaintAfterEdit() {
+  S.thumbs.forEach((url) => URL.revokeObjectURL(url));
+  S.thumbs.clear();
+  await paintTray();
+  refreshDrafts();
+}
+
+async function removePageAt(pageNumber) {
+  if (S.submitting || S.busy || !S.draft) return;
+  if (S.retaking === pageNumber) S.retaking = null;
+  S.draft = await removePage(S.draft, pageNumber);
+  if (!S.draft?.pages.length && S.draft) { await deleteDraft(S.draft.id); S.draft = null; }
+  await repaintAfterEdit();
+}
+
+async function movePageAt(pageNumber, to) {
+  if (S.submitting || S.busy || !S.draft) return;
+  if (to < 1 || to > S.draft.pages.length || to === pageNumber) return;
+  S.draft = await movePage(S.draft, pageNumber, to);
+  await repaintAfterEdit();
 }
 
 async function paintTray() {
@@ -693,13 +717,19 @@ async function paintDrafts() {
   if (!S.ctx?.student) return;
   const drafts = await listDrafts(S.ctx.student.id);
   if (epoch !== S.epoch) return;
+  // A sent paper is not a draft. Its local copy lingers only to finish original
+  // backups and to allow "Rescan this page" during review; both happen without
+  // the student managing it. (Owner, 5 Oct 2026: two identical rows, and
+  // tapping one "submitted" a paper that was already sent.)
   host.renderDrafts(
-    drafts.map((d) => ({
+    drafts.filter((d) => !d.submission && d.id !== S.draft?.id).map((d) => ({
       id: d.id,
-      title: d.submission && !d.pages.every(backupComplete) ? 'Original backup pending' : d.paper_type
+      title: d.paper_type
         ? paperTypes().find((t) => t.value === d.paper_type)?.label ?? 'Paper'
-        : 'Unfinished paper',
+        : 'Unsent paper',
       pages: d.pages.length,
+      updatedAt: d.updated_at ?? null,
+      thumbs: d.pages.slice(0, 3).map((p) => p.proxy ?? p.blob ?? null).filter(Boolean),
       thumb: null,
     })),
     { onResume: resumeDraft, onDiscard: discardDraft },
@@ -740,7 +770,9 @@ async function resumeDraft(id) {
   S.thumbs.forEach((url) => URL.revokeObjectURL(url));
   S.thumbs.clear();
   await paintTray();
-  toast(`Picking up where you left off — ${S.draft.pages.length} page(s) already taken.`);
+  refreshDrafts();
+  // Open the pages, so the student sees exactly what this draft holds.
+  host.reviewPages?.();
 }
 
 // ── send paper ─────────────────────────────────────────────────────────────
@@ -806,7 +838,7 @@ async function run(paperType, sendStartedAt = performance.now()) {
   let current = 'upload';
 
   const paint = (now, sub) => host.renderProgress({
-    heading: 'Reading this paper',
+    heading: 'Reading your paper',
     now,
     sub,
     steps: steps.map((s) => ({
@@ -814,8 +846,6 @@ async function run(paperType, sendStartedAt = performance.now()) {
       state: stepIndex(steps, s.key) < stepIndex(steps, current) ? 'done'
         : s.key === current ? 'now' : 'wait',
     })),
-    skeleton: true,
-    note: 'Nothing is dropped silently. Anything we could not read is shown to you next.',
   });
 
   paint('Getting ready');
@@ -839,7 +869,7 @@ async function run(paperType, sendStartedAt = performance.now()) {
         heading: 'Your paper is submitted',
         now: 'The server has not finished processing it yet.',
         steps: [],
-        note: 'Your pages are saved. You can leave this screen and check the paper in Library; there is no need to upload it again.',
+        note: 'Your pages are saved. There is no need to send it again.',
       });
       await host.refreshLibrary();
       return;
@@ -995,6 +1025,7 @@ function paintReview() {
     noTotal: S.review.noTotal,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
+    readableCount: S.review.readableUnconfirmed?.length ?? 0,
     saving: S.saving,
     saveLabel: S.review.outstanding
       ? `${S.review.outstanding} left to check`
@@ -1026,6 +1057,12 @@ function paintReview() {
     onConfirmClean: async () => {
       try {
         await confirmQuestions(S.review.cleanUnconfirmed);
+        await refreshReview();
+      } catch (e) { toast(e.message, 'warn'); }
+    },
+    onConfirmAll: async () => {
+      try {
+        await confirmQuestions(S.review.readableUnconfirmed ?? []);
         await refreshReview();
       } catch (e) { toast(e.message, 'warn'); }
     },

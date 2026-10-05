@@ -100,3 +100,14 @@ test("bare LaTeX inside a printed question is typeset, and the prose around it s
   expect(plain).not.toContain("\\,");
   expect(plain).toContain("where c is a constant.");
 });
+
+test("a written answer with \\text{} words is typeset as one expression", () => {
+  const text = "\\text{a head} = \\frac{1}{3} \\times \\frac{4}{9} + \\frac{1}{3} \\times \\frac{4}{27}";
+  const { container } = render(<MathText text={text} />);
+  const visible = container.cloneNode(true) as HTMLElement;
+  visible.querySelectorAll(".katex-mathml").forEach((n) => n.remove());
+  const plain = visible.textContent ?? "";
+  expect(plain).not.toContain("\\text");
+  expect(plain).not.toContain("\\times");
+  expect(plain).toMatch(/a\s+head/u);
+});

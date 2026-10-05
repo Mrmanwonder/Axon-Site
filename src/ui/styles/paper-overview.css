@@ -45,3 +45,8 @@
 .po-unplaced .po-part::before { display: none; }
 .po-place { display: block; min-height: 44px; margin: -6px 18px 8px; padding: 0 14px; border: 0; border-radius: 12px;
   background: var(--accent-wash); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* Naming an unknown subject: a quiet accent link inside the meta line. */
+.po-subject { position: relative; height: 26px; padding: 0 11px; border: 0; border-radius: 13px; background: var(--accent-wash); color: var(--label); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+/* 44 px target around a 26 px pill. */
+.po-subject::after { content: ""; position: absolute; inset: -9px -4px; }

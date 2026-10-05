@@ -482,6 +482,20 @@ export async function relabelAttempt(attemptId, label) {
 }
 
 /**
+ * The student names a paper's subject, from their own subjects, when the reader
+ * could not identify it. This is the paper's ordinary subject field, not the
+ * verified identity (which only an exact assessment match may set).
+ */
+export async function setPaperSubject(paperId, subject) {
+  requireOnline('Setting the subject');
+  const clean = String(subject ?? '').trim().slice(0, 80);
+  if (!clean) throw new Error('Choose a subject.');
+  const { error } = await sb.from('paper').update({ subject: clean }).eq('id', paperId);
+  if (error) throw error;
+  await clearCache();
+}
+
+/**
 * Marks-lost totals by cause, from the analytics view — never the base table,
 * so unsure and rejected rows are already excluded (hard rule 3).
 */

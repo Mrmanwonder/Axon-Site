@@ -14,12 +14,13 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
+import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import { usePaperDelete } from "../data/usePaperDelete";
-import { relabelAttempt } from "../data/modules";
+import { relabelAttempt, setPaperSubject } from "../data/modules";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { numMark } from "../data/causes";
@@ -57,7 +58,7 @@ function PartRow({ paperId, part, label }: { paperId: string; part: PaperPart; l
           {part.page != null && <span className="po-page">Page {part.page}</span>}
         </div>
         <div className={"po-prompt" + (part.prompt ? "" : " none")}>
-          {part.prompt ?? "Question text not read"}
+          {part.prompt ? <MathText text={part.prompt} /> : "Question text not read"}
         </div>
         {/* The list says only what needs the student. "Confirmed by you" and
             "Read clearly" live on the question itself, beside its confidence. */}
@@ -113,7 +114,7 @@ function NextAction({ paperId, structure }: { paperId: string; structure: PaperS
 
 export default function PaperOverview() {
   const { paperId } = useParams();
-  const { student, papers, progressResource } = useApp();
+  const { student, papers, progressResource, refreshLibrary } = useApp();
   const deletePaperSheet = usePaperDelete();
   const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "paper",
@@ -179,6 +180,21 @@ export default function PaperOverview() {
     });
   };
 
+  // The reader could not tell the subject: the student names it in one tap,
+  // from their own subjects (owner, 5 Oct 2026).
+  const chooseSubject = () => {
+    const subjects = (student?.subjects ?? []).filter(Boolean);
+    openSheet({
+      title: "Which subject is this?",
+      choices: subjects.map((name) => ({ label: name, value: name })),
+      onChoice: async (name) => {
+        await setPaperSubject(paper.id, name);
+        await Promise.all([reload(), refreshLibrary?.()]);
+        toast(`Filed under ${name}.`);
+      },
+    });
+  };
+
   return (
     <div className="po">
       <nav className="po-crumb" aria-label="Breadcrumb">
@@ -189,7 +205,11 @@ export default function PaperOverview() {
         <div className="detailcopy">
           <h1>{subjectLabel || typeLabel}</h1>
           <div className="sub po-meta">
-            {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
+            {subjectLabel ? <span>{typeLabel}</span> : (
+              (student?.subjects?.length ?? 0) > 0
+                ? <button type="button" className="po-subject" onClick={chooseSubject}>Add subject</button>
+                : <span>Subject not identified</span>
+            )}
             <span>Dated {dated}</span>
             {stale && <span>offline copy</span>}
           </div>
