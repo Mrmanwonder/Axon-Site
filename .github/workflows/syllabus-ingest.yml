@@ -36,10 +36,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install poppler and psql
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils postgresql-client
-      - name: Parser tests
-        run: node --test tests/db/syllabus-parse.test.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the PDF reader and psql
+        run: |
+          python -m pip install --quiet -r scripts/syllabus/requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Parser and extractor tests
+        run: |
+          node --test tests/db/syllabus-parse.test.mjs
+          python scripts/syllabus/test_extract.py
       - name: Fetch, verify and parse
         run: node scripts/syllabus/ingest.mjs --out "$RUNNER_TEMP/syllabus.sql"
       - name: Load as draft

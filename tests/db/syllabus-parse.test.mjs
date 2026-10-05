@@ -98,6 +98,62 @@ test("plain layout: sub-headings become groups, tables after a page break are ig
   assert.ok(!objs.some((o) => /LDM/.test(o.text)));
 });
 
+const wrapped = [
+  "\f" + HEADER,
+  "          1      Gizmo systems",
+  "          1.1    Gizmo parts",
+  "          Candidates should be able to:                              Notes and guidance",
+  "          Explain why a gizmo requires a Central",
+  "          Widget Store (CWS)",
+  "          Describe the roles of the",
+  "          Gizmo Control Unit (GCU) and its clock",
+  "          Use the following gizmo symbols:",
+  "",
+  "                NUT                 BOLT               PIN",
+  "",
+  "                CLIP                PEG                RIVET",
+  "",
+  "          Document a gizmo using a structured",
+  "          English description or a diagram",
+  "          Show understanding of how gizmos are joined",
+  "",
+  "                       Fastener",
+  "            Label          Opcode       Operand                      Explanation",
+].join("\n");
+
+test("plain layout: a line that does not open with a command word continues the objective, labels follow a colon, table headings are dropped", () => {
+  const p = parseCambridgeSyllabus(wrapped);
+  assert.deepEqual(p.units[0].topics[0].objectives.map((o) => o.text), [
+    "Explain why a gizmo requires a Central Widget Store (CWS)",
+    "Describe the roles of the Gizmo Control Unit (GCU) and its clock",
+    "Use the following gizmo symbols: NUT BOLT PIN CLIP PEG RIVET",
+    "Document a gizmo using a structured English description or a diagram",
+    "Show understanding of how gizmos are joined",
+  ]);
+});
+
+const notesFirst = [
+  "\f" + HEADER,
+  "          1 Widget Theory (for Paper 1)",
+  "          1.1 Basic widgets", "",
+  "          Candidates should be able to:                             Notes and examples",
+  "                                                                    Including the round case where",
+  "          •   describe a widget",
+  "                                                                    necessary.",
+  "          •   compare widgets                                       e.g. by size",
+  "                                                                     ∫   a widget integral",
+].join("\n");
+
+test("notes printed above the first objective belong to it, and a notes-only line never leaks into an objective", () => {
+  const p = parseCambridgeSyllabus(notesFirst);
+  const [a, b] = p.units[0].topics[0].objectives;
+  assert.equal(p.style, "bullets");
+  assert.equal(a.text, "describe a widget");
+  assert.equal(a.notes, "Including the round case where necessary.");
+  assert.equal(b.text, "compare widgets");
+  assert.equal(b.notes, "e.g. by size ∫ a widget integral");
+});
+
 test("the audit rejects an objective whose words are not in the source", () => {
   const p = parseCambridgeSyllabus(bullets);
   p.units[0].topics[0].objectives[0].text = "describe a widget and invent a word";

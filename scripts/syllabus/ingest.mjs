@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // Syllabus ingest: fetch each official PDF in curriculum/syllabi/sources.json,
-// check its SHA-256 against the manifest, extract text with poppler's
-// `pdftotext -layout`, parse it with the board's parser, audit every objective
-// against the source, and write SQL that loads the topic tree as a DRAFT.
+// check its SHA-256 against the manifest, extract text with extract.py (which
+// keeps mathematical notation readable; see that file), parse it with the
+// board's parser, audit every objective against the source, and write SQL
+// that loads the topic tree as a DRAFT.
 //
 //   node scripts/syllabus/ingest.mjs [--code 9709] --out /tmp/syllabus.sql
 //
-// Requires `pdftotext` (poppler-utils). Nothing is committed: the SQL goes to
-// --out and is applied by a person (or psql against SUPABASE_DB_URL).
+// Requires python3 with scripts/syllabus/requirements.txt installed. Nothing
+// is committed: the SQL goes to --out and is applied by a person (or psql
+// against SUPABASE_DB_URL).
 //
 // Ids are deterministic (a hash of provider, code, version, kind and topic
 // code), so a re-ingest of the same edition updates rows in place and keeps
@@ -24,6 +26,8 @@ import { parseCambridgeSyllabus, auditParse } from "./cambridge.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PARSERS = { cambridge: parseCambridgeSyllabus };
+/** Bumped when extract.py changes what it writes, so a re-load retags. */
+const EXTRACTOR = "extract.py/2";
 
 export function stableId(...parts) {
   const h = createHash("sha256").update(parts.join("\u0000")).digest("hex");
@@ -59,8 +63,14 @@ export function rowsFor(doc, parsed) {
   return { docId, rows };
 }
 
+/** A short fingerprint of everything a student or the tagger reads. */
+export function contentHash(rows) {
+  return createHash("sha256").update(JSON.stringify(rows.map((r) => [r.id, r.code, r.title, r.objective_text]))).digest("hex").slice(0, 16);
+}
+
 export function sqlFor(doc, parsed, fetchedAt) {
   const { docId, rows } = rowsFor(doc, parsed);
+  const notes = `parser=${doc.parser} extractor=${EXTRACTOR} style=${parsed.style} content=${contentHash(rows)}`;
   const values = rows.map((r) =>
     `(${q(r.id)}, ${q(docId)}, ${q(r.parent_id)}, ${q(r.code)}, ${q(r.kind)}, ${q(r.title)}, ${q(r.objective_text)}, ${q(r.notes_text)}, ${q(r.group_title)}, ${q(r.scope)}, ${r.sort_order}, ${r.depth}, ${r.page ?? "null"})`);
   return `-- ${doc.title} ${doc.syllabus_code} (${doc.version_label}) · ${rows.length} rows · sha256 ${doc.source_sha256}
@@ -70,8 +80,16 @@ begin
     raise notice 'syllabus ${doc.syllabus_code} ${doc.version_label} is not a draft; left unchanged';
     return;
   end if;
+  -- The objective text changed since the last load (a parser fix, say): the
+  -- model's tags were chosen against the old text, so they are dropped and
+  -- the sweep tags the questions again. A tag a student rejected stays.
+  if exists (select 1 from public.syllabus_document where id = ${q(docId)} and extraction_notes is distinct from ${q(notes)}) then
+    delete from public.region_topic rt using public.syllabus_topic t
+     where rt.topic_id = t.id and t.document_id = ${q(docId)} and rt.source = 'model' and rt.student_rejected_at is null;
+    delete from private.topic_tag_job where document_id = ${q(docId)};
+  end if;
   insert into public.syllabus_document (id, provider_key, syllabus_code, title, version_label, valid_from_year, valid_to_year, source_url, source_sha256, fetched_at, status, extraction_notes)
-  values (${q(docId)}, ${q(doc.provider_key)}, ${q(doc.syllabus_code)}, ${q(doc.title)}, ${q(doc.version_label)}, ${doc.valid_from_year ?? "null"}, ${doc.valid_to_year ?? "null"}, ${q(doc.source_url)}, ${q(doc.source_sha256)}, ${q(fetchedAt)}, 'draft', ${q(`parser=${doc.parser} style=${parsed.style}`)})
+  values (${q(docId)}, ${q(doc.provider_key)}, ${q(doc.syllabus_code)}, ${q(doc.title)}, ${q(doc.version_label)}, ${doc.valid_from_year ?? "null"}, ${doc.valid_to_year ?? "null"}, ${q(doc.source_url)}, ${q(doc.source_sha256)}, ${q(fetchedAt)}, 'draft', ${q(notes)})
   on conflict (id) do update set title = excluded.title, source_url = excluded.source_url, source_sha256 = excluded.source_sha256, fetched_at = excluded.fetched_at, extraction_notes = excluded.extraction_notes, updated_at = now();
   delete from public.syllabus_topic where document_id = ${q(docId)} and id <> all (array[${rows.map((r) => q(r.id)).join(",")}]::uuid[]);
   insert into public.syllabus_topic (id, document_id, parent_id, code, kind, title, objective_text, notes_text, group_title, qualification_scope, sort_order, depth, source_page)
@@ -109,7 +127,7 @@ async function main() {
     }
     const pdf = join(work, `${doc.syllabus_code}.pdf`);
     writeFileSync(pdf, bytes);
-    const text = execFileSync("pdftotext", ["-layout", pdf, "-"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const text = execFileSync("python3", [join(ROOT, "scripts/syllabus/extract.py"), pdf], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     const parsed = PARSERS[doc.parser](text);
     const audit = auditParse(parsed, text);
     console.error(`${doc.syllabus_code} ${doc.version_label}: ${audit.units} units, ${audit.topics} topics, ${audit.objectives} objectives, ${audit.problems.length} problems`);
