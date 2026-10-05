@@ -178,6 +178,7 @@ export const legacyCurriculumForStudent = () => ({ providerKey: "cambridge", pro
 export const statusKeyForRun = () => null;
 export const PAPER_STATUS = {};
 export const retryFailedPaper = async () => ({ retry: "started", queued: true, run_id: "run-retry" });
+export const retryAsMarked = async () => ({ retry: "started", queued: true, run_id: "run-retry" });
 export const searchLibrary = async () => [];
 export const AVATAR_PRESETS = [{
   kind: "gradient",
