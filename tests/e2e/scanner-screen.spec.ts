@@ -194,6 +194,19 @@ test.describe("camera screen on a phone", () => {
     await expect.poll(async () => (await calls(page, "onResume")).length).toBe(1);
   });
 
+  test("sending is told in pages, shows the real pages, and can always be left", async ({ page }) => {
+    await open(page, "reading");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/files?\b/i)).toHaveCount(0);
+    const pages = page.locator(".sc-reading-pages li");
+    await expect(pages).toHaveCount(12);
+    await expect(pages.nth(0)).toHaveAttribute("data-sent", "true");
+    await expect(pages.nth(4)).not.toHaveAttribute("data-sent", "true");
+    await expect(page.locator(".sc-reading-pages img")).toHaveCount(12);
+    await expect(page.getByRole("button", { name: "Go to Library" }).first()).toBeVisible();
+  });
+
   test("saved drafts with nothing saved offers one way out", async ({ page }) => {
     await open(page, "search");
     await page.getByRole("button", { name: "Saved drafts" }).first().click();

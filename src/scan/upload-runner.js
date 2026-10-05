@@ -25,9 +25,11 @@ export async function uploadDraftAssets({ draft, studentId, paperId, criticalOnl
     const plan = buildUploadPlan(draft), confirmed = plan.filter(o => o.state.status === 'confirmed').length;
     const pages = new Map();
     for (const o of plan) if (o.critical) pages.set(o.page_number, (pages.get(o.page_number) ?? true) && o.state.status === 'confirmed');
-    const total = draft.pages.length, sent = [...pages.values()].filter(Boolean).length;
-    onProgress?.({ confirmed, total: plan.length, pagesSent: sent, pagesTotal: total,
-      message: sent >= total ? `All ${total} ${total === 1 ? 'page' : 'pages'} sent` : `Sending page ${sent + 1} of ${total}` });
+    const total = draft.pages.length;
+    const sentPages = [...pages.entries()].filter(([, ok]) => ok).map(([n]) => n).sort((a, b) => a - b);
+    const sent = sentPages.length;
+    onProgress?.({ confirmed, total: plan.length, pagesSent: sent, pagesTotal: total, sentPages,
+      message: `${sent} of ${total} ${total === 1 ? 'page' : 'pages'} safely sent` });
   };
   async function write(updates) {
     if (!updates.length) return;

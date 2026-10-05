@@ -74,6 +74,8 @@ export type ProgressModel = {
   now: string;
   sub?: string;
   steps: { label: string; state: "done" | "now" | "wait" }[];
+  /** The paper's pages in order, each with its own picture and whether it is safely sent. */
+  pages?: { n: number; thumb: string | null; sent: boolean }[];
   skeleton?: boolean;
   note?: string;
 } | null;

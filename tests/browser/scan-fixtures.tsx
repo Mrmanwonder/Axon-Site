@@ -96,7 +96,8 @@ export function scanFixture(state: ScanFixtureState, calls: Record<string, unkno
       onMove: async (...args: unknown[]) => { record("onMove")(...args); },
     },
     progress: state === "reading" ? {
-      heading: "Reading your paper", now: "Sending page 5 of 12",
+      heading: "Sending your paper", now: "4 of 12 pages safely sent",
+      pages: Array.from({ length: 12 }, (_, i) => ({ n: i + 1, thumb: paperThumb(i + 1), sent: i < 4 })),
       steps: [
         { label: "Sending the pages", state: "now" }, { label: "Finding the questions", state: "wait" },
         { label: "Reading the answers and the marking", state: "wait" }, { label: "Checking the marks add up", state: "wait" },

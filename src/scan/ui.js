@@ -836,11 +836,21 @@ async function run(paperType, sendStartedAt = performance.now()) {
     { key: 'reconcile', label: 'Checking the marks add up' },
   ];
   let current = 'upload';
+  // The paper the student took, page by page, in page order: each page's own
+  // picture, marked sent only once the server has confirmed what the reader
+  // needs for it (AXO-195). Never a file count.
+  let sentPages = new Set();
+  const pageStrip = () => (S.draft?.pages ?? []).map((p) => ({
+    n: p.page_number,
+    thumb: S.thumbs.get(p.page_number) ?? null,
+    sent: current !== 'upload' || sentPages.has(p.page_number),
+  }));
 
   const paint = (now, sub) => host.renderProgress({
-    heading: 'Reading your paper',
+    heading: current === 'upload' ? 'Sending your paper' : 'Reading your paper',
     now,
     sub,
+    pages: pageStrip(),
     steps: steps.map((s) => ({
       label: s.label,
       state: stepIndex(steps, s.key) < stepIndex(steps, current) ? 'done'
@@ -859,7 +869,12 @@ async function run(paperType, sendStartedAt = performance.now()) {
       onTelemetry: host.uploadTelemetry,
       signal: controller.signal,
       onBackupProgress: progress => { if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn'); },
-      onProgress: ({ stage, message }) => { if (epoch === S.epoch) { current = stage; paint(message); } },
+      onProgress: ({ stage, message, sentPages: sent }) => {
+        if (epoch !== S.epoch) return;
+        current = stage;
+        if (Array.isArray(sent)) sentPages = new Set(sent);
+        paint(message);
+      },
     });
 
     if (epoch !== S.epoch) return;

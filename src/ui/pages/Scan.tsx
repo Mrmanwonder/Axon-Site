@@ -337,6 +337,19 @@ function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof u
       <h1 className="sc-reading-h">{progress.heading ?? "Reading your paper"}</h1>
       <p className="sc-reading-now" aria-live="polite">{progress.now}</p>
       {progress.sub && <p className="sc-reading-sub">{progress.sub}</p>}
+      {(progress.pages?.length ?? 0) > 0 && (
+        <ol className="sc-reading-pages" aria-label="Pages">
+          {progress.pages!.map((p) => (
+            <li key={p.n} data-sent={p.sent ? "true" : undefined}
+                aria-label={`Page ${p.n}, ${p.sent ? "sent" : "sending"}`}>
+              <span className="th">{p.thumb ? <img src={p.thumb} alt="" /> : <span className="blank" />}</span>
+              <span className="n">{p.sent ? (
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
+              ) : p.n}</span>
+            </li>
+          ))}
+        </ol>
+      )}
       {progress.steps.length > 0 && (
         <ol className="sc-reading-steps">
           {progress.steps.map((st, i) => (
