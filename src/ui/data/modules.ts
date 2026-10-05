@@ -547,6 +547,11 @@ export type PaperDetail = {
   tier: string | null;
   date_taken: string;
   subject: string | null;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  /** assessment_identity (official, fixed) · student (they chose it) · triage (assigned automatically) */
+  subject_identity_source?: "assessment_identity" | "student" | "triage" | null;
   reported_total: number | null;
   stated_maximum: number | null;
   total_awarded: number | null;
@@ -726,6 +731,14 @@ export const insightEvidence = papersMod.insightEvidence as unknown as (
   attempts: import("./insights").InsightAttempt[];
   losses: import("./insights").InsightLoss[];
 }>>;
+
+/** The student sets or clears a paper's subject (one of their own subjects). */
+export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subjectOfferingId: string | null) => Promise<void>;
+
+/** Syllabus documents, topics and eligible topic evidence for the syllabus map. */
+export const syllabusMapData = papersMod.syllabusMapData as unknown as (
+  studentId: string,
+) => Promise<Cached<import("./syllabusMap").SyllabusMapInput>>;
 
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (

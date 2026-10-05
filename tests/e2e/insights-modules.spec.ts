@@ -18,6 +18,22 @@ test("Insights renders every evidence-backed module from confirmed rows", async 
   expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
 });
 
+test("the syllabus map shades tested topics, leaves untested ones untested, and opens a topic's detail", async ({ page }) => {
+  await page.goto(URL);
+  await expect(page.getByText("Syllabus map", { exact: true })).toBeVisible();
+  await expect(page.getByText("3 of 6 topics tested")).toBeVisible();
+  const untested = page.getByRole("button", { name: /1\.4 Circular motion: not tested yet/ });
+  await expect(untested).toHaveClass(/untested/);
+  const shaded = page.getByRole("button", { name: /1\.3 Energy transfers: \d+ of \d+ marks lost/ });
+  await expect(shaded).toHaveClass(/ l[1-4]/);
+  await shaded.click();
+  await expect(page.getByText("What the syllabus asks for")).toBeVisible();
+  await expect(page.getByText("describe example energy stores")).toBeVisible();
+  await expect(page.getByText("Your questions on this topic")).toBeVisible();
+  await untested.click();
+  await expect(page.getByText("Untested is not the same as weak.", { exact: false })).toBeVisible();
+});
+
 test("Insights never reports zero papers while the library is still loading", async ({ page }) => {
   await page.goto(URL);
   await expect(page.getByRole("status", { name: "Loading analysis…" })).toBeVisible();

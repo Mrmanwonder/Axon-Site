@@ -1,0 +1,37 @@
+{
+  "$comment": "Official syllabus documents Axon reads topics from. The ingest refuses a download whose SHA-256 differs from the one recorded here; a new edition is a new entry. Text is never committed to this repository; see scripts/syllabus/ingest.mjs.",
+  "documents": [
+    {
+      "provider_key": "cambridge", "syllabus_code": "9709",
+      "title": "Cambridge International AS & A Level Mathematics", "version_label": "2026-2027",
+      "valid_from_year": 2026, "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+      "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5",
+      "parser": "cambridge"
+    },
+    {
+      "provider_key": "cambridge", "syllabus_code": "9231",
+      "title": "Cambridge International AS & A Level Further Mathematics", "version_label": "2026-2027",
+      "valid_from_year": 2026, "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+      "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78",
+      "parser": "cambridge"
+    },
+    {
+      "provider_key": "cambridge", "syllabus_code": "9702",
+      "title": "Cambridge International AS & A Level Physics", "version_label": "2025-2027",
+      "valid_from_year": 2025, "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/664565-2025-2027-syllabus.pdf",
+      "source_sha256": "1cba1cdca33c51a39dd6dfdc69d612f48967abcd89b6ceacdf9ffd6fa2e2b195",
+      "parser": "cambridge"
+    },
+    {
+      "provider_key": "cambridge", "syllabus_code": "9618",
+      "title": "Cambridge International AS & A Level Computer Science", "version_label": "2026",
+      "valid_from_year": 2026, "valid_to_year": 2026,
+      "source_url": "https://www.cambridgeinternational.org/Images/697372-2026-syllabus.pdf",
+      "source_sha256": "bf1b77a2b765d10eb4b005ecae0412add35cf6113ba3218a517893abfc9f2470",
+      "parser": "cambridge"
+    }
+  ]
+}

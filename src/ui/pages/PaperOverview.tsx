@@ -11,13 +11,14 @@
    to open. This screen assumes it is being asked for a paper that has been saved.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent, setPaperSubject } from "../data/modules";
+import AppDropdown from "../components/AppDropdown";
 import { usePaperDelete } from "../data/usePaperDelete";
 import { relabelAttempt } from "../data/modules";
 import { useSheetControls } from "../components/SheetProvider";
@@ -113,7 +114,7 @@ function NextAction({ paperId, structure }: { paperId: string; structure: PaperS
 
 export default function PaperOverview() {
   const { paperId } = useParams();
-  const { student, papers, progressResource } = useApp();
+  const { student, papers, progressResource, refreshLibrary } = useApp();
   const deletePaperSheet = usePaperDelete();
   const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "paper",
@@ -122,6 +123,7 @@ export default function PaperOverview() {
   });
 
   const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
   const toast = useToast();
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
@@ -156,6 +158,26 @@ export default function PaperOverview() {
     ? subjectPresentation(listed, undefined, progressResource?.data?.get(paper.id))
     : subjectPresentation(paper as never);
   const subjectLabel = subjectInfo.state === "unknown" ? null : subjectInfo.label;
+  const subjectOptions = [
+    ...(student?.subject_selections ?? []).map((sel) => ({ value: sel.offering_id, label: sel.external_code ? `${sel.subject} · ${sel.external_code}` : sel.subject })),
+    { value: "", label: "Not set" },
+  ];
+  const changeSubject = async (value: string) => {
+    if ((paper.subject_offering_id ?? "") === value) return;
+    setSavingSubject(true);
+    try {
+      await setPaperSubject(paper.id, value || null);
+      await reload();
+      void refreshLibrary();
+      toast(value ? "Subject changed. Its questions will move to that syllabus shortly." : "Subject cleared.");
+    } catch (cause) {
+      toast(cause instanceof Error && /official assessment/.test(cause.message)
+        ? "This paper's subject comes from its official assessment and can't be changed."
+        : "The subject couldn't be changed. Try again with a connection.");
+    } finally {
+      setSavingSubject(false);
+    }
+  };
   const dated = new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   const requestDelete = () => { if (paperId) deletePaperSheet(paperId); };
@@ -196,6 +218,15 @@ export default function PaperOverview() {
         </div>
         <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
+
+      {paper.subject_identity_source !== "assessment_identity" && (student?.subject_selections?.length ?? 0) > 0 && (
+        <div className="po-subject">
+          <span className="k">Subject</span>
+          <AppDropdown ariaLabel="Paper subject" value={paper.subject_offering_id ?? ""} options={subjectOptions}
+            onChange={(v) => { if (!savingSubject) void changeSubject(v); }} selected={!!paper.subject_offering_id} />
+          {paper.subject_identity_source === "triage" && <span className="hint">Set from the paper. Change it if it&rsquo;s wrong.</span>}
+        </div>
+      )}
 
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">

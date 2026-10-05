@@ -1,0 +1,48 @@
+name: Ingest syllabi
+
+# Loads the official syllabus topic trees listed in curriculum/syllabi/sources.json.
+# The text goes from the board's PDF straight into the database: it is never
+# committed (this repository is public). Each PDF must match its recorded
+# SHA-256, and every objective must pass the parser's audit, or nothing loads.
+# Documents load as DRAFT; a person marks them verified before students see them.
+
+on:
+  workflow_run:
+    workflows: ["Apply migrations"]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "curriculum/syllabi/**"
+      - "scripts/syllabus/**"
+      - ".github/workflows/syllabus-ingest.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: syllabus-ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install poppler and psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils postgresql-client
+      - name: Parser tests
+        run: node --test tests/db/syllabus-parse.test.mjs
+      - name: Fetch, verify and parse
+        run: node scripts/syllabus/ingest.mjs --out "$RUNNER_TEMP/syllabus.sql"
+      - name: Load as draft
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/syllabus.sql"

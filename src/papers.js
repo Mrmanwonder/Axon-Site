@@ -391,7 +391,7 @@ export async function readPaper(studentId, paperId) {
     const { data, error } = await sb
     .from('paper')
     .select(
-      `id,type,tier,date_taken,subject,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
+      `id,type,tier,date_taken,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
       student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,answer_block,marks_awarded,max_marks,marks_source,
@@ -499,6 +499,19 @@ export async function insightEvidence(studentId) {
 }
 
 /**
+* The student sets or clears a paper's subject, from their own subjects. The
+* server refuses anything else and never overrides an official assessment
+* identity. Changing the subject re-places the paper's questions on the new
+* syllabus (the sweep re-tags them).
+*/
+export async function setPaperSubject(paperId, subjectOfferingId) {
+  requireOnline('Changing the subject');
+  const { error } = await sb.rpc('set_paper_subject', { p_paper_id: paperId, p_subject_offering_id: subjectOfferingId || null });
+  if (error) throw error;
+  await clearCache();
+}
+
+/**
  * The student places a part under a question by giving it its real label
  * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
  * the authority (Axon.md section 8). Both the committed attempt and the region
@@ -517,6 +530,48 @@ export async function relabelAttempt(attemptId, label) {
     .eq('committed_attempt_id', attemptId);
   if (regionError) throw regionError;
   await clearCache();
+}
+
+/**
+* Everything the syllabus map draws: the student's subjects, the verified
+* syllabus documents behind them (RLS hides drafts), every topic and objective
+* in those documents, and the eligible evidence from `topic_evidence`, which
+* reads through attempt_analytics (hard rule 3).
+*/
+export async function syllabusMapData(studentId) {
+  return readThrough(`syllabus:${studentId}`, async () => {
+    const { data: subjects, error: subjectError } = await sb
+      .from('student_subject')
+      .select('subject,subject_offering_id,display_name_snapshot,external_code_snapshot')
+      .eq('student_id', studentId);
+    if (subjectError) throw subjectError;
+    const offeringIds = [...new Set((subjects ?? []).map((s) => s.subject_offering_id).filter(Boolean))];
+    if (!offeringIds.length) return { subjects: subjects ?? [], links: [], documents: [], topics: [], evidence: [] };
+    const { data: links, error: linkError } = await sb
+      .from('subject_offering_syllabus')
+      .select('subject_offering_id,document_id')
+      .in('subject_offering_id', offeringIds);
+    if (linkError) throw linkError;
+    const documentIds = [...new Set((links ?? []).map((l) => l.document_id))];
+    if (!documentIds.length) return { subjects, links: [], documents: [], topics: [], evidence: [] };
+    const [{ data: documents, error: documentError }, topics, evidence] = await Promise.all([
+      sb.from('syllabus_document')
+        .select('id,provider_key,syllabus_code,title,version_label,valid_from_year,valid_to_year,source_url,fetched_at')
+        .in('id', documentIds),
+      readAllPages(() => sb
+        .from('syllabus_topic')
+        .select('id,document_id,parent_id,code,kind,title,objective_text,notes_text,group_title,qualification_scope,sort_order')
+        .in('document_id', documentIds)
+        .order('sort_order', { ascending: true })),
+      readAllPages(() => sb
+        .from('topic_evidence')
+        .select('attempt_id,paper_id,topic_id,document_id,is_primary,max_marks,marks_awarded')
+        .eq('student_id', studentId)
+        .order('attempt_id', { ascending: true })),
+    ]);
+    if (documentError) throw documentError;
+    return { subjects, links, documents: documents ?? [], topics, evidence };
+  });
 }
 
 /**

@@ -2,9 +2,12 @@ import type { LibrarySearchHit, Paper, ProgressRow } from "./modules";
 
 /** The subject a paper shows: verified identity first, then the reader's suggestion. Shared by Library and the paper screen so they never disagree. */
 export function subjectPresentation(paper: Paper, hit?: LibrarySearchHit, run?: ProgressRow) {
+  // A subject is set when it came from an official assessment, the student
+  // chose it, or triage matched it to exactly one of the student's subjects
+  // (owner decision, 4 Oct 2026).
   if (
     paper.subject_offering_id
-    && paper.subject_identity_confidence === "verified"
+    && ["verified", "student", "auto"].includes(String(paper.subject_identity_confidence ?? ""))
     && paper.subject_display_snapshot
   ) {
     return { state: "verified" as const, label: paper.subject_display_snapshot };
