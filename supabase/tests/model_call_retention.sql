@@ -25,7 +25,8 @@ values
  (-3, null, null, null, null, 'explain', 'm', 'm', 'p.v1', true, 100, 10,
   '{}', null, '[]'::jsonb, '[]'::jsonb, now() - interval '91 days');
 
-select * from private.apply_model_call_retention();
+select public._t('job reports one row stripped and one deleted',
+  (select stripped = 1 and deleted = 1 from private.apply_model_call_retention()));
 
 select public._t('row older than 90 days is deleted',
   not exists (select 1 from public.model_call where id = -3));
@@ -43,7 +44,8 @@ select public._t('anon and authenticated cannot run the job',
   not has_function_privilege('anon', 'private.apply_model_call_retention()', 'execute')
   and not has_function_privilege('authenticated', 'private.apply_model_call_retention()', 'execute'));
 
-select name, passed, detail from public._r order by seq;
-select count(*) filter (where not passed) as failed, count(*) as total from public._r;
+select count(*) as total, count(*) filter (where passed) as passed,
+       count(*) filter (where not passed) as failed from public._r;
+select seq, name, passed, detail from public._r where not passed order by seq;
 
 rollback;
