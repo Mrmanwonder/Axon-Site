@@ -30,6 +30,12 @@ export type SheetConfig = {
   acknowledge?: string;
   onConfirm?: (value: string) => void | Promise<void>;
   onChoice?: (value: string) => void | Promise<void>;
+  /**
+   * Close the route-backed sheet before invoking a choice action. Use this for
+   * actions that can take a long time or navigate elsewhere; otherwise the
+   * sheet's history entry can outlive the destination and trap the overlay.
+   */
+  dismissBeforeChoice?: boolean;
   /** Optional synchronous cancellation hook for callers waiting on a choice. */
   onCancel?: () => void;
 };
@@ -37,6 +43,7 @@ export type SheetConfig = {
 type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => void };
 
 const Ctx = createContext<SheetValue | null>(null);
+const PAPER_TYPE_SHEET = "What kind of paper is this?";
 
 /** For components that can live outside the provider (tests, isolated screens). */
 export function useOptionalSheetControls(): SheetValue | null {
@@ -76,7 +83,14 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     const base = current.pathname + (params.size ? `?${params}` : "") + current.hash;
     const id = crypto.randomUUID();
     const focused = document.activeElement as HTMLElement | null;
-    entries.current.set(id, { cfg, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
+    // Paper type starts the scanner's full send transaction. It predates the
+    // generic dismiss-before-choice option, so preserve the safe behavior here
+    // for both scanner and file-ingestion callers without changing every other
+    // consequence sheet's await-and-show-error semantics.
+    const effective = cfg.dismissBeforeChoice === undefined && cfg.title === PAPER_TYPE_SHEET
+      ? { ...cfg, dismissBeforeChoice: true }
+      : cfg;
+    entries.current.set(id, { cfg: effective, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
     params.set("sheet", id);
     setInputValue(""); setError(null); setCompleted(null);
     navigate({ pathname: current.pathname, search: `?${params}`, hash: current.hash }, { replace: replacing });
@@ -94,6 +108,28 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     if (!entry || !token || flight.current) return;
     flight.current = true; setBusy(true); setError(null);
     choice === undefined ? hapticFirm() : hapticTick();
+
+    if (choice !== undefined && entry.cfg.dismissBeforeChoice) {
+      const action = entry.cfg.onChoice;
+      const base = entry.base;
+      // Remove the exact sheet entry rather than walking browser history. The
+      // choice action is allowed to navigate immediately afterwards, and it
+      // must never be able to carry ?sheet=... onto that destination.
+      entries.current.delete(token);
+      navigate(base, { replace: true });
+      flight.current = false; setBusy(false); setCompleted(null);
+      // Yield one turn so the route-backed Dialog unmounts before upload state
+      // or a destination navigation begins painting.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      try { await action?.(choice); }
+      catch (cause) {
+        // Long-running scanner sends surface their own durable progress/error
+        // state. Other opt-in callers still get a visible diagnostic.
+        console.error("Sheet choice action failed after dismissal", cause);
+      }
+      return;
+    }
+
     try {
       if (choice === undefined) await entry.cfg.onConfirm?.(inputValue);
       else await entry.cfg.onChoice?.(choice);
