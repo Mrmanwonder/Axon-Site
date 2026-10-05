@@ -113,18 +113,21 @@ const wrapped = [
   "",
   "                CLIP                PEG                RIVET",
   "",
+  "          Document a gizmo using a structured",
+  "          English description or a diagram",
   "          Show understanding of how gizmos are joined",
   "",
   "                       Fastener",
   "            Label          Opcode       Operand                      Explanation",
 ].join("\n");
 
-test("plain layout: a capitalised line continues a phrase or an acronym, labels follow a colon, table headings are dropped", () => {
+test("plain layout: a line that does not open with a command word continues the objective, labels follow a colon, table headings are dropped", () => {
   const p = parseCambridgeSyllabus(wrapped);
   assert.deepEqual(p.units[0].topics[0].objectives.map((o) => o.text), [
     "Explain why a gizmo requires a Central Widget Store (CWS)",
     "Describe the roles of the Gizmo Control Unit (GCU) and its clock",
     "Use the following gizmo symbols: NUT BOLT PIN CLIP PEG RIVET",
+    "Document a gizmo using a structured English description or a diagram",
     "Show understanding of how gizmos are joined",
   ]);
 });

@@ -22,6 +22,9 @@ const NOISE_RE = /^(Back to contents page|www\.cambridgeinternational\.org|Cambr
 const SCOPE_RE = /^\s*(AS Level|AS|A Level) (?:subject )?content\s*$/;
 const SECTION_RE = /^\s*\d\s+Subject content\s*$/m;
 
+/** Words a plain-layout objective opens with (Cambridge command words and the verbs the syllabi use). */
+const COMMAND_RE = /^(Show|Describe|Explain|Use|Write|Construct|Define|Understand|Understanding|Perform|Justify|Produce|Select|Choose|Trace|Document|Draw|Implement|Locate|Correct|Analyse|Convert|Normalise|State|Identify|Calculate|Estimate|Recognise|Recall|Outline|Discuss|Evaluate|Apply|Demonstrate|Interpret|Determine|Give|Represent|Design|Test|Carry|Create|Distinguish|Compare|Know|Be|Make|Find|Solve|Sketch|Derive|Deduce|Predict|Suggest|List|Name|Classify|Measure|Plan|Investigate|Assess|Critique|Develop|Program|Read|Annotate|Complete|Decompose|Debug|Refine|Edit|Translate|Encode|Decode|Store|Search|Sort)\b/;
+
 const clean = (s) => s.replace(/\t/g, " ").replace(/\s+/g, " ").trim();
 
 /**
@@ -184,8 +187,15 @@ export function parseCambridgeSyllabus(text) {
       let body = l;
       if (style === "bullets" && bullet) { startsNew = true; body = bullet[1]; }
       else if (style === "numbered" && numbered && Number(numbered[1]) === topic.objectives.length + (current ? 2 : 1)) { startsNew = true; body = numbered[2]; }
-      else if (style === "plain" && l && /^[A-Z]/.test(l) && !/^[A-Z]{2,}\b/.test(l) && !wrapped(l)) { startsNew = true; }
-      else if (style === "plain" && l && /^[A-Z]{2,}\b/.test(l) && (!current || gapBefore > 0)) { startsNew = true; }
+      // Plain-layout objectives open with a command word ("Show", "Describe",
+      // "Write"); a capitalised line that does not is the objective above
+      // wrapping onto a new line ("…using a structured / English description").
+      else if (style === "plain" && l && /^[A-Z]/.test(l) && (!current || (COMMAND_RE.test(l) && !wrapped(l)))) { startsNew = true; }
+      // A short capitalised line set apart by space is a sub-heading ("Sound"):
+      // it names the group of the objectives that follow.
+      else if (style === "plain" && l && current && gapBefore > 0 && /^[A-Z]/.test(l) && !COMMAND_RE.test(l) && l.split(/\s+/).length <= 4 && !/[.,;:)]$/.test(l)) {
+        close(); pendingGroup = clean(l); continue;
+      }
 
       if (startsNew) {
         close();
