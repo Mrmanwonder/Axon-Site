@@ -48,20 +48,29 @@
 
 /* Opening and closing (owner, 4 Oct 2026): the camera screen rises into place
    and settles away. Transform and opacity only. */
-@keyframes sc-in { from { opacity: 0; transform: translateY(24px) scale(.985); } to { opacity: 1; transform: none; } }
-@keyframes sc-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(18px) scale(.985); } }
-.sc { animation: sc-in .26s cubic-bezier(.2, .9, .25, 1) both; }
-.sc.is-leaving { animation: sc-out .18s cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
-@media (prefers-reduced-motion: reduce) { .sc, .sc.is-leaving { animation: none; } }
-[data-motion="reduce"] .sc, [data-motion="reduce"] .sc.is-leaving { animation: none; }
-
-.sc button { font: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
-
+/* Opening and closing (owner, 4 Oct 2026: deliberate, Apple-like, no bounce).
+   Open: the darkroom fades up; the chrome then settles into place from just
+   outside its resting spot (top bar from above, strip and dock from below) on
+   the sheet curve, a beat later, so the frame arrives before the controls.
+   The picture fades in once the camera is live instead of popping.
+   Close: everything fades together, fast, nothing travels.
+   Transform and opacity only; none of it runs under reduced motion. */
+@keyframes sc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sc-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sc-from-above { from { opacity: 0; transform: translate3d(0, -8px, 0); } to { opacity: 1; transform: none; } }
+@keyframes sc-from-below { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+.sc { animation: sc-fade-in 240ms ease-out both; }
+.sc > /* The top bar (owner, 4 Oct 2026: shorter controls with air above and below).
+   What you see is a 38 px material: the close circle and the tools capsule.
+   What you tap is still 44 px: every button keeps a 44 px box and draws its
+   material on a pseudo-element, so the bar looks lighter without shrinking
+   any target. 8 px of bar padding plus the 3 px the 44 px box overhangs the
+   38 px material leaves 11 px of clear space above and below. */
 .sc-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: max(6px, var(--top-inset)) 12px 6px;
+  padding: max(8px, var(--top-inset)) 12px 8px;
 }
 
 .sc-grow { flex: 1; }
@@ -69,7 +78,8 @@
 /* The navigation bar's material (the shutter wears it too): a dark capsule
    with a hairline rim and a lit top edge. Solid rather than glass: it sits on
    the darkroom, not over the picture. */
-.sc-glass {
+.sc-glass,
+.sc-close::before {
   border: .5px solid rgba(255, 255, 255, .16);
   background: rgba(38, 38, 42, .78);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(255, 255, 255, .06);
@@ -78,10 +88,12 @@
 .sc-tools {
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 3px;
-  border-radius: 25px;
+  height: 38px;
+  padding: 0 3px;
+  border-radius: 19px;
 }
+/* Buttons overhang the 38 px capsule by 3 px each way to keep 44 px targets. */
+.sc-tools > * { margin-block: -3px; }
 
 .sc-circ {
   position: relative;
@@ -98,39 +110,60 @@
   cursor: pointer;
 }
 
-/* Close stands alone at the full capsule height, so both ends of the bar align. */
-.sc-circ.sc-glass { width: 50px; height: 50px; border-radius: 25px; }
-
-.sc-circ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+/* Close: a 38 px circle of the bar's material inside a 44 px target. */
+.sc-close::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+}
+.sc-circ svg { position: relative; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.sc-close svg { width: 18px; height: 18px; stroke-width: 2; }
 .sc-circ svg.dots { fill: currentColor; stroke: none; }
 
 .sc-circ .dot {
   position: absolute;
-  top: 9px;
+  top: 11px;
   right: 10px;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 4px;
   background: var(--sc-accent);
   box-shadow: 0 0 0 2px #26262a;
 }
 
-/* Auto is a toggle shaped like a tab: on, it wears the tab bar's pill. */
+/* Auto is a toggle shaped like a tab: on, it wears the tab bar's pill, drawn
+   32 px tall inside the 44 px target so it sits 3 px inside the capsule. */
 .sc-auto {
+  position: relative;
   min-height: 44px;
-  padding: 0 16px;
-  border-radius: 22px;
+  padding: 0 14px;
+  border-radius: 16px;
   border: 0;
   background: transparent;
   color: var(--sc-ink-2);
   font-weight: 600;
-  font-size: 15px;
-  letter-spacing: -.015em;
+  font-size: 14px;
+  letter-spacing: -.01em;
   cursor: pointer;
-  transition: background-color .2s var(--scan-snap), color .2s var(--scan-snap);
+  transition: color 120ms ease;
 }
-
-.sc-auto[data-on="true"] { background: rgba(255, 255, 255, .16); color: var(--sc-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18); }
+.sc-auto::before {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  opacity: 0;
+  transform: scale(.94);
+  transition: opacity 200ms var(--ease-sheet), transform 200ms var(--ease-sheet);
+}
+.sc-auto > span { position: relative; }
+.sc-auto[data-on="true"] { color: var(--sc-ink); }
+.sc-auto[data-on="true"]::before { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .sc-auto::before { transition: none; } }
+[data-motion="reduce"] .sc-auto::before { transition: none; }
 
 /* ── camera ─────────────────────────────────────────────────────────────── */
 
@@ -372,9 +405,11 @@
 .sheet.sc-menu .srow { width: 100%; border: 0; background: transparent; color: var(--label); text-align: left; font: inherit; cursor: pointer; min-height: 60px; padding: 12px 4px; border-radius: 0; }
 .sheet.sc-menu .srow + .srow::before { left: 4px; right: 4px; }
 .sheet.sc-menu .srow .chev { color: var(--label); }
-.sheet.sc-menu .sc-light { cursor: default; }
-.sheet.sc-menu .sc-light .seg button { min-height: 44px; min-width: 52px; font-size: 14px; }
-.sheet.sc-menu .sc-light small { color: var(--label-2); }
+.sheet.sc-menu .sc-torch { cursor: default; }
+.sheet.sc-menu .sc-torch .gseg { flex: none; width: min(198px, 54%); }
+.sheet.sc-menu .sc-torch small { color: var(--label-2); }
+/* Without a Close row the last row needs the sheet's bottom padding only. */
+.sheet.sc-menu .sc-menu-list { margin-bottom: 2px; }
 
 .sheet.sc-review { max-height: 88dvh; overflow-y: auto; }
 .sc-review-grid { display: flex; flex-direction: column; margin-top: 12px; }

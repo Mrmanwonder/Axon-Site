@@ -39,3 +39,9 @@
 @media (max-width: 420px) {
   .po-mark-none { max-width: 7ch; }
 }
+.po section:not(.po-summary) > .po-note { margin: 4px calc(var(--text-gutter) + 2px) 10px; }
+/* A part Axon could not place carries its own way out: the student places it. */
+.po-unplaced + .po-unplaced { border-top: .5px solid var(--hairline); }
+.po-unplaced .po-part::before { display: none; }
+.po-place { display: block; min-height: 44px; margin: -6px 18px 8px; padding: 0 14px; border: 0; border-radius: 12px;
+  background: var(--accent-wash); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }

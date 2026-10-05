@@ -26,6 +26,8 @@ export type SheetConfig = {
   choices?: SheetChoice[];
   input?: { id: string; label: string; placeholder?: string };
   primary?: string;
+  /** An informational sheet: one button with this label that only closes it. */
+  acknowledge?: string;
   onConfirm?: (value: string) => void | Promise<void>;
   onChoice?: (value: string) => void | Promise<void>;
   /** Optional synchronous cancellation hook for callers waiting on a choice. */
@@ -35,6 +37,11 @@ export type SheetConfig = {
 type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => void };
 
 const Ctx = createContext<SheetValue | null>(null);
+
+/** For components that can live outside the provider (tests, isolated screens). */
+export function useOptionalSheetControls(): SheetValue | null {
+  return useContext(Ctx);
+}
 
 export function useSheetControls(): SheetValue {
   const v = useContext(Ctx);
@@ -106,8 +113,12 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {error && <p role="alert">{error}</p>}
       {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)} aria-busy={busy}>{busy ? "Working…" : choice.label}</button>)}</div>}
       <div className="acts">
-        {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
-        <SheetCancel busy={busy} fallback={closeSheet} />
+        {cfg.acknowledge
+          ? <SheetCancel busy={busy} fallback={closeSheet} label={cfg.acknowledge} className="btn primary" />
+          : <>
+            {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
+            <SheetCancel busy={busy} fallback={closeSheet} />
+          </>}
       </div>
     </Dialog>}
   </Ctx.Provider>;
@@ -115,7 +126,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
 }
 
 /** Cancel leaves the way the sheet arrived. */
-function SheetCancel({ busy, fallback }: { busy: boolean; fallback: () => void }) {
+function SheetCancel({ busy, fallback, label = "Cancel", className = "btn plain" }: { busy: boolean; fallback: () => void; label?: string; className?: string }) {
   const dismiss = useDialogDismiss(fallback);
-  return <button type="button" className="btn plain" disabled={busy} onClick={dismiss}>Cancel</button>;
+  return <button type="button" className={className} disabled={busy} onClick={dismiss}>{label}</button>;
 }

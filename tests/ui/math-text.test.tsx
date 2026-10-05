@@ -84,3 +84,19 @@ test("bare matrix environments are typeset without becoming tables", () => {
   expect(container.querySelector(".katex")).not.toBeNull();
   expect(container.querySelector("table")).toBeNull();
 });
+
+test("bare LaTeX inside a printed question is typeset, and the prose around it stays prose", () => {
+  const text = "1. A summary of 60 values of x gives \\sum(x-c) = 642, \\quad \\sum(x-c)^2 = 32\\,460, where c is a constant. [2]";
+  const { container } = render(<MathText text={text} />);
+  // KaTeX keeps the TeX source in a MathML annotation for screen readers; what
+  // a student sees is everything else.
+  const visible = container.cloneNode(true) as HTMLElement;
+  visible.querySelectorAll(".katex-mathml").forEach((n) => n.remove());
+  const plain = visible.textContent ?? "";
+  expect(container.querySelectorAll(".math-rendered").length).toBeGreaterThanOrEqual(1);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(plain).not.toContain("\\sum");
+  expect(plain).not.toContain("\\quad");
+  expect(plain).not.toContain("\\,");
+  expect(plain).toContain("where c is a constant.");
+});

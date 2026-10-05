@@ -179,7 +179,6 @@ export default function QuestionDetail() {
   const span = (sourcePick?.page != null
     ? region?.page_spans?.find(s => s.page === sourcePick.page)
     : region?.page_spans?.[0]);
-  const highlight = span && sourcePick?.page === span.page ? sourcePick : null;
 
   // Three-valued, and read from the region rather than inferred: "unknown" is a
   // real state and must not be shown as a clean read.
@@ -231,6 +230,10 @@ export default function QuestionDetail() {
           <span className={"conf " + attempt.extraction_confidence}>
             {CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
           </span>
+          {/* Moved here from the paper list (owner, 4 Oct 2026): the list
+              shows only what needs the student; the settled state lives on the
+              question, beside the reading's confidence. */}
+          {attempt.student_confirmed_at && <span className="conf confirmed">Confirmed by you</span>}
           {attempt.marks_awarded != null && attempt.max_marks != null && (
             <span className="qmarks">
               {numMark(attempt.marks_awarded)}<small>/{numMark(attempt.max_marks)}</small>
@@ -240,7 +243,15 @@ export default function QuestionDetail() {
 
         {/* Hard rule 4: an unreadable crop says so, never a silent gap. */}
         <div className="qcrop">
-          <Crop paperId={paperId} pageNumber={span?.page} box={span?.box} highlight={highlight} />
+          {/* Every page the answer runs across, in order: an answer continued
+              on a later page used to show only its first half. */}
+          {(region?.page_spans?.length ? region.page_spans : [span]).map((s, i) => (
+            <div key={`${s?.page ?? "none"}-${i}`} className={i ? "qcrop-more" : undefined}>
+              {(region?.page_spans?.length ?? 0) > 1 && s && <div className="qcrop-page">Page {s.page}</div>}
+              <Crop paperId={paperId} pageNumber={s?.page} box={s?.box}
+                    highlight={s && sourcePick?.page === s.page ? sourcePick : null} />
+            </div>
+          ))}
         </div>
 
         {attempt.question_text && (

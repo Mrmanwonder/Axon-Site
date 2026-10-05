@@ -499,6 +499,27 @@ export async function insightEvidence(studentId) {
 }
 
 /**
+ * The student places a part under a question by giving it its real label
+ * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
+ * the authority (Axon.md section 8). Both the committed attempt and the region
+ * it came from are updated, because the server's question count reads the
+ * region and the paper screen reads the attempt: they must never disagree
+ * (AXO-122 counting contract).
+ */
+export async function relabelAttempt(attemptId, label) {
+  requireOnline('Moving this part');
+  const clean = String(label ?? '').trim().slice(0, 24);
+  if (!clean) throw new Error('A question number is needed.');
+  const { error } = await sb.from('student_attempt').update({ question_label: clean }).eq('id', attemptId);
+  if (error) throw error;
+  const { error: regionError } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('committed_attempt_id', attemptId);
+  if (regionError) throw regionError;
+  await clearCache();
+}
+
+/**
 * Marks-lost totals by cause, from the analytics view — never the base table,
 * so unsure and rejected rows are already excluded (hard rule 3).
 */
