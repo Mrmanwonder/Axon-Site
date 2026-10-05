@@ -2,7 +2,7 @@ import { createRef } from "react";
 import type { ScanValue, TrayPage, LiveState } from "../../src/ui/scan/ScanProvider";
 
 export const SCAN_STATES = [
-  "search", "locked", "saved", "dark", "small", "stuck", "flag", "review", "denied", "desk", "desk-pages",
+  "search", "locked", "saved", "reading", "dark", "small", "stuck", "flag", "review", "denied", "desk", "desk-pages",
 ] as const;
 export type ScanFixtureState = typeof SCAN_STATES[number];
 
@@ -92,9 +92,18 @@ export function scanFixture(state: ScanFixtureState, calls: Record<string, unkno
       onKeep: record("onKeep"), onKeepAll: record("onKeepAll"),
       onAdjustSource: () => ({ blob: PHOTO, quad: PAGE_QUAD }),
       onAdjustApply: async (...args: unknown[]) => { record("onAdjustApply")(...args); },
+      onRemove: async (...args: unknown[]) => { record("onRemove")(...args); },
+      onMove: async (...args: unknown[]) => { record("onMove")(...args); },
     },
-    progress: null,
-    drafts: state === "desk-pages" || state === "saved" ? [{ id: "d1", title: "Maths mock", pages: 3 }] : [],
+    progress: state === "reading" ? {
+      heading: "Sending your paper", now: "4 of 12 pages safely sent",
+      pages: Array.from({ length: 12 }, (_, i) => ({ n: i + 1, thumb: paperThumb(i + 1), sent: i < 4 })),
+      steps: [
+        { label: "Sending the pages", state: "now" }, { label: "Finding the questions", state: "wait" },
+        { label: "Reading the answers and the marking", state: "wait" }, { label: "Checking the marks add up", state: "wait" },
+      ],
+    } : null,
+    drafts: state === "desk-pages" || state === "saved" ? [{ id: "d1", title: "Maths mock", pages: 3, updatedAt: Date.now() - 60_000, thumbs: [] }] : [],
     draftsHandlers: { onResume: record("onResume"), onDiscard: record("onDiscard") },
     resumable: null, review: null, reviewHandlers: null, reviewOpen: false, closeReview: noop,
     ensureScan: async () => ({}) as never,

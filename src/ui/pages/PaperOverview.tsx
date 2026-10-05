@@ -14,6 +14,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
+import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
@@ -58,7 +59,7 @@ function PartRow({ paperId, part, label }: { paperId: string; part: PaperPart; l
           {part.page != null && <span className="po-page">Page {part.page}</span>}
         </div>
         <div className={"po-prompt" + (part.prompt ? "" : " none")}>
-          {part.prompt ?? "Question text not read"}
+          {part.prompt ? <MathText text={part.prompt} /> : "Question text not read"}
         </div>
         {/* The list says only what needs the student. "Confirmed by you" and
             "Read clearly" live on the question itself, beside its confidence. */}

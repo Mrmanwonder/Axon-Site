@@ -12,20 +12,20 @@ test("review uses the existing top-level question/part contract", () => {
   const counts = countQuestions(regions);
   const lead = reviewLeadFor([{ tier: "unsure", confirmed: false }], [{}, {}, {}], counts);
   expect(lead).toContain("1 question (3 parts) · 3 pages");
-  expect(lead).toContain("1 uncertain reading to check");
+  expect(lead).toContain("1 to check");
   expect(lead).not.toContain("4 questions");
 });
 
 test("confirmed unreadable source does not become pending attention again", () => {
   const lead = reviewLeadFor([{ tier: "unreadable", confirmed: true }], [{}],
     { questions_total: 1, parts_total: 1, unassigned_parts: 0, raw_region_count: 1 });
-  expect(lead).toContain("all readings confirmed");
+  expect(lead).toContain("all confirmed");
   expect(lead).not.toContain("to check");
 });
 
 test("unassigned and mandatory clean confirmations remain explicit", () => {
   const lead = reviewLeadFor([{ tier: "confident", confirmed: false }], [{}],
     { questions_total: 0, parts_total: 1, unassigned_parts: 1, raw_region_count: 1 });
-  expect(lead).toContain("1 part with an unassigned question");
-  expect(lead).toContain("1 reading to confirm before saving");
+  expect(lead).toContain("1 part not placed");
+  expect(lead).toContain("1 to confirm");
 });

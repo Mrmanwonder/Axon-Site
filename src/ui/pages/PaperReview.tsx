@@ -15,6 +15,7 @@ import type { ResumeReviewResult } from "../scan/ScanProvider";
 import { useApp } from "../data/AppProvider";
 import type { ProgressRow } from "../data/modules";
 import { paths } from "../app/paths";
+import { retryAsMarked } from "../data/modules";
 import PageSkeleton from "../components/PageSkeleton";
 import { usePaperDelete } from "../data/usePaperDelete";
 import { useOptionalSheetControls } from "../components/SheetProvider";
@@ -307,6 +308,7 @@ export default function PaperReview() {
     return (
       <div style={{ padding: "16px var(--text-gutter)" }}>
         <p className="subnote">{result.reason || "We could not finish reading this paper."}</p>
+        {result.reason && /no marking/i.test(result.reason) && draftId && <ReadAsMarked paperId={draftId} />}
         <FailedPaperActions paperId={draftId} />
       </div>
     );
@@ -331,6 +333,32 @@ function FailedPaperActions({ paperId }: { paperId: string | undefined }) {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
       <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex" }}>Back to Library</Link>
       {listed && sheets && <DeletePaperButton paperId={paperId!} />}
+    </div>
+  );
+}
+
+/** The first look can miss light or small marking. The student holding the
+    paper is the authority on whether it is marked (AXO-196). */
+function ReadAsMarked({ paperId }: { paperId: string }) {
+  const { refreshLibrary } = useApp();
+  const [state, setState] = useState<"idle" | "busy" | "started" | "failed">("idle");
+  if (state === "started") {
+    return <p className="subnote" role="status">Reading it again. It will be in your Library when it is done.</p>;
+  }
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button type="button" className="btn primary" disabled={state === "busy"} aria-busy={state === "busy" || undefined}
+              onClick={async () => {
+                setState("busy");
+                try {
+                  const result = await retryAsMarked(paperId);
+                  setState(result.retry === "started" || result.retry === "already_in_progress" ? "started" : "failed");
+                  void refreshLibrary();
+                } catch { setState("failed"); }
+              }}>
+        {state === "busy" ? "Starting…" : "It is marked. Read it again"}
+      </button>
+      {state === "failed" && <p className="subnote" role="alert">That could not start. Try again with a connection.</p>}
     </div>
   );
 }

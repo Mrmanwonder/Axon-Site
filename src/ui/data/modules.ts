@@ -676,6 +676,7 @@ export const explainRetry = scanApiMod.explainRetry as unknown as (
 export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
   paperId: string,
 ) => Promise<RetryPaperResult>;
+export const retryAsMarked = scanApiMod.retryAsMarked as unknown as (paperId: string) => Promise<{ retry: string; run_id?: string; queued?: boolean }>;
 
 /** What `/tutor` returns (axon-intelligence TutorResponseSchema). */
 export type TutorReply = {

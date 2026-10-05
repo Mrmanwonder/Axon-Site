@@ -160,6 +160,11 @@ export async function loadReview(runId) {
     // say "yes, that is what my paper says" is how a required step becomes a
     // step people learn to rush.
     cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.confirmed).map((q) => q.id),
+    // Every reading the student can vouch for in one go once they have looked:
+    // anything with a reading on screen. An unreadable region has nothing to
+    // vouch for and stays out (owner, 5 Oct 2026: nineteen taps on a paper the
+    // reader got right).
+    readableUnconfirmed: questions.filter((q) => q.tier !== 'unreadable' && !q.confirmed).map((q) => q.id),
   };
 }
 
@@ -185,7 +190,7 @@ export function deltaFor(run, paper, regions) {
  */
 function noTotalFor(run) {
   return run.status_reason_code === 'no_printed_total'
-    ? 'No total is printed on this paper, so there is nothing to check these marks against. Axon will add up the marks it reads.'
+    ? 'No total is printed on this paper. Axon adds up the marks it reads.'
     : null;
 }
 

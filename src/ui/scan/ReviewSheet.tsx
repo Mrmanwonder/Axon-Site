@@ -219,9 +219,12 @@ export default function ReviewSheet() {
           </div>
         )}
 
-        {review.noTotal && <div className="subnote" style={{ marginTop: 14 }}>{review.noTotal}</div>}
-
-        {review.lead && <div className="subnote" style={{ marginTop: 14 }}>{review.lead}</div>}
+        {(review.lead || review.noTotal) && (
+          <div className="subnote rv-lead">
+            {review.lead}
+            {review.noTotal && <span className="rv-lead-2">{review.noTotal}</span>}
+          </div>
+        )}
 
         {review.questions.map((q) => (
           <Question key={q.id} q={q}
@@ -229,16 +232,27 @@ export default function ReviewSheet() {
                     onMark={reviewHandlers.onMark} />
         ))}
 
-        {/* Every question still has to be confirmed before the paper can be
-            saved — enforced in SQL, not here — but a required step costing
-            fourteen identical taps is a step people learn to rush past. */}
-        {review.cleanCount > 0 && (
+        {/* Every reading still has to be confirmed before the paper can be
+            saved (enforced in SQL), but nineteen identical taps on a paper the
+            reader got right is how a required step gets rushed. Once the
+            student has scrolled past them all, one tap vouches for every
+            reading they can see. Unreadable ones are not included. */}
+        {(review.readableCount ?? 0) > 0 && reviewHandlers.onConfirmAll ? (
+          <div className="bulkrow">
+            <div className="b">
+              <div className="t1">Checked them all?</div>
+              <div className="t2">Confirm the {review.readableCount} readings above in one go.</div>
+            </div>
+            <PressBox as="button" type="button" className="qact accent"
+                      onClick={() => { hapticFirm(); reviewHandlers.onConfirmAll?.(); }}>
+              All {review.readableCount} are right
+            </PressBox>
+          </div>
+        ) : review.cleanCount > 0 && (
           <div className="bulkrow">
             <div className="b">
               <div className="t1">{review.cleanCount} read cleanly</div>
-              <div className="t2">
-                Their crops are above. Accept them together, or check them one at a time.
-              </div>
+              <div className="t2">Accept them together, or check them one at a time.</div>
             </div>
             <PressBox as="button" type="button" className="qact accent"
                       onClick={() => { hapticFirm(); reviewHandlers.onConfirmClean(); }}>
@@ -248,9 +262,7 @@ export default function ReviewSheet() {
         )}
 
         <div className="subnote">
-          Nothing here is locked because we were confident. If the mark itself
-          looks wrong, that is a conversation with your teacher — we go by what
-          they wrote.
+          If a mark itself looks wrong, talk to your teacher. We go by what they wrote.
         </div>
 
         <div style={{ margin: "20px var(--gutter) 4px" }}>

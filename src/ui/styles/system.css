@@ -1377,3 +1377,12 @@ dialog.is-closing::backdrop { animation: scrim-out var(--sheet-out) ease-in both
 .gseg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .gseg-pill, .gseg button { transition: none; } }
 [data-motion="reduce"] .gseg-pill, [data-motion="reduce"] .gseg button { transition: none; }
+
+/* Library row status (owner, 5 Oct 2026: one line, not chips over paragraphs). */
+.lib-status{margin-top:6px;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--label-2);min-width:0;}
+.lib-status i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--label-3);}
+.lib-status[data-tone="attention"]{color:var(--label);}
+.lib-status[data-tone="attention"] i{background:var(--attention);}
+.lib-status[data-tone="stopped"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--attention);}
+.rv-lead{margin-top:14px;}
+.rv-lead-2{display:block;margin-top:2px;}

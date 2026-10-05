@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./AppDropdown.css";
 
@@ -73,7 +73,10 @@ export default function AppDropdown({
 
   const active = options.find((option) => option.value === value) ?? options[0];
 
-  useEffect(() => {
+  // Layout effect: the menu is placed before the browser paints it. A plain
+  // effect drew it for one frame at the top-left corner of the screen first
+  // (owner's phone, 5 Oct 2026).
+  useLayoutEffect(() => {
     if (!open) return;
 
     const place = () => {

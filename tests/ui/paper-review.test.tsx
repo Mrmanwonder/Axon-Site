@@ -10,6 +10,12 @@ const fixture = vi.hoisted(() => ({
   ensureScan: vi.fn(),
   reviewOpen: false,
   fetchedAt: 1,
+  retryAsMarked: vi.fn(),
+}));
+
+vi.mock("../../src/ui/data/modules", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  retryAsMarked: fixture.retryAsMarked,
 }));
 
 vi.mock("../../src/ui/data/AppProvider", () => ({
@@ -234,4 +240,28 @@ test("truly missing paper still reports a missing review instead of pretending t
   mount();
 
   expect(await screen.findByText(/We couldn.t find this paper to review/)).toBeTruthy();
+});
+
+
+test("a paper refused as unmarked can be read again on the student's word", async () => {
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("rejected", { status_reason: "This paper has your answers but no marking on it yet. Scan it once your teacher has marked it." }),
+  ]]);
+  fixture.retryAsMarked.mockResolvedValue({ retry: "started", queued: true });
+  mount();
+  const button = await screen.findByRole("button", { name: "It is marked. Read it again" });
+  await act(async () => { button.click(); });
+  expect(fixture.retryAsMarked).toHaveBeenCalledWith("paper-1");
+  expect(await screen.findByText(/Reading it again/)).toBeTruthy();
+});
+
+test("other refusals do not offer to read again as marked", async () => {
+  fixture.progress = new Map([[
+    "paper-1",
+    progress("rejected", { status_reason: "This looks like a question paper with no answers written on it." }),
+  ]]);
+  mount();
+  await screen.findByText(/no answers written on it/);
+  expect(screen.queryByRole("button", { name: "It is marked. Read it again" })).toBeNull();
 });

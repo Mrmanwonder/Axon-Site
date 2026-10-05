@@ -65,6 +65,8 @@ export type TrayHandlers = {
   onKeepAll?: () => Promise<void> | void;
   onAdjustSource?: (n: number) => { blob: Blob; quad: { x: number; y: number }[] | null } | null;
   onAdjustApply?: (n: number, quad: { x: number; y: number }[]) => Promise<void>;
+  onRemove?: (n: number) => Promise<void>;
+  onMove?: (n: number, to: number) => Promise<void>;
 };
 
 export type ProgressModel = {
@@ -72,6 +74,8 @@ export type ProgressModel = {
   now: string;
   sub?: string;
   steps: { label: string; state: "done" | "now" | "wait" }[];
+  /** The paper's pages in order, each with its own picture and whether it is safely sent. */
+  pages?: { n: number; thumb: string | null; sent: boolean }[];
   skeleton?: boolean;
   note?: string;
 } | null;
@@ -101,6 +105,7 @@ export type ReviewModel = {
   noTotal?: string | null;
   outstanding: number;
   cleanCount: number;
+  readableCount?: number;
   saving?: boolean;
   saveLabel: string;
   questions: ReviewQuestion[];
@@ -110,6 +115,7 @@ export type ReviewHandlers = {
   onMark: (id: string, value: number) => void;
   onAction: (id: string, action: string) => void;
   onConfirmClean: () => void;
+  onConfirmAll?: () => void;
   onSave: () => void;
 };
 
@@ -147,7 +153,7 @@ type ScanValue = {
   tray: TrayPage[];
   trayHandlers: TrayHandlers;
   progress: ProgressModel;
-  drafts: { id: string; title: string; pages: number }[];
+  drafts: { id: string; title: string; pages: number; updatedAt?: number | null; thumbs?: Blob[] }[];
   draftsHandlers: { onResume?: (id: string) => void; onDiscard?: (id: string) => void };
   resumable: { id: string; pages: number } | null;
   review: ReviewModel;
@@ -296,7 +302,13 @@ export function ScanProvider({ children }: { children: ReactNode }) {
           if (paperId && visibleRef.current && intent === locationRef.current.key) {
             setReviewIdentity(paperId);
             navigate(paths.review(paperId));
+            return;
           }
+          // The student left while it was being read: do not pull them back.
+          // Clear the reading screen so the scanner is ready next time, and say
+          // where the paper is.
+          setProgress(null);
+          if (paperId) toast("Your paper is read and ready to check in Library.");
         },
         renderReview: (m: ReviewModel, h: ReviewHandlers) => {
           setReview(m);

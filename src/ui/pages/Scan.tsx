@@ -23,13 +23,12 @@ import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
 import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
 import GlideSegment from "../components/GlideSegment";
-import { DraftAlert } from "../components/ScanDrafts";
 import CameraLevel from "../scan/CameraLevel";
 import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
 import PageReview from "../scan/PageReview";
+import DraftsSheet from "../scan/DraftsSheet";
 import ImportDesk from "../scan/ImportDesk";
 import { useDeskMode } from "../scan/useDeskMode";
-import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick } from "../lib/haptics";
 import { CheckSymbol, CropFreeSymbol, InfoSymbol } from "../components/MaterialSymbols";
 import Chevron from "../components/Chevron";
@@ -53,13 +52,12 @@ type Strip = {
 export default function Scan() {
   const {
     videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
+    drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
     setAutoCapture, setTorchMode, auto, submitting, pendingCaptureCount,
     pageReviewOpen, openPageReview, closePageReview,
   } = useScan();
   const { ingestFiles, addPaper, addLink } = useIngestion();
   const { student } = useApp();
-  const { openSheet } = useSheetControls();
   const navigate = useNavigate();
   const desk = useDeskMode();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -119,24 +117,8 @@ export default function Scan() {
 
   const flaggedPages = tray.filter(needsLook);
 
-  const openDrafts = () => {
-    hapticTick();
-    openSheet({
-      title: "Saved drafts",
-      body: drafts.length
-        ? "These unfinished scans are stored on this device until you resume and send them."
-        : "No saved scans yet. Pages you capture will be stored on this device until you send them.",
-      choices: drafts.length
-        ? drafts.map((draft) => ({
-            label: `${draft.title} · ${draft.pages} page${draft.pages === 1 ? "" : "s"}`,
-            value: draft.id,
-          }))
-        : undefined,
-      // Nothing to choose: one way out, not Done beside Cancel.
-      acknowledge: drafts.length ? undefined : "OK",
-      onChoice: (id) => draftsHandlers.onResume?.(id),
-    });
-  };
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const openDrafts = () => { hapticTick(); setDraftsOpen(true); };
 
   const review = pageReviewOpen && <PageReview onClose={closePageReview} />;
 
@@ -244,9 +226,6 @@ export default function Scan() {
               <button type="button" className="sc-btn ghost" onClick={addPaper}>Import photos</button>
             </div>
           )}
-          {resumable && draftsHandlers.onResume && tray.length === 0 && (
-            <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
-          )}
         </div>
 
         <div className="sc-strip" data-tone={strip.tone} role="status" aria-live="polite">
@@ -317,6 +296,12 @@ export default function Scan() {
 </Dialog>
       )}
 
+      {draftsOpen && (
+        <DraftsSheet drafts={drafts} onClose={() => setDraftsOpen(false)}
+          onOpen={(id) => draftsHandlers.onResume?.(id)}
+          onDelete={(id) => draftsHandlers.onDiscard?.(id)} />
+      )}
+
       {review}
       {progress && <ProgressPanel progress={progress} />}
 
@@ -334,32 +319,56 @@ function MoreMenu({ then, children }: { then: (fn: () => void) => void; children
   return <>{children(go)}</>;
 }
 
+/* Reading a paper (owner, 5 Oct 2026: "I have no information, no way to
+   leave this page"). One heading, one live line, the four steps, and a way out
+   that is always there: reading carries on without this screen, and the paper
+   waits in the Library. No skeleton: nothing here is loading into place. */
 function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {
+  const navigate = useNavigate();
+  const working = progress.steps.some((st) => st.state === "now");
   return (
-    <div className="scanbelow">
-      <div className="sectitle tight">{progress.heading ?? "Reading this paper"}</div>
-      <div className="card proc">
-        <div className="hd">{progress.now}</div>
-        {progress.sub && <div className="sub">{progress.sub}</div>}
-        {progress.steps.map((st, i) => (
-          <div key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
-            <span className={"st " + st.state}>
-              {st.state === "done" && (
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-              )}
-            </span>
-            <span className="lb">{st.label}</span>
-          </div>
-        ))}
-        {progress.skeleton && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="skel" style={{ width: "82%" }} />
-            <div className="skel" style={{ width: "64%" }} />
-            <div className="skel" style={{ width: "73%" }} />
-          </div>
-        )}
+    <div className="scanbelow sc-reading" role="region" aria-label={progress.heading ?? "Reading this paper"}>
+      <div className="sc-reading-top">
+        <PressBox as="button" type="button" className="sc-circ sc-close" aria-label="Go to Library"
+                  onClick={() => navigate(paths.library)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
+        </PressBox>
       </div>
-      {progress.note && <div className="subnote">{progress.note}</div>}
+      <h1 className="sc-reading-h">{progress.heading ?? "Reading your paper"}</h1>
+      <p className="sc-reading-now" aria-live="polite">{progress.now}</p>
+      {progress.sub && <p className="sc-reading-sub">{progress.sub}</p>}
+      {(progress.pages?.length ?? 0) > 0 && (
+        <ol className="sc-reading-pages" aria-label="Pages">
+          {progress.pages!.map((p) => (
+            <li key={p.n} data-sent={p.sent ? "true" : undefined}
+                aria-label={`Page ${p.n}, ${p.sent ? "sent" : "sending"}`}>
+              <span className="th">{p.thumb ? <img src={p.thumb} alt="" /> : <span className="blank" />}</span>
+              <span className="n">{p.sent ? (
+                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
+              ) : p.n}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {progress.steps.length > 0 && (
+        <ol className="sc-reading-steps">
+          {progress.steps.map((st, i) => (
+            <li key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
+              <span className={"st " + st.state}>
+                {st.state === "done" && (
+                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
+                )}
+              </span>
+              <span className="lb">{st.label}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {progress.note && <p className="sc-reading-sub">{progress.note}</p>}
+      <div className="sc-reading-acts">
+        <button type="button" className="btn ghost" onClick={() => navigate(paths.library)}>Go to Library</button>
+        {working && <p className="sc-reading-sub">Reading carries on while you are away. The paper waits in your Library.</p>}
+      </div>
     </div>
   );
 }
