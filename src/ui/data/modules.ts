@@ -547,6 +547,11 @@ export type PaperDetail = {
   tier: string | null;
   date_taken: string;
   subject: string | null;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  /** assessment_identity (official, fixed) · student (they chose it) · triage (assigned automatically) */
+  subject_identity_source?: "assessment_identity" | "student" | "triage" | null;
   reported_total: number | null;
   stated_maximum: number | null;
   total_awarded: number | null;
@@ -579,7 +584,6 @@ export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
 export const relabelAttempt = papersMod.relabelAttempt as unknown as (attemptId: string, label: string) => Promise<void>;
-export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subject: string) => Promise<void>;
 
 
 export type AcademicShareState = {
@@ -718,6 +722,23 @@ export const needsCheck = papersMod.needsCheck as unknown as (
 export const unreadablePages = papersMod.unreadablePages as unknown as (
   studentId: string,
 ) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
+
+/** Every eligible attempt and loss event Insights reasons over, from the
+    analytics views only (hard rule 3). */
+export const insightEvidence = papersMod.insightEvidence as unknown as (
+  studentId: string,
+) => Promise<Cached<{
+  attempts: import("./insights").InsightAttempt[];
+  losses: import("./insights").InsightLoss[];
+}>>;
+
+/** The student sets or clears a paper's subject (one of their own subjects). */
+export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subjectOfferingId: string | null) => Promise<void>;
+
+/** Syllabus documents, topics and eligible topic evidence for the syllabus map. */
+export const syllabusMapData = papersMod.syllabusMapData as unknown as (
+  studentId: string,
+) => Promise<Cached<import("./syllabusMap").SyllabusMapInput>>;
 
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (

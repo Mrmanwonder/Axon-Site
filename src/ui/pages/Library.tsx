@@ -282,13 +282,16 @@ export default function Library() {
   // The student's own subjects, always (owner, 5 Oct 2026). A paper whose
   // subject is not known yet is listed under "No subject yet" only while one
   // exists; the paper itself offers to set it.
-  const studentSubjects = (student?.subjects ?? []).filter(Boolean);
+  const selections = student?.subject_selections ?? [];
+  const studentSubjects = selections.length
+    ? selections.map((sel) => ({ id: sel.offering_id as string | null, name: sel.subject }))
+    : (student?.subjects ?? []).filter(Boolean).map((name) => ({ id: null as string | null, name }));
   const hasUnknown = papers.some((paper) => subjectPresentation(paper, undefined, progressResource.data?.get(paper.id)).state === "unknown");
   const subjectOptions: AppDropdownOption[] = [
     { value: "all", label: "All subjects" },
-    ...studentSubjects.map((name) => ({ value: `name:${name}`, label: name })),
+    ...studentSubjects.map((sub) => ({ value: sub.id ? `subject:${sub.id}` : `name:${sub.name}`, label: sub.name })),
     ...verifiedSubjects
-      .filter(([, label]) => !studentSubjects.some((name) => sameSubject(name, label)))
+      .filter(([id, label]) => !studentSubjects.some((sub) => sub.id === id || sameSubject(sub.name, label)))
       .map(([id, label]) => ({ value: `subject:${id}`, label })),
     ...(hasUnknown || subject === "unknown" ? [{ value: "unknown", label: "No subject yet" }] : []),
   ];

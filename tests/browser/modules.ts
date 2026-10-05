@@ -78,7 +78,82 @@ export const signOut = async () => {
   await LocalDataService.clearAll();
   sessionStorage.setItem("axon.test.household.signed-out", "1");
 };
-export async function listPapers() { await wait(); return { data: [], stale: false }; }
+// `insights`: six marked Physics and Mathematics papers with repeating causes, for judging the Insights screen.
+const INSIGHT_PAPERS = [
+  ["ip1", "Physics", "2026-05-12", 40, 27], ["ip2", "Mathematics", "2026-06-02", 50, 38], ["ip3", "Physics", "2026-07-08", 40, 29],
+  ["ip4", "Mathematics", "2026-08-11", 50, 41], ["ip5", "Physics", "2026-09-03", 40, 33], ["ip6", "Physics", "2026-09-24", 40, 34],
+].map(([id, subject, date, available, awarded]) => ({
+  id, subject, subject_display_snapshot: subject, subject_offering_id: subject === "Physics" ? "off-phys" : "off-math",
+  subject_identity_source: "triage", subject_identity_confidence: "auto",
+  type: "unit_test", tier: "tier_1", date_taken: date, created_at: date,
+  total_available: available, total_awarded: awarded, total_partial: false, student_attempt: [{ count: 6 }],
+}));
+function insightFixture() {
+  const attempts: Record<string, unknown>[] = []; const losses: Record<string, unknown>[] = [];
+  const add = (paper: string, n: number, label: string, max: number, got: number, loss?: Record<string, unknown>, blank = false) => {
+    const id = `${paper}-a${n}`;
+    attempts.push({ id, paper_id: paper, question_label: label, max_marks: max, marks_awarded: got, question_order: n, answer_blank: blank });
+    if (loss) losses.push({ id: `${id}-l`, attempt_id: id, marks_lost: max - got, created_at: "2026-09-25T00:00:00Z", concepts: null, loss_reasons: null, depends_on_parts: null, command_word: null, do_this_next: null, ...loss });
+  };
+  for (const p of INSIGHT_PAPERS) {
+    const physics = p.subject === "Physics";
+    add(p.id, 0, "1(a)", 2, 2);
+    add(p.id, 1, "1(b)", 3, 1, physics
+      ? { cause: "keyword_miss", command_word: "Explain", concepts: ["Newton's second law"], do_this_next: "Name the law in your first sentence, then apply it to this situation.",
+          loss_reasons: [{ cause: "keyword_miss", marks: 2, error_type: "presentation" }] }
+      : { cause: "procedural_slip", command_word: "Calculate", concepts: ["Expected value"], do_this_next: "Round only the final answer, to 3 significant figures.",
+          loss_reasons: [{ cause: "procedural_slip", marks: 2, error_type: "final_answer" }] });
+    add(p.id, 2, "2", 4, 4);
+    add(p.id, 3, "3(a)", 6, 3, { cause: "incomplete", command_word: "Describe", concepts: physics ? ["Energy transfers"] : ["Variance"], do_this_next: "Make one point per mark: six marks means six separate, linked statements.", depends_on_parts: physics ? [] : ["2"] });
+    add(p.id, 4, "3(b)", 8, 6, { cause: "conceptual_gap", command_word: "Explain", concepts: physics ? ["Momentum"] : ["Normal distribution"] });
+    const blank = p.id === "ip3" || p.id === "ip5";
+    add(p.id, 5, "4", 3, blank ? 0 : 3, blank ? { cause: "timed_out" } : undefined, blank);
+  }
+  return { attempts, losses };
+}
+// Syllabus map fixture: an invented two-unit syllabus (no board text), Physics only.
+function syllabusFixture() {
+  const doc = { id: "doc-phys", provider_key: "cambridge", syllabus_code: "0000", title: "Example Physics", version_label: "2026",
+    valid_from_year: 2026, valid_to_year: 2026, source_url: "https://example.test/syllabus.pdf", fetched_at: "2026-10-04T00:00:00Z" };
+  const rows: Record<string, unknown>[] = [];
+  let order = 0;
+  const unit = (code: string, title: string, topics: [string, string, string[]][]) => {
+    rows.push({ id: `u${code}`, document_id: doc.id, parent_id: null, code, kind: "unit", title, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+    for (const [tc, tt, objectives] of topics) {
+      rows.push({ id: `t${tc}`, document_id: doc.id, parent_id: `u${code}`, code: tc, kind: "topic", title: tt, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+      objectives.forEach((o, i) => rows.push({ id: `o${tc}.${i + 1}`, document_id: doc.id, parent_id: `t${tc}`, code: `${tc}.${i + 1}`, kind: "objective", title: o, objective_text: o, notes_text: i === 0 ? "Example note for this objective." : null, group_title: null, qualification_scope: "AS", sort_order: order++ }));
+    }
+  };
+  unit("1", "Forces and motion", [
+    ["1.1", "Newton's laws", ["state the first example law", "apply the second example law to a moving body"]],
+    ["1.2", "Momentum", ["define example momentum", "use conservation in a collision"]],
+    ["1.3", "Energy transfers", ["describe example energy stores", "calculate efficiency"]],
+    ["1.4", "Circular motion", ["describe example circular motion"]],
+  ]);
+  unit("2", "Waves", [
+    ["2.1", "Wave properties", ["describe example waves"]],
+    ["2.2", "Superposition", ["explain example interference"]],
+  ]);
+  const evidence: Record<string, unknown>[] = [];
+  const { attempts } = insightFixture();
+  const topicFor: Record<string, string> = { "1(b)": "o1.1.2", "3(a)": "o1.3.1", "3(b)": "o1.2.1", "2": "o1.2.2" };
+  for (const a of attempts as { id: string; paper_id: string; question_label: string; max_marks: number; marks_awarded: number }[]) {
+    if (!a.paper_id || !["ip1", "ip3", "ip5", "ip6"].includes(a.paper_id) || !topicFor[a.question_label]) continue;
+    evidence.push({ attempt_id: a.id, paper_id: a.paper_id, topic_id: topicFor[a.question_label], document_id: doc.id, is_primary: true, max_marks: a.max_marks, marks_awarded: a.marks_awarded });
+  }
+  return {
+    subjects: [
+      { subject: "Physics", subject_offering_id: "off-phys", display_name_snapshot: "Physics", external_code_snapshot: "0000" },
+      { subject: "Mathematics", subject_offering_id: "off-math", display_name_snapshot: "Mathematics", external_code_snapshot: "0001" },
+    ],
+    links: [{ subject_offering_id: "off-phys", document_id: doc.id }],
+    documents: [doc], topics: rows, evidence,
+  };
+}
+export const syllabusMapData = async () => ({ data: scenario === "insights" ? syllabusFixture() : { subjects: [], links: [], documents: [], topics: [], evidence: [] }, stale: false });
+export const setPaperSubject = async () => {};
+export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : [], stale: false }; }
+export const insightEvidence = async () => ({ data: scenario === "insights" ? insightFixture() : { attempts: [], losses: [] }, stale: scenario === "cached" });
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
 // `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
@@ -147,7 +222,6 @@ export const readPaper = async () => ({
 });
 export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
 export const relabelAttempt = async () => {};
-export const setPaperSubject = async () => {};
 export const activeAcademicShare = async () => null;
 export const academicShareUrl = (token: string) => `https://example.invalid/share#token=${token}`;
 export const createAcademicShare = async () => ({ share_id: "s", resource_type: "paper", expires_at: "2099-01-01", token: "t" });
