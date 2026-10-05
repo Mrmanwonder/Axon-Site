@@ -214,7 +214,10 @@ export default function Privacy() {
           through the Google AI Studio (Gemini API) endpoint. Axon's own model configuration marks every
           model route as not permitted to train on Axon data. Axon uses the paid tier of the Gemini API.
           Under Google's terms for that tier, requests and responses are not used to train Google's
-          models and are not retained by Google. Model choice, routing and provider terms can change, so Axon does
+          models. Google does, however, keep prompts, context and outputs for up to 55 days for abuse
+          monitoring, so Axon cannot say that Google retains nothing. Those requests can contain
+          pages of a student's paper and the text read from them. Axon does not control that
+          retention and cannot delete the copy Google holds before the period ends. Model choice, routing and provider terms can change, so Axon does
           not promise that a particular model will always be used. Any deliberate change that would
           materially permit an AI provider to retain or train on identifiable student material must
           receive privacy review and any notice or consent required by law before the affected
