@@ -220,12 +220,14 @@ describe("question size", () => {
 });
 
 describe("command words, stages and topics", () => {
-  test("command words are normalised and report coverage", () => {
-    const s = series(4);
-    s.losses[0].command_word = "explain"; s.losses[1].command_word = "Explain "; s.losses[2].command_word = "STATE";
+  test("command words are normalised, need three questions, and report coverage", () => {
+    const s = series(5);
+    s.losses[0].command_word = "explain"; s.losses[1].command_word = "Explain "; s.losses[2].command_word = "EXPLAIN";
+    s.losses[3].command_word = "State"; s.losses[4].command_word = "state";
     const m = buildInsights({ ...s, now: NOW });
-    expect(m.commandWords.rows.map((r) => [r.word, r.questions, r.marks])).toEqual([["Explain", 2, 4], ["State", 1, 2]]);
-    expect(m.commandWords.coverage).toEqual({ tagged: 3, total: 4 });
+    // "State" covers two questions, under the owner's minimum of three, so it is not named.
+    expect(m.commandWords.rows.map((r) => [r.word, r.questions, r.marks])).toEqual([["Explain", 3, 6]]);
+    expect(m.commandWords.coverage).toEqual({ tagged: 5, total: 5 });
     expect(normaliseCommandWord("x".repeat(60))).toBeNull();
   });
 

@@ -1,13 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
-/* Sheets rise from the bottom edge and fall back to it (transform and opacity
-   only, 280 ms in, 200 ms out; nothing under reduced motion). The browser still
+/* Sheets rise from the bottom edge and fall back to it, on the iOS sheet curve:
+   no overshoot, a long soft landing (transform and opacity only, 440 ms in,
+   300 ms out; nothing under reduced motion). The timings live in system.css
+   (`--sheet-in`, `--sheet-out`); EXIT_MS must match `--sheet-out`. The browser still
    owns modal focus, background inertness and the Escape event. Anything inside
    the sheet that closes it should call `useDialogDismiss()` so it leaves the
    same way it arrived instead of vanishing. */
 
-const EXIT_MS = 200;
+export const SHEET_EXIT_MS = 300;
+const EXIT_MS = SHEET_EXIT_MS;
 const reducedMotion = () => document.documentElement.dataset.motion === "reduce"
   || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
@@ -44,7 +47,13 @@ export default function Dialog({ title, description, busy = false, onClose, chil
     const trigger = restoreFocus ?? document.activeElement as HTMLElement | null;
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
-    (dialog.querySelector("input, button, [tabindex='0']") as HTMLElement | null)?.focus();
+    // Focus a text field if the sheet asks for one, otherwise the sheet itself:
+    // focusing the first button made Safari draw a keyboard focus ring on it.
+    // preventScroll matters: the sheet starts below the fold while it rises,
+    // and Safari scrolled the dialog to reveal the focused control, which left
+    // the sheet stranded mid-screen once it landed.
+    const field = dialog.querySelector<HTMLElement>("input:not([type=hidden]), textarea");
+    (field ?? dialog.querySelector<HTMLElement>(".sheet"))?.focus({ preventScroll: true });
     return () => {
       if (typeof dialog.close === "function") dialog.close();
       else dialog.removeAttribute("open");
@@ -63,9 +72,9 @@ export default function Dialog({ title, description, busy = false, onClose, chil
     }}
     aria-busy={busy || undefined} onCancel={event => { event.preventDefault(); if (!busy) dismiss(); }}
     onClick={event => { if (event.target === event.currentTarget && !busy) dismiss(); }}
-    style={{ padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", background: "transparent", border: 0, color: "inherit" }}>
+    style={{ padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", overflow: "hidden", background: "transparent", border: 0, color: "inherit" }}>
     <DismissCtx.Provider value={dismiss}>
-      <div className={`sheet ${className}`.trim()} style={{ transform: "none" }}>
+      <div className={`sheet ${className}`.trim()} style={{ transform: "none" }} tabIndex={-1}>
         <h4 id={titleId}>{title}</h4>
         {description && <div className="body" id={descriptionId}>{description}</div>}
         {children}

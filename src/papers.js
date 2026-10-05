@@ -512,6 +512,27 @@ export async function setPaperSubject(paperId, subjectOfferingId) {
 }
 
 /**
+ * The student places a part under a question by giving it its real label
+ * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
+ * the authority (Axon.md section 8). Both the committed attempt and the region
+ * it came from are updated, because the server's question count reads the
+ * region and the paper screen reads the attempt: they must never disagree
+ * (AXO-122 counting contract).
+ */
+export async function relabelAttempt(attemptId, label) {
+  requireOnline('Moving this part');
+  const clean = String(label ?? '').trim().slice(0, 24);
+  if (!clean) throw new Error('A question number is needed.');
+  const { error } = await sb.from('student_attempt').update({ question_label: clean }).eq('id', attemptId);
+  if (error) throw error;
+  const { error: regionError } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('committed_attempt_id', attemptId);
+  if (regionError) throw regionError;
+  await clearCache();
+}
+
+/**
 * Everything the syllabus map draws: the student's subjects, the verified
 * syllabus documents behind them (RLS hides drafts), every topic and objective
 * in those documents, and the eligible evidence from `topic_evidence`, which

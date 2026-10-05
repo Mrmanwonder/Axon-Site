@@ -50,6 +50,8 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
 
 /** Minimum papers before anything is called a pattern (Axon.md §8). */
 export const PATTERN_PAPERS = 4;
+/** A command word is named only once it covers this many questions that lost marks (owner, 5 Oct 2026). */
+export const MIN_COMMAND_WORD_QUESTIONS = 3;
 /** A recurring claim must appear in at least this many different papers. */
 export const RECUR_PAPERS = 2;
 /** The window "recent" means, in papers. */
@@ -479,7 +481,7 @@ export function buildInsights(input: {
   }
   const commandWords = {
     rows: [...cwRefs].map(([word, refs]) => ({ word, ...tallyFrom(refs) }))
-      .filter((r) => r.marks > 0)
+      .filter((r) => r.marks > 0 && r.questions >= MIN_COMMAND_WORD_QUESTIONS)
       .sort((a, b) => b.marks - a.marks || b.questions - a.questions || a.word.localeCompare(b.word)),
     coverage: { tagged: cwTagged, total: losses.length },
   };

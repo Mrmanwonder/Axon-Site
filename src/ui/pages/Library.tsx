@@ -12,8 +12,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent, retryFailedPaper, searchLibrary } from "../data/modules";
 import { isPartialTotal } from "../data/paperTotals";
-import type { LibrarySearchHit, Paper, ProgressRow } from "../data/modules";
+import type { LibrarySearchHit, Paper } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
+import { subjectPresentation } from "../data/subjectPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
@@ -68,41 +69,6 @@ function dateBounds(filter: DateFilter) {
     dateFrom: from.toISOString().slice(0, 10),
     dateTo: now.toISOString().slice(0, 10),
   };
-}
-
-function subjectPresentation(paper: Paper, hit?: LibrarySearchHit, run?: ProgressRow) {
-  // A subject is set when it came from an official assessment, the student
-  // chose it, or triage matched it to exactly one of the student's subjects
-  // (owner decision, 4 Oct 2026). All three can be filtered on.
-  if (
-    paper.subject_offering_id
-    && ["verified", "student", "auto"].includes(String(paper.subject_identity_confidence ?? ""))
-    && paper.subject_display_snapshot
-  ) {
-    return { state: "verified" as const, label: paper.subject_display_snapshot };
-  }
-
-  // A search hit is fresh server-authored subject state. Respect an explicit
-  // unknown rather than reviving an older progress suggestion underneath it.
-  if (hit?.subject_state === "unknown") {
-    return { state: "unknown" as const, label: "Subject unknown" };
-  }
-
-  const hitSuggestion = hit?.subject_state === "suggested"
-    && typeof hit.suggested_subject === "string"
-    && hit.suggested_subject.trim()
-    ? hit.suggested_subject.trim()
-    : null;
-  const progressSuggestion = typeof run?.suggested_subject === "string" && run.suggested_subject.trim()
-    ? run.suggested_subject.trim()
-    : null;
-  const legacySuggestion = typeof paper.subject === "string" && paper.subject.trim()
-    ? paper.subject.trim()
-    : null;
-  const suggested = hitSuggestion ?? progressSuggestion ?? legacySuggestion;
-
-  if (suggested) return { state: "suggested" as const, label: suggested };
-  return { state: "unknown" as const, label: "Subject unknown" };
 }
 
 function numeric(value: unknown): number | null {
