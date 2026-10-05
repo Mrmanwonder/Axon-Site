@@ -24,7 +24,6 @@ Usage: extract.py <file.pdf>  (text to stdout)
 import re
 import sys
 
-import pdfplumber
 
 # --- Glyph map ---------------------------------------------------------------
 # Keyed by the font family (subset prefix removed) and the character pdfplumber
@@ -566,6 +565,8 @@ def page_text(page):
 
 
 def main():
+    import pdfplumber  # imported here so the pure functions test without it
+
     with pdfplumber.open(sys.argv[1]) as pdf:
         sys.stdout.write("\f".join(page_text(p) for p in pdf.pages))
 
