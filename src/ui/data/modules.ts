@@ -718,6 +718,15 @@ export const unreadablePages = papersMod.unreadablePages as unknown as (
   studentId: string,
 ) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
 
+/** Every eligible attempt and loss event Insights reasons over, from the
+    analytics views only (hard rule 3). */
+export const insightEvidence = papersMod.insightEvidence as unknown as (
+  studentId: string,
+) => Promise<Cached<{
+  attempts: import("./insights").InsightAttempt[];
+  losses: import("./insights").InsightLoss[];
+}>>;
+
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (
   studentId: string,

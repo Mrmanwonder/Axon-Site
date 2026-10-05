@@ -461,6 +461,44 @@ export async function deleteQuestion(attemptId) {
 }
 
 /**
+* Every row Insights reasons over, from the two analytics views only (hard rule
+* 3). Unsure readings and student-rejected causes are excluded by the views.
+*
+* Paged: PostgREST caps a response, and a capped read would make a long history
+* look shorter than it is, which is a quiet wrong answer rather than an error.
+* Answers and question text are not selected; `answer_blank` carries the one
+* fact the pacing read needs.
+*/
+const INSIGHT_PAGE = 1000;
+async function readAllPages(build) {
+  const rows = [];
+  for (let from = 0; ; from += INSIGHT_PAGE) {
+    const { data, error } = await build().range(from, from + INSIGHT_PAGE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < INSIGHT_PAGE) return rows;
+  }
+}
+
+export async function insightEvidence(studentId) {
+  return readThrough(`insights:${studentId}`, async () => {
+    const [attempts, losses] = await Promise.all([
+      readAllPages(() => sb
+        .from('attempt_analytics')
+        .select('id,paper_id,question_label,max_marks,marks_awarded,question_order,answer_blank')
+        .eq('student_id', studentId)
+        .order('id', { ascending: true })),
+      readAllPages(() => sb
+        .from('mark_loss_analytics')
+        .select('id,attempt_id,cause,marks_lost,do_this_next,command_word,concepts,loss_reasons,depends_on_parts,created_at')
+        .eq('student_id', studentId)
+        .order('id', { ascending: true })),
+    ]);
+    return { attempts, losses };
+  });
+}
+
+/**
  * The student places a part under a question by giving it its real label
  * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
  * the authority (Axon.md section 8). Both the committed attempt and the region
