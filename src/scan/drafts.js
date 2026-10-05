@@ -67,6 +67,17 @@ export async function readDraft(id) {
   return draft ? stamp(decodeDraft(draft, result.assets, { strict: true })) : null;
 }
 
+async function storedDrafts(studentId) {
+  const db = await open();
+  const all = await tx(db, STORE, 'readonly', transaction => transaction.objectStore(STORE).getAll());
+  const expired = (all ?? []).filter(draft => Date.now() - draft.updated_at > DRAFT_RETENTION_MS);
+  for (const draft of expired) await deleteDraft(draft.id);
+  return (all ?? [])
+    .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
+    .filter(draft => draft.student_id === studentId && draft.pages.length)
+    .sort((a, b) => b.updated_at - a.updated_at);
+}
+
 async function loadDraftAssets(drafts) {
   const ids = drafts.map(draft => draft.id);
   if (!ids.length) return [];
@@ -79,22 +90,38 @@ async function loadDraftAssets(drafts) {
   });
 }
 
+/**
+ * Full local drafts for resume/recovery code. Every retained asset is hydrated:
+ * this is deliberately heavier because original-backup recovery must be able
+ * to distinguish "original pending" from "this capture never had an original".
+ */
 export async function listDrafts(studentId) {
-  const db = await open();
-  const all = await tx(db, STORE, 'readonly', transaction => transaction.objectStore(STORE).getAll());
-  const expired = (all ?? []).filter(draft => Date.now() - draft.updated_at > DRAFT_RETENTION_MS);
-  for (const draft of expired) await deleteDraft(draft.id);
-  const kept = (all ?? [])
-    .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
-    .filter(draft => draft.student_id === studentId && draft.pages.length)
-    .sort((a, b) => b.updated_at - a.updated_at);
-  // listDrafts is also the source for startup/online original-backup recovery,
-  // not merely UI cards. It therefore must faithfully hydrate every retained
-  // asset. Returning preview-only rows can turn an unhydrated original marker
-  // into `null`, making backupComplete() incorrectly conclude that no original
-  // ever existed and silently skip the deferred backup.
+  const kept = await storedDrafts(studentId);
   const assets = await loadDraftAssets(kept);
   return kept.map(draft => stamp(decodeDraft(structuredClone(draft), assets, { strict: true })));
+}
+
+async function loadPreviewAssets(drafts) {
+  const keys = new Set();
+  for (const draft of drafts) for (const page of (draft.pages ?? []).slice(0, 3)) {
+    const marker = page.proxy?.axon_asset === 1 ? page.proxy : page.blob?.axon_asset === 1 ? page.blob : null;
+    if (marker?.key) keys.add(marker.key);
+  }
+  if (!keys.size) return [];
+  const db = await open();
+  const requests = [];
+  return tx(db, ASSET_STORE, 'readonly', transaction => {
+    const store = transaction.objectStore(ASSET_STORE);
+    for (const key of keys) requests.push(store.get(key));
+    return () => requests.map(request => request.result).filter(Boolean);
+  });
+}
+
+/** Lightweight scanner/UI listing: metadata plus at most three preview images. */
+export async function listDraftSummaries(studentId) {
+  const kept = await storedDrafts(studentId);
+  const previews = await loadPreviewAssets(kept);
+  return kept.map(draft => stamp(decodeDraft(structuredClone(draft), previews)));
 }
 
 export { saveDraft, mutateDraft, addPage, removePage, movePage, replacePage, markUploaded, pendingPages,
