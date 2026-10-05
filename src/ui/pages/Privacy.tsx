@@ -213,8 +213,10 @@ export default function Privacy() {
           by external AI infrastructure. Axon currently sends model requests to Google's Gemini models
           through the Google AI Studio (Gemini API) endpoint. Axon's own model configuration marks every
           model route as not permitted to train on Axon data. Axon uses the paid tier of the Gemini API.
-          Under Google's terms for that tier, requests and responses are not used to train Google's
-          models and are not retained by Google. Model choice, routing and provider terms can change, so Axon does
+          Under Google's terms for that tier, Google does not use requests and responses to improve its
+          products or train its models, and it logs them for a limited period solely to detect and
+          prevent violations of its Prohibited Use Policy and to meet legal or regulatory
+          disclosure requirements. Model choice, routing and provider terms can change, so Axon does
           not promise that a particular model will always be used. Any deliberate change that would
           materially permit an AI provider to retain or train on identifiable student material must
           receive privacy review and any notice or consent required by law before the affected
