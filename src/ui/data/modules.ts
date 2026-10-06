@@ -22,6 +22,7 @@
 import * as supabaseMod from "../../supabase.js";
 import * as prefsMod from "../../prefs.js";
 import * as consentMod from "../../consent.js";
+import * as noticeMod from "../../notice.js";
 import * as papersMod from "../../papers.js";
 import * as sharesMod from "../../shares.js";
 import * as accountMod from "../../account.js";
@@ -280,6 +281,7 @@ export const recordConsent = consentMod.recordConsent as (a: {
   studentId?: string | null;
   decisions: Record<string, boolean>;
   method?: "in_app_itemised" | "in_app_withdrawal";
+  noticeLanguage?: NoticeLanguage;
 }) => Promise<unknown>;
 export const withdrawConsent = consentMod.withdrawConsent as (a: {
   guardianId: string;
@@ -289,6 +291,31 @@ export const withdrawConsent = consentMod.withdrawConsent as (a: {
 export const listPurposes = consentMod.listPurposes as () => Promise<
   { purpose: string; label: string; is_required: boolean; sort_order: number }[]
 >;
+
+// ── consent notice text (English and Hindi) ──────────────────────────────────
+export type NoticeLanguage = "en" | "hi";
+export type NoticeStrings = {
+  title: string;
+  requiredSection: string;
+  optionalSection: string;
+  neverSection: string;
+  requiredNote: string;
+  optionalNote: string;
+  requiredTag: string;
+  never: string;
+  neverItems: string[];
+  withdrawNote: string;
+  action: string;
+  langLabel: string;
+};
+export const NOTICE_LANGUAGES = noticeMod.LANGUAGES as { code: NoticeLanguage; label: string }[];
+export const noticeStrings = noticeMod.noticeStrings as (lang: NoticeLanguage) => NoticeStrings;
+export const purposeLabel = noticeMod.purposeLabel as (
+  purpose: string, englishLabel: string, lang: NoticeLanguage,
+) => string;
+export const noticeIsComplete = noticeMod.noticeIsComplete as (
+  purposes: { purpose: string }[], lang: NoticeLanguage,
+) => boolean;
 
 // ── papers ─────────────────────────────────────────────────────────────────
 export const listPapers = papersMod.listPapers as unknown as (

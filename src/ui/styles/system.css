@@ -1051,6 +1051,8 @@
      has to say which taps move you forward. */
   #obroot .method .chev{opacity:.28;}
   #obroot .list + .subnote{margin-top:11px;}
+  /* The consent notice's language choice sits above the purposes, on the list gutter. */
+  #obroot .oblang{margin:20px var(--gutter) 0;}
   /* Cause hues stay on the landing motif, where they mean causes. Everywhere
      else in the flow an icon is blue for accent, amber for attention or green
      for something already settled — spending the cause palette on decoration
