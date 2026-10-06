@@ -70,6 +70,7 @@ import Chevron from "../components/Chevron";
 import PressBox from "../components/PressBox";
 import AvatarPicker, { AvatarDisc } from "../components/AvatarPicker";
 import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
+import { ExamSettings } from "../components/ExamPlan";
 import type { CurriculumSelection } from "../components/CurriculumEditor";
 import type { Prefs } from "../data/modules";
 import { paths } from "../app/paths";
@@ -370,6 +371,8 @@ export default function Settings() {
         </div>
       )}
 
+
+      <ExamSettings />
 
       {/* ── Billing ──
           Four states, and the read itself is a fifth. "Loading" is not "free"

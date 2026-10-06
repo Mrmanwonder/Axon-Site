@@ -1,5 +1,7 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
+// `exams` / `exams-setup`: a Cambridge A Level student with real November 2026 zone 4 rows.
+const EXAMS = scenario === "exams" || scenario === "exams-setup";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
 let householdScope = HOUSEHOLD
   ? (sessionStorage.getItem("axon.test.household.scope") ?? "student-a")
@@ -13,10 +15,14 @@ export const sb = {
               { id: "student-a", first_name: "Alpha", programme_id: null, stage_id: null },
               { id: "student-b", first_name: "Beta", programme_id: null, stage_id: null },
             ]
-          : [{ id: "student", first_name: "Sam", programme_id: null, stage_id: null }] }) }
+          : [{ id: "student", first_name: "Sam", programme_id: EXAMS ? "prog-al" : null, stage_id: null }] }) }
         : Promise.resolve({ data: [{ subject: "physics" }] }),
       in: async () => ({
-        data: table === "student_subject"
+        data: EXAMS && table === "curriculum_programme" ? [{ id: "prog-al", provider_id: "prov-c", key: "cambridge_a_level", label: "Cambridge International A Level" }]
+          : EXAMS && table === "curriculum_provider" ? [{ id: "prov-c", key: "cambridge", name: "Cambridge" }]
+          : EXAMS && table === "student_subject" ? [["Mathematics", "9709"], ["Physics", "9702"], ["Computer Science", "9618"]].map(([subject, code]) => ({
+              student_id: "student", subject, subject_offering_id: `off-${code}`, selected_level: null, display_name_snapshot: subject, external_code_snapshot: code }))
+          : table === "student_subject"
           ? (HOUSEHOLD
             ? ["student-a", "student-b"].map(student_id => ({
                 student_id,
@@ -251,10 +257,51 @@ export const readPaper = async () => {
 export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
 export const relabelAttempt = async () => {};
 export const activeAcademicShare = async () => null;
-export const createAcademicShare = async () => { throw new Error("Share creation is outside this illustrative fixture."); };
-export const revokeAcademicShare = async () => {};
-export const presentAcademicShare = async () => {};
-export const academicShareUrl = () => "";
+export const academicShareUrl = (token: string) => `https://example.invalid/share#token=${token}`;
+export const createAcademicShare = async () => ({ share_id: "s", resource_type: "paper", expires_at: "2099-01-01", token: "t" });
+export const presentAcademicShare = async () => "copied";
+export const revokeAcademicShare = async () => ({ revoked: true });
+
+// ── exam dates ──
+import examFixture from "./exam-fixture.json";
+const EXAM_SRC = "https://www.cambridgeinternational.org/Images/757649-november-2026-zone-4-timetable.pdf";
+const examTimetables = [
+  { id: "t-nov4", provider_key: "cambridge", series_key: "2026-11", series_label: "November 2026", zone: 4, timetable_variant: "", status: "final", version_label: "Version 1, April 2026", source_url: EXAM_SRC, fetched_at: "2026-10-06T00:00:00Z", errata: [], first_date: "2026-09-24", last_date: "2026-11-13" },
+  { id: "t-mar4", provider_key: "cambridge", series_key: "2027-03", series_label: "March 2027", zone: 4, timetable_variant: "", status: "final", version_label: "Version 1, July 2026", source_url: EXAM_SRC, fetched_at: "2026-10-06T00:00:00Z", errata: [], first_date: "2027-02-03", last_date: "2027-03-10" },
+];
+const examLocationRows = [
+  { location_key: "India, Kolkata - India Standard Time", lookup_value: "Kolkata", label: "India, Kolkata - India Standard Time", country: "India", zone: 4, timetable_variant: "" },
+  { location_key: "United Arab Emirates, Dubai - Arabian Standard Time", lookup_value: "Dubai", label: "United Arab Emirates, Dubai - Arabian Standard Time", country: "United Arab Emirates", zone: 4, timetable_variant: "" },
+  { location_key: "United States, New York - Eastern Standard Time", lookup_value: "New York", label: "United States, New York - Eastern Standard Time", country: "United States", zone: 2, timetable_variant: "" },
+  { location_key: "United States, Los Angeles - Pacific Standard Time", lookup_value: "Los Angeles", label: "United States, Los Angeles - Pacific Standard Time", country: "United States", zone: 1, timetable_variant: "" },
+];
+const examRoute = (code: string, programme_key: string, kind: string, papers: number[]) => ({ syllabus_code: code, programme_key, kind, papers, source_url: "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf" });
+let examPlanState = scenario === "exams" ? { location_key: examLocationRows[0].location_key, series_key: "2026-11" } : null;
+const examPapersState: { syllabus_code: string; papers: number[] }[] = scenario === "exams" ? [{ syllabus_code: "9709", papers: [3, 6] }] : [];
+export const examLocations = async () => ({ data: examLocationRows, stale: false, offline: false });
+export const examPlanData = async () => {
+  const location = examLocationRows.find((l) => l.location_key === examPlanState?.location_key) ?? null;
+  const chosen = location && examPlanState?.series_key === "2026-11" && location.zone === 4;
+  return { data: {
+    subjects: [{ subject: "Computer Science", syllabus_code: "9618" }, { subject: "Mathematics", syllabus_code: "9709" }, { subject: "Physics", syllabus_code: "9702" }],
+    plan: examPlanState, location, papers: examPapersState, timetables: examTimetables,
+    routes: [
+      examRoute("9709", "cambridge_a_level", "whole", [1, 3, 4, 5]), examRoute("9709", "cambridge_a_level", "whole", [1, 3, 5, 6]),
+      examRoute("9709", "cambridge_a_level", "complete", [3, 5]), examRoute("9709", "cambridge_a_level", "complete", [3, 4]), examRoute("9709", "cambridge_a_level", "complete", [3, 6]),
+      examRoute("9702", "cambridge_a_level", "whole", [1, 2, 3, 4, 5]), examRoute("9702", "cambridge_a_level", "complete", [4, 5]),
+      examRoute("9618", "cambridge_a_level", "whole", [1, 2, 3, 4]), examRoute("9618", "cambridge_a_level", "complete", [3, 4]),
+    ],
+    sittings: chosen ? examFixture.sittings : [],
+  }, stale: false, offline: false };
+};
+export const saveExamPlan = async (_student: string, plan: { locationKey: string | null; seriesKey: string | null }) => {
+  examPlanState = { location_key: plan.locationKey, series_key: plan.seriesKey };
+};
+export const saveExamPapers = async (_student: string, code: string, papers: number[] | null) => {
+  const i = examPapersState.findIndex((p) => p.syllabus_code === code);
+  if (i >= 0) examPapersState.splice(i, 1);
+  if (papers?.length) examPapersState.push({ syllabus_code: code, papers });
+};
 export const deleteQuestion = deletePaper;
 export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});

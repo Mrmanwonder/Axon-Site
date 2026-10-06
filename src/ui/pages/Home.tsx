@@ -41,6 +41,7 @@ import { useInsights } from "../data/useInsights";
 import { ALL_FILTERS, nextFocus } from "../data/insights";
 import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
 import { paths } from "../app/paths";
+import { ExamCard } from "../components/ExamPlan";
 import "../styles/insights.css";
 
 function HomeLoading() {
@@ -101,6 +102,7 @@ export default function Home() {
             Add your first paper
           </PressBox>
         </div>
+        <ExamCard quiet />
       </>
     );
   }
@@ -219,9 +221,7 @@ export default function Home() {
       )}
 
 
-      <div className="card examcard">
-        <div><div className="eyebrow">What&rsquo;s coming up</div><div className="t1">No exam date set</div><div className="t2">Axon won&rsquo;t guess your school calendar. Exam planning will appear here when dates can be saved.</div></div>
-      </div>
+      <ExamCard />
     </>
   );
 }
