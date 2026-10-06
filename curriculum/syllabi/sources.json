@@ -506,6 +506,280 @@
       "source_url": "https://www.cambridgeinternational.org/Images/697423-2026-2028-syllabus.pdf",
       "source_sha256": "0f02e7efdc1175b58b165665f08a54c0c4a82226a3b79492ea9c681dca7db0d8",
       "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "042-XI",
+      "title": "CBSE Class XI Physics (042)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Physics_SecP2_2026-27.pdf",
+      "source_sha256": "9e32271cf5a86caa605cffe2a4b5e19710abc3d3a8715ef725ba78cd94caf1f7",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Physics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "042-XII",
+      "title": "CBSE Class XII Physics (042)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Physics_SecP2_2026-27.pdf",
+      "source_sha256": "9e32271cf5a86caa605cffe2a4b5e19710abc3d3a8715ef725ba78cd94caf1f7",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Physics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "043-XI",
+      "title": "CBSE Class XI Chemistry (043)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Chemistry_SecP2_2026-27.pdf",
+      "source_sha256": "5610f09d357d3ccc9a7b39fc29cb7b1f4530847753783b16c72fff691acd2418",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Chemistry"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "043-XII",
+      "title": "CBSE Class XII Chemistry (043)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Chemistry_SecP2_2026-27.pdf",
+      "source_sha256": "5610f09d357d3ccc9a7b39fc29cb7b1f4530847753783b16c72fff691acd2418",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Chemistry"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "044-XI",
+      "title": "CBSE Class XI Biology (044)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Biology_SecP2_2026-27.pdf",
+      "source_sha256": "3a5767515b41b12b9356151e759beba48bb15a1b711b96c321fa273a7fa7a6ee",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Biology"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "044-XII",
+      "title": "CBSE Class XII Biology (044)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Biology_SecP2_2026-27.pdf",
+      "source_sha256": "3a5767515b41b12b9356151e759beba48bb15a1b711b96c321fa273a7fa7a6ee",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Biology"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "041-XI",
+      "title": "CBSE Class XI Mathematics (041)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+      "source_sha256": "5bf4105d4076189fe00b879fd6d41ffadec87a894a078a7fb912b2f219769572",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Mathematics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "041-XII",
+      "title": "CBSE Class XII Mathematics (041)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Maths_SecP2_2026-27.pdf",
+      "source_sha256": "5bf4105d4076189fe00b879fd6d41ffadec87a894a078a7fb912b2f219769572",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Mathematics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "030-XI",
+      "title": "CBSE Class XI Economics (030)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+      "source_sha256": "927800c6e72b377509533fbe281fb1aa72383e20a3ab5b7b480bd976330b49fa",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Economics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "030-XII",
+      "title": "CBSE Class XII Economics (030)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Economics_SecP2_2026-27.pdf",
+      "source_sha256": "927800c6e72b377509533fbe281fb1aa72383e20a3ab5b7b480bd976330b49fa",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Economics"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "083-XI",
+      "title": "CBSE Class XI Computer Science (083)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Computer_Science_SecP2_2026-27.pdf",
+      "source_sha256": "a46821a87292e5feb296a1ffdb5163f413258d1cb378b871c745539e34f96e82",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Computer Science"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "083-XII",
+      "title": "CBSE Class XII Computer Science (083)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Computer_Science_SecP2_2026-27.pdf",
+      "source_sha256": "a46821a87292e5feb296a1ffdb5163f413258d1cb378b871c745539e34f96e82",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Computer Science"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "065-XI",
+      "title": "CBSE Class XI Informatics Practices (065)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Informatics_Practices_SecP2_2026-27.pdf",
+      "source_sha256": "05747d6271e50d1221f312c710a3175e967f6d2d0f29a0f2cbc992f8267f8d34",
+      "parser": "cbse",
+      "class": "XI",
+      "stage_key": "cbse_11",
+      "offering_names": [
+        "Informatics Practices",
+        "Infomatics Practices"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "065-XII",
+      "title": "CBSE Class XII Informatics Practices (065)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Informatics_Practices_SecP2_2026-27.pdf",
+      "source_sha256": "05747d6271e50d1221f312c710a3175e967f6d2d0f29a0f2cbc992f8267f8d34",
+      "parser": "cbse",
+      "class": "XII",
+      "stage_key": "cbse_12",
+      "offering_names": [
+        "Informatics Practices",
+        "Infomatics Practices"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "086-X",
+      "title": "CBSE Class X Science (086)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/Science_SecP1_2026-27.pdf",
+      "source_sha256": "1bec4a9e44452b22c9d422d8cb528b4de30598f56c243461845165771df7bc37",
+      "parser": "cbse",
+      "class": "X",
+      "stage_key": "cbse_10",
+      "offering_names": [
+        "Science"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "165-X",
+      "title": "CBSE Class X Computer Applications (165)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/Computer_Applications_SecP1X_2026-27.pdf",
+      "source_sha256": "ed542a2163192409a54477f79544d3831c0928b9ecf169d4dec4c3b9a2026ae9",
+      "parser": "cbse",
+      "class": "X",
+      "stage_key": "cbse_10",
+      "offering_names": [
+        "Computer Applications"
+      ]
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "165-IX",
+      "title": "CBSE Class IX Computer Applications (165)",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/Computer_Applications_SecP1IX_2026-27.pdf",
+      "source_sha256": "0d9f887a6b3a39ca838a2a9636c62663d5d48decc83dd96ea0280d3d1414ed8b",
+      "parser": "cbse",
+      "class": "IX",
+      "stage_key": "cbse_9",
+      "offering_names": [
+        "Computer Applications"
+      ]
     }
   ],
   "not_loaded": [
@@ -1326,6 +1600,123 @@
       "name": "Psychology",
       "reason": "the parser could not read this layout cleanly; not loaded until it can",
       "source_url": "https://www.cambridgeinternational.org/Images/721433-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "055-XI",
+      "name": "Accountancy (Class XI)",
+      "reason": "two-column table (topic | learning outcome); read line by line it interleaves the columns, so it is not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "055-XII",
+      "name": "Accountancy (Class XII)",
+      "reason": "two-column table (topic | learning outcome); read line by line it interleaves the columns, so it is not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Accountancy_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "054-XI",
+      "name": "Business Studies (Class XI)",
+      "reason": "two-column table (topic | learning outcome); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "054-XII",
+      "name": "Business Studies (Class XII)",
+      "reason": "two-column table (topic | learning outcome); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/BusinessStudies_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "241-XI",
+      "name": "Applied Mathematics (Class XI)",
+      "reason": "two-column table (Class XI) and over-long merged objectives (Class XII); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "241-XII",
+      "name": "Applied Mathematics (Class XII)",
+      "reason": "two-column table (Class XI) and over-long merged objectives (Class XII); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Applied_Mathematics_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "029-XI",
+      "name": "Geography (Class XI)",
+      "reason": "chapter-and-outcome table; read as prose the units become chapter labels and the objectives fragments, so it is not loaded",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Geography_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "029-XII",
+      "name": "Geography (Class XII)",
+      "reason": "chapter-and-outcome table; read as prose the units become chapter labels and the objectives fragments, so it is not loaded",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/Geography_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "027-XI",
+      "name": "History (Class XI)",
+      "reason": "organised by themes in a table, with no unit headings the parser can read",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/History_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "027-XII",
+      "name": "History (Class XII)",
+      "reason": "organised by themes in a table, with no unit headings the parser can read",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/History_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "028-XI",
+      "name": "Political Science (Class XI)",
+      "reason": "organised by book parts in a table, with no unit headings the parser can read",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/PoliticalScience_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "028-XII",
+      "name": "Political Science (Class XII)",
+      "reason": "organised by book parts in a table, with no unit headings the parser can read",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart2/PoliticalScience_SecP2_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "041-IX",
+      "name": "Mathematics (Class IX)",
+      "reason": "three-column table (unit | content | learning outcomes); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/Maths_SecP1IX_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "041-X",
+      "name": "Mathematics (Class X)",
+      "reason": "three-column table (unit | content | learning outcomes); not loaded until a table parser exists",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/Maths_SecP1X_2026-27.pdf"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "087-IX",
+      "name": "Social Science (Class IX)",
+      "reason": "chapter-by-subject tables with no unit headings the parser can read"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "087-X",
+      "name": "Social Science (Class X)",
+      "reason": "chapter-by-subject tables with no unit headings the parser can read"
+    },
+    {
+      "provider_key": "cbse",
+      "syllabus_code": "086-IX",
+      "name": "Science (Class IX)",
+      "reason": "the 2026-27 Class IX file follows the new textbook chapters in a table with no unit headings the parser can read",
+      "source_url": "https://cbseacademic.nic.in/web_material/CurriculumMain27/SecPart1/ScienceSt_SecP1_2026-27.pdf"
     }
   ]
 }
