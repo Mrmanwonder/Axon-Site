@@ -116,21 +116,79 @@ export async function replacePage(draft, number, page) {
   }, { putAssets: captured.assets, deleteAssetKeys, hydratedPages: [hydrated] });
   return draft;
 }
-const LEASE_MS = 5 * 60 * 1000;
+// A send lease says which tab is sending a booklet. It must never strand a
+// paper: a tab that closed, crashed or was discarded mid-send leaves its lease
+// behind, and the next tab (or the same tab after a reload) takes it over at
+// once. Liveness comes from the Web Locks API, which the browser releases the
+// moment a tab goes away; the expiry is only the fallback for browsers without
+// it. (Owner, 6 Oct 2026: "That did not finish… already sending in another
+// tab" must never appear.)
+const LEASE_MS = 90 * 1000;
+const HEARTBEAT_MS = 20 * 1000;
+const LOCK_PREFIX = 'axon-send:';
+const heldLocks = new Map();
+
+/** Thrown only while another live tab really is sending this booklet. */
+export class SendBusy extends Error {
+  constructor(owner) { super('This booklet is being sent from another tab.'); this.name = 'SendBusy'; this.busy = true; this.owner = owner; }
+}
+
+const locks = () => globalThis.navigator?.locks ?? null;
+
+async function holdOwnerLock(owner) {
+  const api = locks();
+  if (!api?.request || heldLocks.has(owner)) return;
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await new Promise(resolve => {
+    api.request(LOCK_PREFIX + owner, { mode: 'exclusive' }, () => { resolve(); return held; }).catch(resolve);
+  });
+  heldLocks.set(owner, release);
+}
+function dropOwnerLock(owner) {
+  heldLocks.get(owner)?.();
+  heldLocks.delete(owner);
+}
+/** true: that sender is alive. false: it is gone. null: cannot tell here. */
+export async function senderAlive(owner) {
+  if (heldLocks.has(owner)) return true;
+  const api = locks();
+  if (!api?.query) return null;
+  try {
+    const { held = [] } = await api.query();
+    return held.some(lock => lock.name === LOCK_PREFIX + owner);
+  } catch { return null; }
+}
+
 export const assertLease = (fresh, owner) => {
-  if (fresh.upload_lease?.owner !== owner) throw new Error('Another tab is sending this booklet. Reopen the draft.');
+  if (fresh.upload_lease?.owner !== owner) throw new SendBusy(fresh.upload_lease?.owner ?? null);
 };
 export async function claimSendLease(draft, owner) {
-  return mutateDraft(draft, fresh => {
-    if (fresh.upload_lease && fresh.upload_lease.owner !== owner && fresh.upload_lease.expires_at > Date.now()) throw new Error('This booklet is already sending in another tab.');
+  await holdOwnerLock(owner);
+  const take = takeover => mutateDraft(draft, fresh => {
+    const lease = fresh.upload_lease;
+    if (lease && lease.owner !== owner && lease.expires_at > Date.now() && lease.owner !== takeover) throw new SendBusy(lease.owner);
     fresh.upload_lease = { owner, expires_at: Date.now() + LEASE_MS };
   });
+  try {
+    return await take(null);
+  } catch (error) {
+    if (!error?.busy) { dropOwnerLock(owner); throw error; }
+    // The holder left without releasing (closed tab, crash, reload): take over.
+    if (error.owner && await senderAlive(error.owner) === false) {
+      try { return await take(error.owner); } catch (again) { dropOwnerLock(owner); throw again; }
+    }
+    dropOwnerLock(owner);
+    throw error;
+  }
 }
 export async function touchSendLease(draft, owner) {
   return mutateDraft(draft, fresh => { assertLease(fresh, owner); fresh.upload_lease.expires_at = Date.now() + LEASE_MS; });
 }
 export async function releaseSendLease(draft, owner) {
-  return mutateDraft(draft, fresh => { if (fresh.upload_lease?.owner === owner) delete fresh.upload_lease; });
+  try {
+    return await mutateDraft(draft, fresh => { if (fresh.upload_lease?.owner === owner) delete fresh.upload_lease; });
+  } finally { dropOwnerLock(owner); }
 }
 export const updateAssets = (draft, updates, owner) => mutateDraft(draft, fresh => {
   if (owner) { assertLease(fresh, owner); fresh.upload_lease.expires_at = Date.now() + LEASE_MS; }
@@ -144,6 +202,14 @@ export async function markUploaded(draft, number, extra = {}) {
   }));
   await updateAssets(draft, updates); return draft;
 }
+/** The student pressed Read. Kept with the draft so a send that a closed tab,
+    a dead battery or a lost connection interrupted resumes on its own. */
+export async function requestSend(draft, paperType) {
+  return mutateDraft(draft, fresh => {
+    fresh.send_requested ??= { at: Date.now() };
+    if (paperType && !fresh.submission_started) fresh.paper_type = paperType;
+  });
+}
 export const pendingPages = draft => draft.pages.filter(p => !processingReady(p));
 
 export function startLeaseHeartbeat(draft, owner, onError) {
@@ -152,8 +218,8 @@ export function startLeaseHeartbeat(draft, owner, onError) {
     if (stopped) return;
     try { await touchSendLease(draft, owner); }
     catch (error) { stopped = true; onError(error); return; }
-    if (!stopped) timer = setTimeout(beat, 30000);
+    if (!stopped) timer = setTimeout(beat, HEARTBEAT_MS);
   };
-  timer = setTimeout(beat, 30000);
+  timer = setTimeout(beat, HEARTBEAT_MS);
   return () => { stopped = true; clearTimeout(timer); };
 }

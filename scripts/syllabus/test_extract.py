@@ -123,5 +123,14 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(lines[1].index("e.g."), col)
 
 
+class SpaceArtefactTests(unittest.TestCase):
+    def test_space_drawn_over_a_capital_does_not_split_the_word(self):
+        chars = word("The rules", 100, 200)
+        t = chars[0]
+        # The PDF draws a space glyph at the capital's own position.
+        chars.insert(1, dict(t, text=" ", x1=t["x0"] + 2.8))
+        self.assertEqual([w[2] for w in E.words_of(chars)], ["The", "rules"])
+
+
 if __name__ == "__main__":
     unittest.main()

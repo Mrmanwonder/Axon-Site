@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildSyllabusMaps, chooseDocument, levelFor, EARLY_QUESTIONS } from "../../src/ui/data/syllabusMap";
+import { buildSyllabusMaps, chooseDocument, levelFor, scopeLabel, EARLY_QUESTIONS } from "../../src/ui/data/syllabusMap";
 import type { SyllabusMapInput, SyllabusDocument } from "../../src/ui/data/syllabusMap";
 import { ALL_FILTERS } from "../../src/ui/data/insights";
 
@@ -106,5 +106,16 @@ describe("syllabus map", () => {
     const next = { ...doc, id: "next", valid_from_year: 2028, valid_to_year: 2030 };
     expect(chooseDocument([old, next, doc], 2026)?.id).toBe("doc-phys");
     expect(chooseDocument([old, next], 2026)?.id).toBe("next");
+  });
+});
+
+describe("scopeLabel", () => {
+  test("reads every stored scope in words and leaves unknown ones out", () => {
+    expect(scopeLabel("AS")).toBe("AS Level");
+    expect(scopeLabel("A")).toBe("A Level");
+    expect(scopeLabel("IGCSE_CORE")).toBe("Core");
+    expect(scopeLabel("IGCSE_EXTENDED")).toBe("Extended");
+    expect(scopeLabel(null)).toBeNull();
+    expect(scopeLabel("SOMETHING_ELSE")).toBeNull();
   });
 });

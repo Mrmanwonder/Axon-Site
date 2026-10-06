@@ -18,16 +18,30 @@
 
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCambridgeSyllabus, auditParse } from "./cambridge.mjs";
+import { parseCambridgeOutline, plausibility } from "./cambridge-outline.mjs";
 
+const execFileP = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PARSERS = { cambridge: parseCambridgeSyllabus };
+/**
+ * Each parser with the checks its output must pass before anything loads.
+ * The outline parser joins a heading from one column with bullets from the
+ * other, so its audit checks each bulleted part in source order on its own.
+ */
+const PARSERS = {
+  cambridge: { parse: parseCambridgeSyllabus, audit: (p, t) => auditParse(p, t).problems },
+  "cambridge-outline": {
+    parse: parseCambridgeOutline,
+    audit: (p, t) => [...auditParse(p, t, { maxLen: 1500, minLen: 5, segments: true }).problems, ...plausibility(p)],
+  },
+};
 /** Bumped when extract.py changes what it writes, so a re-load retags. */
-const EXTRACTOR = "extract.py/2";
+const EXTRACTOR = "extract.py/3";
 
 export function stableId(...parts) {
   const h = createHash("sha256").update(parts.join("\u0000")).digest("hex");
@@ -56,7 +70,7 @@ export function rowsFor(doc, parsed) {
       const topicId = stableId(docId, "topic", t.code);
       rows.push({ id: topicId, parent_id: unitId, code: t.code, kind: "topic", title: t.title, objective_text: null, notes_text: null, group_title: null, scope: t.scope ?? u.scope, sort_order: order++, depth: 1, page: t.page });
       for (const o of t.objectives) {
-        rows.push({ id: stableId(docId, "objective", o.code), parent_id: topicId, code: o.code, kind: "objective", title: shortTitle(o.text), objective_text: o.text, notes_text: o.notes, group_title: o.group, scope: t.scope ?? u.scope, sort_order: order++, depth: 2, page: o.page });
+        rows.push({ id: stableId(docId, "objective", o.code), parent_id: topicId, code: o.code, kind: "objective", title: shortTitle(o.text), objective_text: o.text, notes_text: o.notes, group_title: o.group, scope: o.scope ?? t.scope ?? u.scope, sort_order: order++, depth: 2, page: o.page });
       }
     }
   }
@@ -107,35 +121,51 @@ end $$;
 `;
 }
 
+/** Downloads, checks, extracts, parses and audits one manifest document. */
+async function prepare(doc, work) {
+  const res = await fetch(doc.source_url);
+  if (!res.ok) return { error: `${doc.syllabus_code}: download failed, HTTP ${res.status}` };
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const sha = createHash("sha256").update(bytes).digest("hex");
+  if (sha !== doc.source_sha256) {
+    return { error: `${doc.syllabus_code}: SHA-256 ${sha} does not match the manifest. The board has published a different file; add it as a new edition after checking it.` };
+  }
+  const pdf = join(work, `${doc.syllabus_code}.pdf`);
+  writeFileSync(pdf, bytes);
+  const { stdout: text } = await execFileP("python3", [join(ROOT, "scripts/syllabus/extract.py"), pdf], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const parser = PARSERS[doc.parser];
+  if (!parser) return { error: `${doc.syllabus_code}: unknown parser "${doc.parser}"` };
+  const parsed = parser.parse(text);
+  const problems = parser.audit(parsed, text);
+  const objectives = parsed.units.reduce((n, u) => n + u.topics.reduce((k, t) => k + t.objectives.length, 0), 0);
+  const summary = `${doc.syllabus_code} ${doc.version_label}: ${parsed.units.length} units, ${objectives} objectives, ${problems.length} problems`;
+  if (problems.length) return { error: [summary, ...problems.map((p) => `  ${p}`)].join("\n") };
+  return { summary, sql: sqlFor(doc, parsed, new Date().toISOString()) };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const only = args.includes("--code") ? args[args.indexOf("--code") + 1] : null;
   const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : null;
   const manifest = JSON.parse(readFileSync(join(ROOT, "curriculum/syllabi/sources.json"), "utf8"));
   const work = mkdtempSync(join(tmpdir(), "axon-syllabus-"));
-  const chunks = [];
-  let failed = false;
-  for (const doc of manifest.documents) {
-    if (only && doc.syllabus_code !== only) continue;
-    const res = await fetch(doc.source_url);
-    if (!res.ok) { console.error(`${doc.syllabus_code}: download failed, HTTP ${res.status}`); failed = true; continue; }
-    const bytes = Buffer.from(await res.arrayBuffer());
-    const sha = createHash("sha256").update(bytes).digest("hex");
-    if (sha !== doc.source_sha256) {
-      console.error(`${doc.syllabus_code}: SHA-256 ${sha} does not match the manifest. The board has published a different file; add it as a new edition after checking it.`);
-      failed = true; continue;
+  const docs = manifest.documents.filter((d) => !only || d.syllabus_code === only);
+  const results = new Array(docs.length);
+  let next = 0;
+  // A few at a time: extraction is CPU-bound and the board's site is shared.
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (next < docs.length) {
+      const i = next++;
+      results[i] = await prepare(docs[i], work).catch((e) => ({ error: `${docs[i].syllabus_code}: ${e.message}` }));
     }
-    const pdf = join(work, `${doc.syllabus_code}.pdf`);
-    writeFileSync(pdf, bytes);
-    const text = execFileSync("python3", [join(ROOT, "scripts/syllabus/extract.py"), pdf], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
-    const parsed = PARSERS[doc.parser](text);
-    const audit = auditParse(parsed, text);
-    console.error(`${doc.syllabus_code} ${doc.version_label}: ${audit.units} units, ${audit.topics} topics, ${audit.objectives} objectives, ${audit.problems.length} problems`);
-    if (audit.problems.length) { for (const p of audit.problems) console.error(`  ${p}`); failed = true; continue; }
-    chunks.push(sqlFor(doc, parsed, new Date().toISOString()));
+  }));
+  let failed = false;
+  for (const r of results) {
+    if (r.error) { console.error(r.error); failed = true; } else console.error(r.summary);
   }
-  const sql = chunks.join("\n");
+  const sql = results.filter((r) => r.sql).map((r) => r.sql).join("\n");
   if (out) writeFileSync(out, sql); else process.stdout.write(sql);
+  console.error(`${results.filter((r) => r.sql).length} of ${docs.length} documents ready; ${(manifest.not_loaded ?? []).length} listed as not loaded in the manifest.`);
   if (failed) process.exitCode = 1;
 }
 

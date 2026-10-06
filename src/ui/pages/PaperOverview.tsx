@@ -11,7 +11,7 @@
    to open. This screen assumes it is being asked for a paper that has been saved.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
 import MathText from "../components/MathText";
@@ -34,6 +34,8 @@ import ResourceActions from "../components/ResourceActions";
 import { tutorEntryVisible } from "../data/tutor";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckSummary } from "../components/SchemeCheck";
 import "../styles/paper-overview.css";
 
 /** What the badge means, in words. "Likely" alone told the student nothing. */
@@ -124,11 +126,24 @@ export default function PaperOverview() {
   });
 
   const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
   const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
   const toast = useToast();
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   const structure = useMemo(() => (paper ? paperStructure(paper) : null), [paper]);
+  // Save closes review at once; the paper fills in here when its marks are
+  // committed. Until then, say what is happening and keep checking.
+  const runStatus = paperId ? progressResource?.data?.get(paperId)?.status : undefined;
+  const saving = !!paper && !paper.student_attempt.length && ["needs_review", "explaining", "ready"].includes(runStatus ?? "");
+  useEffect(() => {
+    if (!saving) return;
+    const timer = window.setInterval(() => { void refreshLibrary().catch(() => {}); }, 3000);
+    return () => window.clearInterval(timer);
+  }, [saving, refreshLibrary]);
+  useEffect(() => {
+    if (runStatus === "committed" && paper && !paper.student_attempt.length) void reload();
+  }, [runStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadError) {
     return (
@@ -263,6 +278,8 @@ export default function PaperOverview() {
         </section>
       )}
 
+      {schemeCheck.check && <SchemeCheckSummary check={schemeCheck.check} regions={schemeCheck.regions} />}
+
       {tutorEntryVisible() && attempts.length > 0 && (
         <div style={{ margin: "12px var(--gutter) 0" }}>
           <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost" style={{ display: "inline-flex" }}>
@@ -271,7 +288,18 @@ export default function PaperOverview() {
         </div>
       )}
 
-      {!attempts.length && (
+      {saving && (
+        <div className="list" role="status">
+          <div className="srow noicon">
+            <div className="lbl">
+              Saving this paper
+              <small>Axon is working out where the marks went. The questions appear here by themselves.</small>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!attempts.length && !saving && (
         <>
           <h2 className="sectitle">Questions</h2>
           <div className="list">

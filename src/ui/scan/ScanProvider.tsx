@@ -18,6 +18,7 @@ import type { SheetConfig } from "../components/SheetProvider";
 import type { CropBox } from "../components/Crop";
 import { captureUploadTelemetry } from '../lib/analytics';
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import type { SendJob } from "./ReadingScreen";
 
 export type TrayPage = {
   page_number: number;
@@ -93,6 +94,8 @@ export type ReviewQuestion = {
   crop?: { paperId: string; page: number; box: CropBox } | null;
   pageNumber?: number;
   unreadableReason?: string | null;
+  /** "diagram" when the answer is drawn rather than written. */
+  regionType?: string | null;
   alternatives?: number[];
   allocationUnusable?: boolean;
   explanation?: { cause?: string; body?: string; doThisNext?: string } | null;
@@ -114,6 +117,7 @@ export type ReviewModel = {
 export type ReviewHandlers = {
   onMark: (id: string, value: number) => void;
   onAction: (id: string, action: string) => void;
+  onRelabel?: (id: string, label: string) => Promise<void>;
   onConfirmClean: () => void;
   onConfirmAll?: () => void;
   onSave: () => void;
@@ -170,6 +174,13 @@ type ScanValue = {
   pageReviewOpen: boolean;
   openPageReview: () => void;
   closePageReview: () => void;
+  /** Papers sending or being read in the background, newest last. */
+  sends: SendJob[];
+  /** The paper whose reading screen covers the scanner, if any. */
+  focusedSend: string | null;
+  setFocusedSend: (id: string | null) => void;
+  retrySend: (id: string) => void;
+  dismissSend: (id: string) => void;
 };
 
 const Ctx = createContext<ScanValue | null>(null);
@@ -183,6 +194,11 @@ function reviewIdentityFromPath(pathname: string) {
   if (!pathname.startsWith(prefix)) return null;
   const identity = pathname.slice(prefix.length).split("/")[0];
   return identity || null;
+}
+
+/** For surfaces that may render outside the provider (tests, public pages). */
+export function useOptionalScan(): ScanValue | null {
+  return useContext(Ctx);
 }
 
 export function useScan(): ScanValue {
@@ -230,6 +246,42 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const [submitting, setSubmitting] = useState(false);
   const [auto, setAuto] = useState(true);
   const autoRef = useRef(true);
+  const [sends, setSends] = useState<SendJob[]>([]);
+  const [focusedSend, setFocusedSend] = useState<string | null>(null);
+  type Queue = { subscribe: (fn: (jobs: SendJob[]) => void) => () => void; resume: (studentId: string, titleFor?: (t: string | null) => string | null) => Promise<void>; wake: (id?: string) => void; dismiss: (id: string) => void; cancelAll: () => void };
+  const queueRef = useRef<Queue | null>(null);
+
+  // Sends outlive the scanner: they resume as soon as the app opens, on any
+  // screen, so a paper interrupted by a closed tab carries on by itself.
+  useEffect(() => {
+    const studentId = app.student?.id;
+    if (!studentId) return;
+    let stop = () => {};
+    let cancelled = false;
+    const start = async () => {
+      try {
+        const [{ sendQueue }, papersMod, curriculum] = await Promise.all([
+          import("../../scan/send-queue.js"), import("../../papers.js"), import("../../curriculum.js"),
+        ]);
+        if (cancelled) return;
+        const queue = (await sendQueue()) as unknown as Queue;
+        if (cancelled) return;
+        queueRef.current = queue;
+        stop = queue.subscribe((jobs) => setSends(jobs.filter((j) => (j as SendJob & { studentId?: string }).studentId === studentId)));
+        const types = papersMod.paperTypesFor(curriculum.providerKeyForStudent(appRef.current.student)) as { value: string; label: string }[];
+        await queue.resume(studentId, (t) => types.find((x) => x.value === t)?.label ?? null);
+      } catch (error) {
+        console.warn("[scan] could not resume sends", error);
+      }
+    };
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const handle = idle ? idle(() => void start()) : window.setTimeout(() => void start(), 800);
+    return () => {
+      cancelled = true;
+      stop();
+      if (!idle) window.clearTimeout(handle as number);
+    };
+  }, [app.student?.id]);
 
   const scanPromise = useRef<Promise<ScanModule> | null>(null);
   const scanReady = useRef<Promise<unknown> | null>(null);
@@ -242,6 +294,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
       ++activation.current;
       modRef.current?.resetScan(); scanReady.current = null;
       setTray([]); setDrafts([]); setReview(null); setReviewIdentity(null); setProgress(null); setResumable(null); setSubmitting(false);
+      queueRef.current?.cancelAll(); setSends([]); setFocusedSend(null);
     };
     addEventListener("axon:local-data", clear);
     return () => removeEventListener("axon:local-data", clear);
@@ -288,6 +341,7 @@ export function ScanProvider({ children }: { children: ReactNode }) {
           setDraftsHandlers(() => handlers);
         },
         renderProgress: (m: ProgressModel) => setProgress(m),
+        sendStarted: (id: string) => setFocusedSend(id),
         openSheet: (cfg: SheetConfig) => openSheet(cfg),
         openReview: (paperId: string, intent: string | null) => {
           // Re-entry can arrive through a canonical paper-id route or a legacy
@@ -420,6 +474,11 @@ export function ScanProvider({ children }: { children: ReactNode }) {
   const setTorchMode = useCallback((mode: TorchMode) => { void modRef.current?.setTorchMode(mode); }, []);
   const openPageReview = useCallback(() => setPageReviewOpen(true), []);
   const closePageReview = useCallback(() => setPageReviewOpen(false), []);
+  const retrySend = useCallback((id: string) => { queueRef.current?.wake(id); }, []);
+  const dismissSend = useCallback((id: string) => {
+    queueRef.current?.dismiss(id);
+    setFocusedSend((current) => (current === id ? null : current));
+  }, []);
 
   const value = useMemo<ScanValue>(() => ({
     videoRef, overlayRef,
@@ -428,11 +487,13 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, setTorchMode, auto, submitting,
     pageReviewOpen, openPageReview, closePageReview,
+    sends, focusedSend, setFocusedSend, retrySend, dismissSend,
   }), [
     camera, scanState, hint, tray, trayHandlers, progress, drafts, draftsHandlers,
     resumable, review, reviewHandlers, reviewOpen, closeReview,
     ensureScan, onScreenVisible, shoot, setAutoCapture, setTorchMode, auto, submitting,
     pageReviewOpen, openPageReview, closePageReview,
+    sends, focusedSend, retrySend, dismissSend,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

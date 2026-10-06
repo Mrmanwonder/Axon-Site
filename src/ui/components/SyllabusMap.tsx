@@ -13,7 +13,7 @@ import { paths } from "../app/paths";
 import { numMark } from "../data/causes";
 import { PATTERN_PAPERS, type QuestionRef } from "../data/insights";
 import SyllabusRadar, { unitSummary } from "./SyllabusRadar";
-import type { SubjectMap, SyllabusMaps, TopicCell } from "../data/syllabusMap";
+import { scopeLabel, type SubjectMap, type SyllabusMaps, type TopicCell } from "../data/syllabusMap";
 
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
@@ -45,7 +45,7 @@ export function Detail({ cell, map, describe, showSource = true }: { cell: Topic
   return (
     <div className="heatdetail" aria-live="polite">
       <div className="hdtop">
-        <div><div className="code">{cell.code}{cell.scope ? ` · ${cell.scope === "A" ? "A Level" : cell.scope === "AS" ? "AS Level" : cell.scope}` : ""}</div><h3>{cell.title}</h3></div>
+        <div><div className="code">{cell.code}{scopeLabel(cell.scope) ? ` · ${scopeLabel(cell.scope)}` : ""}</div><h3>{cell.title}</h3></div>
         {cell.state !== "untested" && <div className="v">{numMark(cell.lost)} of {numMark(cell.available)}<small>marks lost</small></div>}
       </div>
       <p className="meta">
@@ -158,7 +158,7 @@ export function SyllabusUnits({ map, describe }: { map: SubjectMap; describe: (r
     {map.units.map((u) => (
       <section className="card sunit" key={u.id} id={`unit-${u.code}`} aria-label={`${u.code} ${u.title}`}>
         <div className="sunithead">
-          <h2 className="uname"><span>{u.code}</span>{u.title}{scopeName(u.scope) ? <em>{scopeName(u.scope)}</em> : null}</h2>
+          <h2 className="uname"><span>{u.code}</span>{u.title}{scopeLabel(u.scope) ? <em>{scopeLabel(u.scope)}</em> : null}</h2>
           <div className="sunitmeta">{unitSummary(u, map.shadingReady)}</div>
         </div>
         <div className="heatgrid">
@@ -176,8 +176,4 @@ export function SyllabusUnits({ map, describe }: { map: SubjectMap; describe: (r
       </section>
     ))}
   </>;
-}
-
-function scopeName(scope: string | null): string | null {
-  return scope === "A" ? "A Level" : scope === "AS" ? "AS Level" : scope;
 }

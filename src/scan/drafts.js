@@ -125,7 +125,8 @@ export async function listDraftSummaries(studentId) {
 }
 
 export { saveDraft, mutateDraft, addPage, removePage, movePage, replacePage, markUploaded, pendingPages,
-  updateAssets, claimSendLease, touchSendLease, startLeaseHeartbeat, releaseSendLease, assertLease } from './draft-mutations.js';
+  updateAssets, claimSendLease, touchSendLease, startLeaseHeartbeat, releaseSendLease, assertLease,
+  requestSend, SendBusy, senderAlive } from './draft-mutations.js';
 export async function deleteDraft(id) {
   const db = await open();
   await tx(db, [STORE, ASSET_STORE], 'readwrite', transaction => {

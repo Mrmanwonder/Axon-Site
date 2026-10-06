@@ -41,6 +41,8 @@ import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
 import { tutorEntryVisible } from "../data/tutor";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckQuestion } from "../components/SchemeCheck";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -115,6 +117,7 @@ export default function QuestionDetail() {
   });
 
   const { paper, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
   const [picked, setPicked] = useState<Segment | null>(null);
@@ -175,6 +178,7 @@ export default function QuestionDetail() {
   // provenance rule: committed_attempt_id is the one column that traces a saved
   // attempt back to the region it came from, and page_spans carries the box.
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
+  const checkResult = region?.id ? schemeCheck.regions.get(region.id) ?? null : null;
   const sourcePick = attempt.answer_block?.source_space === "page_pixels_v1" ? picked?.bbox : null;
   const span = (sourcePick?.page != null
     ? region?.page_spans?.find(s => s.page === sourcePick.page)
@@ -339,10 +343,16 @@ export default function QuestionDetail() {
 
         {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
 
-        <div className="qfield">
-          <div className="k">Marked from</div>
-          <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
-        </div>
+        {/* An unmarked paper checked against its published scheme: Axon's
+            estimate, never shown as a teacher mark (owner decision, 6 Oct 2026). */}
+        {checkResult && <SchemeCheckQuestion result={checkResult} />}
+
+        {!checkResult && (
+          <div className="qfield">
+            <div className="k">Marked from</div>
+            <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
+          </div>
+        )}
 
         {loss?.cause && (
           <div className="qfield">
