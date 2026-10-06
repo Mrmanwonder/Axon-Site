@@ -24,7 +24,9 @@ test("the syllabus radar shades tested units, leaves untested ones empty, and op
   await expect(page.getByText("3 of 5 units tested")).toBeVisible();
   // An untested unit is a button that says so; it is never drawn with a value.
   await expect(page.getByRole("button", { name: /^2 Waves: Not tested yet/ })).toBeVisible();
-  await expect(page.locator(".radar .rsector.heatfill")).toHaveCount(3);
+  // One filled shape through the three tested units; none for the two untested ones.
+  await expect(page.locator(".radar .rarea")).toHaveCount(1);
+  await expect(page.locator(".radar .rpoint")).toHaveCount(3);
   await page.getByRole("button", { name: /^1 Forces and motion: \d+ of \d+ marks lost/ }).click();
   await expect(page.locator(".radarpick")).toContainText("Forces and motion");
   await page.getByRole("link", { name: "In detail" }).click();

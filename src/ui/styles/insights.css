@@ -158,43 +158,32 @@
 @media (min-width: 768px) { .igrid .isection-wide { grid-column: 1 / -1; } }
 
 
-/* Syllabus radar: one spoke per unit. Single accent hue; confidence is form
-   (solid = evidence, hollow = early, dashed spoke = untested). No values are
-   written on the web: rings are unlabelled and the chosen unit's counts sit
-   below it in text. */
-.radar { width: 100%; max-width: 360px; margin: 2px auto 0; }
+/* Syllabus radar: a classic spider web. Rings and spokes are recessive grey;
+   the student's shape is one accent fill with a 2.5px outline. Confidence is
+   form (solid point = evidence, hollow = early, dashed spoke = untested). No
+   values are written on the web; the chosen unit's counts sit below in text. */
+.radar { width: 100%; max-width: 460px; margin: 4px auto 0; }
 .radar svg { display: block; width: 100%; height: auto; overflow: visible; }
-.radar .rring { fill: none; stroke: var(--hairline); stroke-width: 1; }
-.radar .rring:last-of-type { stroke: var(--label-3); stroke-opacity: .55; }
-.radar .rspoke { stroke: var(--label-3); stroke-opacity: .55; stroke-width: 1; }
-.radar .rspoke.untested { stroke-dasharray: 3 4; stroke-opacity: .7; }
-.radar .rspoke.on { stroke: var(--label); stroke-opacity: .8; stroke-width: 1.5; }
-.radar .rsector { stroke: var(--surface); stroke-width: 1.5; }
-.radar .rsector.tested { fill: var(--accent-wash); }
-.radar .rsector.heatfill.l0 { fill: var(--heat-0); }
-.radar .rsector.heatfill.l1 { fill: var(--heat-1); }
-.radar .rsector.heatfill.l2 { fill: var(--heat-2); }
-.radar .rsector.heatfill.l3 { fill: var(--heat-3); }
-.radar .rsector.heatfill.l4 { fill: var(--heat-4); }
-.radar .rsector.heatfill.early { fill-opacity: .55; }
-.radar .rarea { fill: none; }
-/* Data marks are ink, so they read on every shade of the sectors underneath. */
-.radar .rline { fill: none; stroke: var(--label); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.radar .rpoint { fill: var(--label); stroke: var(--surface); stroke-width: 2; }
-.radar .rpoint.early { fill: var(--surface); stroke: var(--label); stroke-width: 2; }
-.radar .rpoint.on { stroke: var(--accent); stroke-width: 2.5; }
+.radar .rring { fill: none; stroke: var(--label-3); stroke-opacity: .35; stroke-width: 1; }
+.radar .rspoke { stroke: var(--label-3); stroke-opacity: .5; stroke-width: 1; }
+.radar .rspoke.untested { stroke-dasharray: 3 4; }
+.radar .rarea { fill: var(--accent); fill-opacity: .28; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.radar .rline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+.radar .rpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.radar .rpoint.early { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.radar .rpoint.on { stroke: var(--label); stroke-width: 2.5; }
 .radar .rtested { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
-.radar .rlabel { fill: var(--label-2); font-weight: 600; font-variant-numeric: tabular-nums; }
-.radar .rlabel.untested { fill: var(--label-3); font-weight: 500; }
-.radar .rlabel.on { fill: var(--accent); font-weight: 700; }
+.radar .rlabel { fill: var(--label-2); font-size: 14px; font-weight: 500; letter-spacing: -.01em; }
+.radar .rlabel.untested { fill: var(--label-3); }
+.radar .rlabel.on { fill: var(--label); font-weight: 650; }
 .radar .rhit { fill: transparent; cursor: pointer; outline: none; }
 .radar .rhit:focus-visible { fill: var(--accent); fill-opacity: .08; }
 .radarlegend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 8px 0 0; font-size: 12px; color: var(--label-2); }
 .radarlegend .key { display: inline-flex; align-items: center; gap: 6px; }
 .radarlegend .rk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .radarlegend .rk.rim { background: var(--accent); }
-.radarlegend .rk.solid { background: var(--label); }
-.radarlegend .rk.hollow { border: 2px solid var(--label); width: 9px; height: 9px; }
+.radarlegend .rk.solid { background: var(--accent); }
+.radarlegend .rk.hollow { border: 2px solid var(--accent); width: 9px; height: 9px; }
 .radarlegend .ramp { display: inline-flex; align-items: center; gap: 3px; }
 .radarlegend .ramp i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .radarlegend .ramp span:first-child { margin-right: 4px; }

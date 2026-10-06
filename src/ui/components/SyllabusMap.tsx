@@ -122,7 +122,7 @@ export default function SyllabusMap({ data, initialSubject }: {
       </div>
       <p className="lede">
         {map.shadingReady
-          ? "Each wedge is a syllabus unit. Darker, and further from the centre, means more of its marks lost."
+          ? "Each spoke is a syllabus unit. The further out your shape reaches, the more of that unit’s marks you lost."
           : map.papersPlaced === 0
             ? `None of your ${map.label} questions have been placed on the syllabus yet.`
             : `Marks lost by unit appear at ${PATTERN_PAPERS} ${map.label} papers (${map.papersPlaced} so far). For now, the web marks the units you have been tested on.`}
@@ -133,7 +133,6 @@ export default function SyllabusMap({ data, initialSubject }: {
             label={`${map.label}: marks lost by syllabus unit`} />
         : null}
       <div className="radarlegend" aria-hidden="true">
-        {map.shadingReady && <span className="ramp"><span>Fewer lost</span>{[0, 1, 2, 3, 4].map((l) => <i key={l} className={`heat l${l}`} />)}<span>More</span></span>}
         {map.shadingReady && <span className="key"><i className="rk solid" />Evidence</span>}
         {map.shadingReady && <span className="key"><i className="rk hollow" />Early evidence</span>}
         {!map.shadingReady && <span className="key"><i className="rk rim" />Tested</span>}
