@@ -7,7 +7,8 @@
 #             e.g. logarithms in Pure 1 and Pure 3)
 #   also_ok   codes that are fair secondary tags; a strong tag outside primary + also_ok is wrong
 #   control   "off_syllabus" / "no_context": the right answer is no strong tag at all
-# Labels are drafted by Claude and are DRAFT (needs_human_label) until a person confirms them.
+# Labels were drafted by Claude and confirmed by the owner on 2026-10-06 (eval run 7ca49ba7 matched
+# every one); they are human labels now. A new or changed case starts as a draft again.
 import json, uuid
 
 NS = uuid.UUID("3b8e5c1a-7d24-4f0e-9a61-2c5d8e7f1b40")
@@ -25,7 +26,7 @@ def case(key, code, label, marks, q, ans, primary=(), also_ok=(), control=None, 
         "student_answer": ans,
         "expected": {"primary": list(primary), "also_ok": list(also_ok), "control": control},
         "traps": list(traps),
-        "needs_human_label": True,
+        "needs_human_label": False,
     })
 
 
@@ -199,7 +200,7 @@ case("c-off-syllabus", "9618", "1", 4,
 json.dump({
     "golden_set_version": "topic-tag-synthetic-v1",
     "stage": "topic_tag",
-    "labels": "DRAFT: drafted by Claude, need a person's confirmation before they are truth",
+    "labels": "Drafted by Claude, confirmed by the owner on 2026-10-06",
     "cases": cases,
 }, open(__file__.replace("build_topic_tag_v1.py", "topic-tag-v1.json"), "w"), ensure_ascii=False, indent=1)
 print(len(cases), "cases")
