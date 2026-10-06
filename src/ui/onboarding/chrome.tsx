@@ -65,13 +65,16 @@ export const BRAND = {
     and on the two dead ends a rail would claim progress through a flow that has
     just stopped. */
 export function Shell({
-  children, title, sub, phase, onBack,
+  children, title, sub, phase, onBack, lang,
 }: {
   children: ReactNode;
   title?: string;
   sub?: string;
   phase?: number;
   onBack?: () => void;
+  /** Language of the step's content, when it is not English (the consent
+      notice in Hindi). Covers the title and the body, not the chrome above. */
+  lang?: string;
 }) {
   /* `#obroot` is not decorative and it is not a leftover mount point: twenty
      rules in system.css are scoped to it, including the whole onboarding
@@ -110,7 +113,7 @@ export function Shell({
           </div>
           )}
         </div>
-        <div className="view on obview">
+        <div className="view on obview" lang={lang}>
           {title && (
             <div className="greet">
               <h1>{title}</h1>
@@ -126,10 +129,10 @@ export function Shell({
 
 /** Amber, never red: red is the sign-out row and nothing else. An error here is
     something to fix, not a rebuke. */
-export function Err({ message }: { message?: string | null }) {
+export function Err({ message, lang }: { message?: string | null; lang?: string }) {
   if (!message) return null;
   return (
-    <div className="draft" role="alert">
+    <div className="draft" role="alert" lang={lang}>
       <div className="ic"><Icon d={ICONS.warn} /></div>
       <div className="b"><div className="t2">{message}</div></div>
     </div>

@@ -30,7 +30,8 @@ vi.mock("../../src/ui/data/profiles", () => ({
 vi.mock("../../src/ui/data/useParentMode", () => ({
   useParentMode: () => ({ guard: fixture.parentGuard }),
 }));
-vi.mock("../../src/ui/data/modules", () => {
+vi.mock("../../src/ui/data/modules", async () => {
+  const notice = await vi.importActual<typeof import("../../src/notice.js")>("../../src/notice.js");
   const offering = {
     id: "00000000-0000-0000-0000-000000009702",
     programme_id: "programme-as",
@@ -52,6 +53,8 @@ vi.mock("../../src/ui/data/modules", () => {
     signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
     OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
     listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
+    NOTICE_LANGUAGES: notice.LANGUAGES, noticeStrings: notice.noticeStrings,
+    purposeLabel: notice.purposeLabel, noticeIsComplete: notice.noticeIsComplete,
     startCheckout: vi.fn(),
     paperTypesFor: () => [],
     PROVIDER_KEYS: ["cambridge", "cbse", "ib"],
@@ -242,5 +245,117 @@ test("consent stays opt-in and is submitted through Parent Mode", async () => {
       weekly_parent_digest: false,
       improve_extraction: false,
     },
+    noticeLanguage: "en",
   }));
+});
+
+/* ── AXO-210: the consent notice in Hindi ─────────────────────────────────── */
+
+const ALL_PURPOSES = [
+  { purpose: "store_papers", label: "Storing and reading uploaded papers", is_required: true, sort_order: 1 },
+  { purpose: "extract_text", label: "Extracting text from uploaded papers", is_required: true, sort_order: 2 },
+  { purpose: "generate_explanations", label: "Explaining where marks were lost", is_required: true, sort_order: 3 },
+  { purpose: "track_progress", label: "Tracking progress over time", is_required: true, sort_order: 4 },
+  { purpose: "weekly_parent_digest", label: "Weekly summary to the parent", is_required: false, sort_order: 5 },
+  { purpose: "improve_extraction", label: "Improving extraction accuracy from corrections", is_required: false, sort_order: 6 },
+];
+
+async function openConsent(purposes: typeof ALL_PURPOSES) {
+  window.history.replaceState({}, "", "/");
+  fixture.currentSession.mockResolvedValue({ user: { id: "guardian", email: "parent@example.test" } });
+  fixture.from.mockImplementation((table: string) => {
+    if (table !== "guardian") throw new Error(`unexpected table: ${table}`);
+    return {
+      upsert: () => ({
+        select: () => ({
+          single: async () => ({
+            data: { id: "guardian-row", name: "Parent", contact: "parent@example.test" },
+            error: null,
+          }),
+        }),
+      }),
+    };
+  });
+  fixture.loadProfiles.mockResolvedValue({ data: [] });
+  fixture.listPurposes.mockResolvedValue(purposes);
+  fixture.recordConsent.mockResolvedValue([]);
+  render(<MemoryRouter initialEntries={["/"]}><Onboarding /></MemoryRouter>);
+  await screen.findByRole("heading", { name: "One detail" });
+  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
+  await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByRole("heading", { name: "What you're agreeing to" });
+}
+
+test("the consent notice offers English and Hindi, and Hindi switches the whole notice", async () => {
+  await openConsent(ALL_PURPOSES);
+
+  const choice = await screen.findByRole("group", { name: "Notice language" });
+  const english = within(choice).getByRole("button", { name: "English" });
+  const hindi = within(choice).getByRole("button", { name: "हिन्दी" });
+  expect(english.getAttribute("aria-pressed")).toBe("true");
+  expect(hindi.getAttribute("lang")).toBe("hi");
+
+  // The choice comes before the purposes.
+  const firstSection = screen.getByText("What we need to do");
+  expect(choice.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  await userEvent.click(hindi);
+
+  const heading = await screen.findByRole("heading", { name: "आप किस बात के लिए सहमति दे रहे हैं" });
+  expect(heading.closest("[lang]")?.getAttribute("lang")).toBe("hi");
+  expect(screen.getByText("हमें जो करना ज़रूरी है")).toBeTruthy();
+  expect(screen.getByText("अपलोड किए गए पेपर सहेजना और पढ़ना")).toBeTruthy();
+  expect(screen.getByRole("switch", { name: "अभिभावक को साप्ताहिक सारांश" })
+    .getAttribute("aria-checked")).toBe("false");
+  expect(screen.getByRole("button", { name: "सहमति दें" })).toBeTruthy();
+  // No English purpose label, one-liner or section title survives in Hindi.
+  expect(screen.queryByText("Storing and reading uploaded papers")).toBeNull();
+  expect(screen.queryByText("The pages you upload, kept in the account")).toBeNull();
+  expect(screen.queryByText("What we need to do")).toBeNull();
+
+  // And back.
+  await userEvent.click(within(screen.getByRole("group", { name: "सूचना की भाषा" }))
+    .getByRole("button", { name: "English" }));
+  await screen.findByRole("heading", { name: "What you're agreeing to" });
+  expect(screen.getByText("Storing and reading uploaded papers")).toBeTruthy();
+});
+
+test("the language the notice was shown in is recorded with the consent", async () => {
+  await openConsent(ALL_PURPOSES);
+  await userEvent.click(within(await screen.findByRole("group", { name: "Notice language" }))
+    .getByRole("button", { name: "हिन्दी" }));
+  await userEvent.click(screen.getByRole("switch", { name: "अभिभावक को साप्ताहिक सारांश" }));
+  await userEvent.click(screen.getByRole("button", { name: "सहमति दें" }));
+
+  await waitFor(() => expect(fixture.recordConsent).toHaveBeenCalledWith({
+    guardianId: "guardian-row",
+    studentId: null,
+    decisions: {
+      store_papers: true,
+      extract_text: true,
+      generate_explanations: true,
+      track_progress: true,
+      weekly_parent_digest: true,
+      improve_extraction: false,
+    },
+    noticeLanguage: "hi",
+  }));
+});
+
+test("Hindi is not offered when a purpose on the notice has no Hindi text", async () => {
+  await openConsent([
+    ...ALL_PURPOSES,
+    { purpose: "untranslated_purpose", label: "A purpose with no Hindi label", is_required: false, sort_order: 7 },
+  ]);
+
+  await screen.findByText("A purpose with no Hindi label");
+  expect(screen.queryByRole("group", { name: "Notice language" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "हिन्दी" })).toBeNull();
+  const note = screen.getByText("The Hindi notice is incomplete, so this notice is in English only for now.");
+  expect(note.getAttribute("lang")).toBe("en");
+
+  await userEvent.click(screen.getByRole("button", { name: "Give consent" }));
+  await waitFor(() => expect(fixture.recordConsent).toHaveBeenCalledWith(
+    expect.objectContaining({ noticeLanguage: "en" }),
+  ));
 });
