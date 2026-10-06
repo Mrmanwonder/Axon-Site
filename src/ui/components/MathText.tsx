@@ -19,10 +19,25 @@ import { normalizeAcademicText } from "../data/academicContent";
  */
 const REFUSED = /\\(href|url|includegraphics|html(?:Class|Id|Style|Data)|color|textcolor|colorbox|fcolorbox|mathcolor)\b/;
 
+/*
+ * KaTeX has no text-mode `tabular`, and `align`/`align*` only work in display
+ * mode. Students' answers (and the reader's transcriptions of them) use all
+ * three, so they are mapped onto the KaTeX environments that typeset the same
+ * structure: `array` keeps the column spec and \hline rules, and `aligned`
+ * keeps the & alignment points inline or in display. Words inside a tabular
+ * cell are wrapped in \text{} so they stay upright prose, not italic maths.
+ */
+function katexEnvironments(latex: string): string {
+  return latex
+    .replace(/\\begin\{tabular\}(\s*\{[^{}]*\})?([\s\S]*?)\\end\{tabular\}/g, (_m, spec: string | undefined, body: string) =>
+      "\\begin{array}" + (spec ?? "") + wrapProseWords(body) + "\\end{array}")
+    .replace(/\\(begin|end)\{align\*?\}/g, "\\$1{aligned}");
+}
+
 export function renderSafeLatex(latex: string, displayMode = false): string | null {
   if (!latex.trim() || REFUSED.test(latex)) return null;
   try {
-    return katex.renderToString(normalizeAcademicText(latex), {
+    return katex.renderToString(katexEnvironments(normalizeAcademicText(latex)), {
       displayMode,
       strict: true,
       trust: false,
@@ -69,7 +84,8 @@ type Token =
   | { kind: "text"; value: string }
   | { kind: "math"; value: string; display: boolean };
 
-const EXPLICIT_MATH = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|\$(?!\$)(?:\\.|[^$\\\n])+\$)/g;
+// A single-dollar opener must not be an escaped currency sign (\$32,000).
+const EXPLICIT_MATH = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|(?<!\\)\$(?!\$)(?:\\.|[^$\\\n])+\$)/g;
 
 function looksDelimitedMath(value: string): boolean {
   const text = value.trim();
@@ -257,12 +273,115 @@ function firstLegacyMatch(text: string): { index: number; value: string } | null
   return best;
 }
 
+/* Commands whose braced argument is already prose; their words are left alone. */
+const TEXT_COMMAND = /^\\(?:text|mathrm|textbf|textit|textrm|mathbf|operatorname|mbox|begin|end)$/;
+
+/**
+ * Wrap runs of ordinary words in \text{} so a line that mixes prose and maths
+ * ("\text{median} = 10^{th} pos = \$32,000") typesets as one expression with
+ * the words upright and their spacing kept, instead of italic run-together
+ * letters. Commands (\frac, \hline), single-letter variables and the
+ * arguments of \text-like commands are copied verbatim.
+ */
+function wrapProseWords(source: string): string {
+  let out = "";
+  let i = 0;
+  const copyGroup = () => {
+    // Copies one balanced {...} group starting at source[i].
+    let depth = 0;
+    const start = i;
+    do {
+      if (source[i] === "\\") { i += 2; continue; }
+      if (source[i] === "{") depth++;
+      if (source[i] === "}") depth--;
+      i++;
+    } while (i < source.length && depth > 0);
+    out += source.slice(start, i);
+  };
+  while (i < source.length) {
+    const char = source[i];
+    if (char === "\\") {
+      const command = /^\\(?:[A-Za-z]+\*?|.)/.exec(source.slice(i))?.[0] ?? "\\";
+      out += command;
+      i += command.length;
+      if (TEXT_COMMAND.test(command)) {
+        while (source[i] === " ") out += source[i++];
+        if (source[i] === "{") copyGroup();
+      }
+      continue;
+    }
+    const run = /^[A-Za-z]{2,}(?:[ \t]+[A-Za-z]{2,})*/.exec(source.slice(i))?.[0];
+    if (run && !/[A-Za-z0-9]/.test(source[i - 1] ?? "")) {
+      // Keep a separating space only where two terms are simply juxtaposed
+      // ("10^{th} pos"); around an operator KaTeX already spaces correctly.
+      const before = /[A-Za-z0-9}][ \t]+$/.test(out) ? " " : "";
+      const after = /^[ \t]+[A-Za-z0-9\\]/.test(source.slice(i + run.length)) && !/^[ \t]+\\(?:times|div|cdot|le|ge|ne|approx|pm|to)\b/.test(source.slice(i + run.length)) ? " " : "";
+      out += "\\text{" + before + run + after + "}";
+      i += run.length;
+      continue;
+    }
+    out += char;
+    i++;
+  }
+  return out;
+}
+
+/*
+ * One line of working that mixes prose and maths, written with LaTeX commands
+ * but no delimiters: "\text{median} = 10^{th} pos = \$32,000". When the line
+ * is mostly maths (a relation, at most two ordinary words outside \text{}),
+ * typeset the whole line once, with the stray words upright, rather than
+ * cutting it into fragments that KaTeX cannot parse on their own.
+ */
+function mixedLatexLine(line: string): string | null {
+  const value = line.trim();
+  if (!/\\(?:[A-Za-z]+|[$%&#])/.test(value) || REFUSED.test(value)) return null;
+  if (!/[=<>]|\\(?:le|ge|ne|approx|times|div|cdot|pm)\b/.test(value)) return null;
+  const prose = value
+    .replace(/\\(?:text|mathrm|textbf|textit|textrm|mbox|operatorname)\s*\{[^{}]*\}/g, " ")
+    .replace(/\\[A-Za-z]+/g, " ");
+  if ((prose.match(/[A-Za-z]{3,}/g)?.length ?? 0) > 2) return null;
+  // Thousands separators: 32,000 is one number, not a list.
+  const latex = wrapProseWords(value).replace(/(\d),(?=\d{3}(?!\d))/g, "$1{,}");
+  return renderSafeLatex(latex) ? latex : null;
+}
+
+/** Environments that own their row boundaries; they may span several lines. */
+const ENVIRONMENT = /\\begin\{(array|tabular|matrix|pmatrix|bmatrix|aligned|align\*?|cases|gathered)\}/;
+
+/** The first complete \begin{env} ... \end{env} block, honouring nesting. */
+function firstEnvironment(text: string): { index: number; value: string } | null {
+  const open = ENVIRONMENT.exec(text);
+  if (!open || open.index == null) return null;
+  const name = open[1].replace("*", "\\*");
+  const tags = new RegExp("\\\\(begin|end)\\{" + name + "\\}", "g");
+  tags.lastIndex = open.index;
+  let depth = 0;
+  for (let tag = tags.exec(text); tag; tag = tags.exec(text)) {
+    depth += tag[1] === "begin" ? 1 : -1;
+    if (depth === 0) {
+      const end = tag.index + tag[0].length;
+      return { index: open.index, value: text.slice(open.index, end) };
+    }
+  }
+  return null;
+}
+
 function legacyTokens(text: string): Token[] {
   if (!text) return [];
-  // Valid matrix/alignment environments own their row boundaries, including
-  // actual newlines. Keep them as a single mathematical block.
-  if (/^\\begin\{/.test(text.trim()) && looksLikeWholeMath(text)) {
-    return [{ kind: "math", value: text.trim(), display: true }];
+  // A table or alignment environment owns its row boundaries, including real
+  // newlines, so it is one display block even when it spans many lines. The
+  // working around it keeps its own line breaks; the single newline on each
+  // side is absorbed because a display block already starts on its own line.
+  const environment = firstEnvironment(text);
+  if (environment) {
+    const before = text.slice(0, environment.index).replace(/\n[ \t]*$/, "");
+    const after = text.slice(environment.index + environment.value.length).replace(/^[ \t]*\n/, "");
+    return [
+      ...legacyTokens(before),
+      { kind: "math", value: environment.value, display: true },
+      ...legacyTokens(after),
+    ];
   }
   // A newline separates working steps; do not typeset a whole answer as one
   // expression and lose the original line order or prose boundaries.
@@ -275,6 +394,8 @@ function legacyTokens(text: string): Token[] {
   if (looksLikeWholeMath(text)) {
     return [{ kind: "math", value: normaliseLegacyLatex(text), display: false }];
   }
+  const mixed = mixedLatexLine(text);
+  if (mixed) return [{ kind: "math", value: mixed, display: false }];
 
   const out: Token[] = [];
   let rest = text;
