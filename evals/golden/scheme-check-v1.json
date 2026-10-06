@@ -1,0 +1,677 @@
+{
+ "golden_set_version": "scheme-check-synthetic-v1",
+ "stage": "scheme_check",
+ "labels": "Drafted by Claude; await owner confirmation",
+ "note": "Questions, answers and scheme sections are all invented for this eval; no board text.",
+ "cases": [
+  {
+   "id": "ed06dcbb-8f1a-58fd-afee-94988e0dfa9d",
+   "key": "m-square-full",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "1",
+   "marks_available": 3,
+   "question_text": "Express 4x^2 - 24x + 11 in the form a(x - b)^2 + c.",
+   "student_answer": "4(x^2 - 6x) + 11 = 4(x - 3)^2 - 36 + 11 = 4(x - 3)^2 - 25",
+   "scheme": "a = 4 stated or used | B1\nb = 3 from halving the linear coefficient after taking out 4 | M1\nc = -25 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     3,
+     3
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "9936eb2d-9d09-52e6-9f18-6431fe13d102",
+   "key": "m-square-slip",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "1",
+   "marks_available": 3,
+   "question_text": "Express 4x^2 - 24x + 11 in the form a(x - b)^2 + c.",
+   "student_answer": "4(x - 3)^2 - 9 + 11 = 4(x - 3)^2 + 2",
+   "scheme": "a = 4 stated or used | B1\nb = 3 from halving the linear coefficient after taking out 4 | M1\nc = -25 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [
+    "forgot to multiply the 9 by 4; method and a are right, c is wrong"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "efd05753-7499-52e3-8179-4c2c929ac813",
+   "key": "m-diff-tangent",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "4",
+   "marks_available": 4,
+   "question_text": "Find the equation of the tangent to y = x^3 - 2x + 5 at the point where x = 2.",
+   "student_answer": "dy/dx = 3x^2 - 2 = 10 at x = 2, y = 9, y - 9 = 10(x - 2), y = 10x - 11",
+   "scheme": "Differentiate correctly | B1\nSubstitute x = 2 into the derivative to get a gradient | M1\nFind y = 9 and use a line through (2, 9) with their gradient | M1\ny = 10x - 11 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     4,
+     4
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "9154c031-32bc-58ee-8f87-0abf4f1ff325",
+   "key": "m-diff-tangent-normal",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "4",
+   "marks_available": 4,
+   "question_text": "Find the equation of the tangent to y = x^3 - 2x + 5 at the point where x = 2.",
+   "student_answer": "dy/dx = 3x^2 - 2 = 10, normal gradient -1/10, y - 9 = -1/10 (x - 2)",
+   "scheme": "Differentiate correctly | B1\nSubstitute x = 2 into the derivative to get a gradient | M1\nFind y = 9 and use a line through (2, 9) with their gradient | M1\ny = 10x - 11 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     3
+    ],
+    "control": null
+   },
+   "traps": [
+    "found the normal instead of the tangent; an examiner may or may not credit the line method"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "18fb045b-52b1-50b9-8373-88c13c731d65",
+   "key": "m-integral-area",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "6",
+   "marks_available": 4,
+   "question_text": "Find the area enclosed between y = 9 - x^2 and the x-axis.",
+   "student_answer": "integral of 9 - x^2 from -3 to 3 = [9x - x^3/3] = (27 - 9) - (-27 + 9) = 36",
+   "scheme": "Correct limits x = -3 and x = 3 | B1\nIntegrate to 9x - x^3/3 | M1\nSubstitute limits and subtract | M1\nArea = 36 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     4,
+     4
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "4ca1dd56-3aad-5102-a971-8e0ffdf6b3f2",
+   "key": "m-integral-no-limits",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "6",
+   "marks_available": 4,
+   "question_text": "Find the area enclosed between y = 9 - x^2 and the x-axis.",
+   "student_answer": "9x - x^3/3",
+   "scheme": "Correct limits x = -3 and x = 3 | B1\nIntegrate to 9x - x^3/3 | M1\nSubstitute limits and subtract | M1\nArea = 36 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     1
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "981bd20e-b80b-5eae-99a7-0d9817a38834",
+   "key": "m-gp-blank",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "7",
+   "marks_available": 4,
+   "question_text": "A geometric progression has first term 50 and sum to infinity 200. Find the common ratio and the third term.",
+   "student_answer": "",
+   "scheme": "Use S = a/(1 - r) with a = 50 | M1\nr = 3/4 | A1\nUse ar^2 with their r | M1\nThird term = 28.125 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     0,
+     0
+    ],
+    "control": "blank"
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "ee7b84b1-b41c-569f-b18b-0209690a7c7c",
+   "key": "m-trig-solve",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "5",
+   "marks_available": 5,
+   "question_text": "Solve 2cos^2 x + 3sin x = 3 for 0 <= x <= 180 degrees.",
+   "student_answer": "2(1 - sin^2 x) + 3 sin x - 3 = 0, 2sin^2 x - 3sin x + 1 = 0, sin x = 1/2 or 1, x = 30, 90, 150",
+   "scheme": "Use cos^2 = 1 - sin^2 | M1\nForm a three-term quadratic in sin x | A1\nSolve to sin x = 1/2 or 1 | M1\nx = 30 and 150 | A1\nx = 90 and no others in range | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     5,
+     5
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "3952791c-d804-52ae-b35c-257799a7df15",
+   "key": "m-trig-missing-root",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "5",
+   "marks_available": 5,
+   "question_text": "Solve 2cos^2 x + 3sin x = 3 for 0 <= x <= 180 degrees.",
+   "student_answer": "2sin^2 x - 3 sin x + 1 = 0, sin x = 1/2, x = 30",
+   "scheme": "Use cos^2 = 1 - sin^2 | M1\nForm a three-term quadratic in sin x | A1\nSolve to sin x = 1/2 or 1 | M1\nx = 30 and 150 | A1\nx = 90 and no others in range | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     3
+    ],
+    "control": null
+   },
+   "traps": [
+    "missed sin x = 1 and the second angle"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "7f693a34-0db6-5330-9784-bf80a5d2c112",
+   "key": "m-mismatch",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "3",
+   "marks_available": 3,
+   "question_text": "Find the coefficient of x^2 in the expansion of (3 - 2x)^5.",
+   "student_answer": "5C2 x 3^3 x (-2)^2 = 10 x 27 x 4 = 1080",
+   "scheme": "Use S = a/(1 - r) with a = 50 | M1\nr = 3/4 | A1\nUse ar^2 with their r | M1\nThird term = 28.125 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": false,
+    "est": null,
+    "control": "mismatch"
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "ae10f648-71ff-5768-8474-dc4e563f38ef",
+   "key": "m-binomial-sign",
+   "syllabus_code": "9709",
+   "paper": "9709/12 Synthetic eval paper",
+   "label": "3",
+   "marks_available": 3,
+   "question_text": "Find the coefficient of x^2 in the expansion of (3 - 2x)^5.",
+   "student_answer": "10 x 27 x (-2) = -540",
+   "scheme": "Correct binomial coefficient 10 | B1\nCombine 3^3 with (-2x)^2 | M1\nCoefficient = 1080 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     1
+    ],
+    "control": null
+   },
+   "traps": [
+    "did not square the -2"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "00818516-e7c6-515a-93f1-aab9410e1038",
+   "key": "f-induction",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "2",
+   "marks_available": 5,
+   "question_text": "Prove by induction that 1 + 3 + 5 + ... + (2n - 1) = n^2 for every positive integer n.",
+   "student_answer": "n = 1: 1 = 1^2 true. Assume true for n = k: sum = k^2. Then sum to k+1 = k^2 + 2k + 1 = (k+1)^2. So true for k+1. Since true for n=1 and true for k implies true for k+1, true for all positive integers.",
+   "scheme": "Base case shown | B1\nState the inductive hypothesis for n = k | B1\nAdd the (k+1)th term to the hypothesis | M1\nReach (k+1)^2 | A1\nCorrect conclusion | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     5,
+     5
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "b356f2ef-f4e4-5e05-8f38-cdc4a1cbd0b5",
+   "key": "f-induction-no-conclusion",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "2",
+   "marks_available": 5,
+   "question_text": "Prove by induction that 1 + 3 + 5 + ... + (2n - 1) = n^2 for every positive integer n.",
+   "student_answer": "k^2 + 2k + 1 = (k+1)^2",
+   "scheme": "Base case shown | B1\nState the inductive hypothesis for n = k | B1\nAdd the (k+1)th term to the hypothesis | M1\nReach (k+1)^2 | A1\nCorrect conclusion | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     2
+    ],
+    "control": null
+   },
+   "traps": [
+    "no base case, no hypothesis, no conclusion"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "b5d8f6c7-1914-5952-9fa9-b3b258c11b60",
+   "key": "f-roots",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "1",
+   "marks_available": 4,
+   "question_text": "The roots of x^3 - 4x^2 + 2x - 7 = 0 are a, b, c. Find a^2 + b^2 + c^2.",
+   "student_answer": "sum = 4, sum of pairs = 2, a^2+b^2+c^2 = 16 - 4 = 12",
+   "scheme": "a + b + c = 4 | B1\nab + bc + ca = 2 | B1\nUse (sum)^2 - 2(sum of pairs) | M1\n12 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     4,
+     4
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "880cdac6-c172-539f-8990-4a14ebd03401",
+   "key": "f-roots-sign",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "1",
+   "marks_available": 4,
+   "question_text": "The roots of x^3 - 4x^2 + 2x - 7 = 0 are a, b, c. Find a^2 + b^2 + c^2.",
+   "student_answer": "sum = -4, pairs = 2, 16 - 4 = 12",
+   "scheme": "a + b + c = 4 | B1\nab + bc + ca = 2 | B1\nUse (sum)^2 - 2(sum of pairs) | M1\n12 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     3,
+     4
+    ],
+    "control": null
+   },
+   "traps": [
+    "wrong sign on the sum but the square hides it; correct final value"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "727f3019-92a0-57e8-8b2a-fd1f7b2e8c29",
+   "key": "f-matrix-inverse",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "3",
+   "marks_available": 3,
+   "question_text": "Find the inverse of the matrix M = [[2, 1], [5, 3]].",
+   "student_answer": "det = 6 - 5 = 1, M^-1 = [[3, -1], [-5, 2]]",
+   "scheme": "Determinant = 1 | B1\nSwap and negate | M1\nCorrect inverse | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     3,
+     3
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "8a1aa6e1-29f7-55d0-8586-77c1701d95a1",
+   "key": "f-unreadable",
+   "syllabus_code": "9231",
+   "paper": "9231/11 Synthetic eval paper",
+   "label": "3",
+   "marks_available": 3,
+   "question_text": "Find the inverse of the matrix M = [[2, 1], [5, 3]].",
+   "student_answer": "[illegible] ... ?? ]] [[ ...",
+   "scheme": "Determinant = 1 | B1\nSwap and negate | M1\nCorrect inverse | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": false,
+    "est": null,
+    "control": "unreadable"
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "d974b57d-1fac-5e75-adb0-895b1d74868b",
+   "key": "p-kinematics",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "2(b)",
+   "marks_available": 3,
+   "question_text": "A ball is dropped from rest and falls 20 m. Ignoring air resistance, calculate its speed just before it hits the ground. Take g = 9.81 m s^-2.",
+   "student_answer": "v^2 = u^2 + 2as = 0 + 2(9.81)(20) = 392.4, v = 19.8 m/s",
+   "scheme": "Use v^2 = u^2 + 2as or energy | C1\nSubstitution with u = 0 | C1\nv = 19.8 m s^-1 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     3,
+     3
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "e5a37bae-72f4-592b-846b-e3a471f84264",
+   "key": "p-kinematics-no-root",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "2(b)",
+   "marks_available": 3,
+   "question_text": "A ball is dropped from rest and falls 20 m. Ignoring air resistance, calculate its speed just before it hits the ground. Take g = 9.81 m s^-2.",
+   "student_answer": "v^2 = 2 x 9.81 x 20 = 392 m/s",
+   "scheme": "Use v^2 = u^2 + 2as or energy | C1\nSubstitution with u = 0 | C1\nv = 19.8 m s^-1 | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [
+    "did not take the square root"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "52fa3e5c-af9f-54f3-bd88-df1d3b6e64de",
+   "key": "p-resistance",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "5(a)",
+   "marks_available": 2,
+   "question_text": "Two resistors of 6.0 ohm and 3.0 ohm are connected in parallel. Calculate the combined resistance.",
+   "student_answer": "1/R = 1/6 + 1/3 = 1/2, R = 2.0 ohm",
+   "scheme": "Use 1/R = 1/R1 + 1/R2 | C1\nR = 2.0 ohm | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "86f59e0a-a9ec-56fd-b176-8ccb267dbf5a",
+   "key": "p-resistance-series",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "5(a)",
+   "marks_available": 2,
+   "question_text": "Two resistors of 6.0 ohm and 3.0 ohm are connected in parallel. Calculate the combined resistance.",
+   "student_answer": "R = 6 + 3 = 9 ohm",
+   "scheme": "Use 1/R = 1/R1 + 1/R2 | C1\nR = 2.0 ohm | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     0,
+     0
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "c6e818f7-f105-5f2d-b6ea-af7d18a2bc44",
+   "key": "p-explain-words",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "3(a)",
+   "marks_available": 2,
+   "question_text": "State what is meant by the moment of a force.",
+   "student_answer": "force times the perpendicular distance from the pivot to the line of action of the force",
+   "scheme": "Force multiplied by distance | B1\nDistance is perpendicular from the pivot to the line of action | B1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "f3544b13-1670-59aa-860a-12d6ba52aea3",
+   "key": "p-explain-partial",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "3(a)",
+   "marks_available": 2,
+   "question_text": "State what is meant by the moment of a force.",
+   "student_answer": "force times distance",
+   "scheme": "Force multiplied by distance | B1\nDistance is perpendicular from the pivot to the line of action | B1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     1
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "b3043da8-bb30-5c92-aeb1-d3b5e9b98619",
+   "key": "p-blank",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "6",
+   "marks_available": 3,
+   "question_text": "Calculate the energy of a photon of wavelength 500 nm.",
+   "student_answer": "   ",
+   "scheme": "Use E = hc / wavelength | C1\nConvert 500 nm to metres | C1\nE = 3.98 x 10^-19 J | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     0,
+     0
+    ],
+    "control": "blank"
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "8b0b0aa4-01e5-55df-9391-5225477dcc87",
+   "key": "p-verbatim-trap",
+   "syllabus_code": "9702",
+   "paper": "9702/22 Synthetic eval paper",
+   "label": "4",
+   "marks_available": 2,
+   "question_text": "Explain why the current in a filament lamp is not proportional to the potential difference across it.",
+   "student_answer": "as the current increases the filament gets hotter so its resistance increases",
+   "scheme": "Temperature of the filament rises as the current increases, so the lattice ions vibrate more strongly | B1\nResistance increases with temperature, so the graph of current against potential difference is not a straight line | B1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     2
+    ],
+    "control": "verbatim"
+   },
+   "traps": [
+    "long scheme lines tempt copying; feedback must use its own words"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "951f5399-bfb3-532c-b41b-1f55056e0b59",
+   "key": "c-binary",
+   "syllabus_code": "9618",
+   "paper": "9618/12 Synthetic eval paper",
+   "label": "1(a)",
+   "marks_available": 2,
+   "question_text": "Convert the denary number 77 into an 8-bit binary number.",
+   "student_answer": "01001101",
+   "scheme": "Correct bits for 64, 8, 4, 1 | B1\nWritten as 8 bits with leading zero | B1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "e056c25d-a666-51c3-a371-f86b71e3f0bc",
+   "key": "c-binary-7bit",
+   "syllabus_code": "9618",
+   "paper": "9618/12 Synthetic eval paper",
+   "label": "1(a)",
+   "marks_available": 2,
+   "question_text": "Convert the denary number 77 into an 8-bit binary number.",
+   "student_answer": "1001101",
+   "scheme": "Correct bits for 64, 8, 4, 1 | B1\nWritten as 8 bits with leading zero | B1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     1,
+     1
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "57a675f9-a91f-52f1-ac66-23feddf9dd1d",
+   "key": "c-pseudocode",
+   "syllabus_code": "9618",
+   "paper": "9618/12 Synthetic eval paper",
+   "label": "5",
+   "marks_available": 4,
+   "question_text": "Write pseudocode to output the total of the integers from 1 to N, where N is input by the user.",
+   "student_answer": "INPUT N\nTotal <- 0\nFOR i <- 1 TO N\n  Total <- Total + i\nNEXT i\nOUTPUT Total",
+   "scheme": "Input N | B1\nInitialise a total to 0 | B1\nLoop from 1 to N adding the counter | M1\nOutput the total after the loop | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     4,
+     4
+    ],
+    "control": null
+   },
+   "traps": [],
+   "needs_human_label": true
+  },
+  {
+   "id": "82f64fcb-97fe-59ce-b1e1-0ce93e1cd1ef",
+   "key": "c-pseudocode-no-init",
+   "syllabus_code": "9618",
+   "paper": "9618/12 Synthetic eval paper",
+   "label": "5",
+   "marks_available": 4,
+   "question_text": "Write pseudocode to output the total of the integers from 1 to N, where N is input by the user.",
+   "student_answer": "INPUT N\nFOR i <- 1 TO N\n  Total <- Total + i\n  OUTPUT Total\nNEXT i",
+   "scheme": "Input N | B1\nInitialise a total to 0 | B1\nLoop from 1 to N adding the counter | M1\nOutput the total after the loop | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": true,
+    "est": [
+     2,
+     2
+    ],
+    "control": null
+   },
+   "traps": [
+    "no initialisation and output inside the loop"
+   ],
+   "needs_human_label": true
+  },
+  {
+   "id": "7ad5f9de-07d2-5a56-b432-dddf0b4f8c16",
+   "key": "c-mismatch",
+   "syllabus_code": "9618",
+   "paper": "9618/12 Synthetic eval paper",
+   "label": "2",
+   "marks_available": 2,
+   "question_text": "State two differences between RAM and ROM.",
+   "student_answer": "RAM is volatile, ROM is not. RAM can be written to, ROM is read only.",
+   "scheme": "Input N | B1\nInitialise a total to 0 | B1\nLoop from 1 to N adding the counter | M1\nOutput the total after the loop | A1",
+   "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
+   "expected": {
+    "can_check": false,
+    "est": null,
+    "control": "mismatch"
+   },
+   "traps": [],
+   "needs_human_label": true
+  }
+ ]
+}
