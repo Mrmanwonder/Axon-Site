@@ -220,3 +220,32 @@ test("the review card's AcademicText renders the same array answer as a table", 
   expect(container.querySelector(".math-display .katex-hline")).not.toBeNull();
   expect(container.querySelectorAll(".katex")).toHaveLength(2);
 });
+
+/*
+ * AXO-139 production gate: shapes copied from the owner's own saved papers
+ * (5 Oct screenshots and the production audit on 6 Oct). Normal reading must
+ * show no raw TeX command, brace or delimiter.
+ */
+test.each([
+  ["\\text{} inside fractions", "\\frac{\\text{a head}}{\\text{no red}} = \\frac{\\frac{1}{3}}{\\frac{10}{27}} = \\frac{9}{10}"],
+  ["\\sum and \\quad in question prose", "Given that \\sum(x-c) = 642, \\quad \\sum(x-c)^2 = 32\\,460, where c is a constant, find the mean."],
+  ["\\Sigma in question prose", "\\Sigma(x - 200) = 446 and \\Sigma x = 6846."],
+  ["combinations with a leading superscript", "^{4}\\text{C}_1 \\times 3! \\times 3! = 144"],
+  ["combinations with an empty base", "^{9}C_{6} \\times {}^{3}C_{3} = 84 \\times 1 = 84 \\text{ different ways}"],
+  ["words beside \\times", "O No No \\times 3 = \\frac{4}{12} \\times \\frac{8}{11} \\times 3 = \\frac{28}{55}"],
+  ["ordinals and an escaped dollar", "\\text{median} = 10^{th}\\text{ pos} = \\$32,000"],
+  ["a bare percent sign", "Small = 20% = (S \\le x)"],
+  ["percent in working", "UQ = 75\\% \\times 19 = 15^{th}\\text{ pos}"],
+])("production example renders without raw TeX: %s", (_name, text) => {
+  const { container } = render(<MathText text={text} />);
+  expect(container.querySelector(".katex")).not.toBeNull();
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(visibleText(container)).not.toMatch(/\\[A-Za-z]+|\^\{|_\{|\{\}/);
+});
+
+test("a bare percent sign is a percent, never a TeX comment that swallows the line", () => {
+  const html = renderSafeLatex("20% = (S \\le x)");
+  expect(html).not.toBeNull();
+  expect(html).toContain("%");
+  expect(html).toContain("≤");
+});
