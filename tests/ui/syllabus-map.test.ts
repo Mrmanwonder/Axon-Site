@@ -57,6 +57,21 @@ describe("syllabus map", () => {
     expect([m.questionsPlaced, m.questionsUnplaced]).toEqual([4, 4]);
   });
 
+  test("a unit counts each placed question once and carries the radar's numbers", () => {
+    const s = scenario(4);
+    // Tag every a-question to the second topic too: still one question per attempt in the unit.
+    s.data.evidence.push(...s.papers.map((p, i) => ({ attempt_id: `a${i}`, paper_id: p.id, topic_id: "o3", document_id: doc.id, is_primary: false, max_marks: 4, marks_awarded: 1 })));
+    const u = buildSyllabusMaps({ ...s, now: NOW }).maps[0].units[0];
+    expect([u.questions, u.papers, u.lost, u.available, u.topicsTested, u.state]).toEqual([4, 4, 12, 16, 2, "evidence"]);
+  });
+
+  test("a unit with no placed question is untested, with nothing lost and nothing available", () => {
+    const s = scenario(4);
+    s.data.evidence = [];
+    const u = buildSyllabusMaps({ ...s, now: NOW }).maps[0].units[0];
+    expect([u.state, u.questions, u.lost, u.available]).toEqual(["untested", 0, 0, 0]);
+  });
+
   test("no shading until four papers are placed in the subject", () => {
     const three = buildSyllabusMaps({ ...scenario(3), now: NOW }).maps[0];
     expect(three.shadingReady).toBe(false);

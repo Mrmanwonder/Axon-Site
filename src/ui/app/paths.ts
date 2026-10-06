@@ -23,6 +23,7 @@ export const paths = {
   scan: "/scan",
   review: (draftId: string) => `/scan/review/${draftId}`,
   insights: "/insights",
+  syllabus: (offeringId: string) => `/insights/syllabus/${offeringId}`,
   settings: "/settings",
   tutor: (ctx: { paperId?: string; attemptId?: string } = {}) => {
     const q = new URLSearchParams();

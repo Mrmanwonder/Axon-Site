@@ -1,11 +1,9 @@
-/* The syllabus map: one subject's published topic tree, shaded by the share
-   of marks lost on questions placed on each topic. See syllabusMap.ts for the
-   rules; this file only draws them.
-
-   A cell is a button. Choosing one opens its detail below the grid: the marks,
-   the board's own learning objectives (verbatim), and the questions behind it,
-   each linking to the question. Shade is never the only signal: every cell
-   carries its counts in its accessible name and in the detail. */
+/* The syllabus map. On Insights: one subject's units on a radar, with the
+   chosen unit's marks and an "In detail" link. On the detail page: every
+   unit, a tile per topic shaded by the share of marks lost, and every topic's
+   board objectives (verbatim) and the questions behind it.
+   See syllabusMap.ts for the rules; this file only draws them. Shade is never
+   the only signal: every mark carries its counts in its accessible name. */
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -14,6 +12,7 @@ import PressBox from "./PressBox";
 import { paths } from "../app/paths";
 import { numMark } from "../data/causes";
 import { PATTERN_PAPERS, type QuestionRef } from "../data/insights";
+import SyllabusRadar, { unitSummary } from "./SyllabusRadar";
 import { scopeLabel, type SubjectMap, type SyllabusMaps, type TopicCell } from "../data/syllabusMap";
 
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
@@ -24,7 +23,7 @@ function cellLabel(c: TopicCell, ready: boolean): string {
   return `${c.code} ${c.title}: ${counts}${c.state === "early" ? ", early evidence" : ""}${ready ? "" : ", not shaded yet"}`;
 }
 
-function Legend({ ready }: { ready: boolean }) {
+export function Legend({ ready }: { ready: boolean }) {
   return (
     <div className="heatlegend" aria-hidden="true">
       {ready && <span className="ramp"><span>Fewer marks lost</span>{[0, 1, 2, 3, 4].map((l) => <i key={l} className={`heat l${l}`} />)}<span>More</span></span>}
@@ -34,7 +33,7 @@ function Legend({ ready }: { ready: boolean }) {
   );
 }
 
-function Detail({ cell, map, describe }: { cell: TopicCell; map: SubjectMap; describe: (r: QuestionRef) => string }) {
+export function Detail({ cell, map, describe, showSource = true }: { cell: TopicCell; map: SubjectMap; describe: (r: QuestionRef) => string; showSource?: boolean }) {
   const groups = useMemo(() => {
     const out: { group: string | null; items: TopicCell["objectives"] }[] = [];
     for (const o of cell.objectives) {
@@ -83,24 +82,33 @@ function Detail({ cell, map, describe }: { cell: TopicCell; map: SubjectMap; des
           ))}
         </ul>
       </>}
-      <p className="widgetnote">
+      {showSource && <p className="widgetnote">
         Objectives quoted from the {map.document.title} {map.document.syllabus_code} syllabus ({map.document.version_label}).{" "}
         <a href={map.document.source_url} target="_blank" rel="noreferrer">Source</a>
-      </p>
+      </p>}
     </div>
   );
 }
 
-export default function SyllabusMap({ data, describe, initialSubject }: {
-  data: SyllabusMaps; describe: (r: QuestionRef) => string; initialSubject?: string | null;
+/** The Insights card: one subject's units on a radar, the chosen unit's
+    numbers, and the way into the full syllabus. */
+export default function SyllabusMap({ data, initialSubject }: {
+  data: SyllabusMaps; initialSubject?: string | null;
 }) {
   const [offering, setOffering] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
   const map = data.maps.find((m) => m.offeringId === offering)
     ?? data.maps.find((m) => m.label === initialSubject)
     ?? data.maps[0];
+  const firstPick = useMemo(() => {
+    if (!map?.shadingReady) return null;
+    const tested = map.units.filter((u) => u.state !== "untested" && u.available > 0);
+    return tested.sort((a, b) => b.lost / b.available - a.lost / a.available || b.questions - a.questions)[0]?.id ?? null;
+  }, [map]);
+  const [picked, setPicked] = useState<string | null>(null);
   if (!map) return null;
-  const cell = map.units.flatMap((u) => u.cells).find((c) => c.id === selected) ?? null;
+  const selectedId = picked && map.units.some((u) => u.id === picked) ? picked : firstPick;
+  const unit = map.units.find((u) => u.id === selectedId) ?? null;
+  const tested = map.units.filter((u) => u.state !== "untested").length;
 
   return (
     <div className="card heatcard">
@@ -108,41 +116,64 @@ export default function SyllabusMap({ data, describe, initialSubject }: {
         {data.maps.length > 1
           ? <AppDropdown ariaLabel="Syllabus map subject" value={map.offeringId}
               options={data.maps.map((m) => ({ value: m.offeringId, label: `${m.label} · ${m.document.syllabus_code}` }))}
-              onChange={(v) => { setOffering(v); setSelected(null); }} selected />
+              onChange={(v) => { setOffering(v); setPicked(null); }} selected />
           : <span className="subj">{map.label} · {map.document.syllabus_code}</span>}
-        <span className="cov">{map.topicsTested} of {map.topicsTotal} topics tested</span>
+        <span className="cov">{tested} of {map.units.length} units tested</span>
       </div>
-      {!map.shadingReady && (
-        <p className="lede">
-          {map.papersPlaced === 0
+      <p className="lede">
+        {map.shadingReady
+          ? "Each spoke is a syllabus unit. The further out your shape reaches, the more of that unit’s marks you lost."
+          : map.papersPlaced === 0
             ? `None of your ${map.label} questions have been placed on the syllabus yet.`
-            : `Shading by marks lost starts at ${PATTERN_PAPERS} ${map.label} papers (${map.papersPlaced} so far). For now, the map shows which topics you have been tested on.`}
-        </p>
-      )}
-      <Legend ready={map.shadingReady} />
-      {map.units.map((u) => (
-        <section className="heatunit" key={u.id} aria-label={`${u.code} ${u.title}`}>
-          <div className="uname"><span>{u.code}</span>{u.title}{scopeLabel(u.scope) ? <em>{scopeLabel(u.scope)}</em> : null}</div>
-          <div className="heatgrid">
-            {u.cells.map((c) => (
-              <button key={c.id} type="button"
-                className={`heatcell heat ${c.state}${c.level !== null && c.state !== "untested" ? ` l${c.level}` : ""}${c.id === selected ? " on" : ""}`}
-                aria-pressed={c.id === selected} aria-label={cellLabel(c, map.shadingReady)} title={cellLabel(c, map.shadingReady)}
-                onClick={() => setSelected(c.id === selected ? null : c.id)}>
-                <span className="cc">{c.code}</span>
-                <span className="ct">{c.title}</span>
-                {c.state !== "untested" && <span className="cq" aria-hidden="true">{c.questions} {c.questions === 1 ? "question" : "questions"}</span>}
-              </button>
-            ))}
-          </div>
-          {cell && u.cells.some((c) => c.id === cell.id) && <Detail cell={cell} map={map} describe={describe} />}
-        </section>
-      ))}
+            : `Marks lost by unit appear at ${PATTERN_PAPERS} ${map.label} papers (${map.papersPlaced} so far). For now, the web marks the units you have been tested on.`}
+      </p>
+      {map.units.length >= 3
+        ? <SyllabusRadar units={map.units} ready={map.shadingReady} selected={selectedId}
+            onSelect={(id) => setPicked(id === selectedId ? null : id)}
+            label={`${map.label}: marks lost by syllabus unit`} />
+        : null}
+      <div className="radarlegend" aria-hidden="true">
+        {!map.shadingReady && <span className="key"><i className="rk tested" />Tested</span>}
+        <span className="key"><i className="rk dashed" />Not tested yet</span>
+      </div>
+      <div className="radarpick" aria-live="polite">
+        {unit
+          ? <><div className="rpname"><span>{unit.code}</span>{unit.title}</div><div className="rpmeta">{unitSummary(unit, map.shadingReady)}</div></>
+          : <div className="rpmeta">Tap a unit to see its marks.</div>}
+      </div>
+      <PressBox as={Link} to={paths.syllabus(map.offeringId)} className="btn ghost indetail">In detail</PressBox>
       <p className="widgetnote">
-        {map.shadingReady ? "Each topic is shaded by the share of its marks you lost, across" : "Placed so far:"} {plural(map.questionsPlaced, "question")} in {plural(map.papersPlaced, "paper")}.
-        {map.questionsUnplaced > 0 ? ` ${plural(map.questionsUnplaced, "question")} in ${map.label} ${map.questionsUnplaced === 1 ? "is" : "are"} not on the map yet: still being placed, or not clearly on one topic.` : ""}
-        {" "}Topics come from the board&rsquo;s published syllabus; which topic a question tests is worked out by Axon, and marks are your teacher&rsquo;s.
+        Placed so far: {plural(map.questionsPlaced, "question")} in {plural(map.papersPlaced, "paper")}.
+        {map.questionsUnplaced > 0 ? ` ${plural(map.questionsUnplaced, "question")} in ${map.label} ${map.questionsUnplaced === 1 ? "is" : "are"} not on the syllabus yet.` : ""}
+        {" "}Units come from the board&rsquo;s published syllabus; which unit a question tests is worked out by Axon, and marks are your teacher&rsquo;s.
       </p>
     </div>
   );
+}
+
+/** Every unit of one subject in full: unit totals, a tile per topic, and every
+    topic's objectives and questions. The detail page. */
+export function SyllabusUnits({ map, describe }: { map: SubjectMap; describe: (r: QuestionRef) => string }) {
+  return <>
+    {map.units.map((u) => (
+      <section className="card sunit" key={u.id} id={`unit-${u.code}`} aria-label={`${u.code} ${u.title}`}>
+        <div className="sunithead">
+          <h2 className="uname"><span>{u.code}</span>{u.title}{scopeLabel(u.scope) ? <em>{scopeLabel(u.scope)}</em> : null}</h2>
+          <div className="sunitmeta">{unitSummary(u, map.shadingReady)}</div>
+        </div>
+        <div className="heatgrid">
+          {u.cells.map((c) => (
+            <a key={c.id} href={`#topic-${c.id}`}
+              className={`heatcell heat ${c.state}${c.level !== null && c.state !== "untested" ? ` l${c.level}` : ""}`}
+              aria-label={cellLabel(c, map.shadingReady)}>
+              <span className="cc">{c.code}</span>
+              <span className="ct">{c.title}</span>
+              {c.state !== "untested" && <span className="cq" aria-hidden="true">{c.questions} {c.questions === 1 ? "question" : "questions"}</span>}
+            </a>
+          ))}
+        </div>
+        {u.cells.map((c) => <div key={c.id} id={`topic-${c.id}`} className="stopic"><Detail cell={c} map={map} describe={describe} showSource={false} /></div>)}
+      </section>
+    ))}
+  </>;
 }
