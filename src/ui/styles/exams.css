@@ -1,0 +1,56 @@
+/* What's coming up (AXO-207). Roles only; no palette values. Dates are plain
+   text: nothing here is a mark, and nothing is coloured by urgency. */
+
+/* Secondary text on these surfaces uses label-2: label-3 does not reach 4.5:1
+   on a card (the system-wide question is AXO-203). */
+.card.examcard .eyebrow,.card.examcard .t2,.examsettings .srow .aux,.examsettings .srow .lbl small{color:var(--label-2)}
+.examcard .examnext{margin-top:2px}
+.examcard .examnext .when{font-size:13px;font-weight:650;color:var(--accent);margin-bottom:3px;font-variant-numeric:tabular-nums}
+.examcard .examnext .t1{font-size:17px;font-weight:650;letter-spacing:-.015em}
+.examcard .examnext .t2{font-variant-numeric:tabular-nums}
+
+.examvariant{margin-top:6px;font-size:12.5px;color:var(--label-2);line-height:1.45}
+
+.examlist{list-style:none;margin:14px 0 0;padding:0;border-top:.5px solid var(--hairline)}
+.examlist li{display:grid;grid-template-columns:56px 1fr auto;align-items:baseline;gap:10px;padding:10px 0;border-bottom:.5px solid var(--hairline)}
+.examlist li:last-child{border-bottom:0}
+.examlist .d{font-size:13px;font-weight:600;color:var(--label-2);font-variant-numeric:tabular-nums}
+.examlist .w{font-size:14px;font-weight:600;min-width:0}
+.examlist .w small{display:block;font-size:12.5px;font-weight:450;color:var(--label-2);margin-top:2px}
+.examlist .s{font-size:12px;font-weight:650;color:var(--label-2)}
+
+.examwindows{margin-top:12px;font-size:12.5px;color:var(--label-2);line-height:1.5}
+.examwindows > div + div{margin-top:4px}
+
+.examask{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;margin-top:14px;padding-top:12px;border-top:.5px solid var(--hairline);font-size:14px;font-weight:550}
+.examask .textaction{margin-top:0;min-height:44px}
+.examcard button.textaction{background:none;border:0;padding:0;min-height:44px;cursor:pointer;font:inherit;font-size:14px;font-weight:600}
+
+.examsource{margin-top:12px}
+.examnote{font-size:13px;color:var(--label-2);line-height:1.45;margin:8px 0 0}
+
+.examsetup{margin-top:14px;display:grid;gap:12px}
+.examfield{display:grid;gap:6px}
+.examfield > span{font-size:12px;font-weight:650;color:var(--label-2);text-transform:uppercase;letter-spacing:.05em}
+.examactions{display:flex;gap:10px;align-items:center;margin-top:4px}
+.examactions .btn{min-height:44px;padding:0 20px;font-size:15px}
+.examactions .btn.primary{font-size:19px;font-weight:700}
+.examactions .btn.ghost{font-size:15px}
+.examactions .btn.plain{background:none;color:var(--accent)}
+
+.examedit{padding:14px 18px}
+.examedithead{font-size:15px;font-weight:650}
+.examchooser{display:grid;gap:10px}
+.examopts{display:grid;gap:8px;margin-top:4px}
+.examopt{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 14px;border-radius:14px;
+  background:var(--surface-sunk);text-align:left;font-size:14px;font-weight:550;line-height:1.35;cursor:pointer;color:inherit;border:0}
+.examopt .mark{flex:none;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--label-3)}
+.examopt.check .mark{border-radius:5px}
+.examopt.on{background:var(--accent-wash)}
+.examopt.on .mark{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 3px var(--surface-sunk)}
+.examopt.check.on .mark{box-shadow:none;background:var(--accent)
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.2 5.8 10 11 4' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat}
+
+@media (prefers-reduced-motion: no-preference){
+  .examopt{transition:background-color 120ms ease}
+}

@@ -16,9 +16,10 @@ import ReviewSheet from "../../src/ui/scan/ReviewSheet";
 import PaperOverview from "../../src/ui/pages/PaperOverview";
 import { Route, Routes } from "react-router-dom";
 import Scan from "../../src/ui/pages/Scan";
+import { ExamSettings } from "../../src/ui/components/ExamPlan";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
-if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early") {
+if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams")) {
   await Promise.all([
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
@@ -61,7 +62,7 @@ function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "insights" ? <Insights /> : <Library />}</>;
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights" ? <Insights /> : <Library />}</>;
 }
 const root = createRoot(document.getElementById("root")!);
 if (params.get("view") === "scan-screen") {
