@@ -27,7 +27,11 @@ export function useScan() {
     },
     reviewHandlers: {
       onMark(_id: string, value: number) { (window as typeof window & { __markChoice?: number }).__markChoice = value; },
-      onAction() {}, onConfirmClean() {}, onSave() {},
+      onAction() {}, onConfirmClean() {}, onSave() {}, async onRelabel() {},
     },
   };
+}
+
+export function useOptionalScan() {
+  return useScan();
 }

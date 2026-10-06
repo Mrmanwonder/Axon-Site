@@ -28,6 +28,8 @@ import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
 import PageReview from "../scan/PageReview";
 import DraftsSheet from "../scan/DraftsSheet";
 import ImportDesk from "../scan/ImportDesk";
+import ReadingScreen, { modelForSend } from "../scan/ReadingScreen";
+import type { SendJob } from "../scan/ReadingScreen";
 import { useDeskMode } from "../scan/useDeskMode";
 import { hapticTick } from "../lib/haptics";
 import { CheckSymbol, CropFreeSymbol, InfoSymbol } from "../components/MaterialSymbols";
@@ -51,10 +53,11 @@ type Strip = {
 
 export default function Scan() {
   const {
-    videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
+    videoRef, overlayRef, camera, hint, tray, trayHandlers,
     drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
     setAutoCapture, setTorchMode, auto, submitting, pendingCaptureCount,
     pageReviewOpen, openPageReview, closePageReview,
+    sends, focusedSend, setFocusedSend, retrySend,
   } = useScan();
   const { ingestFiles, addPaper, addLink } = useIngestion();
   const { student } = useApp();
@@ -74,15 +77,26 @@ export default function Scan() {
   };
   const cameraApp = useRef<HTMLInputElement>(null);
 
+  // The paper just handed over, while its reading screen covers the camera.
+  const focused = sends.find((job) => job.id === focusedSend) ?? null;
+  const covered = Boolean(focused);
+
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
     if (desk) void ensureScan().catch(() => { /* the screen still takes files */ });
-    else onScreenVisible(true);
+    else onScreenVisible(!covered);
     return () => {
       document.documentElement.classList.remove("scanner-active");
       if (!desk) onScreenVisible(false);
     };
-  }, [desk, onScreenVisible, ensureScan]);
+  }, [desk, onScreenVisible, ensureScan, covered]);
+
+  // The paper is read while the student is still looking at it: open review.
+  useEffect(() => {
+    if (focused?.phase !== "review" || !focused.paperId) return;
+    setFocusedSend(null);
+    navigate(paths.review(focused.paperId));
+  }, [focused?.phase, focused?.paperId, setFocusedSend, navigate]);
 
   // iOS Safari handles pinch through gesture events outside touch-action.
   useEffect(() => {
@@ -127,7 +141,7 @@ export default function Scan() {
       <>
         <ImportDesk onReview={openPageReview} />
         {review}
-        {progress && <ProgressPanel progress={progress} />}
+        {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
         {!student && <div className="subnote">Create a student profile before scanning.</div>}
       </>
     );
@@ -303,10 +317,30 @@ export default function Scan() {
       )}
 
       {review}
-      {progress && <ProgressPanel progress={progress} />}
+      {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
 
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
+  );
+}
+
+/* The scanner after Read (owner, 6 Oct 2026): the whole screen becomes this
+   paper's reading screen. Continue scanning hands the camera back for the next
+   paper while this one carries on; Go to Library leaves it to finish there. */
+function SendingScreen({ job, onContinue, onRetry }: { job: SendJob; onContinue: () => void; onRetry: () => void }) {
+  const navigate = useNavigate();
+  const toLibrary = () => navigate(paths.library);
+  const actions = job.phase === "stuck"
+    ? [{ label: "Try again", run: onRetry, primary: true }, { label: "Continue scanning", run: onContinue }]
+    : job.phase === "refused"
+      ? [{ label: "Continue scanning", run: onContinue, primary: true }, { label: "Go to Library", run: toLibrary }]
+      : [{ label: "Continue scanning", run: () => { hapticTick(); onContinue(); }, primary: true }, { label: "Go to Library", run: toLibrary }];
+  return (
+    <ReadingScreen model={modelForSend(job)} variant="overlay" onClose={toLibrary} closeLabel="Go to Library"
+      actions={actions}
+      footnote={["sending", "waiting", "reading"].includes(job.phase)
+        ? "This carries on while you scan the next paper or leave. It waits in your Library."
+        : null} />
   );
 }
 
@@ -317,58 +351,4 @@ function MoreMenu({ then, children }: { then: (fn: () => void) => void; children
   // system's own action sheets. A row closes the sheet first, then acts.
   const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), SHEET_EXIT_MS + 10); };
   return <>{children(go)}</>;
-}
-
-/* Reading a paper (owner, 5 Oct 2026: "I have no information, no way to
-   leave this page"). One heading, one live line, the four steps, and a way out
-   that is always there: reading carries on without this screen, and the paper
-   waits in the Library. No skeleton: nothing here is loading into place. */
-function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {
-  const navigate = useNavigate();
-  const working = progress.steps.some((st) => st.state === "now");
-  return (
-    <div className="scanbelow sc-reading" role="region" aria-label={progress.heading ?? "Reading this paper"}>
-      <div className="sc-reading-top">
-        <PressBox as="button" type="button" className="sc-circ sc-close" aria-label="Go to Library"
-                  onClick={() => navigate(paths.library)}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
-        </PressBox>
-      </div>
-      <h1 className="sc-reading-h">{progress.heading ?? "Reading your paper"}</h1>
-      <p className="sc-reading-now" aria-live="polite">{progress.now}</p>
-      {progress.sub && <p className="sc-reading-sub">{progress.sub}</p>}
-      {(progress.pages?.length ?? 0) > 0 && (
-        <ol className="sc-reading-pages" aria-label="Pages">
-          {progress.pages!.map((p) => (
-            <li key={p.n} data-sent={p.sent ? "true" : undefined}
-                aria-label={`Page ${p.n}, ${p.sent ? "sent" : "sending"}`}>
-              <span className="th">{p.thumb ? <img src={p.thumb} alt="" /> : <span className="blank" />}</span>
-              <span className="n">{p.sent ? (
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-              ) : p.n}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {progress.steps.length > 0 && (
-        <ol className="sc-reading-steps">
-          {progress.steps.map((st, i) => (
-            <li key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
-              <span className={"st " + st.state}>
-                {st.state === "done" && (
-                  <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-                )}
-              </span>
-              <span className="lb">{st.label}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      {progress.note && <p className="sc-reading-sub">{progress.note}</p>}
-      <div className="sc-reading-acts">
-        <button type="button" className="btn ghost" onClick={() => navigate(paths.library)}>Go to Library</button>
-        {working && <p className="sc-reading-sub">Reading carries on while you are away. The paper waits in your Library.</p>}
-      </div>
-    </div>
-  );
 }

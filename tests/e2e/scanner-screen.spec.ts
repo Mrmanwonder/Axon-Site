@@ -205,6 +205,18 @@ test.describe("camera screen on a phone", () => {
     await expect(pages.nth(4)).not.toHaveAttribute("data-sent", "true");
     await expect(page.locator(".sc-reading-pages img")).toHaveCount(12);
     await expect(page.getByRole("button", { name: "Go to Library" }).first()).toBeVisible();
+    // The whole scanner is this paper's screen until the student moves on.
+    await page.getByRole("button", { name: "Continue scanning" }).click();
+    expect(await calls(page, "setFocusedSend")).toEqual([[null]]);
+  });
+
+  test("a lost connection waits and says so; it never says the send did not finish", async ({ page }) => {
+    await open(page, "offline");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText(/No connection\. Sending carries on by itself/)).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/did not finish|another tab/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue scanning" })).toBeVisible();
   });
 
   test("saved drafts with nothing saved offers one way out", async ({ page }) => {
