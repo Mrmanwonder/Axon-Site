@@ -153,6 +153,18 @@ function MarkPicker({ q, onMark }: { q: ReviewQuestion; onMark: (id: string, val
   const label = "Which number did your teacher write?";
   const chosen = options.findIndex((a) => a === q.marksAwarded);
   const pick = (a: number) => { if (a !== q.marksAwarded) { hapticTick(); onMark(q.id, a); } };
+  // The radio keyboard pattern: one tab stop, arrows move and choose.
+  const focusIndex = chosen < 0 ? 0 : chosen;
+  const onKey = (event: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+      : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const next = (i + step + options.length) % options.length;
+    const group = event.currentTarget.parentElement;
+    group?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+    pick(options[next]);
+  };
   return (
     <div className="qfield qmarkpick">
       <div className="k" id={`mk-${q.id}`}>{label}</div>
@@ -160,15 +172,17 @@ function MarkPicker({ q, onMark }: { q: ReviewQuestion; onMark: (id: string, val
         <div className={"gseg qmarkseg" + (chosen < 0 ? " is-empty" : "")} role="radiogroup" aria-labelledby={`mk-${q.id}`}
              style={{ "--gseg-n": options.length, "--gseg-i": Math.max(0, chosen) } as React.CSSProperties}>
           <span className="gseg-pill" aria-hidden="true" />
-          {options.map((a) => (
-            <button type="button" key={a} role="radio" aria-checked={a === q.marksAwarded} aria-pressed={a === q.marksAwarded}
+          {options.map((a, i) => (
+            <button type="button" key={a} role="radio" aria-checked={a === q.marksAwarded}
+                    tabIndex={i === focusIndex ? 0 : -1} onKeyDown={(e) => onKey(e, i)}
                     onClick={() => pick(a)}>{num(a)}</button>
           ))}
         </div>
       ) : (
         <div className="qmarkkeys" role="radiogroup" aria-labelledby={`mk-${q.id}`}>
-          {options.map((a) => (
+          {options.map((a, i) => (
             <button type="button" key={a} role="radio" aria-checked={a === q.marksAwarded}
+                    tabIndex={i === focusIndex ? 0 : -1} onKeyDown={(e) => onKey(e, i)}
                     onClick={() => pick(a)}>{num(a)}</button>
           ))}
         </div>
