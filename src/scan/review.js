@@ -148,7 +148,7 @@ export async function loadReview(runId) {
     markRules,
     questions,
     pagesUnreadable: unreadable ?? [],
-    delta: deltaFor(run, paper),
+    delta: deltaFor(run, paper, regions ?? []),
     noTotal: noTotalFor(run),
     // Every headline shows its sample size; this is that screen's version of it.
     lead: reviewLeadFor(questions, pages ?? [], counts),
@@ -165,18 +165,26 @@ export async function loadReview(runId) {
     // say "yes, that is what my paper says" is how a required step becomes a
     // step people learn to rush.
     cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.confirmed).map((q) => q.id),
+    // Every reading the student can vouch for in one go once they have looked:
+    // anything with a reading on screen. An unreadable region has nothing to
+    // vouch for and stays out (owner, 5 Oct 2026: nineteen taps on a paper the
+    // reader got right).
+    readableUnconfirmed: questions.filter((q) => q.tier !== 'unreadable' && !q.confirmed).map((q) => q.id),
   };
 }
 
 
-function deltaFor(run, paper) {
-  if (run.reconciled !== false) return null;
+export function deltaFor(run, paper, regions) {
+  const readable = regions.filter(r => r.confidence_tier !== 'unreadable' && r.marks_awarded != null);
+  if (!readable.length) return null;
+  const awarded = readable.reduce((sum, r) => sum + Number(r.marks_awarded), 0);
   if (paper?.reported_total === null || paper?.reported_total === undefined) return null;
+  if (Math.abs(awarded - Number(paper.reported_total)) < 0.0001) return null;
   return {
     // The framing is fixed: our reading is what did not add up. The app never
     // tells a student their teacher cannot add.
     message: 'Our reading of this paper does not match the total on it. Worth checking the questions below.',
-    ours: Number(paper.total_awarded ?? 0),
+    ours: awarded,
     theirs: Number(paper.reported_total),
   };
 }
@@ -187,7 +195,7 @@ function deltaFor(run, paper) {
  */
 function noTotalFor(run) {
   return run.status_reason_code === 'no_printed_total'
-    ? 'No total is printed on this paper, so there is nothing to check these marks against. Axon will add up the marks it reads.'
+    ? 'No total is printed on this paper. Axon adds up the marks it reads.'
     : null;
 }
 
@@ -277,6 +285,25 @@ export async function correctAnswer(regionId, text) {
   }).eq('id', regionId);
   if (error) throw error;
 
+  await countCorrection(regionId);
+}
+
+/**
+ * Which question and part this is. The student has the paper, so placing a
+ * part is transcription and is accepted at once, the same as Fix this (owner,
+ * 6 Oct 2026: "I can't choose the question and part"). Two parts of one paper
+ * cannot share a label; the server refuses that, and the student is told which.
+ */
+export async function relabelRegion(regionId, label) {
+  const clean = String(label ?? '').replace(/\s+/g, '').slice(0, 24);
+  if (!/^\d{1,3}(\([a-z]\))?(\([ivx]{1,4}\))?$/.test(clean)) throw new Error('Choose the question number, and the part if it has one.');
+  const { error } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('id', regionId);
+  if (error) {
+    if (error.code === '23505') throw new Error(`Another part of this paper is already ${clean}. Change that one first.`);
+    throw error;
+  }
   await countCorrection(regionId);
 }
 

@@ -525,7 +525,7 @@ export function scorePage(img, { longEdge = null } = {}) {
       ? 'The phone moved while this was taken. Hold still and take it again.'
       : 'This page is too blurred to read the marking. Take it again.');
   } else if (blurVerdict === 'warn') {
-    reasons.push('Slightly soft — worth retaking if the red pen looks faint.');
+    reasons.push('A little soft. Retake it if the teacher’s marking looks faint.');
   }
 
   const glareVerdict = glare.score > QUALITY.GLARE_FAIL ? 'fail' : glare.score > QUALITY.GLARE_WARN ? 'warn' : 'ok';
@@ -537,8 +537,8 @@ export function scorePage(img, { longEdge = null } = {}) {
   const clipVerdict = clipped > QUALITY.CLIP_WARN ? 'warn' : 'ok';
   if (clipVerdict === 'warn') {
     reasons.push(glare.headroom <= QUALITY.HEADROOM_LOW
-      ? 'This page came out very bright all over, which flattens red pen into the paper. More shade, or turn a lamp away from it.'
-      : 'Parts of this page are over-exposed, which flattens red pen into the paper.');
+      ? 'This page came out very bright all over, which can wash out the marking. More shade, or turn a lamp away from it.'
+      : 'Parts of this page are very bright, which can wash out the marking.');
   }
 
   // Below RESOLUTION_FAIL there is nothing honest left to say about the page:
@@ -552,7 +552,7 @@ export function scorePage(img, { longEdge = null } = {}) {
   if (resVerdict === 'fail') {
     reasons.push('This photo is too small to read the marking. Move closer and take it again.');
   } else if (resVerdict === 'warn') {
-    reasons.push('Smaller than we would like — closer next time means we read the marking better.');
+    reasons.push('A little small. Closer next time reads the marking better.');
   }
 
   return {
@@ -610,10 +610,10 @@ export function reconcileWithInk(quality, teacherMarkCount) {
     && quality.verdict === 'fail'
     && !quality.reasons.some((r) => r !== GLARE_FAIL_REASON
       && !r.startsWith('A little glare') // its own warn wording, not a fail from elsewhere
-      && !r.startsWith('Slightly soft')
+      && !r.startsWith('A little soft')
       && !r.startsWith('Parts of this page')
       && !r.startsWith('This page came out very bright')
-      && !r.startsWith('Smaller than we would like'));
+      && !r.startsWith('A little small'));
 
   // A handful of stray marks proves nothing (margin noise, a torn edge); a real
   // page of teacher marking does not survive layer separation by accident.

@@ -20,19 +20,19 @@ for (const width of [360, 390, 768, 1024, 1440]) {
       await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
 
       await expect(page.getByRole("heading", { level: 1, name: "Test paper" })).toBeVisible();
-      await expect(page.getByRole("heading", { level: 3, name: "Question 1" })).toBeVisible();
-      await expect(page.getByRole("heading", { level: 3, name: "Unassigned parts" })).toBeVisible();
-      await expect(page.getByText("2 questions · 7 saved parts · 3 parts not placed under a question")).toBeVisible();
+      await expect(page.getByRole("heading", { level: 2, name: "Question 1" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 2, name: "Unassigned parts" })).toBeVisible();
+      await expect(page.getByText(/2 questions · 7 parts/)).toBeVisible();
 
       // No horizontal document overflow, and every full part path stays on screen.
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-      for (const label of ["Question 1(a)(i)", "Question 1(a)(ii)", "Question 1(a)(iii)", "Question 2(a)", "Unassigned part (c)", "Unassigned part (d)", "Unassigned part (b)"]) {
+      for (const label of ["1(a)(i)", "1(a)(ii)", "1(a)(iii)", "2(a)", "Part c", "Part d", "Part b"]) {
         const box = await page.getByText(label, { exact: true }).first().boundingBox();
         expect(box, label).not.toBeNull();
         expect(box!.x + box!.width, `${label} fits the viewport`).toBeLessThanOrEqual(width + 1);
       }
       // Each part row is a bounded, 44px-or-taller target.
-      const rows = await page.locator(".paper-part").evaluateAll((n) => n.map((x) => x.getBoundingClientRect().height));
+      const rows = await page.locator(".po-part").evaluateAll((n) => n.map((x) => x.getBoundingClientRect().height));
       expect(rows.length).toBe(7);
       for (const h of rows) expect(h).toBeGreaterThanOrEqual(44);
 

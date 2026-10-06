@@ -29,6 +29,7 @@ vi.mock("../../src/ui/data/AppProvider", () => ({
       fetchedAt: Date.now(),
     },
     refreshLibrary: fixture.refresh,
+    student: { subjects: ["English", "Physics"] },
   }),
 }));
 
@@ -68,6 +69,18 @@ function paper(overrides: Record<string, unknown>) {
     total_awarded: 2,
     total_available: 3,
     ...overrides,
+  };
+}
+
+
+/** A Library row by what it shows: the subject as its title and the paper
+    type in its facts, or the type as its title while the subject is unknown. */
+function row(subject: string, type: string) {
+  return (_: string, el: Element | null) => {
+    if (!el?.classList.contains("t1")) return false;
+    const card = el.closest(".row");
+    if (subject === "Subject unknown") return el.textContent === type && !card?.querySelector(".t2")?.textContent?.includes(type);
+    return el.textContent === subject && !!card?.querySelector(".t2")?.textContent?.includes(type);
   };
 }
 
@@ -124,9 +137,9 @@ test("answer-only server match controls the visible result identity set", async 
   await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), "private answer phrase");
 
   await waitFor(() => expect(fixture.search).toHaveBeenCalled());
-  await waitFor(() => expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy());
-  expect(screen.queryByText("Physics · Class test")).toBeNull();
-  expect(screen.queryByText("Mathematics · End-of-year exam")).toBeNull();
+  await waitFor(() => expect(screen.getByText(row("Subject unknown", "Mid-term"))).toBeTruthy());
+  expect(screen.queryByText(row("Physics", "Class test"))).toBeNull();
+  expect(screen.queryByText(row("Mathematics", "End-of-year exam"))).toBeNull();
 
   expect(fixture.search).toHaveBeenLastCalledWith(expect.objectContaining({
     query: "private answer phrase",
@@ -149,7 +162,7 @@ test("verified subject filter sends the canonical offering id to private search"
 
   mount();
   await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
-  await userEvent.click(screen.getByRole("option", { name: "Physics · 042" }));
+  await userEvent.click(screen.getByRole("option", { name: "Physics" }));
   await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), "force");
 
   await waitFor(() => expect(fixture.search).toHaveBeenCalled());
@@ -158,15 +171,15 @@ test("verified subject filter sends the canonical offering id to private search"
     subjectOfferingId: "off-physics",
     subjectState: "all",
   }));
-  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
+  expect(await screen.findByText(row("Physics", "Class test"))).toBeTruthy();
 });
 
 test("unverified legacy subject is visibly suggested and missing identity stays unknown", () => {
   mount();
 
-  expect(screen.getByText("Physics · Class test")).toBeTruthy();
-  expect(screen.getByText("Mathematics · End-of-year exam")).toBeTruthy();
-  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(screen.getByText(row("Physics", "Class test"))).toBeTruthy();
+  expect(screen.getByText(row("Mathematics", "End-of-year exam"))).toBeTruthy();
+  expect(screen.getByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
 });
 
 
@@ -191,12 +204,12 @@ test("triage-only subject suggestion appears before search and stays tentative",
 
   mount();
 
-  expect(screen.getByText("English · Class test")).toBeTruthy();
-  expect(screen.queryByText("Subject unknown · Class test")).toBeNull();
+  expect(screen.getByText(row("English", "Class test"))).toBeTruthy();
+  expect(screen.queryByText(row("Subject unknown", "Class test"))).toBeNull();
   expect(fixture.search).not.toHaveBeenCalled();
 });
 
-test("default Suggested and Unknown filters use triage-derived subject state", async () => {
+test("the subject filter lists the student's own subjects, and No subject yet only while one exists", async () => {
   fixture.papers = [
     paper({ id: "triage-only" }),
     paper({ id: "still-unknown", type: "mid_term" }),
@@ -221,14 +234,16 @@ test("default Suggested and Unknown filters use triage-derived subject state", a
   mount();
 
   await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
-  await userEvent.click(screen.getByRole("option", { name: "Suggested subject" }));
-  expect(screen.getByText("English · Class test")).toBeTruthy();
-  expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull();
+  expect(screen.getByRole("option", { name: "Physics" })).toBeTruthy();
+  expect(screen.queryByRole("option", { name: "Suggested subject" })).toBeNull();
+  await userEvent.click(screen.getByRole("option", { name: "English" }));
+  expect(screen.getByText(row("English", "Class test"))).toBeTruthy();
+  expect(screen.queryByText(row("Subject unknown", "Mid-term"))).toBeNull();
 
   await userEvent.click(screen.getByRole("button", { name: "Filter by subject" }));
-  await userEvent.click(screen.getByRole("option", { name: "Subject unknown" }));
-  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
-  expect(screen.queryByText("English · Class test")).toBeNull();
+  await userEvent.click(screen.getByRole("option", { name: "No subject yet" }));
+  expect(screen.getByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
+  expect(screen.queryByText(row("English", "Class test"))).toBeNull();
 
   expect(fixture.search).not.toHaveBeenCalled();
 });
@@ -260,12 +275,12 @@ test("last-good results remain visible while a newer search is in flight", async
   mount();
   const input = screen.getByRole("searchbox", { name: "Search library" });
   await userEvent.type(input, "energy");
-  expect(await screen.findByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(await screen.findByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
 
   await userEvent.type(input, " transfer");
   await waitFor(() => expect(fixture.search).toHaveBeenCalledTimes(2));
   expect(screen.getByText("Searching…")).toBeTruthy();
-  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(screen.getByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
 
   pending.resolve([{
     paper_id: "verified",
@@ -276,8 +291,8 @@ test("last-good results remain visible while a newer search is in flight", async
     suggested_confidence: null,
   }]);
 
-  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
-  await waitFor(() => expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull());
+  expect(await screen.findByText(row("Physics", "Class test"))).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText(row("Subject unknown", "Mid-term"))).toBeNull());
 });
 
 test("failed search keeps last-good results and retry can replace them", async () => {
@@ -303,15 +318,15 @@ test("failed search keeps last-good results and retry can replace them", async (
   mount();
   const input = screen.getByRole("searchbox", { name: "Search library" });
   await userEvent.type(input, "momentum");
-  expect(await screen.findByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(await screen.findByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
 
   await userEvent.type(input, " conservation");
   expect(await screen.findByText(/Search couldn’t reach the private index/)).toBeTruthy();
-  expect(screen.getByText("Subject unknown · Mid-term")).toBeTruthy();
+  expect(screen.getByText(row("Subject unknown", "Mid-term"))).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-  expect(await screen.findByText("Physics · Class test")).toBeTruthy();
-  await waitFor(() => expect(screen.queryByText("Subject unknown · Mid-term")).toBeNull());
+  expect(await screen.findByText(row("Physics", "Class test"))).toBeTruthy();
+  await waitFor(() => expect(screen.queryByText(row("Subject unknown", "Mid-term"))).toBeNull());
 });
 
 test("empty search result is distinct from an empty Library and keeps filters editable", async () => {

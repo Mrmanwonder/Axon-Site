@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 
@@ -33,49 +33,53 @@ test("a closed review is absent from the accessibility tree", () => {
   expect(screen.queryByText("Question 1")).toBeNull();
 });
 
-test("native radio selection stays a draft until the teacher mark is explicitly saved", async () => {
+test("mark alternatives are one radio group with the teacher's number checked, and emit the chosen value", async () => {
   render(<ReviewSheet />);
-  const radios = screen.getAllByRole("radio");
+  const group = screen.getByRole("radiogroup", { name: "Which number did your teacher write?" });
+  const radios = within(group).getAllByRole("radio");
   expect(radios).toHaveLength(3);
-  expect((radios[1] as HTMLInputElement).checked).toBe(true);
+  expect(radios[1].getAttribute("aria-checked")).toBe("true");
   const user = userEvent.setup();
   await user.click(radios[2]);
-  expect(fixture.state.reviewHandlers.onMark).not.toHaveBeenCalled();
-  expect((screen.getByRole("button", { name: "Confirm all readings" }) as HTMLButtonElement).disabled).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Save teacher’s mark" }));
   expect(fixture.state.reviewHandlers.onMark).toHaveBeenCalledWith("question", 2);
 });
 
-test("failed mark save retains its selected draft and does not confirm the question", async () => {
-  const handlers = fixture.state.reviewHandlers as Record<string, any>;
-  handlers.onMark.mockRejectedValue(new Error("The server could not save this mark."));
+test("a drawn answer says so instead of 'Not read', and review carries no explanation of lost marks", () => {
+  fixture.state = { ...fixture.state, review: { ...review, questions: [{
+    ...review.questions[0], answer: null, regionType: "diagram",
+    explanation: { cause: "procedural_slip", body: "The quartile position was rounded down.", doThisNext: "Use (n+1)/4." },
+  }] } };
   render(<ReviewSheet />);
-  const user = userEvent.setup();
-  await user.click(screen.getByRole("radio", { name: "0" }));
-  await user.click(screen.getByRole("button", { name: "Save teacher’s mark" }));
-  expect((await screen.findByRole("alert")).textContent).toContain("The server could not save this mark.");
-  expect((screen.getByRole("radio", { name: "0" }) as HTMLInputElement).checked).toBe(true);
-  expect(handlers.onAction).not.toHaveBeenCalled();
-  expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Cancel mark change" }));
-  expect((screen.getByRole("radio", { name: "1" }) as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByText(/A drawn answer/)).toBeTruthy();
+  expect(screen.queryByText("Not read")).toBeNull();
+  // Checking the reading is review's only job (owner, 6 Oct 2026).
+  expect(screen.queryByText(/Why the mark went/i)).toBeNull();
+  expect(screen.queryByText(/quartile position/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Not why I lost it" })).toBeNull();
 });
 
-test("answer edits preserve line breaks and survive a failed save", async () => {
-  const onAnswer = vi.fn().mockRejectedValue(new Error("Answer not saved"));
-  fixture.state.reviewHandlers = { ...(fixture.state.reviewHandlers as object), onAnswer };
-  render(<ReviewSheet />);
+test("the student places a part by tapping its label: question, then part", async () => {
+  const onRelabel = vi.fn().mockResolvedValue(undefined);
+  fixture.state = { ...fixture.state, review: { ...review, questions: [{ ...review.questions[0], label: "(b)" }] },
+    reviewHandlers: { ...(fixture.state.reviewHandlers as object), onRelabel } };
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "Edit answer transcription" }));
-  const editor = screen.getByRole("textbox", { name: "Edit answer transcription" });
-  await user.clear(editor); await user.type(editor, "x + 1\n= 2");
-  await user.click(screen.getByRole("button", { name: "Save answer transcription" }));
-  expect((await screen.findByRole("alert")).textContent).toContain("Answer not saved");
-  expect((editor as HTMLTextAreaElement).value).toBe("x + 1\n= 2");
-  expect(onAnswer).toHaveBeenCalledWith("question", "x + 1\n= 2");
+  render(<ReviewSheet />);
+  await user.click(screen.getByRole("button", { name: /Question \(b\)\. Change/ }));
+  await user.click(within(screen.getByRole("radiogroup", { name: "Question number" })).getByRole("radio", { name: "4" }));
+  expect(within(screen.getByRole("radiogroup", { name: "Part" })).getByRole("radio", { name: "(b)" }).getAttribute("aria-checked")).toBe("true");
+  await user.click(within(screen.getByRole("radiogroup", { name: "Part" })).getByRole("radio", { name: "(a)" }));
+  await user.click(screen.getByRole("button", { name: "This is 4(a)" }));
+  expect(onRelabel).toHaveBeenCalledWith("question", "4(a)");
 });
 
-test("a review without a source page does not offer an invented page-retake action", () => {
+test("a label shown as 'Question 3(b)' opens the place sheet on question 3, part (b)", async () => {
+  const onRelabel = vi.fn().mockResolvedValue(undefined);
+  fixture.state = { ...fixture.state, review: { ...review, questions: [{ ...review.questions[0], label: "Question 3(b)" }] },
+    reviewHandlers: { ...(fixture.state.reviewHandlers as object), onRelabel } };
+  const user = userEvent.setup();
   render(<ReviewSheet />);
-  expect(screen.queryByRole("button", {name: "Rescan this page"})).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Question 3(b). Change" }));
+  expect(within(screen.getByRole("radiogroup", { name: "Question number" })).getByRole("radio", { name: "3" }).getAttribute("aria-checked")).toBe("true");
+  expect(within(screen.getByRole("radiogroup", { name: "Part" })).getByRole("radio", { name: "(b)" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("button", { name: "This is 3(b)" })).toBeTruthy();
 });

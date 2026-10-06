@@ -150,8 +150,10 @@ const { data, error } = await sb
 * @param {{studentId:string, paperId:string, page:Object}} args
 * @returns {{r2_bucket:string, r2_key:string, mask_key:string|null, bytes:number}}
 */
-export async function uploadScannedPage({ studentId, paperId, page }) {
+export async function uploadScannedPage({ studentId, paperId, page, timing }) {
+  timing?.stage?.('intent');
   requireOnline('Uploading');
+  const measure = (stage, fn) => timing ? timing.measure(stage, fn) : fn();
 
 const pageType = page.blob.type || 'image/jpeg';
 
@@ -179,11 +181,11 @@ const wanted = [
     }
   }
 
-const intent = await uploadIntent({
+const intent = await measure('intent', () => uploadIntent({
   student_id: studentId,
   paper_id: paperId,
   objects: wanted.map((o) => ({ kind: o.kind, name: o.name, content_type: o.content_type, bytes: o.blob.size })),
-});
+}, timing?.retry));
 
 const minted = new Map();
   for (const want of wanted) {
@@ -198,10 +200,10 @@ const minted = new Map();
 
 const uploads = [];
   for (const [, object] of minted) {
-    await putObject(object.url, object.blob, object.content_type);
+    await measure('transfer', () => putObject(object.url, object.blob, object.content_type, timing?.retry));
     uploads.push({ key: object.key, bucket: object.bucket, bytes: object.blob.size });
   }
-  await uploadComplete({ paper_id: paperId, uploads });
+  await measure('confirmation', () => uploadComplete({ paper_id: paperId, uploads }, timing?.retry));
 
 const pageObj = minted.get('page');
   return {
@@ -456,6 +458,120 @@ export async function deleteQuestion(attemptId) {
   if (error) throw error;
   await clearCache();
   return data;
+}
+
+/**
+* Every row Insights reasons over, from the two analytics views only (hard rule
+* 3). Unsure readings and student-rejected causes are excluded by the views.
+*
+* Paged: PostgREST caps a response, and a capped read would make a long history
+* look shorter than it is, which is a quiet wrong answer rather than an error.
+* Answers and question text are not selected; `answer_blank` carries the one
+* fact the pacing read needs.
+*/
+const INSIGHT_PAGE = 1000;
+async function readAllPages(build) {
+  const rows = [];
+  for (let from = 0; ; from += INSIGHT_PAGE) {
+    const { data, error } = await build().range(from, from + INSIGHT_PAGE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < INSIGHT_PAGE) return rows;
+  }
+}
+
+export async function insightEvidence(studentId) {
+  return readThrough(`insights:${studentId}`, async () => {
+    const [attempts, losses] = await Promise.all([
+      readAllPages(() => sb
+        .from('attempt_analytics')
+        .select('id,paper_id,question_label,max_marks,marks_awarded,question_order,answer_blank')
+        .eq('student_id', studentId)
+        .order('id', { ascending: true })),
+      readAllPages(() => sb
+        .from('mark_loss_analytics')
+        .select('id,attempt_id,cause,marks_lost,do_this_next,command_word,concepts,loss_reasons,depends_on_parts,created_at')
+        .eq('student_id', studentId)
+        .order('id', { ascending: true })),
+    ]);
+    return { attempts, losses };
+  });
+}
+
+/**
+* The student sets or clears a paper's subject, from their own subjects. The
+* server refuses anything else and never overrides an official assessment
+* identity. Changing the subject re-places the paper's questions on the new
+* syllabus (the sweep re-tags them).
+*/
+export async function setPaperSubject(paperId, subjectOfferingId) {
+  requireOnline('Changing the subject');
+  const { error } = await sb.rpc('set_paper_subject', { p_paper_id: paperId, p_subject_offering_id: subjectOfferingId || null });
+  if (error) throw error;
+  await clearCache();
+}
+
+/**
+ * The student places a part under a question by giving it its real label
+ * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
+ * the authority (Axon.md section 8). Both the committed attempt and the region
+ * it came from are updated, because the server's question count reads the
+ * region and the paper screen reads the attempt: they must never disagree
+ * (AXO-122 counting contract).
+ */
+export async function relabelAttempt(attemptId, label) {
+  requireOnline('Moving this part');
+  const clean = String(label ?? '').trim().slice(0, 24);
+  if (!clean) throw new Error('A question number is needed.');
+  const { error } = await sb.from('student_attempt').update({ question_label: clean }).eq('id', attemptId);
+  if (error) throw error;
+  const { error: regionError } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('committed_attempt_id', attemptId);
+  if (regionError) throw regionError;
+  await clearCache();
+}
+
+/**
+* Everything the syllabus map draws: the student's subjects, the verified
+* syllabus documents behind them (RLS hides drafts), every topic and objective
+* in those documents, and the eligible evidence from `topic_evidence`, which
+* reads through attempt_analytics (hard rule 3).
+*/
+export async function syllabusMapData(studentId) {
+  return readThrough(`syllabus:${studentId}`, async () => {
+    const { data: subjects, error: subjectError } = await sb
+      .from('student_subject')
+      .select('subject,subject_offering_id,display_name_snapshot,external_code_snapshot')
+      .eq('student_id', studentId);
+    if (subjectError) throw subjectError;
+    const offeringIds = [...new Set((subjects ?? []).map((s) => s.subject_offering_id).filter(Boolean))];
+    if (!offeringIds.length) return { subjects: subjects ?? [], links: [], documents: [], topics: [], evidence: [] };
+    const { data: links, error: linkError } = await sb
+      .from('subject_offering_syllabus')
+      .select('subject_offering_id,document_id')
+      .in('subject_offering_id', offeringIds);
+    if (linkError) throw linkError;
+    const documentIds = [...new Set((links ?? []).map((l) => l.document_id))];
+    if (!documentIds.length) return { subjects, links: [], documents: [], topics: [], evidence: [] };
+    const [{ data: documents, error: documentError }, topics, evidence] = await Promise.all([
+      sb.from('syllabus_document')
+        .select('id,provider_key,syllabus_code,title,version_label,valid_from_year,valid_to_year,source_url,fetched_at')
+        .in('id', documentIds),
+      readAllPages(() => sb
+        .from('syllabus_topic')
+        .select('id,document_id,parent_id,code,kind,title,objective_text,notes_text,group_title,qualification_scope,sort_order')
+        .in('document_id', documentIds)
+        .order('sort_order', { ascending: true })),
+      readAllPages(() => sb
+        .from('topic_evidence')
+        .select('attempt_id,paper_id,topic_id,document_id,is_primary,max_marks,marks_awarded')
+        .eq('student_id', studentId)
+        .order('attempt_id', { ascending: true })),
+    ]);
+    if (documentError) throw documentError;
+    return { subjects, links, documents: documents ?? [], topics, evidence };
+  });
 }
 
 /**

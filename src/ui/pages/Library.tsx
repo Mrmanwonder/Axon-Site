@@ -12,14 +12,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent, retryFailedPaper, searchLibrary } from "../data/modules";
 import { isPartialTotal } from "../data/paperTotals";
-import type { LibrarySearchHit, Paper, ProgressRow } from "../data/modules";
+import type { LibrarySearchHit, Paper } from "../data/modules";
 import { paperPresentation } from "../data/paperPresentation";
+import { subjectPresentation } from "../data/subjectPresentation";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import PageSkeleton from "../components/PageSkeleton";
 import { useToast } from "../components/ToastProvider";
+import { useOptionalScan } from "../scan/ScanProvider";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
     exists. Decorative. */
@@ -70,38 +72,6 @@ function dateBounds(filter: DateFilter) {
   };
 }
 
-function subjectPresentation(paper: Paper, hit?: LibrarySearchHit, run?: ProgressRow) {
-  if (
-    paper.subject_offering_id
-    && paper.subject_identity_confidence === "verified"
-    && paper.subject_display_snapshot
-  ) {
-    return { state: "verified" as const, label: paper.subject_display_snapshot };
-  }
-
-  // A search hit is fresh server-authored subject state. Respect an explicit
-  // unknown rather than reviving an older progress suggestion underneath it.
-  if (hit?.subject_state === "unknown") {
-    return { state: "unknown" as const, label: "Subject unknown" };
-  }
-
-  const hitSuggestion = hit?.subject_state === "suggested"
-    && typeof hit.suggested_subject === "string"
-    && hit.suggested_subject.trim()
-    ? hit.suggested_subject.trim()
-    : null;
-  const progressSuggestion = typeof run?.suggested_subject === "string" && run.suggested_subject.trim()
-    ? run.suggested_subject.trim()
-    : null;
-  const legacySuggestion = typeof paper.subject === "string" && paper.subject.trim()
-    ? paper.subject.trim()
-    : null;
-  const suggested = hitSuggestion ?? progressSuggestion ?? legacySuggestion;
-
-  if (suggested) return { state: "suggested" as const, label: suggested };
-  return { state: "unknown" as const, label: "Subject unknown" };
-}
-
 function numeric(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
@@ -118,12 +88,26 @@ function marksLost(paper: Record<string, unknown>): number | null {
   return Math.max(0, available - awarded);
 }
 
+/** Subject names compare without case or a trailing syllabus code. */
+export function sameSubject(a: string, b: string): boolean {
+  const norm = (x: string) => x.replace(/·.*$/, "").trim().toLowerCase();
+  return norm(a) === norm(b);
+}
+
+/** The reader's reason, cut to one plain clause for a list row. */
+function shortReason(reason: string): string {
+  if (/no marking/i.test(reason)) return "no marking found";
+  const first = reason.split(/(?<=\.)\s/)[0].replace(/\.$/, "");
+  return first.length > 48 ? first.slice(0, 47) + "…" : first.charAt(0).toLowerCase() + first.slice(1);
+}
+
 export default function Library() {
   const { papers, papersError, papersResource, progressResource, refreshLibrary, student } = useApp();
   const providerKey = providerKeyForStudent(student);
 
   const navigate = useNavigate();
   const toast = useToast();
+  const sends = useOptionalScan()?.sends ?? [];
   const [retrying, setRetrying] = useState<Set<string>>(() => new Set());
 
   const retryPaper = async (paperId: string) => {
@@ -176,6 +160,11 @@ export default function Library() {
   );
 
   const selectedOfferingId = subject.startsWith("subject:") ? subject.slice("subject:".length) : null;
+  const selectedSubjectName = subject.startsWith("name:") ? subject.slice("name:".length) : null;
+  // Private search filters by the canonical offering; a subject chosen by name
+  // maps to the verified offering with that name when one exists.
+  const searchOfferingId = selectedOfferingId
+    ?? (selectedSubjectName ? verifiedSubjects.find(([, label]) => sameSubject(selectedSubjectName, label))?.[0] ?? null : null);
   const selectedSubjectState = subject === "unknown"
     ? "unknown"
     : subject === "suggested"
@@ -195,7 +184,7 @@ export default function Library() {
       const bounds = dateBounds(dateFilter);
       void searchLibrary({
         query: normalizedQuery,
-        subjectOfferingId: selectedOfferingId,
+        subjectOfferingId: searchOfferingId,
         subjectState: selectedSubjectState,
         paperType: type === "all" ? null : type,
         tier: tier === "any" ? null : tier,
@@ -223,7 +212,7 @@ export default function Library() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     normalizedQuery,
-    selectedOfferingId,
+    searchOfferingId,
     selectedSubjectState,
     type,
     tier,
@@ -253,6 +242,7 @@ export default function Library() {
         undefined,
         progressResource.data?.get(paper.id),
       );
+      if (selectedSubjectName && (subjectInfo.state === "unknown" || !sameSubject(selectedSubjectName, subjectInfo.label))) return false;
       if (selectedSubjectState === "unknown" && subjectInfo.state !== "unknown") return false;
       if (selectedSubjectState === "suggested" && subjectInfo.state !== "suggested") return false;
       if (type !== "all" && paper.type !== type) return false;
@@ -282,6 +272,7 @@ export default function Library() {
     normalizedQuery,
     searchState,
     selectedOfferingId,
+    selectedSubjectName,
     selectedSubjectState,
     progressResource.data,
     dateFilter,
@@ -290,11 +281,21 @@ export default function Library() {
     sort,
   ]);
 
+  // The student's own subjects, always (owner, 5 Oct 2026). A paper whose
+  // subject is not known yet is listed under "No subject yet" only while one
+  // exists; the paper itself offers to set it.
+  const selections = student?.subject_selections ?? [];
+  const studentSubjects = selections.length
+    ? selections.map((sel) => ({ id: sel.offering_id as string | null, name: sel.subject }))
+    : (student?.subjects ?? []).filter(Boolean).map((name) => ({ id: null as string | null, name }));
+  const hasUnknown = papers.some((paper) => subjectPresentation(paper, undefined, progressResource.data?.get(paper.id)).state === "unknown");
   const subjectOptions: AppDropdownOption[] = [
     { value: "all", label: "All subjects" },
-    ...verifiedSubjects.map(([id, label]) => ({ value: `subject:${id}`, label })),
-    { value: "suggested", label: "Suggested subject" },
-    { value: "unknown", label: "Subject unknown" },
+    ...studentSubjects.map((sub) => ({ value: sub.id ? `subject:${sub.id}` : `name:${sub.name}`, label: sub.name })),
+    ...verifiedSubjects
+      .filter(([id, label]) => !studentSubjects.some((sub) => sub.id === id || sameSubject(sub.name, label)))
+      .map(([id, label]) => ({ value: `subject:${id}`, label })),
+    ...(hasUnknown || subject === "unknown" ? [{ value: "unknown", label: "No subject yet" }] : []),
   ];
   const dateOptions: AppDropdownOption[] = [
     { value: "any", label: "Any date" },
@@ -409,7 +410,16 @@ export default function Library() {
         {filteredPapers.map((p) => {
           const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
           const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
-          const presentation = paperPresentation(p, progressResource);
+          const send = sends.find((job) => job.paperId === p.id && ["sending", "waiting", "stuck"].includes(job.phase));
+          const base = paperPresentation(p, progressResource);
+          // A paper still leaving this phone says so, in pages (owner, 6 Oct 2026).
+          const presentation = send ? {
+            ...base, canOpen: true, canRetry: false, status: "sending",
+            statusLabel: send.phase === "sending"
+              ? `Sending · ${send.pages.filter((pg) => pg.sent).length} of ${send.pages.length} pages`
+              : send.phase === "waiting" ? "Waiting for a connection to finish sending" : "Waiting to send",
+            tone: send.phase === "sending" ? "wait" : "attention",
+          } : base;
           const status = { label: presentation.statusLabel, tone: presentation.tone };
           const lost = marksLost(p as Record<string, unknown>);
           const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
@@ -419,25 +429,28 @@ export default function Library() {
             hitByPaper.get(p.id),
             progressResource.data?.get(p.id),
           );
+          // One title, one line of facts, one status line when there is a
+          // status. Explanations live on the paper, not on the card.
+          const title = subjectInfo.state === "unknown" ? paperTypeLabel(p.type, providerKey) : subjectInfo.label;
+          const facts = [
+            subjectInfo.state === "unknown" ? null : paperTypeLabel(p.type, providerKey),
+            pages ? `${pages} page${pages === 1 ? "" : "s"}` : null,
+            date,
+          ].filter(Boolean).join(" · ");
+          const statusLine = status
+            ? (presentation.status === "rejected" && presentation.reason ? `Not read: ${shortReason(presentation.reason)}` : status.label)
+            : (!questions ? "Not read yet" : null);
           const meta = (
             <>
               <Thumb />
               <div className="b">
-                <div className="t1">{subjectInfo.label} · {paperTypeLabel(p.type, providerKey)}</div>
-                <div className="t2">
-                  <span>{pages ? `${pages} page${pages === 1 ? "" : "s"}` : "Paper"}</span>
-                  <span>·</span>
-                  <span>{date}</span>
-                </div>
-                <div className="t2" style={{ marginTop: 6 }}>
-                  <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
-                    {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
-                  </span>
-                  {status
-                    ? <span className={"tier " + (status.tone === "wait" ? "t1" : "uns")}>{status.label}</span>
-                    : (!questions && <span className="tier uns">Not read yet</span>)}
-                </div>
-                {presentation.reason && <div className="t2">{presentation.reason}</div>}
+                <div className="t1">{title}</div>
+                <div className="t2">{facts}</div>
+                {statusLine && (
+                  <div className="lib-status" data-tone={status?.tone ?? "wait"}>
+                    <i aria-hidden="true" />{statusLine}
+                  </div>
+                )}
               </div>
               <div className="lost" aria-label={lost === null ? "Marks lost unavailable" : `${isPartialTotal(p as Record<string, unknown>) ? "at least " : ""}${lost} marks lost`}>
                 {lost === null ? "—" : Number.isInteger(lost) ? lost : lost.toFixed(1)}
@@ -496,7 +509,6 @@ export default function Library() {
         })}
       </div>
 
-      <div className="subnote">Search matches paper details, question labels and text, and your written answers. Suggested subjects are never treated as verified.</div>
     </>
   );
 }

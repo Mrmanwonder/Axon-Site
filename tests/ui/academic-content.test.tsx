@@ -59,3 +59,4 @@ test("untrusted table cells do not execute HTML or links", () => {
   expect(container.querySelector("a")).toBeNull();
   expect(container.textContent).toContain("<img");
 });
+

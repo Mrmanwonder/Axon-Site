@@ -10,7 +10,7 @@ import { createContext, startTransition, useCallback, useContext, useEffect, use
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-import Dialog from "./Dialog";
+import Dialog, { useDialogDismiss } from "./Dialog";
 
 export type SheetChoice = {
   label: string;
@@ -26,8 +26,16 @@ export type SheetConfig = {
   choices?: SheetChoice[];
   input?: { id: string; label: string; placeholder?: string };
   primary?: string;
+  /** An informational sheet: one button with this label that only closes it. */
+  acknowledge?: string;
   onConfirm?: (value: string) => void | Promise<void>;
   onChoice?: (value: string) => void | Promise<void>;
+  /**
+   * Close the route-backed sheet before invoking a choice action. Use this for
+   * actions that can take a long time or navigate elsewhere; otherwise the
+   * sheet's history entry can outlive the destination and trap the overlay.
+   */
+  dismissBeforeChoice?: boolean;
   /** Optional synchronous cancellation hook for callers waiting on a choice. */
   onCancel?: () => void;
 };
@@ -35,6 +43,12 @@ export type SheetConfig = {
 type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => void };
 
 const Ctx = createContext<SheetValue | null>(null);
+const PAPER_TYPE_SHEET = "What kind of paper is this?";
+
+/** For components that can live outside the provider (tests, isolated screens). */
+export function useOptionalSheetControls(): SheetValue | null {
+  return useContext(Ctx);
+}
 
 export function useSheetControls(): SheetValue {
   const v = useContext(Ctx);
@@ -69,7 +83,14 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     const base = current.pathname + (params.size ? `?${params}` : "") + current.hash;
     const id = crypto.randomUUID();
     const focused = document.activeElement as HTMLElement | null;
-    entries.current.set(id, { cfg, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
+    // Paper type starts the scanner's full send transaction. It predates the
+    // generic dismiss-before-choice option, so preserve the safe behavior here
+    // for both scanner and file-ingestion callers without changing every other
+    // consequence sheet's await-and-show-error semantics.
+    const effective = cfg.dismissBeforeChoice === undefined && cfg.title === PAPER_TYPE_SHEET
+      ? { ...cfg, dismissBeforeChoice: true }
+      : cfg;
+    entries.current.set(id, { cfg: effective, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
     params.set("sheet", id);
     setInputValue(""); setError(null); setCompleted(null);
     navigate({ pathname: current.pathname, search: `?${params}`, hash: current.hash }, { replace: replacing });
@@ -87,6 +108,28 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     if (!entry || !token || flight.current) return;
     flight.current = true; setBusy(true); setError(null);
     choice === undefined ? hapticFirm() : hapticTick();
+
+    if (choice !== undefined && entry.cfg.dismissBeforeChoice) {
+      const action = entry.cfg.onChoice;
+      const base = entry.base;
+      // Remove the exact sheet entry rather than walking browser history. The
+      // choice action is allowed to navigate immediately afterwards, and it
+      // must never be able to carry ?sheet=... onto that destination.
+      entries.current.delete(token);
+      navigate(base, { replace: true });
+      flight.current = false; setBusy(false); setCompleted(null);
+      // Yield one turn so the route-backed Dialog unmounts before upload state
+      // or a destination navigation begins painting.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      try { await action?.(choice); }
+      catch (cause) {
+        // Long-running scanner sends surface their own durable progress/error
+        // state. Other opt-in callers still get a visible diagnostic.
+        console.error("Sheet choice action failed after dismissal", cause);
+      }
+      return;
+    }
+
     try {
       if (choice === undefined) await entry.cfg.onConfirm?.(inputValue);
       else await entry.cfg.onChoice?.(choice);
@@ -104,12 +147,22 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
       {cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
       {error && <p role="alert">{error}</p>}
-      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)}>{choice.label}</button>)}</div>}
+      {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)} aria-busy={busy}>{busy ? "Working…" : choice.label}</button>)}</div>}
       <div className="acts">
-        {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
-        <button type="button" className="btn plain" disabled={busy} onClick={closeSheet}>Cancel</button>
+        {cfg.acknowledge
+          ? <SheetCancel busy={busy} fallback={closeSheet} label={cfg.acknowledge} className="btn primary" />
+          : <>
+            {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
+            <SheetCancel busy={busy} fallback={closeSheet} />
+          </>}
       </div>
     </Dialog>}
   </Ctx.Provider>;
 
+}
+
+/** Cancel leaves the way the sheet arrived. */
+function SheetCancel({ busy, fallback, label = "Cancel", className = "btn plain" }: { busy: boolean; fallback: () => void; label?: string; className?: string }) {
+  const dismiss = useDialogDismiss(fallback);
+  return <button type="button" className={className} disabled={busy} onClick={dismiss}>{label}</button>;
 }

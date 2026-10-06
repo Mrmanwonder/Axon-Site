@@ -240,6 +240,27 @@
   --nav-icon-on: var(--p-ink-950);
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Syllabus map heat (owner, 4 Oct 2026): one hue, the accent; darker = more
+   marks lost. Never red, never a second hue. Steps are mixed toward the
+   surface so both themes stay on their own background. Contrast for the cell
+   label was computed per step (WCAG): every step passes 4.5:1 with --label
+   except dark step 4, which takes --heat-ink-4 (4.94:1).
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --heat-0: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --heat-1: color-mix(in srgb, var(--accent) 28%, var(--surface));
+  --heat-2: color-mix(in srgb, var(--accent) 48%, var(--surface));
+  --heat-3: color-mix(in srgb, var(--accent) 70%, var(--surface));
+  --heat-4: color-mix(in srgb, var(--accent) 92%, var(--surface));
+  --heat-ink-4: var(--p-ink-950);
+}
+
+[data-theme="light"] {
+  --heat-ink-4: var(--label);
+}
+
 /* glass furniture that floats over the viewfinder, which is always dark —
    so these are fixed, not themed */
 :root {

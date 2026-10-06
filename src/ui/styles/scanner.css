@@ -46,13 +46,31 @@
   touch-action: none;
 }
 
-.sc button { font: inherit; color: inherit; -webkit-appearance: none; appearance: none; }
-
+/* Opening and closing (owner, 4 Oct 2026): the camera screen rises into place
+   and settles away. Transform and opacity only. */
+/* Opening and closing (owner, 4 Oct 2026: deliberate, Apple-like, no bounce).
+   Open: the darkroom fades up; the chrome then settles into place from just
+   outside its resting spot (top bar from above, strip and dock from below) on
+   the sheet curve, a beat later, so the frame arrives before the controls.
+   The picture fades in once the camera is live instead of popping.
+   Close: everything fades together, fast, nothing travels.
+   Transform and opacity only; none of it runs under reduced motion. */
+@keyframes sc-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sc-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sc-from-above { from { opacity: 0; transform: translate3d(0, -8px, 0); } to { opacity: 1; transform: none; } }
+@keyframes sc-from-below { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+.sc { animation: sc-fade-in 240ms ease-out both; }
+.sc > /* The top bar (owner, 4 Oct 2026: shorter controls with air above and below).
+   What you see is a 38 px material: the close circle and the tools capsule.
+   What you tap is still 44 px: every button keeps a 44 px box and draws its
+   material on a pseudo-element, so the bar looks lighter without shrinking
+   any target. 8 px of bar padding plus the 3 px the 44 px box overhangs the
+   38 px material leaves 11 px of clear space above and below. */
 .sc-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: max(10px, var(--top-inset)) 12px 10px;
+  padding: max(8px, var(--top-inset)) 12px 8px;
 }
 
 .sc-grow { flex: 1; }
@@ -60,7 +78,8 @@
 /* The navigation bar's material (the shutter wears it too): a dark capsule
    with a hairline rim and a lit top edge. Solid rather than glass: it sits on
    the darkroom, not over the picture. */
-.sc-glass {
+.sc-glass,
+.sc-close::before {
   border: .5px solid rgba(255, 255, 255, .16);
   background: rgba(38, 38, 42, .78);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(255, 255, 255, .06);
@@ -69,59 +88,82 @@
 .sc-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 5px;
-  border-radius: 32px;
+  height: 38px;
+  padding: 0 3px;
+  border-radius: 19px;
 }
+/* Buttons overhang the 38 px capsule by 3 px each way to keep 44 px targets. */
+.sc-tools > * { margin-block: -3px; }
 
 .sc-circ {
   position: relative;
   flex: none;
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 23px;
+  border-radius: 22px;
   border: 0;
   background: transparent;
   color: var(--sc-ink);
   cursor: pointer;
 }
 
-/* Close stands alone at the full capsule height, so both ends of the bar align. */
-.sc-circ.sc-glass { width: 56px; height: 56px; border-radius: 28px; }
-
-.sc-circ svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+/* Close: a 38 px circle of the bar's material inside a 44 px target. */
+.sc-close::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+}
+.sc-circ svg { position: relative; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.sc-close svg { width: 18px; height: 18px; stroke-width: 2; }
 .sc-circ svg.dots { fill: currentColor; stroke: none; }
 
 .sc-circ .dot {
   position: absolute;
-  top: 9px;
+  top: 11px;
   right: 10px;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 4px;
   background: var(--sc-accent);
   box-shadow: 0 0 0 2px #26262a;
 }
 
-/* Auto is a toggle shaped like a tab: on, it wears the tab bar's pill. */
+/* Auto is a toggle shaped like a tab: on, it wears the tab bar's pill, drawn
+   32 px tall inside the 44 px target so it sits 3 px inside the capsule. */
 .sc-auto {
-  min-height: 46px;
-  padding: 0 18px;
-  border-radius: 23px;
+  position: relative;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 16px;
   border: 0;
   background: transparent;
   color: var(--sc-ink-2);
   font-weight: 600;
-  font-size: 15px;
-  letter-spacing: -.015em;
+  font-size: 14px;
+  letter-spacing: -.01em;
   cursor: pointer;
-  transition: background-color .2s var(--scan-snap), color .2s var(--scan-snap);
+  transition: color 120ms ease;
 }
-
-.sc-auto[data-on="true"] { background: rgba(255, 255, 255, .16); color: var(--sc-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18); }
+.sc-auto::before {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  opacity: 0;
+  transform: scale(.94);
+  transition: opacity 200ms var(--ease-sheet), transform 200ms var(--ease-sheet);
+}
+.sc-auto > span { position: relative; }
+.sc-auto[data-on="true"] { color: var(--sc-ink); }
+.sc-auto[data-on="true"]::before { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .sc-auto::before { transition: none; } }
+[data-motion="reduce"] .sc-auto::before { transition: none; }
 
 /* ── camera ─────────────────────────────────────────────────────────────── */
 
@@ -359,51 +401,113 @@
 /* ── sheets opened from the scanner ─────────────────────────────────────── */
 
 /* The More sheet is the Settings list inside the app's own sheet. */
-.sheet.sc-menu .sc-menu-list { margin: 16px 0 0; background: var(--surface-sunk); }
-.sheet.sc-menu .srow { width: 100%; border: 0; background: transparent; color: var(--label); text-align: left; font: inherit; cursor: pointer; min-height: 56px; }
+.sheet.sc-menu .sc-menu-list { margin: 10px -4px 0; display: flex; flex-direction: column; }
+.sheet.sc-menu .srow { width: 100%; border: 0; background: transparent; color: var(--label); text-align: left; font: inherit; cursor: pointer; min-height: 60px; padding: 12px 4px; border-radius: 0; }
+.sheet.sc-menu .srow + .srow::before { left: 4px; right: 4px; }
 .sheet.sc-menu .srow .chev { color: var(--label); }
-.sheet.sc-menu .sc-light { cursor: default; }
-.sheet.sc-menu .sc-light .seg button { min-height: 44px; min-width: 52px; font-size: 14px; }
-.sheet.sc-menu .sc-light small { color: var(--label-2); }
+.sheet.sc-menu .sc-torch { cursor: default; }
+.sheet.sc-menu .sc-torch .gseg { flex: none; width: min(198px, 54%); }
+.sheet.sc-menu .sc-torch small { color: var(--label-2); }
+/* Without a Close row the last row needs the sheet's bottom padding only. */
+.sheet.sc-menu .sc-menu-list { margin-bottom: 2px; }
 
-.sheet.sc-review { max-height: 88dvh; overflow-y: auto; }
-.sc-review-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-
-.sc-pg {
+/* Page review (owner, 5 Oct 2026): the paper as a grid, two pages across,
+   in paper order. A tile is the page and its number; a page that needs a look
+   wears the stack's amber dashed outline. Everything else lives one tap in. */
+.sheet.sc-review {
+  --sheet-pad-b: max(18px, calc(18px + env(safe-area-inset-bottom)));
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+.sc-grid {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  grid-template-areas: "th head" "th why" "th acts";
-  column-gap: 12px;
-  row-gap: 2px;
-  align-items: start;
-  padding: 10px;
-  border-radius: 16px;
-  background: var(--surface-sunk);
-  font-size: 14px;
-  color: var(--label-2);
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 42%), 1fr));
+  gap: 14px 12px;
 }
-
-.sc-pg .th { grid-area: th; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 6px; background: #e6e2d8; }
-.sc-pg .th img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.sc-pg[data-flagged="true"] .th { outline: 2px dashed var(--amber); outline-offset: 2px; }
-.sc-pg b { grid-area: head; color: var(--label); font-weight: 650; font-size: 15px; }
-.sc-pg .why { grid-area: why; line-height: 1.35; }
-.sc-pg[data-flagged="true"] .why { color: var(--label); }
-.sc-pg .pgacts { grid-area: acts; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.sc-pg .pgacts button {
-  flex: 0 1 auto;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid var(--label-3, var(--hairline));
-  background: transparent;
+.sc-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--label);
-  font-weight: 600;
-  font-size: 14px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+}
+.sc-tile:active:not(:disabled) { transform: scale(.97); }
+.sc-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+.sc-tile .th {
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #e6e2d8;
+  box-shadow: 0 0 0 .5px var(--hairline), 0 2px 8px rgba(0, 0, 0, .18);
+}
+.sc-tile .th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sc-tile[data-flagged="true"] .th { outline: 2px dashed var(--amber); outline-offset: 2px; }
+.sc-tile .n {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(20, 20, 22, .78);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sc-tile .look {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  height: 26px;
+  padding: 0 9px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--amber);
+  color: #1c1300;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.sc-review-acts { position: sticky; bottom: 0; padding-top: 12px; background: var(--sheet-bg); }
+/* The footer is solid down to the sheet's bottom edge, so nothing scrolls
+   visibly underneath it. */
+.sc-review-acts {
+  position: sticky;
+  bottom: calc(-1 * var(--sheet-pad-b, 18px));
+  margin: 0 -22px calc(-1 * var(--sheet-pad-b, 18px));
+  padding: 14px 22px var(--sheet-pad-b, 18px);
+  background: var(--sheet-bg);
+  box-shadow: 0 -.5px 0 var(--hairline);
+}
+
+/* One page, large. */
+.sc-page-img {
+  margin-top: 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-sunk);
+}
+.sc-page-img img { display: block; max-width: 100%; max-height: 46dvh; object-fit: contain; }
+.sc-page-img[data-flagged="true"] { outline: 2px dashed var(--amber); outline-offset: 2px; }
+.sc-page-acts { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.sc-page-move { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sc-page .acts { margin-top: 12px; }
+.sc-remove { color: var(--attention); }
 
 .sheet.sc-edge {
   inset: 0;
@@ -464,15 +568,12 @@ html.scanner-active .sheet .sh-choice {
 }
 
 /* Tablets: the camera column, centred, not stretched across the window. */
+/* Tablets get the whole screen too (owner, 4 Oct 2026): the camera used to be
+   a 480px card in the middle of an iPad, as if it were a phone mock-up. The
+   controls keep a readable measure in the middle of the wide bars. */
 @media (min-width: 768px) {
-  .sc {
-    position: relative;
-    inset: auto;
-    width: min(100%, 480px);
-    height: clamp(560px, calc(100dvh - var(--view-top) - 28px), 880px);
-    margin: 0 auto;
-    border-radius: 28px;
-  }
+  .sc-top, .sc-dock { padding-left: max(12px, calc((100% - 640px) / 2)); padding-right: max(12px, calc((100% - 640px) / 2)); }
+  .sc-strip { width: min(616px, calc(100% - 24px)); margin-left: auto; margin-right: auto; }
 }
 
 /* ── level line (visual only, never part of capture logic) ──────────────── */
@@ -659,3 +760,60 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
     animation: none !important;
   }
 }
+
+/* ── saved drafts ─────────────────────────────────────────────────────────── */
+.sc-draft-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.sc-draft { display: flex; align-items: center; gap: 8px; padding: 10px 0; }
+.sc-draft + .sc-draft { border-top: .5px solid var(--hairline); }
+.sc-draft-open {
+  flex: 1;
+  min-width: 0;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sc-draft-pile { position: relative; flex: none; width: 52px; height: 64px; }
+.sc-draft-pile img, .sc-draft-pile .blank {
+  position: absolute;
+  inset: 0;
+  width: 46px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e6e2d8;
+  box-shadow: 0 0 0 .5px var(--hairline), 0 1px 4px rgba(0, 0, 0, .2);
+}
+.sc-draft-pile img[data-i="1"] { transform: translate(4px, 2px) rotate(4deg); }
+.sc-draft-pile img[data-i="2"] { transform: translate(-2px, 3px) rotate(-5deg); }
+.sc-draft-txt { min-width: 0; display: grid; gap: 3px; }
+.sc-draft-txt b { font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.sc-draft-txt small { font-size: 13px; color: var(--label-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-draft-del {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 22px;
+  background: var(--surface-sunk);
+  color: var(--label-2);
+  cursor: pointer;
+}
+.sc-draft-del svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sc-draft[data-confirming="true"] { flex-wrap: wrap; }
+.sc-draft-confirm { flex-basis: 100%; display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+/* The app's .sheet li rule is for bullet lists; these lists are layouts. */
+.sheet .sc-grid li { display: block; padding: 0; border: 0; gap: 0; font-size: inherit; color: inherit; }
+.sheet li.sc-draft { padding: 10px 0; border-top: 0; font-size: inherit; color: inherit; }
+.sheet li.sc-draft + li.sc-draft { border-top: .5px solid var(--hairline); }
+.sc-draft-open, .sc-draft-open:hover { -webkit-appearance: none; appearance: none; box-shadow: none; outline-offset: 2px; }
+

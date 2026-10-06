@@ -74,6 +74,10 @@ export const destinations: Destination[] = [
 /** Which destination a location belongs to. Returns -1 for none, which is
     what the 404 and any future off-nav screen get. */
 export function activeIndex(pathname: string): number {
+  // Checking a paper's readings is part of that paper, so it keeps Library lit
+  // even though its address sits under /scan (owner, 5 Oct 2026: the Scan tab
+  // lit up on a paper opened from the Library).
+  if (pathname.startsWith("/scan/review/")) return destinations.findIndex((d) => d.path === paths.library);
   return destinations.findIndex((d) =>
     d.matchPrefix
       ? pathname === d.matchPrefix || pathname.startsWith(d.matchPrefix + "/")

@@ -9,7 +9,7 @@ import Insights from "../../src/ui/pages/Insights";
 import { useResource } from "../../src/ui/data/useResource";
 import { ToastProvider } from "../../src/ui/components/ToastProvider";
 
-const mocks = vi.hoisted(() => ({ papers: vi.fn(), progress: vi.fn(), consent: vi.fn(), session: vi.fn(), analytics: vi.fn() }));
+const mocks = vi.hoisted(() => ({ papers: vi.fn(), progress: vi.fn(), consent: vi.fn(), session: vi.fn(), analytics: vi.fn(), insights: vi.fn() }));
 vi.mock("../../src/ui/data/useIngestion", () => ({ useIngestion: () => ({ addPaper() {} }) }));
 vi.mock("../../src/ui/data/modules", () => ({
   sb: {
@@ -35,7 +35,7 @@ vi.mock("../../src/ui/data/modules", () => ({
   readLocal: () => ({ theme: "dark", text_size: "m", reduce_motion: true }), loadPrefs: async () => ({ theme: "dark" }), savePrefs: vi.fn(),
   readConsentState: mocks.consent, recordConsent: vi.fn(), withdrawConsent: vi.fn(), signOut: vi.fn(),
   listPapers: mocks.papers, paperProgress: mocks.progress, watchLibrary: () => () => {},
-  analyticsReadiness: mocks.analytics, lossByCause: async () => ({ data: {} }), needsCheck: async () => ({ data: { count: 0, papers: 0 } }), unreadablePages: async () => ({ data: [] }),
+  analyticsReadiness: mocks.analytics, insightEvidence: mocks.insights, lossByCause: async () => ({ data: {} }), needsCheck: async () => ({ data: { count: 0, papers: 0 } }), unreadablePages: async () => ({ data: [] }),
   providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Test paper", statusKeyForRun: () => "reading", PAPER_STATUS: { reading: { label: "Reading", tone: "wait" } },
   retryFailedPaper: vi.fn(),
@@ -54,6 +54,7 @@ function mount(child: React.ReactNode) {
 }
 beforeEach(() => {
   vi.clearAllMocks(); mocks.session.mockResolvedValue({}); mocks.papers.mockResolvedValue({ data: [], stale: false }); mocks.progress.mockResolvedValue(new Map()); mocks.consent.mockResolvedValue({}); mocks.analytics.mockResolvedValue({ data: { papers_counted: 0, questions_counted: 0, has_enough_data: false } });
+  mocks.insights.mockResolvedValue({ data: { attempts: [], losses: [] }, stale: false });
 });
 test("cold Library does not assert empty or a final zero before papers complete", async () => {
   const read = deferred<any>(); mocks.papers.mockReturnValue(read.promise); mount(<Library />);
@@ -73,8 +74,8 @@ test("failed progress refresh disables recovery without surfacing sync status", 
 });
 test("consent failures remain failures", async () => { mocks.consent.mockRejectedValue(new Error("offline")); mount(null); expect(await screen.findByText("consent:failed")).toBeTruthy(); });
 test("auth read error enters boot error", async () => { mocks.session.mockRejectedValue(new Error("auth unavailable")); mount(null); expect(await screen.findByText("boot_error")).toBeTruthy(); });
-test("Insights shows failed reads instead of an indefinite blank", async () => { mocks.analytics.mockRejectedValue(new Error("offline")); mount(<Insights />); expect(await screen.findByText("Can’t reach your analysis")).toBeTruthy(); });
-test("cached analytics carries an explicit label", async () => { mocks.analytics.mockResolvedValue({ data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: true }); mount(<Insights />); expect(await screen.findByText("Last available analysis.")).toBeTruthy(); });
+test("Insights shows failed reads instead of an indefinite blank", async () => { mocks.insights.mockRejectedValue(new Error("offline")); mount(<Insights />); expect(await screen.findByText("Can’t reach your analysis")).toBeTruthy(); });
+test("cached analytics carries an explicit label", async () => { mocks.insights.mockResolvedValue({ data: { attempts: [], losses: [] }, stale: true }); mount(<Insights />); expect(await screen.findByText("Last available analysis.")).toBeTruthy(); });
 test("reversed completion cannot replace a newer resource and changing student hides old data", async () => {
   const first = deferred<any>(); const second = deferred<any>(); const read = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValue(new Promise(() => {}));
   function Probe({ id }: { id: string }) { const { resource, reload } = useResource(id, read); return <><span>{resource.data ?? resource.state}</span><button onClick={() => void reload()}>Reload</button></>; }
@@ -107,14 +108,51 @@ test("slow cache completion cannot replace the live result", async () => {
   expect(screen.getByText("ready:live paper")).toBeTruthy();
   expect(screen.queryByText(/older paper/)).toBeNull();
 });
+/** n papers in one subject, each losing two marks to the same cause, with the student's own fix. */
+function evidence(n: number) {
+  const papers = Array.from({ length: n }, (_, i) => ({ id: `p${i}`, type: "unit_test", tier: "tier_1", date_taken: `2026-0${i + 1}-10`, subject: "Physics" }));
+  const attempts = papers.map((p, i) => ({ id: `a${i}`, paper_id: p.id, question_label: `Q${i + 1}`, max_marks: 4, marks_awarded: 2, question_order: 0, answer_blank: false }));
+  const losses = attempts.map((a, i) => ({
+    id: `l${i}`, attempt_id: a.id, cause: "keyword_miss", marks_lost: 2, do_this_next: `Name the law in sentence one (${i + 1})`,
+    command_word: "Explain", concepts: ["Newton's second law"], loss_reasons: null, depends_on_parts: null, created_at: "2026-09-01T00:00:00Z",
+  }));
+  return { papers, attempts, losses };
+}
+
 test("Coverage shows while evidence builds and disappears once patterns are ready", async () => {
-  mocks.analytics.mockResolvedValue({ data: { papers_counted: 2, questions_counted: 9, has_enough_data: false }, stale: false });
+  const few = evidence(2);
+  mocks.papers.mockResolvedValue({ data: few.papers, stale: false });
+  mocks.insights.mockResolvedValue({ data: { attempts: few.attempts, losses: few.losses }, stale: false });
   const first = mount(<Insights />);
   expect(await screen.findByText("Coverage")).toBeTruthy();
+  expect(screen.queryByText("Mistakes that repeat")).toBeNull();
   first.unmount();
-  mocks.analytics.mockResolvedValue({ data: { papers_counted: 5, questions_counted: 25, has_enough_data: true }, stale: false });
+  const enough = evidence(5);
+  mocks.papers.mockResolvedValue({ data: enough.papers, stale: false });
+  mocks.insights.mockResolvedValue({ data: { attempts: enough.attempts, losses: enough.losses }, stale: false });
   mount(<Insights />);
-  await screen.findByText("Why marks are lost");
+  await screen.findByText("Where your marks go");
   expect(screen.queryByText("Coverage")).toBeNull();
   expect(screen.queryByText(/of 4 papers/)).toBeNull();
+  // The checklist quotes the most recent fix, and links to the question it came from.
+  expect(screen.getByText("Name the law in sentence one (5)")).toBeTruthy();
+  expect(screen.getByText(/In 3 of your last 3 papers/)).toBeTruthy();
+  expect(screen.getByText(/10 of 10 explained marks were lost where the knowledge was there/)).toBeTruthy();
+});
+
+test("Home names a focus only when a mistake repeats inside enough evidence", async () => {
+  const few = evidence(3);
+  mocks.papers.mockResolvedValue({ data: few.papers, stale: false });
+  mocks.insights.mockResolvedValue({ data: { attempts: few.attempts, losses: few.losses }, stale: false });
+  const first = mount(<Home />);
+  await screen.findByText("Recent scans");
+  await waitFor(() => expect(mocks.insights).toHaveBeenCalled());
+  expect(screen.queryByText("Before your next paper")).toBeNull();
+  first.unmount();
+  const enough = evidence(4);
+  mocks.papers.mockResolvedValue({ data: enough.papers, stale: false });
+  mocks.insights.mockResolvedValue({ data: { attempts: enough.attempts, losses: enough.losses }, stale: false });
+  mount(<Home />);
+  expect(await screen.findByText("Before your next paper")).toBeTruthy();
+  expect(screen.getByText("Name the law in sentence one (4)")).toBeTruthy();
 });

@@ -171,6 +171,12 @@ export default function Onboarding() {
   // ── OTP autofill and resend cooldown ──
   const OTP_RESEND_COOLDOWN_S = 30;
   const [otpBusy, setOtpBusy] = useState(false);
+  const otpFlight = useRef(false);
+  const sendFlight = useRef(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeDeliveryFailed, setCodeDeliveryFailed] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const accountFlight = useRef(false);
   const [otpSentAt, setOtpSentAt] = useState<number | null>(null);
   const [cooldownNow, setCooldownNow] = useState(() => Date.now());
   const otpCooldownRemaining = otpSentAt === null ? 0
@@ -257,9 +263,11 @@ export default function Onboarding() {
      the button can share it without duplicating the guardian upsert. */
   const verifyOtpCode = useCallback(async (raw: string) => {
     if (!raw.trim()) return setError("Enter the code we sent.");
-    if (otpBusy) return;
+    if (otpFlight.current || sendFlight.current || codeDeliveryFailed) return;
     hapticFirm();
+    otpFlight.current = true;
     setOtpBusy(true);
+    setError(null);
     try {
       await verifyOtp(contact.trim(), raw.trim());
       // Guardian row first: it holds no student data, so it is safe before
@@ -273,9 +281,9 @@ export default function Onboarding() {
       setGuardian(data);
       await continueAsGuardian(data);
     } catch (e) { fail(e, "That code did not work."); }
-    finally { setOtpBusy(false); }
+    finally { otpFlight.current = false; setOtpBusy(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contact, parentName, otpBusy, continueAsGuardian]);
+  }, [contact, parentName, continueAsGuardian, codeDeliveryFailed]);
 
   /* Auto-submit the instant a 6-digit numeric code is complete — typed,
      pasted, or autofilled from the iOS QuickType bar — rather than making the
@@ -286,7 +294,7 @@ export default function Onboarding() {
     if (step !== "otp" || otpBusy) return;
     if (/^\d{6}$/.test(code.trim())) void verifyOtpCode(code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, step]);
+  }, [code, step, sendingCode]);
 
   /* Purposes are fetched when that step opens, not at mount. The optional ones
      must never arrive pre-ticked, so their default comes from `is_required` and
@@ -305,7 +313,21 @@ export default function Onboarding() {
       .catch((e) => fail(e, "We could not load what you're agreeing to."));
   }, [step, purposes]);
 
-  const back = BACK_TO[step];
+  const requestCode = async () => {
+    if (sendFlight.current || otpFlight.current) return;
+    sendFlight.current = true;
+    setSendingCode(true); setCodeDeliveryFailed(false); setError(null);
+    try {
+      await sendOtp(contact.trim());
+      const now = Date.now();
+      setOtpSentAt(now); setCooldownNow(now);
+    } catch (e) {
+      setCodeDeliveryFailed(true); setOtpSentAt(null);
+      fail(e, "That code could not be sent. Please try again.");
+    } finally { sendFlight.current = false; setSendingCode(false); }
+  };
+
+  const back = sendingCode || otpBusy ? undefined : BACK_TO[step];
   const shellProps = {
     phase: STEP_PHASE[step],
     onBack: back ? () => go(back) : undefined,
@@ -390,16 +412,13 @@ export default function Onboarding() {
     };
 
     const send = async () => {
+      if (sendFlight.current || busyProvider) return;
       if (!parentName.trim()) return setError("We need your name.");
       if (!contact.trim()) return setError("Enter an email address or phone number.");
       hapticFirm();
-      try {
-        await sendOtp(contact.trim());
-        setOtpSentAt(Date.now());
-        setCooldownNow(Date.now());
-        go("otp");
-      }
-      catch (e) { fail(e, "That code could not be sent."); }
+      setCode("");
+      go("otp");
+      await requestCode();
     };
 
     return (
@@ -449,7 +468,7 @@ export default function Onboarding() {
 
   if (step === "otp") {
     return (
-      <Shell {...shellProps} title="Check your email">
+      <Shell {...shellProps} title={contact.includes("@") ? "Check your email" : "Check your messages"}>
         <Err message={error} />
         <div className="obfields">
           {/* inputMode="numeric" is what makes autoComplete="one-time-code"
@@ -461,12 +480,14 @@ export default function Onboarding() {
                  inputMode="numeric" onEnter={() => void verifyOtpCode(code)} />
         </div>
         <div className="subnote">
-          Sent to {contact}. If the email contains a link rather than a code, paste
-          the whole link here — that works too, and it still works after your mail
-          app has already opened it.
+          <span role="status">{sendingCode ? `Sending a code to ${contact}.` : codeDeliveryFailed
+            ? "Your code has not been sent. Try again or go back to change your contact."
+            : `Sent to ${contact}.`}</span> If the message contains a link rather than a code,
+          paste the whole link here.
         </div>
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" disabled={otpBusy}
+          <PressBox as="button" type="button" className="btn primary" disabled={otpBusy || sendingCode || codeDeliveryFailed}
+                    aria-busy={otpBusy}
                     onClick={() => void verifyOtpCode(code)}>
             {otpBusy ? "Checking…" : "Continue"}
           </PressBox>
@@ -475,18 +496,11 @@ export default function Onboarding() {
               cooldown so a mistap can't fire a flurry of emails. */}
           <PressBox
             as="button" type="button" className="btn plain"
-            disabled={otpCooldownRemaining > 0}
-            onClick={async () => {
-              hapticTick();
-              try {
-                await sendOtp(contact.trim());
-                setOtpSentAt(Date.now());
-                setCooldownNow(Date.now());
-                setError("Sent again.");
-              } catch (e) { fail(e, "That could not be sent."); }
-            }}
+            disabled={sendingCode || otpBusy || otpCooldownRemaining > 0}
+            aria-busy={sendingCode}
+            onClick={() => void requestCode()}
           >
-            {otpCooldownRemaining > 0 ? `Resend in ${otpCooldownRemaining}s` : "Send it again"}
+            {sendingCode ? "Sending code…" : otpCooldownRemaining > 0 ? `Resend in ${otpCooldownRemaining}s` : codeDeliveryFailed ? "Try sending again" : "Send it again"}
           </PressBox>
         </div>
       </Shell>
@@ -498,8 +512,10 @@ export default function Onboarding() {
      them back to the start, ask only for what is missing. */
   if (step === "nameOnly") {
     const save = async () => {
+      if (accountFlight.current) return;
       if (!parentName.trim()) return setError("We need your name.");
       hapticFirm();
+      accountFlight.current = true; setAccountBusy(true); setError(null);
       try {
         const sess = await currentSession() as SessionUser;
         const { data, error: e } = await sb.from("guardian").upsert(
@@ -510,6 +526,7 @@ export default function Onboarding() {
         setGuardian(data);
         await continueAsGuardian(data);
       } catch (e) { fail(e, "That could not be saved."); }
+      finally { accountFlight.current = false; setAccountBusy(false); }
     };
 
     return (
@@ -527,8 +544,8 @@ export default function Onboarding() {
                  hint="So the student knows whose account this is." />
         </div>
         <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" onClick={() => void save()}>
-            Continue
+          <PressBox as="button" type="button" className="btn primary" disabled={accountBusy} aria-busy={accountBusy} onClick={() => void save()}>
+            {accountBusy ? "Opening your account…" : "Continue"}
           </PressBox>
         </div>
       </Shell>
@@ -699,6 +716,7 @@ export default function Onboarding() {
           p_programme_key: curriculum.programmeKey,
           p_stage_key: curriculum.stageKey,
           p_avatar_key: avatarKey,
+          ...(curriculum.schoolPathway ? { p_school_pathway: curriculum.schoolPathway } : {}),
           p_subjects: curriculum.subjects.map(({ offering, level }) => ({
             offering_id: offering.id,
             level,

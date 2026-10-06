@@ -246,6 +246,8 @@ test("primary navigation uses navigation semantics and one current page @a11y", 
 test("answer content remains the accessible name of an interactive segment @a11y", async ({ page }) => {
   await page.goto("/tests/browser/index.html?view=answer");
   await expect(page.getByRole("button", { name: "x + 1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "x + 1", exact: true }).click();
+  await expect(page.getByLabel("Selected source page")).toHaveText("2");
 });
 
 test("runtime route failures and unknown URLs have distinct recovery UI", async ({ page }) => {
@@ -264,9 +266,6 @@ test("review mark radios follow native keyboard behavior and closed review is ab
   await expect(selected).toBeChecked();
   await selected.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("radio", { name: "2", exact: true })).toBeChecked();
-  expect(await page.evaluate(() => (window as typeof window & { __markChoice?: number }).__markChoice)).toBeUndefined();
-  await page.getByRole("button", { name: "Save teacher’s mark" }).click();
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __markChoice?: number }).__markChoice)).toBe(2);
 
   await page.goto("/tests/browser/index.html?view=review&scenario=closed");

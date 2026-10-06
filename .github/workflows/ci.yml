@@ -11,6 +11,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   node-tests:
     name: npm test (bench + harness)
@@ -23,6 +26,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: AXO-188 controlled reference transport benchmark
+        run: node bench/upload-reference.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: axo-188-reference
+          path: bench/results/axo-188-reference.json
       - run: npm run curriculum:validate
       - run: npm run typecheck
       - run: npm run build
@@ -121,6 +130,11 @@ jobs:
             rm -f "$log"
           done
           exit $status
+
+      - name: Verify concurrent authenticated saves against local Postgres
+        run: node scripts/audit-commit-concurrency.mjs
+        env:
+          AXON_LOCAL_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
       - name: Verify commit-totals repair in a rolled-back local fixture
         run: |

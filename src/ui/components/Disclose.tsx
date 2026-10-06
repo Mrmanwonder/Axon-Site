@@ -6,7 +6,7 @@
    site in QuestionDetail for why that matters there. */
 
 import { useApp } from "../data/AppProvider";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 export default function Disclose({
   label, children, onOpen,
@@ -20,10 +20,17 @@ export default function Disclose({
   const panel = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const p = panel.current, i = inner.current;
     if (!p || !i) return;
-    p.style.height = open ? `${i.offsetHeight}px` : "0px";
+    let active = true;
+    const measure = () => { if (active) p.style.height = open ? `${i.offsetHeight}px` : "0px"; };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    if (open) observer?.observe(i);
+    window.addEventListener("resize", measure);
+    void document.fonts?.ready.then(measure);
+    return () => { active = false; observer?.disconnect(); window.removeEventListener("resize", measure); };
   }, [open, children]);
 
   return (

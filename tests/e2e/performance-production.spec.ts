@@ -266,7 +266,7 @@ async function populateWarmCache(page: Page, backend: BackendOptions) {
   await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
   // readThrough awaits its IndexedDB write before exposing the live result, so
   // this actual paper row is also the cache-population barrier for warm samples.
-  await expect(page.getByRole("button", { name: /Physics · Class test/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Physics\s*Class test/ })).toBeVisible();
 }
 
 test.describe("production startup performance @performance", () => {
@@ -351,7 +351,7 @@ test.describe("production startup performance @performance", () => {
       backend.dataDelayMs = WARM_DATA_DELAY_MS;
       await page.goto(`${origin}/library`, { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
-      await expect(page.getByRole("button", { name: /Physics · Class test/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: /Physics\s*Class test/ })).toBeVisible();
       librarySamples.push(Date.now() - started);
       expect(libraryTrace.some(row => isDataRead(row.key) && row.doneAt === undefined)).toBe(true);
     }

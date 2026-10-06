@@ -13,7 +13,7 @@
     "test:ui": "vitest run",
     "test:e2e": "playwright test",
     "test:a11y": "playwright test --grep @a11y",
-    "test:db": "node --test tests/db/*.test.mjs",
+    "test:db": "node --test tests/db/*.test.mjs && python3 -B scripts/syllabus/test_extract.py",
     "curriculum:validate": "node scripts/curriculum/catalog.mjs validate",
     "curriculum:check": "node scripts/curriculum/catalog.mjs check"
   },

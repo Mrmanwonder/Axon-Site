@@ -57,6 +57,7 @@ export type Student = {
   programme_id?: string | null;
   stage_id?: string | null;
   curriculum_version?: string | null;
+  school_pathway?: "ib_school_igcse" | null;
   provider_key?: string | null;
   provider_label?: string | null;
   programme_key?: string | null;
@@ -463,7 +464,7 @@ export type MarkLossEvent = {
 };
 
 /** A box on the page image, in the pipeline's 0–1000 grid. */
-export type Bbox = { x: number; y: number; w: number; h: number; page_index?: number };
+export type Bbox = { x: number; y: number; w: number; h: number; page_index?: number; page?: number };
 
 /** One piece of a transcribed line. `latex` is model-generated and untrusted. */
 export type Segment = {
@@ -491,6 +492,7 @@ export type AnswerBlock = {
   lines: { segments: Segment[]; role: "working" | "final_answer" | "restatement" | "crossed_out" }[];
   notation_profile: string;
   raw_text: string;
+  source_space?: "page_pixels_v1";
 };
 
 export type StudentAttempt = {
@@ -552,13 +554,14 @@ export type PaperDetail = {
   date_taken: string;
   /** Existing date_taken is an added-on date, not evidence of an exam date. */
   created_at?: string;
-  subject_offering_id?: string | null;
-  subject_display_snapshot?: string | null;
-  subject_external_code_snapshot?: string | null;
-  subject_identity_source?: string | null;
   subject_identity_confidence?: string | null;
   subject_verified_at?: string | null;
   subject: string | null;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  /** assessment_identity (official, fixed) · student (they chose it) · triage (assigned automatically) */
+  subject_identity_source?: "assessment_identity" | "student" | "triage" | null;
   reported_total: number | null;
   stated_maximum: number | null;
   total_awarded: number | null;
@@ -590,6 +593,7 @@ export const recordExplanationFeedback = papersMod.recordExplanationFeedback as 
 export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
+export const relabelAttempt = papersMod.relabelAttempt as unknown as (attemptId: string, label: string) => Promise<void>;
 
 
 export type AcademicShareState = {
@@ -682,6 +686,7 @@ export const explainRetry = scanApiMod.explainRetry as unknown as (
 export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
   paperId: string,
 ) => Promise<RetryPaperResult>;
+export const retryAsMarked = scanApiMod.retryAsMarked as unknown as (paperId: string) => Promise<{ retry: string; run_id?: string; queued?: boolean }>;
 
 /** What `/tutor` returns (axon-intelligence TutorResponseSchema). */
 export type TutorReply = {
@@ -728,6 +733,23 @@ export const needsCheck = papersMod.needsCheck as unknown as (
 export const unreadablePages = papersMod.unreadablePages as unknown as (
   studentId: string,
 ) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
+
+/** Every eligible attempt and loss event Insights reasons over, from the
+    analytics views only (hard rule 3). */
+export const insightEvidence = papersMod.insightEvidence as unknown as (
+  studentId: string,
+) => Promise<Cached<{
+  attempts: import("./insights").InsightAttempt[];
+  losses: import("./insights").InsightLoss[];
+}>>;
+
+/** The student sets or clears a paper's subject (one of their own subjects). */
+export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subjectOfferingId: string | null) => Promise<void>;
+
+/** Syllabus documents, topics and eligible topic evidence for the syllabus map. */
+export const syllabusMapData = papersMod.syllabusMapData as unknown as (
+  studentId: string,
+) => Promise<Cached<import("./syllabusMap").SyllabusMapInput>>;
 
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (

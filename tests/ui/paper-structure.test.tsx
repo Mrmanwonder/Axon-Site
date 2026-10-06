@@ -130,20 +130,20 @@ test("the pictured paper renders as grouped questions with an honest unassigned 
   mount();
 
   expect(await screen.findByRole("heading", { level: 1, name: "Class test" })).toBeTruthy();
-  expect(screen.getByText("Subject not confirmed")).toBeTruthy();
-  expect(screen.getByText(/Added 7 Sept?/)).toBeTruthy();
-  expect(screen.getByText("Scored coverage: 7 of 7 leaf parts.")).toBeTruthy();
-  expect(screen.getByText("2 questions · 7 saved parts · 3 parts not placed under a question")).toBeTruthy();
-  expect(screen.getByText(/Teacher.s marks as read: 15 out of 22/)).toBeTruthy();
+  expect(screen.getByText("Subject not identified")).toBeTruthy();
+  expect(screen.getByText(/Added 7 Sep/)).toBeTruthy();
+  expect(screen.getByText("15 of 22 from your teacher · 2 questions · 7 parts")).toBeTruthy();
+  // The overview no longer badges settled rows; that state lives on the question.
+  expect(screen.queryByText("Confirmed by you")).toBeNull();
 
-  const q1 = screen.getByRole("heading", { level: 3, name: "Question 1" }).closest("section")!;
+  const q1 = screen.getByRole("heading", { level: 2, name: "Question 1" }).closest("section")!;
   expect(within(q1).getAllByRole("link")).toHaveLength(3);
-  expect(within(q1).getByText("Question 1(a)(ii)")).toBeTruthy();
+  expect(within(q1).getByText("1(a)(ii)")).toBeTruthy();
 
-  const loose = screen.getByRole("heading", { level: 3, name: "Unassigned parts" }).closest("section")!;
+  const loose = screen.getByRole("heading", { level: 2, name: "Unassigned parts" }).closest("section")!;
   expect(within(loose).getAllByRole("link")).toHaveLength(3);
-  expect(within(loose).getByText("Unassigned part (c)")).toBeTruthy();
-  expect(within(loose).getAllByText("Printed question not read. Inspect the saved page.").length).toBe(3);
+  expect(within(loose).getByText("Part c")).toBeTruthy();
+  expect(within(loose).getAllByText("Question text not read").length).toBe(3);
 });
 
 test("headline is marks lost, with at-least framing whenever a mark is unread", async () => {
@@ -154,7 +154,7 @@ test("headline is marks lost, with at-least framing whenever a mark is unread", 
   mount();
   expect(await screen.findByText(/2 marks lost/)).toBeTruthy();
   expect(screen.getByText(/At least/)).toBeTruthy();
-  expect(screen.getByText(/Teacher.s mark: Not read out of 4/)).toBeTruthy();
+  expect(screen.getByText(/Mark not read · out of 4/)).toBeTruthy();
   expect(screen.getByText(/1 part has no readable mark\./)).toBeTruthy();
 });
 
@@ -164,7 +164,14 @@ test("a needs-checking part is the next action and links to that exact part", as
     stale: false, offline: false,
   });
   mount();
-  const link = await screen.findByRole("link", { name: "Open Question 2" });
+  const link = await screen.findByRole("link", { name: "Open 2" });
   expect(link.getAttribute("href")).toBe("/library/paper-1/a2");
   expect(screen.getByText("Needs checking")).toBeTruthy();
+});
+
+test("an unassigned part can be placed under a question by hand", async () => {
+  fixture.readPaper.mockResolvedValue({ data: { ...base, ...pictured }, stale: false, offline: false });
+  mount();
+  const loose = (await screen.findByRole("heading", { level: 2, name: "Unassigned parts" })).closest("section")!;
+  expect(within(loose).getAllByRole("button", { name: "Place under a question" })).toHaveLength(3);
 });

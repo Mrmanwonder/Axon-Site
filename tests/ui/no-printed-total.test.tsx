@@ -71,14 +71,14 @@ test("no printed total, every mark read: labelled as added up by Axon, never as 
 test("no printed total with an unreadable mark: the figure is shown as at least, and says why", async () => {
   fixture.readPaper.mockResolvedValue({ data: paper({ total_partial: true, total_awarded: 4, total_available: 5 }), stale: false, offline: false });
   mount();
-  expect(await screen.findByText(/some marks could not be read, so this is at least what was awarded/i)).toBeTruthy();
-  expect(screen.getByText(/At least .*marks? lost/)).toBeTruthy();
+  expect(await screen.findByText(/some marks couldn’t be read, so more may have been lost/i)).toBeTruthy();
+  expect(screen.getByText(/^at least$/i)).toBeTruthy();
 });
 
 test("a printed total carries no added-up note", async () => {
   fixture.readPaper.mockResolvedValue({ data: paper({ reported_total: 7, total_basis: "printed", reconciled: true }), stale: false, offline: false });
   mount();
-  await screen.findByRole("heading", { name: "Question 1", level: 3 });
+  await screen.findByText("Question 1");
   expect(screen.queryByText(/No total was printed/)).toBeNull();
   expect(screen.queryByText(/^at least$/i)).toBeNull();
 });
@@ -86,7 +86,7 @@ test("a printed total carries no added-up note", async () => {
 test("a printed total that does not match still says so, with both numbers", async () => {
   fixture.readPaper.mockResolvedValue({ data: paper({ reported_total: 9, total_basis: "printed", reconciled: false }), stale: false, offline: false });
   mount();
-  expect(await screen.findByText(/the total printed on your paper is/)).toBeTruthy();
+  expect(await screen.findByText(/the total on your paper is/)).toBeTruthy();
 });
 
 test("paperTotals: partial totals never count as complete, and notes use the agreed framing", () => {

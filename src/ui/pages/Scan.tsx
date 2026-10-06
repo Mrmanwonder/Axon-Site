@@ -14,20 +14,23 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useRef, useState } from "react";
+import type React from "react";
 import { useNavigate } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { TorchMode } from "../scan/ScanProvider";
 import { useIngestion } from "../data/useIngestion";
 import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
-import Dialog from "../components/Dialog";
-import { DraftAlert } from "../components/ScanDrafts";
+import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
+import GlideSegment from "../components/GlideSegment";
 import CameraLevel from "../scan/CameraLevel";
 import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
 import PageReview from "../scan/PageReview";
+import DraftsSheet from "../scan/DraftsSheet";
 import ImportDesk from "../scan/ImportDesk";
+import ReadingScreen, { modelForSend } from "../scan/ReadingScreen";
+import type { SendJob } from "../scan/ReadingScreen";
 import { useDeskMode } from "../scan/useDeskMode";
-import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick } from "../lib/haptics";
 import { CheckSymbol, CropFreeSymbol, InfoSymbol } from "../components/MaterialSymbols";
 import Chevron from "../components/Chevron";
@@ -50,28 +53,50 @@ type Strip = {
 
 export default function Scan() {
   const {
-    videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
+    videoRef, overlayRef, camera, hint, tray, trayHandlers,
+    drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
     setAutoCapture, setTorchMode, auto, submitting, pendingCaptureCount,
     pageReviewOpen, openPageReview, closePageReview,
+    sends, focusedSend, setFocusedSend, retrySend,
   } = useScan();
   const { ingestFiles, addPaper, addLink } = useIngestion();
   const { student } = useApp();
-  const { openSheet } = useSheetControls();
   const navigate = useNavigate();
   const desk = useDeskMode();
   const [menuOpen, setMenuOpen] = useState(false);
+  // The scanner fades up and its controls settle in; it closes by fading out
+  // (scanner.css; 200 ms out, instant under reduced motion).
+  const [leaving, setLeaving] = useState(false);
+  const closeScanner = () => {
+    if (leaving) return;
+    const reduced = document.documentElement.dataset.motion === "reduce"
+      || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) { navigate(paths.home); return; }
+    setLeaving(true);
+    window.setTimeout(() => navigate(paths.home), 200);
+  };
   const cameraApp = useRef<HTMLInputElement>(null);
+
+  // The paper just handed over, while its reading screen covers the camera.
+  const focused = sends.find((job) => job.id === focusedSend) ?? null;
+  const covered = Boolean(focused);
 
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
     if (desk) void ensureScan().catch(() => { /* the screen still takes files */ });
-    else onScreenVisible(true);
+    else onScreenVisible(!covered);
     return () => {
       document.documentElement.classList.remove("scanner-active");
       if (!desk) onScreenVisible(false);
     };
-  }, [desk, onScreenVisible, ensureScan]);
+  }, [desk, onScreenVisible, ensureScan, covered]);
+
+  // The paper is read while the student is still looking at it: open review.
+  useEffect(() => {
+    if (focused?.phase !== "review" || !focused.paperId) return;
+    setFocusedSend(null);
+    navigate(paths.review(focused.paperId));
+  }, [focused?.phase, focused?.paperId, setFocusedSend, navigate]);
 
   // iOS Safari handles pinch through gesture events outside touch-action.
   useEffect(() => {
@@ -106,23 +131,8 @@ export default function Scan() {
 
   const flaggedPages = tray.filter(needsLook);
 
-  const openDrafts = () => {
-    hapticTick();
-    openSheet({
-      title: "Saved drafts",
-      body: drafts.length
-        ? "These unfinished scans are stored on this device until you resume and send them."
-        : "No saved scans yet. Pages you capture will be stored on this device until you send them.",
-      choices: drafts.length
-        ? drafts.map((draft) => ({
-            label: `${draft.title} · ${draft.pages} page${draft.pages === 1 ? "" : "s"}`,
-            value: draft.id,
-          }))
-        : undefined,
-      primary: "Done",
-      onChoice: (id) => draftsHandlers.onResume?.(id),
-    });
-  };
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const openDrafts = () => { hapticTick(); setDraftsOpen(true); };
 
   const review = pageReviewOpen && <PageReview onClose={closePageReview} />;
 
@@ -131,7 +141,7 @@ export default function Scan() {
       <>
         <ImportDesk onReview={openPageReview} />
         {review}
-        {progress && <ProgressPanel progress={progress} />}
+        {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
         {!student && <div className="subnote">Create a student profile before scanning.</div>}
       </>
     );
@@ -146,7 +156,7 @@ export default function Scan() {
     if (hint.tone === "attention" && hint.reason) {
       if (hint.action === "torch" && torch?.supported) {
         return { tone: "attention", text: hint.hint,
-          action: { label: "Turn on light", run: () => setTorchMode("on") } };
+          action: { label: "Turn on torch", run: () => setTorchMode("on") } };
       }
       if (hint.reason === "nothing" || hint.reason === "engine") {
         return { tone: "attention", text: hint.hint,
@@ -174,25 +184,25 @@ export default function Scan() {
   const shutterOff = !live || submitting || pendingCaptureCount >= 2;
   const draftsCount = drafts.length;
 
-  const closeMenuThen = (fn: () => void) => { setMenuOpen(false); window.setTimeout(fn, 0); };
+  const closeMenuThen = (fn: () => void) => { window.setTimeout(fn, 0); };
 
   return (
     <>
-      <div className="sc" data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
+      <div className={"sc" + (leaving ? " is-leaving" : "")} data-camera={live ? "on" : "off"} data-phase={live ? undefined : camera.phase}>
         {/* The top bar wears the navigation bar's material, the same as the
             shutter below it: close on its own, and the three tools in one
             capsule whose "on" state is the tab bar's pill. Line glyphs at the
             tab bar's weight, so the camera reads as the same app. */}
         <div className="sc-top">
-          <PressBox as="button" type="button" className="sc-circ sc-glass" aria-label="Close scanner"
-                    onClick={() => navigate(paths.home)}>
+          <PressBox as="button" type="button" className="sc-circ sc-close" aria-label="Close scanner"
+                    onClick={closeScanner}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" /></svg>
           </PressBox>
           <span className="sc-grow" />
           <div className="sc-tools sc-glass">
             <PressBox as="button" type="button" className="sc-auto" data-on={auto ? "true" : "false"}
                       aria-pressed={auto} onClick={() => { hapticTick(); setAutoCapture(!auto); }}>
-              Auto
+              <span>Auto</span>
             </PressBox>
             <PressBox as="button" type="button" className="sc-circ"
                       aria-label={draftsCount ? `Saved drafts, ${draftsCount}` : "Saved drafts"}
@@ -230,9 +240,6 @@ export default function Scan() {
               <button type="button" className="sc-btn ghost" onClick={addPaper}>Import photos</button>
             </div>
           )}
-          {resumable && draftsHandlers.onResume && tray.length === 0 && (
-            <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
-          )}
         </div>
 
         <div className="sc-strip" data-tone={strip.tone} role="status" aria-live="polite">
@@ -265,84 +272,83 @@ export default function Scan() {
 
       {menuOpen && (
         <Dialog title="More" busy={false} onClose={() => setMenuOpen(false)} className="sc-menu">
-          {/* The Settings list, verbatim: plain rows, a label with its note
-              under it, a chevron where the row leads somewhere, and the app's
-              segmented control for a three-way choice. */}
-          <div className="list sc-menu-list">
+          <MoreMenu then={closeMenuThen}>{(then) => (<>
+          {/* Rows straight on the sheet, divided by hairlines, the way the
+              app's other sheets list things: no card inside the overlay. */}
+          <div className="sc-menu-list">
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(addPaper)}>
+                      onClick={() => then(addPaper)}>
               <div className="lbl">Import photos<small>From your gallery or files</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(() => cameraApp.current?.click())}>
+                      onClick={() => then(() => cameraApp.current?.click())}>
               <div className="lbl">Use your camera app<small>Take the photo with your phone’s own camera</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(addLink)}>
+                      onClick={() => then(addLink)}>
               <div className="lbl">Add a link<small>A shared PDF or drive file</small></div>
               <Chevron />
             </PressBox>
             <PressBox as="button" type="button" className="srow noicon" data-interactive=""
-                      onClick={() => closeMenuThen(openDrafts)}>
+                      onClick={() => then(openDrafts)}>
               <div className="lbl">Saved drafts</div>
               <div className="aux">{draftsCount || "None"}</div>
               <Chevron />
             </PressBox>
             {torch?.supported && (
-              <div className="srow noicon sc-light" role="group" aria-label="Light">
-                <div className="lbl">Light{torch.error && <small role="alert">{torch.error}</small>}</div>
-                <div className="seg">
-                  {(["auto", "on", "off"] as TorchMode[]).map((mode) => (
-                    <button type="button" key={mode} aria-pressed={torch.mode === mode}
-                            className={torch.mode === mode ? "on" : undefined}
-                            onClick={() => setTorchMode(mode)}>{TORCH_LABEL[mode]}</button>
-                  ))}
-                </div>
+              <div className="srow noicon sc-torch">
+                <div className="lbl">Torch{torch.error && <small role="alert">{torch.error}</small>}</div>
+                <GlideSegment label="Torch" value={torch.mode as TorchMode}
+                              options={(["auto", "on", "off"] as TorchMode[]).map((mode) => ({ value: mode, label: TORCH_LABEL[mode] }))}
+                              onChange={(mode) => { hapticTick(); setTorchMode(mode); }} />
               </div>
             )}
           </div>
-          <div className="acts">
-            <button type="button" className="btn plain" onClick={() => setMenuOpen(false)}>Close</button>
-          </div>
-        </Dialog>
+          </>)}</MoreMenu>
+</Dialog>
+      )}
+
+      {draftsOpen && (
+        <DraftsSheet drafts={drafts} onClose={() => setDraftsOpen(false)}
+          onOpen={(id) => draftsHandlers.onResume?.(id)}
+          onDelete={(id) => draftsHandlers.onDiscard?.(id)} />
       )}
 
       {review}
-      {progress && <ProgressPanel progress={progress} />}
+      {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
 
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
   );
 }
 
-function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {
+/* The scanner after Read (owner, 6 Oct 2026): the whole screen becomes this
+   paper's reading screen. Continue scanning hands the camera back for the next
+   paper while this one carries on; Go to Library leaves it to finish there. */
+function SendingScreen({ job, onContinue, onRetry }: { job: SendJob; onContinue: () => void; onRetry: () => void }) {
+  const navigate = useNavigate();
+  const toLibrary = () => navigate(paths.library);
+  const actions = job.phase === "stuck"
+    ? [{ label: "Try again", run: onRetry, primary: true }, { label: "Continue scanning", run: onContinue }]
+    : job.phase === "refused"
+      ? [{ label: "Continue scanning", run: onContinue, primary: true }, { label: "Go to Library", run: toLibrary }]
+      : [{ label: "Continue scanning", run: () => { hapticTick(); onContinue(); }, primary: true }, { label: "Go to Library", run: toLibrary }];
   return (
-    <div className="scanbelow">
-      <div className="sectitle tight">{progress.heading ?? "Reading this paper"}</div>
-      <div className="card proc">
-        <div className="hd">{progress.now}</div>
-        {progress.sub && <div className="sub">{progress.sub}</div>}
-        {progress.steps.map((st, i) => (
-          <div key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
-            <span className={"st " + st.state}>
-              {st.state === "done" && (
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-              )}
-            </span>
-            <span className="lb">{st.label}</span>
-          </div>
-        ))}
-        {progress.skeleton && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="skel" style={{ width: "82%" }} />
-            <div className="skel" style={{ width: "64%" }} />
-            <div className="skel" style={{ width: "73%" }} />
-          </div>
-        )}
-      </div>
-      {progress.note && <div className="subnote">{progress.note}</div>}
-    </div>
+    <ReadingScreen model={modelForSend(job)} variant="overlay" onClose={toLibrary} closeLabel="Go to Library"
+      actions={actions}
+      footnote={["sending", "waiting", "reading"].includes(job.phase)
+        ? "This carries on while you scan the next paper or leave. It waits in your Library."
+        : null} />
   );
+}
+
+/** The More sheet's body. Every row leaves through the sheet's exit motion first. */
+function MoreMenu({ then, children }: { then: (fn: () => void) => void; children: (go: (fn: () => void) => void) => React.ReactNode }) {
+  const dismiss = useDialogDismiss();
+  // No Close row: the sheet closes by tapping outside it or Escape, like the
+  // system's own action sheets. A row closes the sheet first, then acts.
+  const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), SHEET_EXIT_MS + 10); };
+  return <>{children(go)}</>;
 }

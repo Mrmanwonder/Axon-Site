@@ -237,7 +237,8 @@ test("rapid switches serialize server authority and only the newest choice can r
 });
 
 test("online recovery refreshes the same active student lease without changing UI identity", async () => {
-  mount();
+  // Flush boot and its student-dependent effects before simulating recovery.
+  await act(async () => { mount(); });
   await screen.findByText(A.id);
   fixture.setScope.mockClear();
 

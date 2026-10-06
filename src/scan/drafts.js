@@ -6,33 +6,36 @@
 // capture is the most expensive drop-off in the product, because the paper is
 // physically present at that moment and will not be again.
 //
-// So pages are written to IndexedDB as they are taken, before anything is
-// uploaded, and each page records whether it has reached storage yet. Resuming
-// picks up at the first page that has not — per page, with no re-capture and no
-// re-upload of what already landed.
+// Draft metadata and binary assets are stored separately. This keeps upload
+// state writes tiny while preserving the same durable local recovery contract.
 
-import { openDraftDatabase, closeLocalDatabase, localDataEpoch } from '../local-data.js';
+import { openDraftDatabase, closeLocalDatabase } from '../local-data.js';
 const STORE = 'drafts';
+const ASSET_STORE = 'draft_assets';
 export const DRAFT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const open = openDraftDatabase;
-const stamp = draft => { if (draft) Object.defineProperty(draft, '_epoch', { value: localDataEpoch(), configurable: true }); return draft; };
+import { decodeDraft } from './draft-codec.js';
+import { stampDraft as stamp } from './draft-mutations.js';
 
-function tx(db, mode, fn) {
+function tx(db, stores, mode, fn) {
   return new Promise((resolve, reject) => {
     let transaction;
     let result;
     try {
-      transaction = db.transaction(STORE, mode);
-      result = fn(transaction.objectStore(STORE));
+      transaction = db.transaction(stores, mode);
+      result = fn(transaction);
     } catch (error) {
       closeLocalDatabase(db);
       reject(error);
       return;
     }
-    transaction.oncomplete = () => { closeLocalDatabase(db); resolve(result.result ?? result); };
+    transaction.oncomplete = () => { closeLocalDatabase(db); resolve(typeof result === 'function' ? result() : result?.result ?? result); };
     transaction.onerror = transaction.onabort = () => { closeLocalDatabase(db); reject(transaction.error); };
-
   });
+}
+
+function requestAllByIndex(store, indexName, value) {
+  return store.index(indexName).getAll(IDBKeyRange.only(value));
 }
 
 /** Start a draft. The id is the paper id once there is one, or a local id until then. */
@@ -47,147 +50,93 @@ export async function createDraft({ id, studentId, paperType }) {
     updated_at: Date.now(),
     pages: [],
   };
-  await tx(db, 'readwrite', (store) => store.put(draft));
+  await tx(db, STORE, 'readwrite', transaction => transaction.objectStore(STORE).add(draft));
   return stamp(draft);
 }
 
 export async function readDraft(id) {
   const db = await open();
-  const draft = await tx(db, 'readonly', (store) => store.get(id));
+  let draftRequest, assetsRequest;
+  const result = await tx(db, [STORE, ASSET_STORE], 'readonly', transaction => {
+    draftRequest = transaction.objectStore(STORE).get(id);
+    assetsRequest = requestAllByIndex(transaction.objectStore(ASSET_STORE), 'draft', id);
+    return () => ({ draft: draftRequest.result, assets: assetsRequest.result ?? [] });
+  });
+  const draft = result?.draft;
   if (draft && Date.now() - draft.updated_at > DRAFT_RETENTION_MS) { await deleteDraft(id); return null; }
-  return stamp(draft);
+  return draft ? stamp(decodeDraft(draft, result.assets, { strict: true })) : null;
 }
 
-export async function listDrafts(studentId) {
+async function storedDrafts(studentId) {
   const db = await open();
-  const all = await tx(db, 'readonly', (store) => store.getAll());
-  for (const draft of all ?? []) if (Date.now() - draft.updated_at > DRAFT_RETENTION_MS) await deleteDraft(draft.id);
+  const all = await tx(db, STORE, 'readonly', transaction => transaction.objectStore(STORE).getAll());
+  const expired = (all ?? []).filter(draft => Date.now() - draft.updated_at > DRAFT_RETENTION_MS);
+  for (const draft of expired) await deleteDraft(draft.id);
   return (all ?? [])
-  .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
-  .filter((d) => d.student_id === studentId && d.pages.length)
-  .sort((a, b) => b.updated_at - a.updated_at).map(stamp);
+    .filter(draft => Date.now() - draft.updated_at <= DRAFT_RETENTION_MS)
+    .filter(draft => draft.student_id === studentId && draft.pages.length)
+    .sort((a, b) => b.updated_at - a.updated_at);
 }
 
-export async function saveDraft(draft) {
-  if (draft._epoch !== localDataEpoch()) throw new Error("This draft was cleared. Start a new scan.");
+async function loadDraftAssets(drafts) {
+  const ids = drafts.map(draft => draft.id);
+  if (!ids.length) return [];
   const db = await open();
-  draft.updated_at = Date.now();
-  await tx(db, 'readwrite', (store) => store.put(draft));
-  return stamp(draft);
+  const requests = [];
+  return tx(db, ASSET_STORE, 'readonly', transaction => {
+    const index = transaction.objectStore(ASSET_STORE).index('draft');
+    for (const id of ids) requests.push(index.getAll(IDBKeyRange.only(id)));
+    return () => requests.flatMap(request => request.result ?? []);
+  });
 }
 
+/**
+ * Full local drafts for resume/recovery code. Every retained asset is hydrated:
+ * this is deliberately heavier because original-backup recovery must be able
+ * to distinguish "original pending" from "this capture never had an original".
+ */
+export async function listDrafts(studentId) {
+  const kept = await storedDrafts(studentId);
+  const assets = await loadDraftAssets(kept);
+  return kept.map(draft => stamp(decodeDraft(structuredClone(draft), assets, { strict: true })));
+}
+
+async function loadPreviewAssets(drafts) {
+  const keys = new Set();
+  for (const draft of drafts) for (const page of (draft.pages ?? []).slice(0, 3)) {
+    const marker = page.proxy?.axon_asset === 1 ? page.proxy : page.blob?.axon_asset === 1 ? page.blob : null;
+    if (marker?.key) keys.add(marker.key);
+  }
+  if (!keys.size) return [];
+  const db = await open();
+  const requests = [];
+  return tx(db, ASSET_STORE, 'readonly', transaction => {
+    const store = transaction.objectStore(ASSET_STORE);
+    for (const key of keys) requests.push(store.get(key));
+    return () => requests.map(request => request.result).filter(Boolean);
+  });
+}
+
+/** Lightweight scanner/UI listing: metadata plus at most three preview images. */
+export async function listDraftSummaries(studentId) {
+  const kept = await storedDrafts(studentId);
+  const previews = await loadPreviewAssets(kept);
+  return kept.map(draft => stamp(decodeDraft(structuredClone(draft), previews)));
+}
+
+export { saveDraft, mutateDraft, addPage, removePage, movePage, replacePage, markUploaded, pendingPages,
+  updateAssets, claimSendLease, touchSendLease, startLeaseHeartbeat, releaseSendLease, assertLease,
+  requestSend, SendBusy, senderAlive } from './draft-mutations.js';
 export async function deleteDraft(id) {
   const db = await open();
-  await tx(db, 'readwrite', (store) => store.delete(id));
-}
-
-/**
-* Add a page to a draft.
-*
-* The conditioned bytes are stored, and so is the raw frame — but only until it
-* has been uploaded. Conditioning is the expensive part and it has already
-* happened, so what travels is the conditioned page; the original is kept
-* because §7.6.4 says a mistake must stay recoverable server-side, and it is
-* dropped in `markUploaded` because keeping a booklet's worth of unmodified
-* camera stills would roughly triple its footprint on a phone that may not have
-* the room.
-*/
-export async function addPage(draft, page) {
-  draft.pages.push({
-    page_number: draft.pages.length + 1,
-    blob: page.blob,
-    mask: page.mask ?? null,
-    thumb: page.thumb ?? null,
-    // Dropped again by markUploaded the moment it lands. See acceptPage.
-    original: page.original ?? null,
-    original_type: page.original_type ?? null,
-    proxy: page.proxy ?? null,
-    width: page.width,
-    height: page.height,
-    quality: page.quality,
-    // Local-only perceptual signature used to catch an accidental re-scan of
-    // the same physical page. It is deliberately outside conditioning_meta, so
-    // ingest never uploads it to the server.
-    fingerprint: page.fingerprint ?? null,
-    meta: page.meta,
-    source_kind: page.source_kind ?? null,
-    teacher_marks: page.teacher_marks ?? [],
-    margin_band: page.margin_band ?? null,
-    layer_fallback: page.layer_fallback ?? null,
-    uploaded: false,
+  await tx(db, [STORE, ASSET_STORE], 'readwrite', transaction => {
+    transaction.objectStore(STORE).delete(id);
+    const request = transaction.objectStore(ASSET_STORE).index('draft').openCursor(IDBKeyRange.only(id));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      cursor.delete();
+      cursor.continue();
+    };
   });
-  return saveDraft(draft);
-}
-
-export async function removePage(draft, pageNumber) {
-  draft.pages = renumber(draft.pages.filter((p) => p.page_number !== pageNumber));
-  return saveDraft(draft);
-}
-
-/** Move a page within the booklet. Order is the student's to decide, not ours. */
-export async function movePage(draft, from, to) {
-  const pages = [...draft.pages];
-  const [moved] = pages.splice(from - 1, 1);
-  if (!moved) return draft;
-  pages.splice(Math.max(0, Math.min(pages.length, to - 1)), 0, moved);
-  draft.pages = renumber(pages);
-  return saveDraft(draft);
-}
-
-/**
-* Give pages their positions, and un-send anything whose position changed.
-*
-* Storage is keyed by page number, so a page that has already been uploaded as
-* page 3 and is now page 4 is not uploaded — the bytes sitting at page 4 are
-* somebody else's. Carrying the `uploaded` flag through a renumber left the
-* booklet silently out of order after a reorder that followed a failed upload,
-* and nothing would ever have re-sent it.
-*/
-function renumber(pages) {
-  return pages.map((p, i) => {
-    const page_number = i + 1;
-    return page_number === p.page_number ? p : { ...p, page_number, uploaded: false };
-  });
-}
-
-/** Replace one page in place — a retake, keeping its position in the booklet. */
-export async function replacePage(draft, pageNumber, page) {
-  draft.pages = draft.pages.map((p) => (p.page_number === pageNumber
-                                        ? { ...p, ...page, page_number: pageNumber, uploaded: false }
-                                        : p));
-  return saveDraft(draft);
-}
-
-/**
-* Mark a page sent, and keep what it was sent as.
-*
-* `extra` carries where the bytes actually landed — the R2 bucket and key for
-* the page and its mask. Without persisting that alongside `uploaded`, a
-* connection dropped between upload and submit would strand pages that had
-* already reached storage: `pendingPages` would correctly not re-send them, but
-* nothing would remember where they went.
-*/
-export async function markUploaded(draft, pageNumber, extra = {}) {
-  draft.pages = draft.pages.map((p) => (p.page_number === pageNumber
-    // The original and the thumbnail are dropped here, and only here: they are
-    // in R2 now, `extra` carries the keys, and holding a booklet's worth of
-    // unmodified camera stills in IndexedDB after they have been sent is the
-    // footprint acceptPage's own comment warns about. The conditioned page and
-    // its mask stay — they are what a resume re-sends and what the tray shows.
-    ? { ...p, ...extra, original: null, thumb: null, uploaded: true }
-    : p));
-  return saveDraft(draft);
-}
-
-/**
- * What a resume has left to do.
- *
- * A page flagged `uploaded` from a draft started before this device last
- * updated is not trustworthy on its own — the field it is trusted for,
- * `r2_key`, is what the server actually needs, and an older build could set
- * `uploaded` without ever setting it. Re-checking both is what makes a stale
- * draft resumable instead of stuck failing paper-submit forever.
- */
-export function pendingPages(draft) {
-    return draft.pages.filter((p) => !p.uploaded || !p.r2_key);
 }

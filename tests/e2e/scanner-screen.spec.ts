@@ -59,7 +59,7 @@ test.describe("camera screen on a phone", () => {
     await open(page, "dark");
     await shot(page, "m-dark");
     await expect(page.locator(".sc-strip")).toHaveAttribute("data-tone", "attention");
-    await page.getByRole("button", { name: "Turn on light" }).click();
+    await page.getByRole("button", { name: "Turn on torch" }).click();
     expect(await calls(page, "setTorchMode")).toEqual([["on"]]);
   });
 
@@ -84,22 +84,52 @@ test.describe("camera screen on a phone", () => {
     expect(await calls(page, "onRetake")).toEqual([[2]]);
   });
 
-  test("review sheet leads with the page that needs a look", async ({ page }) => {
+  test("review shows the paper as a grid in page order, with the flagged page outlined", async ({ page }) => {
     await open(page, "review");
     await shot(page, "m-review");
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading", { name: "1 page needs a look" })).toBeVisible();
-    await expect(dialog.getByText("The other 2 are clear.")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Retake page 2" })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Adjust edges" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "3 pages" })).toBeVisible();
+    await expect(dialog.getByText("Page 2 needs a look. Tap a page to fix it.")).toBeVisible();
+    const tiles = dialog.locator(".sc-tile");
+    await expect(tiles).toHaveCount(3);
+    await expect(tiles.nth(1)).toHaveAttribute("data-flagged", "true");
+    // Two across on a phone.
+    const [a, b] = await Promise.all([tiles.nth(0).boundingBox(), tiles.nth(1).boundingBox()]);
+    expect(Math.abs((a?.y ?? 0) - (b?.y ?? 1))).toBeLessThan(2);
     await expect(dialog.getByRole("button", { name: "Read as it is" })).toBeVisible();
-    // Flagged page first.
-    await expect(dialog.locator(".sc-pg").first()).toContainText("Page 2");
+    // Nothing shows beneath the footer: it is solid to the sheet's bottom edge.
+    const gap = await page.evaluate(() => {
+      const sheet = document.querySelector(".sheet.sc-review")!.getBoundingClientRect();
+      const acts = document.querySelector(".sc-review-acts")!.getBoundingClientRect();
+      return Math.round(sheet.bottom - acts.bottom);
+    });
+    expect(gap).toBeLessThanOrEqual(1);
+  });
+
+  test("every page, flagged or not, opens with Adjust edges, Retake, reorder and remove", async ({ page }) => {
+    await open(page, "review");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Page 3", exact: true }).click();
+    await expect(dialog.getByRole("heading", { name: "Page 3" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Adjust edges" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Retake" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Move earlier" }).click();
+    expect(await calls(page, "onMove")).toEqual([[3, 2]]);
+  });
+
+  test("removing a page states what happens before it happens", async ({ page }) => {
+    await open(page, "review");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Page 1", exact: true }).click();
+    await dialog.getByRole("button", { name: "Remove this page" }).click();
+    await dialog.getByRole("button", { name: "Remove page 1. The pages after it move up." }).click();
+    expect(await calls(page, "onRemove")).toEqual([[1]]);
   });
 
   test("adjust edges opens the editor on the original photo and returns four corners", async ({ page }) => {
     await open(page, "review");
     await page.waitForTimeout(300);
+    await page.getByRole("button", { name: "Page 2, needs a look" }).click();
     await page.getByRole("button", { name: "Adjust edges" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("heading", { name: "Page 2 edges" })).toBeVisible();
@@ -131,15 +161,78 @@ test.describe("camera screen on a phone", () => {
     await shot(page, "m-more");
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("button", { name: /Import photos/ })).toBeVisible();
-    await expect(dialog.getByRole("group", { name: "Light" })).toBeVisible();
+    await expect(dialog.getByRole("group", { name: "Torch" })).toBeVisible();
+    // No Close row: the sheet closes from outside it or with Escape.
+    await expect(dialog.getByRole("button", { name: "Close" })).toHaveCount(0);
+    // Safari once scrolled the dialog to reveal a focused button while the sheet
+    // was still rising, stranding it mid-screen. Once landed, the sheet sits on
+    // the bottom edge, the dialog is unscrolled, and no button holds focus.
+    await page.waitForTimeout(600);
+    const landed = await page.evaluate(() => {
+      const d = document.querySelector("dialog")!;
+      const sheet = d.querySelector(".sheet")!.getBoundingClientRect();
+      return { bottom: sheet.bottom, height: window.innerHeight, scroll: d.scrollTop,
+        focused: document.activeElement?.tagName };
+    });
+    expect(landed.scroll).toBe(0);
+    expect(Math.abs(landed.bottom - landed.height)).toBeLessThan(1);
+    expect(landed.focused).not.toBe("BUTTON");
     await dialog.getByRole("button", { name: "On", exact: true }).click();
     expect(await calls(page, "setTorchMode")).toEqual([["on"]]);
+  });
+
+  test("a saved draft shows what it holds and can be opened or deleted", async ({ page }) => {
+    await open(page, "saved");
+    await page.getByRole("button", { name: /Saved drafts/ }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("3 pages")).toBeVisible();
+    await expect(dialog.getByText(/Maths mock · Today/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Delete draft, 3 pages" }).click();
+    await dialog.getByRole("button", { name: "Delete 3 pages from this phone" }).click();
+    expect(await calls(page, "onDiscard")).toEqual([["d1"]]);
+    await dialog.getByRole("button", { name: /Open draft, 3 pages/ }).click();
+    await expect.poll(async () => (await calls(page, "onResume")).length).toBe(1);
+  });
+
+  test("sending is told in pages, shows the real pages, and can always be left", async ({ page }) => {
+    await open(page, "reading");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/files?\b/i)).toHaveCount(0);
+    const pages = page.locator(".sc-reading-pages li");
+    await expect(pages).toHaveCount(12);
+    await expect(pages.nth(0)).toHaveAttribute("data-sent", "true");
+    await expect(pages.nth(4)).not.toHaveAttribute("data-sent", "true");
+    await expect(page.locator(".sc-reading-pages img")).toHaveCount(12);
+    await expect(page.getByRole("button", { name: "Go to Library" }).first()).toBeVisible();
+    // The whole scanner is this paper's screen until the student moves on.
+    await page.getByRole("button", { name: "Continue scanning" }).click();
+    expect(await calls(page, "setFocusedSend")).toEqual([[null]]);
+  });
+
+  test("a lost connection waits and says so; it never says the send did not finish", async ({ page }) => {
+    await open(page, "offline");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText(/No connection\. Sending carries on by itself/)).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/did not finish|another tab/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue scanning" })).toBeVisible();
+  });
+
+  test("saved drafts with nothing saved offers one way out", async ({ page }) => {
+    await open(page, "search");
+    await page.getByRole("button", { name: "Saved drafts" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("button", { name: "OK" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toHaveCount(0);
+    await dialog.getByRole("button", { name: "OK" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
   test("the light control is absent where the camera has no torch", async ({ page }) => {
     await open(page, "search");
     await page.getByRole("button", { name: "More" }).click();
-    await expect(page.getByRole("group", { name: "Light" })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Torch" })).toHaveCount(0);
   });
 
   test("every control is at least 44px and the page has no red", async ({ page }) => {
@@ -252,5 +345,17 @@ test.describe("import screen on a laptop", () => {
     await expect(zone).toHaveAttribute("data-over", "true");
     await expect(page.getByText("Let go to add these pages")).toBeVisible();
     await shot(page, "d-over");
+  });
+});
+
+test.describe("tablets keep the camera", () => {
+  test.use({ viewport: { width: 1024, height: 1366 }, hasTouch: true, isMobile: false,
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" });
+  test("an iPad with a trackpad (reports as a Mac with touch) gets the camera, not the import screen", async ({ page }) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 }));
+    await open(page, "search");
+    await expect(page.locator(".sc")).toBeVisible();
+    await expect(page.locator(".sc-desk")).toHaveCount(0);
+    await shot(page, "t-ipad");
   });
 });

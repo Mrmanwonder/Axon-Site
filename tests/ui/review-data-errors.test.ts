@@ -52,5 +52,5 @@ test("a confirmed unreadable region retains its source state without pending rev
   expect(result.outstanding).toBe(0);
   expect(result.questions[0].unreadableReason).toBe("Source unclear");
   expect(result.lead).toContain("1 question (1 part)");
-  expect(result.lead).toContain("all readings confirmed");
+  expect(result.lead).toContain("all confirmed");
 });

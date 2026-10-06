@@ -23,7 +23,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { deleteQuestion, explainRetry, paperTypeLabel, providerKeyForStudent, recordExplanationFeedback } from "../data/modules";
-import type { StudentAttempt } from "../data/modules";
+import type { Segment, StudentAttempt } from "../data/modules";
+import Crop from "../components/Crop";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
 import SourceEvidence from "../components/SourceEvidence";
 import MaterialSymbol from "../components/MaterialSymbol";
@@ -43,6 +44,8 @@ import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
 import { tutorEntryVisible } from "../data/tutor";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckQuestion } from "../components/SchemeCheck";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -117,8 +120,10 @@ export default function QuestionDetail() {
   });
 
   const { paper, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
+  const [picked, setPicked] = useState<Segment | null>(null);
 
   const attempt: StudentAttempt | undefined = paper?.student_attempt.find((a) => a.id === qId);
   const [retrying, setRetrying] = useState(false);
@@ -176,7 +181,11 @@ export default function QuestionDetail() {
   // provenance rule: committed_attempt_id is the one column that traces a saved
   // attempt back to the region it came from, and page_spans carries the box.
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
-  const span = region?.page_spans?.[0];
+  const checkResult = region?.id ? schemeCheck.regions.get(region.id) ?? null : null;
+  const sourcePick = attempt.answer_block?.source_space === "page_pixels_v1" ? picked?.bbox : null;
+  const span = (sourcePick?.page != null
+    ? region?.page_spans?.find(s => s.page === sourcePick.page)
+    : region?.page_spans?.[0]);
   const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
   const reading = paperReading(paper);
   const readingPart = reading.parts.find(p => p.attempt.id === attempt.id);
@@ -228,9 +237,13 @@ export default function QuestionDetail() {
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
         <div className="qhead">
           <h1 className="t1">{questionLabel}</h1>
-          <span className={"conf " + (attempt.student_confirmed_at ? "confirmed" : attempt.extraction_confidence)}>
-            {attempt.student_confirmed_at ? "Confirmed by you" : CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
+          <span className={"conf " + attempt.extraction_confidence}>
+            {CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
           </span>
+          {/* Moved here from the paper list (owner, 4 Oct 2026): the list
+              shows only what needs the student; the settled state lives on the
+              question, beside the reading's confidence. */}
+          {attempt.student_confirmed_at && <span className="conf confirmed">Confirmed by you</span>}
           {attempt.marks_awarded != null && attempt.max_marks != null && (
             <span className="qmarks">
               {numMark(attempt.marks_awarded)}<small>/{numMark(attempt.max_marks)}</small>
@@ -238,10 +251,23 @@ export default function QuestionDetail() {
           )}
         </div>
 
-        <div className="qfield"><div className="k">Printed question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
+        {/* Hard rule 4: an unreadable crop says so, never a silent gap. */}
+        <div className="qcrop">
+          {/* Every page the answer runs across, in order: an answer continued
+              on a later page used to show only its first half. */}
+          {(region?.page_spans?.length ? region.page_spans : [span]).map((s, i) => (
+            <div key={`${s?.page ?? "none"}-${i}`} className={i ? "qcrop-more" : undefined}>
+              {(region?.page_spans?.length ?? 0) > 1 && s && <div className="qcrop-page">Page {s.page}</div>}
+              <Crop paperId={paperId} pageNumber={s?.page} box={s?.box}
+                    highlight={s && sourcePick?.page === s.page ? sourcePick : null} />
+            </div>
+          ))}
+        </div>
+
+        <div className="qfield"><div className="k">Question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
         {sharedStem && sharedStem !== attempt.question_text && <Field k="Shared question context" v={sharedStem} steps />}
         {readingPart?.inherited && <p className="subnote">Parent linked by source order; the printed label has no parent number.</p>}
-        <SourceEvidence paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />
+        <SourceEvidence inspectOnly paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />
 
         {/* Not "Your answer". The crop above is the student's answer; this is
             what we made of it, and the live data shows what that can cost —
@@ -251,15 +277,22 @@ export default function QuestionDetail() {
           block={attempt.answer_block}
           rawText={attempt.student_answer}
           recognition={recognition}
+          onPick={setPicked}
         />
 
         <div className="qfield"><div className="k">Teacher’s mark</div><div className="v">{attempt.marks_awarded == null ? "Not read" : numMark(attempt.marks_awarded)}{attempt.max_marks != null ? ` out of ${numMark(attempt.max_marks)}` : " · Maximum not read"}</div></div>
         {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
 
-        <div className="qfield">
-          <div className="k">Marked from</div>
-          <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
-        </div>
+        {/* An unmarked paper checked against its published scheme: Axon's
+            estimate, never shown as a teacher mark (owner decision, 6 Oct 2026). */}
+        {checkResult && <SchemeCheckQuestion result={checkResult} />}
+
+        {!checkResult && (
+          <div className="qfield">
+            <div className="k">Marked from</div>
+            <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
+          </div>
+        )}
 
         {/* How this question is answered, one tap below the student's own, in
             the same step shape so the two can be read against each other.

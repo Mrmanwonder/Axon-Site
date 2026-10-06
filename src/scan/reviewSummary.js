@@ -8,13 +8,14 @@ export function reviewLeadFor(questions, pages, counts) {
     " · " + pages.length + " page" + (pages.length === 1 ? "" : "s");
   const needing = questions.filter(q => !q.confirmed && q.tier !== "confident").length;
   const outstanding = questions.filter(q => !q.confirmed).length;
+  // One short line (owner, 5 Oct 2026: "so much text, no hierarchy").
   const unassigned = counts.unassigned_parts
-    ? " · " + counts.unassigned_parts + " part" + (counts.unassigned_parts === 1 ? "" : "s") + " with an unassigned question"
+    ? " · " + counts.unassigned_parts + " part" + (counts.unassigned_parts === 1 ? "" : "s") + " not placed"
     : "";
   const state = needing
-    ? " · " + needing + " uncertain reading" + (needing === 1 ? "" : "s") + " to check, shown first"
+    ? " · " + needing + " to check"
     : outstanding
-      ? " · " + outstanding + " reading" + (outstanding === 1 ? "" : "s") + " to confirm before saving"
-      : " · all readings confirmed";
+      ? " · " + outstanding + " to confirm"
+      : " · all confirmed";
   return base + unassigned + state;
 }
