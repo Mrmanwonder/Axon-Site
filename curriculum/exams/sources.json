@@ -1,0 +1,325 @@
+{
+ "$comment": "Official exam timetables Axon reads dates from, and paper routes read from each syllabus's assessment overview. scripts/exams/ingest.py refuses a download whose SHA-256 differs from the one here; a new version of a timetable is a new hash. Routes are facts (paper numbers) checked by a person against the cited syllabus; add a syllabus here only after reading its assessment overview.",
+ "timetables": [
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 1,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757645-november-2026-zone-1-timetable.pdf",
+   "source_sha256": "4b5b05bd31f67c24ce34a8891747ced73800850b2567387fb483b4b94f6c820d"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 2,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757646-november-2026-zone-2-timetable.pdf",
+   "source_sha256": "ea82183aaeaea18b837a7d00b23f9d468042310f2c17e6a0fbc1ee46351120d5"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 3,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757648-november-2026-zone-3-timetable.pdf",
+   "source_sha256": "f7d5d0ddc11f714decd89ce5838bc3f7736f50ac12d9651f3a67d6ce7a9160a5"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 3,
+   "timetable_variant": "uk",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757647-november-2026-zone-3-uk-timetable.pdf",
+   "source_sha256": "e8fca44224f653185458c58bd0b0ed37f2183b9a7053f04c4475fe67b8f1c710"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 4,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757649-november-2026-zone-4-timetable.pdf",
+   "source_sha256": "92951031723bb071d2cfcd4c08b8da5d76b9a4bd7b76462616d374fb3c7d2277"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 5,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757650-november-2026-zone-5-timetable.pdf",
+   "source_sha256": "73fafa286a200a2f429d2f80fbfa530d528e8490ad71117d7d85b3099a5d0ddc"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2026-11",
+   "series_label": "November 2026",
+   "zone": 6,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/757651-november-2026-zone-6-timetable.pdf",
+   "source_sha256": "8122baa0151bc0571590bdd5ed11bc21c5f992c9f3793c36ae09d26f4b41d16b"
+  },
+  {
+   "provider_key": "cambridge",
+   "series_key": "2027-03",
+   "series_label": "March 2027",
+   "zone": 4,
+   "timetable_variant": "",
+   "status": "final",
+   "source_url": "https://www.cambridgeinternational.org/Images/686092-cambridge-final-examination-timetable.pdf",
+   "source_sha256": "50f2b121dea042b877d4ba0ccb7884a346f0435ce833133529e8d7497542c6d3"
+  }
+ ],
+ "not_published": [
+  {
+   "provider_key": "cambridge",
+   "series_key": "2027-06",
+   "note": "June 2027 timetables not yet on the Cambridge exam timetables page (checked 2026-10-06)."
+  },
+  {
+   "provider_key": "cbse",
+   "series_key": "2027-02",
+   "note": "CBSE 2027 board exam date sheet not yet published (checked 2026-10-06; expected October to November 2026)."
+  },
+  {
+   "provider_key": "ib",
+   "series_key": "2027-05",
+   "note": "IB's May 2027 final examination schedule is published, but not loaded: IB material is held pending the owner's IB licence decision (AXO-200). Dates are facts; loading them needs the owner's go-ahead."
+  }
+ ],
+ "routes": [
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    2
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    5
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_a_level",
+   "kind": "whole",
+   "papers": [
+    1,
+    3,
+    4,
+    5
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_a_level",
+   "kind": "whole",
+   "papers": [
+    1,
+    3,
+    5,
+    6
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    3,
+    5
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    3,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9709",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    3,
+    6
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
+   "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5"
+  },
+  {
+   "syllabus_code": "9231",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    3
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+   "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78"
+  },
+  {
+   "syllabus_code": "9231",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+   "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78"
+  },
+  {
+   "syllabus_code": "9231",
+   "programme_key": "cambridge_a_level",
+   "kind": "whole",
+   "papers": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+   "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78"
+  },
+  {
+   "syllabus_code": "9231",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    2,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+   "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78"
+  },
+  {
+   "syllabus_code": "9231",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    2,
+    3
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
+   "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78"
+  },
+  {
+   "syllabus_code": "9702",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    2,
+    3
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/664565-2025-2027-syllabus.pdf",
+   "source_sha256": "1cba1cdca33c51a39dd6dfdc69d612f48967abcd89b6ceacdf9ffd6fa2e2b195"
+  },
+  {
+   "syllabus_code": "9702",
+   "programme_key": "cambridge_a_level",
+   "kind": "whole",
+   "papers": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/664565-2025-2027-syllabus.pdf",
+   "source_sha256": "1cba1cdca33c51a39dd6dfdc69d612f48967abcd89b6ceacdf9ffd6fa2e2b195"
+  },
+  {
+   "syllabus_code": "9702",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    4,
+    5
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/664565-2025-2027-syllabus.pdf",
+   "source_sha256": "1cba1cdca33c51a39dd6dfdc69d612f48967abcd89b6ceacdf9ffd6fa2e2b195"
+  },
+  {
+   "syllabus_code": "9618",
+   "programme_key": "cambridge_as",
+   "kind": "whole",
+   "papers": [
+    1,
+    2
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697372-2026-syllabus.pdf",
+   "source_sha256": "bf1b77a2b765d10eb4b005ecae0412add35cf6113ba3218a517893abfc9f2470"
+  },
+  {
+   "syllabus_code": "9618",
+   "programme_key": "cambridge_a_level",
+   "kind": "whole",
+   "papers": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697372-2026-syllabus.pdf",
+   "source_sha256": "bf1b77a2b765d10eb4b005ecae0412add35cf6113ba3218a517893abfc9f2470"
+  },
+  {
+   "syllabus_code": "9618",
+   "programme_key": "cambridge_a_level",
+   "kind": "complete",
+   "papers": [
+    3,
+    4
+   ],
+   "source_url": "https://www.cambridgeinternational.org/Images/697372-2026-syllabus.pdf",
+   "source_sha256": "bf1b77a2b765d10eb4b005ecae0412add35cf6113ba3218a517893abfc9f2470"
+  }
+ ]
+}

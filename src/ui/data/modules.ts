@@ -31,6 +31,7 @@ import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
 import * as avatarMod from "../../avatar.js";
 import * as scanApiMod from "../../scan/functions.js";
+import * as examsMod from "../../exams.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -740,6 +741,14 @@ export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId:
 export const syllabusMapData = papersMod.syllabusMapData as unknown as (
   studentId: string,
 ) => Promise<Cached<import("./syllabusMap").SyllabusMapInput>>;
+
+// ── exam dates (AXO-207) ───────────────────────────────────────────────────
+export const examLocations = examsMod.examLocations as unknown as () => Promise<Cached<import("./examPlan").ExamLocation[]>>;
+export const examPlanData = examsMod.examPlanData as unknown as (studentId: string) => Promise<Cached<import("./examPlan").ExamPlanInput>>;
+export const saveExamPlan = examsMod.saveExamPlan as unknown as (
+  studentId: string, plan: { locationKey: string | null; seriesKey: string | null },
+) => Promise<void>;
+export const saveExamPapers = examsMod.saveExamPapers as unknown as (studentId: string, syllabusCode: string, papers: number[] | null) => Promise<void>;
 
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (
