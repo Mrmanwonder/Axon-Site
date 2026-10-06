@@ -14,7 +14,8 @@
 #   blank       an empty answer must be estimated at exactly 0
 #   mismatch    a scheme for a different question must give can_check false
 #   verbatim    a scheme with long lines the model is tempted to copy; the validator rejects copying
-# Labels are drafts written by Claude and await owner confirmation (needs_human_label true).
+# Labels were drafted by Claude and confirmed by the owner on 2026-10-06 after eval run c7a66b34;
+# they are human labels now. A new or changed case starts as a draft again.
 import json, uuid
 
 NS = uuid.UUID("9c41f7a2-5b8d-4e36-a0c7-1d2e3f4a5b6c")
@@ -35,7 +36,7 @@ def case(key, code, paper, label, marks, q, ans, scheme, can_check=True, est=Non
         "conventions": "M: method mark, earned for a valid method even with an arithmetic slip. A: accuracy mark, needs the M mark it depends on. B: independent mark. FT: follow through from an earlier error.",
         "expected": {"can_check": can_check, "est": list(est) if est is not None else None, "control": control},
         "traps": list(traps),
-        "needs_human_label": True,
+        "needs_human_label": False,
     })
 
 
@@ -205,7 +206,7 @@ case("c-mismatch", "9618", CS, "2", 2,
 json.dump({
     "golden_set_version": "scheme-check-synthetic-v1",
     "stage": "scheme_check",
-    "labels": "Drafted by Claude; await owner confirmation",
+    "labels": "Drafted by Claude, confirmed by the owner on 2026-10-06",
     "note": "Questions, answers and scheme sections are all invented for this eval; no board text.",
     "cases": cases,
 }, open(__file__.replace("build_scheme_check_v1.py", "scheme-check-v1.json"), "w"), indent=1, ensure_ascii=False)

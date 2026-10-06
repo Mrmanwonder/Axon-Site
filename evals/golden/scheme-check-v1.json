@@ -1,7 +1,7 @@
 {
  "golden_set_version": "scheme-check-synthetic-v1",
  "stage": "scheme_check",
- "labels": "Drafted by Claude; await owner confirmation",
+ "labels": "Drafted by Claude, confirmed by the owner on 2026-10-06",
  "note": "Questions, answers and scheme sections are all invented for this eval; no board text.",
  "cases": [
   {
@@ -24,7 +24,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "9936eb2d-9d09-52e6-9f18-6431fe13d102",
@@ -48,7 +48,7 @@
    "traps": [
     "forgot to multiply the 9 by 4; method and a are right, c is wrong"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "efd05753-7499-52e3-8179-4c2c929ac813",
@@ -70,7 +70,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "9154c031-32bc-58ee-8f87-0abf4f1ff325",
@@ -94,7 +94,7 @@
    "traps": [
     "found the normal instead of the tangent; an examiner may or may not credit the line method"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "18fb045b-52b1-50b9-8373-88c13c731d65",
@@ -116,7 +116,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "4ca1dd56-3aad-5102-a971-8e0ffdf6b3f2",
@@ -138,7 +138,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "981bd20e-b80b-5eae-99a7-0d9817a38834",
@@ -160,7 +160,7 @@
     "control": "blank"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "ee7b84b1-b41c-569f-b18b-0209690a7c7c",
@@ -182,7 +182,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "3952791c-d804-52ae-b35c-257799a7df15",
@@ -206,7 +206,7 @@
    "traps": [
     "missed sin x = 1 and the second angle"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "7f693a34-0db6-5330-9784-bf80a5d2c112",
@@ -225,7 +225,7 @@
     "control": "mismatch"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "ae10f648-71ff-5768-8474-dc4e563f38ef",
@@ -249,7 +249,7 @@
    "traps": [
     "did not square the -2"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "00818516-e7c6-515a-93f1-aab9410e1038",
@@ -271,7 +271,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b356f2ef-f4e4-5e05-8f38-cdc4a1cbd0b5",
@@ -295,7 +295,7 @@
    "traps": [
     "no base case, no hypothesis, no conclusion"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b5d8f6c7-1914-5952-9fa9-b3b258c11b60",
@@ -317,7 +317,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "880cdac6-c172-539f-8990-4a14ebd03401",
@@ -341,7 +341,7 @@
    "traps": [
     "wrong sign on the sum but the square hides it; correct final value"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "727f3019-92a0-57e8-8b2a-fd1f7b2e8c29",
@@ -363,7 +363,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "8a1aa6e1-29f7-55d0-8586-77c1701d95a1",
@@ -382,7 +382,7 @@
     "control": "unreadable"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "d974b57d-1fac-5e75-adb0-895b1d74868b",
@@ -404,7 +404,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "e5a37bae-72f4-592b-846b-e3a471f84264",
@@ -428,7 +428,7 @@
    "traps": [
     "did not take the square root"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "52fa3e5c-af9f-54f3-bd88-df1d3b6e64de",
@@ -450,7 +450,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "86f59e0a-a9ec-56fd-b176-8ccb267dbf5a",
@@ -472,7 +472,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "c6e818f7-f105-5f2d-b6ea-af7d18a2bc44",
@@ -494,7 +494,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "f3544b13-1670-59aa-860a-12d6ba52aea3",
@@ -516,7 +516,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b3043da8-bb30-5c92-aeb1-d3b5e9b98619",
@@ -538,7 +538,7 @@
     "control": "blank"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "8b0b0aa4-01e5-55df-9391-5225477dcc87",
@@ -562,7 +562,7 @@
    "traps": [
     "long scheme lines tempt copying; feedback must use its own words"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "951f5399-bfb3-532c-b41b-1f55056e0b59",
@@ -584,7 +584,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "e056c25d-a666-51c3-a371-f86b71e3f0bc",
@@ -606,7 +606,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "57a675f9-a91f-52f1-ac66-23feddf9dd1d",
@@ -628,7 +628,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "82f64fcb-97fe-59ce-b1e1-0ce93e1cd1ef",
@@ -652,7 +652,7 @@
    "traps": [
     "no initialisation and output inside the loop"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "7ad5f9de-07d2-5a56-b432-dddf0b4f8c16",
@@ -671,7 +671,7 @@
     "control": "mismatch"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   }
  ]
 }
