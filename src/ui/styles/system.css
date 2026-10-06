@@ -1318,6 +1318,12 @@ dialog[open]::backdrop { animation: scrim-in 320ms ease-out both; }
 dialog.is-closing > .sheet { animation: sheet-out var(--sheet-out) var(--ease-sheet-out) both; }
 dialog.is-closing::backdrop { animation: scrim-out var(--sheet-out) ease-in both; }
 .sheet:focus { outline: none; }
+/* Above the on-screen keyboard. Dialog.tsx sets --kb to the height of the
+   layout viewport the keyboard covers, and --vvh to what is still visible, from
+   window.visualViewport (src/ui/lib/keyboardInset.ts). A plain offset, never
+   animated; the rise itself stays a transform. Without a keyboard both fall
+   back to the resting sheet: bottom 0, capped 8px short of the screen. */
+dialog > .sheet { bottom: var(--kb, 0px); max-height: calc(var(--vvh, 100%) - 8px); }
 @media (prefers-reduced-motion: reduce) {
   dialog[open] > .sheet, dialog[open]::backdrop, dialog.is-closing > .sheet, dialog.is-closing::backdrop { animation: none; }
 }

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useKeyboardInset } from "../lib/keyboardInset";
 
 /* Sheets rise from the bottom edge and fall back to it, on the iOS sheet curve:
    no overshoot, a long soft landing (transform and opacity only, 440 ms in,
@@ -26,6 +27,8 @@ export default function Dialog({ title, description, busy = false, onClose, chil
   title: string; description?: string; busy?: boolean; onClose: () => void; children: ReactNode; restoreFocus?: HTMLElement | null; className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Lifts the sheet above an on-screen keyboard (see keyboardInset.ts).
+  useKeyboardInset(ref);
   const titleId = useId();
   const descriptionId = useId();
   const [closing, setClosing] = useState(false);
