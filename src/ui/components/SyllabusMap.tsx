@@ -14,7 +14,7 @@ import PressBox from "./PressBox";
 import { paths } from "../app/paths";
 import { numMark } from "../data/causes";
 import { PATTERN_PAPERS, type QuestionRef } from "../data/insights";
-import type { SubjectMap, SyllabusMaps, TopicCell } from "../data/syllabusMap";
+import { scopeLabel, type SubjectMap, type SyllabusMaps, type TopicCell } from "../data/syllabusMap";
 
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
@@ -46,7 +46,7 @@ function Detail({ cell, map, describe }: { cell: TopicCell; map: SubjectMap; des
   return (
     <div className="heatdetail" aria-live="polite">
       <div className="hdtop">
-        <div><div className="code">{cell.code}{cell.scope ? ` · ${cell.scope === "A" ? "A Level" : cell.scope === "AS" ? "AS Level" : cell.scope}` : ""}</div><h3>{cell.title}</h3></div>
+        <div><div className="code">{cell.code}{scopeLabel(cell.scope) ? ` · ${scopeLabel(cell.scope)}` : ""}</div><h3>{cell.title}</h3></div>
         {cell.state !== "untested" && <div className="v">{numMark(cell.lost)} of {numMark(cell.available)}<small>marks lost</small></div>}
       </div>
       <p className="meta">
@@ -122,7 +122,7 @@ export default function SyllabusMap({ data, describe, initialSubject }: {
       <Legend ready={map.shadingReady} />
       {map.units.map((u) => (
         <section className="heatunit" key={u.id} aria-label={`${u.code} ${u.title}`}>
-          <div className="uname"><span>{u.code}</span>{u.title}{u.scope ? <em>{u.scope === "A" ? "A Level" : u.scope === "AS" ? "AS Level" : u.scope}</em> : null}</div>
+          <div className="uname"><span>{u.code}</span>{u.title}{scopeLabel(u.scope) ? <em>{scopeLabel(u.scope)}</em> : null}</div>
           <div className="heatgrid">
             {u.cells.map((c) => (
               <button key={c.id} type="button"
