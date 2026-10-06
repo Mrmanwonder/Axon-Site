@@ -218,6 +218,11 @@ def classify(chars):
     if not sizes:
         return
     big_size = sizes[len(sizes) // 2]
+    # A line that is mostly script ("• e^(ax+b)") has a small median: the main
+    # size is then that of its full-size letters.
+    full = [c["size"] for c in chars if c["text"].isalnum() and not c.get("token") and family(c) not in TALL]
+    if full and max(full) * 0.85 > big_size:
+        big_size = max(full)
     big = [c for c in chars if c["size"] >= 0.85 * big_size and c["text"].strip()] or chars
     base_mid = sorted((c["top"] + c["bottom"]) / 2 for c in big)[len(big) // 2]
     for c in chars:
@@ -494,6 +499,11 @@ def words_of(chars):
     groups, cur = [], []
     for i, c in enumerate(chars):
         if c["text"] == " ":
+            # A space glyph drawn at the very start of the letter before it is a layout
+            # artefact (some syllabi place it under a word's first capital),
+            # not a gap: "T he" must stay "The".
+            if cur and c["x0"] <= cur[-1]["x0"] + 1:
+                continue
             rest = chars[i + 1:]
             k = 0
             while k < len(rest) and (rest[k].get("kind") or rest[k]["text"] == " "):

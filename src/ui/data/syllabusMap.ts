@@ -56,6 +56,19 @@ export type TopicCell = {
   objectives: ObjectiveCell[];
   refs: QuestionRef[];
 };
+/** How a syllabus point's qualification scope reads on screen. */
+export function scopeLabel(scope: string | null): string | null {
+  switch (scope) {
+    case "AS": return "AS Level";
+    case "A": return "A Level";
+    case "IGCSE_CORE": return "Core";
+    case "IGCSE_EXTENDED": return "Extended";
+    case "SL": return "SL";
+    case "HL": return "HL";
+    default: return null;
+  }
+}
+
 export type UnitRow = { id: string; code: string; title: string; scope: string | null; cells: TopicCell[] };
 export type SubjectMap = {
   offeringId: string;
