@@ -138,7 +138,7 @@
 .heatcell .cc { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .heatcell .ct { font-size: 11.5px; line-height: 1.25; color: var(--label); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .heatcell.untested .ct, .heatcell.untested .cc { color: var(--label-2); }
-.heatcell .cq { margin-top: auto; padding-top: 4px; font-size: 11px; font-weight: 550; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.heatcell .cq { margin-top: auto; padding-top: 4px; font-size: 11px; font-weight: 550; color: var(--label); font-variant-numeric: tabular-nums; }
 .heatdetail { margin: 10px 0 6px; padding: 14px; border-radius: 12px; background: var(--surface-sunk); }
 .heatdetail .hdtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .heatdetail .code { font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
@@ -156,3 +156,64 @@
 .objlist .oq { grid-column: 2; font-size: 12px; font-weight: 600; color: var(--accent); }
 .heatdetail .widgetnote a { color: var(--accent); }
 @media (min-width: 768px) { .igrid .isection-wide { grid-column: 1 / -1; } }
+
+
+/* Syllabus radar: a classic spider web. Rings and spokes are recessive grey;
+   the student's shape is one accent fill with a 2.5px outline. Confidence is
+   form (solid point = evidence, hollow = early, dashed spoke = untested). No
+   values are written on the web; the chosen unit's counts sit below in text. */
+.radar { width: 100%; max-width: 460px; margin: 4px auto 0; }
+.radar svg { display: block; width: 100%; height: auto; overflow: visible; }
+.radar .rring { fill: none; stroke: var(--label-3); stroke-opacity: .35; stroke-width: 1; }
+.radar .rspoke { stroke: var(--label-3); stroke-opacity: .5; stroke-width: 1; }
+.radar .rspoke.untested { stroke-dasharray: 3 4; }
+.radar .rspoke.tested { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2.5; stroke-linecap: round; }
+.radar .rarea { fill: var(--accent); fill-opacity: .28; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.radar .rline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+.radar .rpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.radar .rpoint.early { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.radar .rpoint.on { stroke: var(--label); stroke-width: 2.5; }
+.radar .rtested { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.radar .rlabel { fill: var(--label-2); font-size: 14px; font-weight: 500; letter-spacing: -.01em; }
+.radar .rlabel.untested { fill: var(--label-3); }
+.radar .rlabel.on { fill: var(--label); font-weight: 650; }
+.radar .rhit { fill: transparent; cursor: pointer; outline: none; }
+.radar .rhit:focus-visible { fill: var(--accent); fill-opacity: .08; }
+.radarlegend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 8px 0 0; font-size: 12px; color: var(--label-2); }
+.radarlegend .key { display: inline-flex; align-items: center; gap: 6px; }
+.radarlegend .rk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.radarlegend .rk.tested { width: 16px; height: 0; border-radius: 0; border-top: 2.5px solid var(--accent); }
+.radarlegend .rk.solid { background: var(--accent); }
+.radarlegend .rk.hollow { border: 2px solid var(--accent); width: 9px; height: 9px; }
+.radarlegend .ramp { display: inline-flex; align-items: center; gap: 3px; }
+.radarlegend .ramp i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.radarlegend .ramp span:first-child { margin-right: 4px; }
+.radarlegend .ramp span:last-child { margin-left: 4px; }
+.radarlegend .rk.dashed { width: 16px; height: 0; border-radius: 0; border-top: 1.5px dashed var(--label-3); }
+.radarpick { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-sunk); min-height: 44px; }
+.radarpick .rpname { display: flex; gap: 8px; font-size: 14.5px; font-weight: 650; letter-spacing: -.012em; color: var(--label); }
+.radarpick .rpname span { color: var(--label-2); font-variant-numeric: tabular-nums; }
+.radarpick .rpmeta { margin-top: 3px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.radarpick .rpmeta:only-child { margin-top: 0; }
+.indetail { width: 100%; margin-top: 12px !important; padding: 13px !important; font-size: 15px !important; }
+
+/* Syllabus in detail */
+.sdetail { padding-bottom: 32px; }
+.sdetail .greet { margin-bottom: 16px; }
+.sdsummary { padding: 18px; margin: 4px 0 16px; }
+.sdcounts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.sdcounts div { display: flex; flex-direction: column; gap: 2px; }
+.sdcounts strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--label); font-variant-numeric: tabular-nums; }
+.sdcounts span { font-size: 12px; line-height: 1.3; color: var(--label-2); }
+.sdjump { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sdjump a { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; border-radius: 12px; background: var(--surface-sunk); font-size: 13px; font-weight: 650; color: var(--label); font-variant-numeric: tabular-nums; }
+.sdjump a.untested { color: var(--label-2); font-weight: 500; }
+.sunit { padding: 16px 18px; margin-bottom: 16px; scroll-margin-top: 12px; }
+.sunithead { margin-bottom: 10px; }
+.sunithead .uname { margin: 0 0 2px; font-size: 14.5px; letter-spacing: -.012em; }
+.sdetail .greet .sub { color: var(--label-2); }
+.sunitmeta { font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.sunit a.heatcell { text-decoration: none; }
+.stopic { scroll-margin-top: 12px; }
+.stopic .heatdetail { margin-top: 12px; }
+.sdsource { margin-top: 4px; }
