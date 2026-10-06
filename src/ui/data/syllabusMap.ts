@@ -56,7 +56,12 @@ export type TopicCell = {
   objectives: ObjectiveCell[];
   refs: QuestionRef[];
 };
-export type UnitRow = { id: string; code: string; title: string; scope: string | null; cells: TopicCell[] };
+export type UnitRow = {
+  id: string; code: string; title: string; scope: string | null; cells: TopicCell[];
+  /** Each placed question counted once in the unit, however many of its topics it touches. */
+  lost: number; available: number; questions: number; papers: number; topicsTested: number;
+  state: TopicCell["state"];
+};
 export type SubjectMap = {
   offeringId: string;
   label: string;
@@ -136,6 +141,7 @@ export function buildSyllabusMaps(input: {
     // topic id -> attempt id -> ref; objective id -> attempts
     const perTopic = new Map<string, Map<string, QuestionRef>>();
     const perObjective = new Map<string, Set<string>>();
+    const perUnit = new Map<string, Map<string, { lost: number; max: number; paper: string }>>();
     const placed = new Set<string>();
     const placedPapers = new Set<string>();
     const availableByAttempt = new Map<string, number>();
@@ -155,6 +161,11 @@ export function buildSyllabusMaps(input: {
         marks: round(lost), paperIndex: paperIndex.get(e.paper_id) ?? 0,
       });
       perTopic.set(topic.id, m);
+      if (topic.parent_id) {
+        const u = perUnit.get(topic.parent_id) ?? new Map();
+        u.set(e.attempt_id, { lost, max, paper: e.paper_id });
+        perUnit.set(topic.parent_id, u);
+      }
       availableByAttempt.set(e.attempt_id, max);
       if (byId.get(e.topic_id)?.kind === "objective") {
         perObjective.set(e.topic_id, (perObjective.get(e.topic_id) ?? new Set()).add(e.attempt_id));
@@ -188,7 +199,16 @@ export function buildSyllabusMaps(input: {
           refs,
         });
       }
-      if (cells.length) units.push({ id: u.id, code: u.code, title: u.title, scope: u.qualification_scope, cells });
+      if (cells.length) {
+        const placedHere = [...(perUnit.get(u.id)?.values() ?? [])];
+        const uq = placedHere.length; const up = new Set(placedHere.map((x) => x.paper)).size;
+        units.push({
+          id: u.id, code: u.code, title: u.title, scope: u.qualification_scope, cells,
+          lost: round(placedHere.reduce((n, x) => n + x.lost, 0)), available: round(placedHere.reduce((n, x) => n + x.max, 0)),
+          questions: uq, papers: up, topicsTested: cells.filter((c) => c.state !== "untested").length,
+          state: !uq ? "untested" : uq < EARLY_QUESTIONS || up < EARLY_PAPERS ? "early" : "evidence",
+        });
+      }
     }
 
     maps.push({

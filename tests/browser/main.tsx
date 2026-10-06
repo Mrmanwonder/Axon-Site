@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "../../src/ui/data/AppProvider";
 import Library from "../../src/ui/pages/Library";
 import Home from "../../src/ui/pages/Home";
 import Insights from "../../src/ui/pages/Insights";
+import SyllabusDetail from "../../src/ui/pages/SyllabusDetail";
 import AppRouteErrorBoundary from "../../src/ui/pages/AppRouteErrorBoundary";
 import NotFound from "../../src/ui/pages/NotFound";
 import TabNav from "../../src/ui/shell/TabNav";
@@ -61,7 +62,9 @@ function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "insights" ? <Insights /> : <Library />}</>;
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "insights"
+    ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
+    : <Library />}</>;
 }
 const root = createRoot(document.getElementById("root")!);
 if (params.get("view") === "scan-screen") {

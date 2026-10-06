@@ -184,21 +184,21 @@ export default function Insights() {
     {model.evidence.papers === 0 && filtered && papers.length > 0
       ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no confirmed evidence for this combination yet.</p><button onClick={() => setFilters(ALL_FILTERS)}>Clear filters</button></div>
       : <Body model={model} describe={describe} addPaper={addPaper} filtered={filtered}
-          syllabus={<SyllabusSection maps={syllabus.maps} state={syllabus.state} describe={describe} subject={filters.subject === "all" ? null : filters.subject} />} />}
+          syllabus={<SyllabusSection maps={syllabus.maps} state={syllabus.state} subject={filters.subject === "all" ? null : filters.subject} />} />}
 
     {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis.</div>}
   </>;
 }
 
-function SyllabusSection({ maps, state, describe, subject }: {
-  maps: SyllabusMaps | null; state: string; describe: (r: QuestionRef) => string; subject: string | null;
+function SyllabusSection({ maps, state, subject }: {
+  maps: SyllabusMaps | null; state: string; subject: string | null;
 }) {
   return <section className="isection isection-wide">
     <div className="sectitle">Syllabus map</div>
     {!maps ? (state === "failed"
       ? <EvidenceGap title="Syllabus map unavailable">Axon couldn&rsquo;t load the syllabus right now. Your papers are unaffected.</EvidenceGap>
       : <div className="card heatcard" role="status" aria-label="Loading syllabus map"><p className="lede">Loading the syllabus…</p></div>)
-      : maps.maps.length ? <SyllabusMap data={maps} describe={describe} initialSubject={subject} />
+      : maps.maps.length ? <SyllabusMap data={maps} initialSubject={subject} />
       : <EvidenceGap title="No syllabus map yet">
           {maps.withoutSyllabus.length
             ? `The official syllabus for ${maps.withoutSyllabus.join(", ")} isn’t available in Axon yet. Topics will appear here once it is.`

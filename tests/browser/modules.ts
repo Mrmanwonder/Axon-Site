@@ -134,9 +134,15 @@ function syllabusFixture() {
     ["2.1", "Wave properties", ["describe example waves"]],
     ["2.2", "Superposition", ["explain example interference"]],
   ]);
+  unit("3", "Electricity", [
+    ["3.1", "Current and charge", ["define example current"]],
+    ["3.2", "Circuits", ["analyse an example circuit"]],
+  ]);
+  unit("4", "Thermal physics", [["4.1", "Internal energy", ["describe example internal energy"]]]);
+  unit("5", "Nuclear physics", [["5.1", "Radioactive decay", ["describe example decay"]]]);
   const evidence: Record<string, unknown>[] = [];
   const { attempts } = insightFixture();
-  const topicFor: Record<string, string> = { "1(b)": "o1.1.2", "3(a)": "o1.3.1", "3(b)": "o1.2.1", "2": "o1.2.2" };
+  const topicFor: Record<string, string> = { "1(b)": "o1.1.2", "3(a)": "o1.3.1", "3(b)": "o1.2.1", "2": "o1.2.2", "1(a)": "o3.1.1", "4": "o4.1.1" };
   for (const a of attempts as { id: string; paper_id: string; question_label: string; max_marks: number; marks_awarded: number }[]) {
     if (!a.paper_id || !["ip1", "ip3", "ip5", "ip6"].includes(a.paper_id) || !topicFor[a.question_label]) continue;
     evidence.push({ attempt_id: a.id, paper_id: a.paper_id, topic_id: topicFor[a.question_label], document_id: doc.id, is_primary: true, max_marks: a.max_marks, marks_awarded: a.marks_awarded });

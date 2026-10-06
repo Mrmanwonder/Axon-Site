@@ -18,20 +18,26 @@ test("Insights renders every evidence-backed module from confirmed rows", async 
   expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
 });
 
-test("the syllabus map shades tested topics, leaves untested ones untested, and opens a topic's detail", async ({ page }) => {
+test("the syllabus radar shades tested units, leaves untested ones empty, and opens the syllabus in detail", async ({ page }) => {
   await page.goto(URL);
   await expect(page.getByText("Syllabus map", { exact: true })).toBeVisible();
-  await expect(page.getByText("3 of 6 topics tested")).toBeVisible();
-  const untested = page.getByRole("button", { name: /1\.4 Circular motion: not tested yet/ });
+  await expect(page.getByText("3 of 5 units tested")).toBeVisible();
+  // An untested unit is a button that says so; it is never drawn with a value.
+  await expect(page.getByRole("button", { name: /^2 Waves: Not tested yet/ })).toBeVisible();
+  await expect(page.locator(".radar .rsector.heatfill")).toHaveCount(3);
+  await page.getByRole("button", { name: /^1 Forces and motion: \d+ of \d+ marks lost/ }).click();
+  await expect(page.locator(".radarpick")).toContainText("Forces and motion");
+  await page.getByRole("link", { name: "In detail" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Physics" })).toBeVisible();
+  const untested = page.getByRole("link", { name: /1\.4 Circular motion: not tested yet/ });
   await expect(untested).toHaveClass(/untested/);
-  const shaded = page.getByRole("button", { name: /1\.3 Energy transfers: \d+ of \d+ marks lost/ });
-  await expect(shaded).toHaveClass(/ l[1-4]/);
-  await shaded.click();
-  await expect(page.getByText("What the syllabus asks for")).toBeVisible();
+  await expect(page.getByRole("link", { name: /1\.3 Energy transfers: \d+ of \d+ marks lost/ })).toHaveClass(/ l[0-4]/);
   await expect(page.getByText("describe example energy stores")).toBeVisible();
-  await expect(page.getByText("Your questions on this topic")).toBeVisible();
-  await untested.click();
-  await expect(page.getByText("Untested is not the same as weak.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Your questions on this topic").first()).toBeVisible();
+  await expect(page.getByText("Untested is not the same as weak.", { exact: false }).first()).toBeVisible();
+  expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);
 });
 
 test("Insights never reports zero papers while the library is still loading", async ({ page }) => {
@@ -78,9 +84,10 @@ test("below four papers: one coverage card with steps and the next action, and t
   await expect(page.getByRole("img", { name: "3 of 4 papers counted" })).toBeVisible();
   await expect(page.getByText("One more marked paper and Axon starts comparing them.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Scan a marked paper" })).toBeVisible();
-  await expect(page.getByText("Shading by marks lost starts at 4 Physics papers (2 so far).", { exact: false })).toBeVisible();
-  // A topic with evidence but no shading yet still reads as tested, never as blank.
-  await expect(page.getByRole("button", { name: /1\.2 Momentum: .*not shaded yet/ })).toHaveCSS("border-top-style", "solid");
+  await expect(page.getByText("Marks lost by unit appear at 4 Physics papers (2 so far).", { exact: false })).toBeVisible();
+  // Below the threshold the web marks tested units on the rim and draws no values.
+  await expect(page.locator(".radar .rtested")).toHaveCount(3);
+  await expect(page.locator(".radar .rpoint")).toHaveCount(0);
   expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);
