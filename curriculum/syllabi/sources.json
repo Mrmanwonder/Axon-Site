@@ -2,36 +2,1330 @@
   "$comment": "Official syllabus documents Axon reads topics from. The ingest refuses a download whose SHA-256 differs from the one recorded here; a new edition is a new entry. Text is never committed to this repository; see scripts/syllabus/ingest.mjs.",
   "documents": [
     {
-      "provider_key": "cambridge", "syllabus_code": "9709",
-      "title": "Cambridge International AS & A Level Mathematics", "version_label": "2026-2027",
-      "valid_from_year": 2026, "valid_to_year": 2027,
+      "provider_key": "cambridge",
+      "syllabus_code": "9709",
+      "title": "Cambridge International AS & A Level Mathematics",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
       "source_url": "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf",
       "source_sha256": "dd0131f3cd8d4e3c270e7936cbb909c15f4cb8053f8337b67c16e8ec0b8bc5e5",
       "parser": "cambridge"
     },
     {
-      "provider_key": "cambridge", "syllabus_code": "9231",
-      "title": "Cambridge International AS & A Level Further Mathematics", "version_label": "2026-2027",
-      "valid_from_year": 2026, "valid_to_year": 2027,
+      "provider_key": "cambridge",
+      "syllabus_code": "9231",
+      "title": "Cambridge International AS & A Level Further Mathematics",
+      "version_label": "2026-2027",
+      "valid_from_year": 2026,
+      "valid_to_year": 2027,
       "source_url": "https://www.cambridgeinternational.org/Images/697357-2026-2027-syllabus.pdf",
       "source_sha256": "02c88d06ada474d94a2124a272ed587b5f7afbb1157aef47eff9674b7375fa78",
       "parser": "cambridge"
     },
     {
-      "provider_key": "cambridge", "syllabus_code": "9702",
-      "title": "Cambridge International AS & A Level Physics", "version_label": "2025-2027",
-      "valid_from_year": 2025, "valid_to_year": 2027,
+      "provider_key": "cambridge",
+      "syllabus_code": "9702",
+      "title": "Cambridge International AS & A Level Physics",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
       "source_url": "https://www.cambridgeinternational.org/Images/664565-2025-2027-syllabus.pdf",
       "source_sha256": "1cba1cdca33c51a39dd6dfdc69d612f48967abcd89b6ceacdf9ffd6fa2e2b195",
       "parser": "cambridge"
     },
     {
-      "provider_key": "cambridge", "syllabus_code": "9618",
-      "title": "Cambridge International AS & A Level Computer Science", "version_label": "2026",
-      "valid_from_year": 2026, "valid_to_year": 2026,
+      "provider_key": "cambridge",
+      "syllabus_code": "9618",
+      "title": "Cambridge International AS & A Level Computer Science",
+      "version_label": "2026",
+      "valid_from_year": 2026,
+      "valid_to_year": 2026,
       "source_url": "https://www.cambridgeinternational.org/Images/697372-2026-syllabus.pdf",
       "source_sha256": "bf1b77a2b765d10eb4b005ecae0412add35cf6113ba3218a517893abfc9f2470",
       "parser": "cambridge"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0264",
+      "title": "Cambridge IGCSE Business",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718123-2027-2029-syllabus.pdf",
+      "source_sha256": "74cc69211e44bd0f67cdd79783af8df6b5278e06d65e64ed027d3ab191d61f39",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0266",
+      "title": "Cambridge IGCSE Psychology",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718092-2027-2029-syllabus.pdf",
+      "source_sha256": "080897072afa2e92895aa267bdc64ded7208f34d7937cab8a1bce7e08393b248",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0417",
+      "title": "Cambridge IGCSE Information and Communication Technology",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697139-2026-2028-syllabus.pdf",
+      "source_sha256": "47a74b3d8b092438b4dfa2831318987ea86338a391ac8615f8856d19285d4088",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0450",
+      "title": "Cambridge IGCSE Business Studies",
+      "version_label": "2026",
+      "valid_from_year": 2026,
+      "valid_to_year": 2026,
+      "source_url": "https://www.cambridgeinternational.org/Images/697146-2026-syllabus.pdf",
+      "source_sha256": "fad6aa5ba1fbebca9a3fec61445303901cadf6d28f1ffcb53d646d7df19f0674",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0452",
+      "title": "Cambridge IGCSE Accounting",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718141-2027-2029-syllabus.pdf",
+      "source_sha256": "699282e73024c413ef597e40e87b48c14c19213f9664c2cd6373518f4628efcd",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0455",
+      "title": "Cambridge IGCSE Economics",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718148-2027-2029-syllabus.pdf",
+      "source_sha256": "5f9ea8fc630b3fa3e53d16dee53b739b1d8353836eae1aaeca751f6554cd6744",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0460",
+      "title": "Cambridge IGCSE Geography",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718150-2027-2029-syllabus.pdf",
+      "source_sha256": "8b1b64b726d67b10fb0dff513e05dd2447087ebc569d1b15669f28dd743c7b0b",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0471",
+      "title": "Cambridge IGCSE Travel & Tourism",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/721329-2027-2029-syllabus.pdf",
+      "source_sha256": "7c3226df4909c9f48d3ce8cbb737c994f0f87779b1f6ae71118ca688f0d9adb5",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0478",
+      "title": "Cambridge IGCSE Computer Science",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697167-2026-2028-syllabus.pdf",
+      "source_sha256": "e89c9629185d75b7e182e74460f1b0fd62e30c71f2ae4d67c9563123ca0558d1",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0490",
+      "title": "Cambridge IGCSE Religious Studies",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/663158-2025-2027-syllabus.pdf",
+      "source_sha256": "901548ef9380eafc623122a4a82df733984e26f5b42e6ab3b93889aa09494b6f",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0495",
+      "title": "Cambridge IGCSE Sociology",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/662464-2025-2027-syllabus.pdf",
+      "source_sha256": "b9762332e4e80d28b9342520b2038a69e836dca6ef1f34710a8e9de83f42bff6",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0580",
+      "title": "Cambridge IGCSE Mathematics",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/662466-2025-2027-syllabus.pdf",
+      "source_sha256": "627f8e5dab21605f95b9aceec4a2dcdddf91dce5767d6938d647b38041c6d363",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0600",
+      "title": "Cambridge IGCSE Agriculture",
+      "version_label": "2027-2028",
+      "valid_from_year": 2027,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/721347-2027-2028-syllabus.pdf",
+      "source_sha256": "466a942e3c428cb0255b177eaa79d87aacc2cedb6133ed9c7abed5822e09c5e7",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0606",
+      "title": "Cambridge IGCSE Additional Mathematics",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/662470-2025-2027-syllabus.pdf",
+      "source_sha256": "7d5412763f74834a441e45f4b0f983d163d6fc7511568a8c63bdf830ec8508a8",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0607",
+      "title": "Cambridge IGCSE International Mathematics",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/662472-2025-2027-syllabus.pdf",
+      "source_sha256": "19f64dbe0b1e899b3174a25dc9d16e27a3d78388bdbc56bb5aeb26200e450fa3",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0610",
+      "title": "Cambridge IGCSE Biology",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697203-2026-2028-syllabus.pdf",
+      "source_sha256": "ce4310300cfab16ed3ba2224896983b7a725a9052900a0eee394dd126b694098",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0620",
+      "title": "Cambridge IGCSE Chemistry",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697205-2026-2028-syllabus.pdf",
+      "source_sha256": "6aab46afe64e4de40a447c36d1bfa382a10e9865eab9230af7915629cf576f0c",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0625",
+      "title": "Cambridge IGCSE Physics",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697209-2026-2028-syllabus.pdf",
+      "source_sha256": "baaf59f84543beb133ea87cbf8cfb0e8bf105a360cce5009cf57d3ae0a357075",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0653",
+      "title": "Cambridge IGCSE Combined Science",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/662474-2025-2027-syllabus.pdf",
+      "source_sha256": "c1d12d3ecb1dd5041163e2f3df770f092c52d48d518eebce01ebd8d721516c9e",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0654",
+      "title": "Cambridge IGCSE Co-ordinated Sciences (Double Award)",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/664572-2025-2027-syllabus.pdf",
+      "source_sha256": "6d46e4a07a512a12c80cbfc0d0715e2b4198f1faf76a5bb8d31f8d97ab6274f2",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0680",
+      "title": "Cambridge IGCSE Environmental Management",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718156-2027-2029-syllabus.pdf",
+      "source_sha256": "ea7f3171ebb7f44911bc1f507ff5552ac8e0f90a15205165b544753826be2628",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0774",
+      "title": "Cambridge IGCSE (9–1) Business",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718158-2027-2029-syllabus.pdf",
+      "source_sha256": "8b9f14ac5db1eb4c2ec53fe29f90dfc5f05a39dc17be85c41498b545f69ea8a1",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0970",
+      "title": "Cambridge IGCSE (9–1) Biology",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697234-2026-2028-syllabus.pdf",
+      "source_sha256": "53b15311a9b1918df47334fa38924286424d883d418333e332bf2767ac786786",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0971",
+      "title": "Cambridge IGCSE (9–1) Chemistry",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697236-2026-2028-syllabus.pdf",
+      "source_sha256": "e06b9fcfaa70efa6363d2f2205ec6b03cd4735d9a7d374847ceab855b7e73774",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0972",
+      "title": "Cambridge IGCSE (9–1) Physics",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697240-2026-2028-syllabus.pdf",
+      "source_sha256": "4a25f4f9d499d6fc05be6d9aab7d6035d0a46355741ddf4d611c4a387a4f2b02",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0973",
+      "title": "Cambridge IGCSE (9–1) Co-ordinated Sciences (Double Award)",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/664570-2025-2027-syllabus.pdf",
+      "source_sha256": "765d6288cd8364a4b31d5bd3adaca1de9bb6b579dc79bb8195ff034820d80463",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0976",
+      "title": "Cambridge IGCSE (9–1) Geography",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718939-2027-2029-syllabus.pdf",
+      "source_sha256": "304e94b8128345a54aa7dfd698616eff6228a71cb288b411f878db7601b3f0a0",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0980",
+      "title": "Cambridge IGCSE (9–1) Mathematics",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/663105-2025-2027-syllabus.pdf",
+      "source_sha256": "62b217e93953f77493a2f768a79259d653adc0a739ac8f18fc31b5daf6c2e01c",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0983",
+      "title": "Cambridge IGCSE (9–1) Information and Communication Technology",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697246-2026-2028-syllabus.pdf",
+      "source_sha256": "48c17ccb84d57181eb891d62cc0b6c15c4ba97d02b1e8e04fc8469e00a01e917",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0984",
+      "title": "Cambridge IGCSE (9–1) Computer Science",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697248-2026-2028-syllabus.pdf",
+      "source_sha256": "664e03dae21ecc5d7af2345631156ceb5db0f9951bb9c31fff480564fcb6b660",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0985",
+      "title": "Cambridge IGCSE (9–1) Accounting",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718200-2027-2029-syllabus.pdf",
+      "source_sha256": "d370f5deec59fdb8120b5a08f5473cefeb21cff2f4d7a7af4b73ec42b7129aa8",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0986",
+      "title": "Cambridge IGCSE (9–1) Business Studies",
+      "version_label": "2026",
+      "valid_from_year": 2026,
+      "valid_to_year": 2026,
+      "source_url": "https://www.cambridgeinternational.org/Images/697256-2026-syllabus.pdf",
+      "source_sha256": "5fa955ddcc38e2195e04adab89570bb963284f1c58ca155ce7062b9c21f9ed2d",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0987",
+      "title": "Cambridge IGCSE (9–1) Economics",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/718202-2027-2029-syllabus.pdf",
+      "source_sha256": "6b17f9507d2fb7926bc5b2db586a5dd4e05fccacea788d9e50db87ee19b9772e",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8386",
+      "title": "Cambridge International AS Level Sport & Physical Education",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/721331-2027-2029-syllabus.pdf",
+      "source_sha256": "db97ddd313413d3b08053fd40c18dc80eadab3e27743176e842d268df42491aa",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9084",
+      "title": "Cambridge International AS & A Level Law",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697352-2026-2028-syllabus.pdf",
+      "source_sha256": "ab42c25341229a11ae29497701de87b7b796538da4b79fe7789ffc70e2bba095",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9395",
+      "title": "Cambridge International AS & A Level Travel & Tourism",
+      "version_label": "2027-2029",
+      "valid_from_year": 2027,
+      "valid_to_year": 2029,
+      "source_url": "https://www.cambridgeinternational.org/Images/721364-2027-2029-syllabus.pdf",
+      "source_sha256": "fdc32de70844cd32188eccc14e0e68d2fababb57b7f3f6fd4061c613c380afac",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9609",
+      "title": "Cambridge International AS & A Level Business",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697371-2026-2028-syllabus.pdf",
+      "source_sha256": "2c7a9283173acecb7e6fe18589895017d815f42e1a6a2bcd8c7ac250e3eccc68",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9699",
+      "title": "Cambridge International AS & A Level Sociology",
+      "version_label": "2027-2028",
+      "valid_from_year": 2027,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/721413-2027-2028-syllabus.pdf",
+      "source_sha256": "36f97b8e4c6860edc40d7396102c863af01fac35c837c20e2edf0939b1594cc5",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9700",
+      "title": "Cambridge International AS & A Level Biology",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/664560-2025-2027-syllabus.pdf",
+      "source_sha256": "5e6fe634a2c2ae95bf823c742e585140e7a4495224373b5aaaccb78fe2e35db1",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9701",
+      "title": "Cambridge International AS & A Level Chemistry",
+      "version_label": "2025-2027",
+      "valid_from_year": 2025,
+      "valid_to_year": 2027,
+      "source_url": "https://www.cambridgeinternational.org/Images/664563-2025-2027-syllabus.pdf",
+      "source_sha256": "bc40af1d0789b3217524f380337d3a36e49264f5f28ab991e3e85c9102d53ad2",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9706",
+      "title": "Cambridge International AS & A Level Accounting",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697417-2026-2028-syllabus.pdf",
+      "source_sha256": "0f217d51b36353316752c36c423d699bf6d8c0f705cb8baf8af91cf7eefa8f06",
+      "parser": "cambridge-outline"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9708",
+      "title": "Cambridge International AS & A Level Economics",
+      "version_label": "2026-2028",
+      "valid_from_year": 2026,
+      "valid_to_year": 2028,
+      "source_url": "https://www.cambridgeinternational.org/Images/697423-2026-2028-syllabus.pdf",
+      "source_sha256": "0f02e7efdc1175b58b165665f08a54c0c4a82226a3b79492ea9c681dca7db0d8",
+      "parser": "cambridge-outline"
+    }
+  ],
+  "not_loaded": [
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0262",
+      "name": "Swahili",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664586-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0265",
+      "name": "Computer Science",
+      "reason": "no edition covering 2026 or 2027"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0400",
+      "name": "Art & Design",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/729776-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0408",
+      "name": "World Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664592-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0409",
+      "name": "History - American (US)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664594-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0410",
+      "name": "Music",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/694052-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0411",
+      "name": "Drama",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664602-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0413",
+      "name": "Physical Education",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721298-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0444",
+      "name": "Mathematics (US)",
+      "reason": "no edition covering 2026 or 2027"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0445",
+      "name": "Design & Technology",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721302-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0448",
+      "name": "Pakistan Studies",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/732847-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0454",
+      "name": "Enterprise",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721305-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0457",
+      "name": "Global Perspectives",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/662457-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0465",
+      "name": "English (Core) as a Second Language (Egypt)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721307-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0470",
+      "name": "History",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721327-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0472",
+      "name": "English (as an Additional Language)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697158-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0474",
+      "name": "Spanish - Literature in Spanish",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663145-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0475",
+      "name": "English - Literature in English",
+      "reason": "the board's site refused the download (HTTP 406); to retry"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0479",
+      "name": "Statistics",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/718153-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0480",
+      "name": "Latin",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697172-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0493",
+      "name": "Islamiyat",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697174-2026-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0499",
+      "name": "Sanskrit",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/711319-2026-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0500",
+      "name": "English - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/718783-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0501",
+      "name": "French - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721371-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0502",
+      "name": "Spanish - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664614-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0504",
+      "name": "Portuguese - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663168-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0505",
+      "name": "German - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721335-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0508",
+      "name": "Arabic - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/719278-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0509",
+      "name": "Chinese - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697185-2026-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0510",
+      "name": "English as a Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721337-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0511",
+      "name": "English as a Second Language (Count-in speaking)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721343-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0513",
+      "name": "Turkish - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664970-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0518",
+      "name": "Thai - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664618-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0520",
+      "name": "French - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664620-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0523",
+      "name": "Chinese - Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697191-2026-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0524",
+      "name": "English - First Language (US)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664622-2025-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0525",
+      "name": "German - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664624-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0530",
+      "name": "Spanish - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664626-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0531",
+      "name": "IsiZulu as a Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663184-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0535",
+      "name": "Italian - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664629-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0538",
+      "name": "Bahasa Indonesia",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664631-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0539",
+      "name": "Urdu as a Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664633-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0544",
+      "name": "Arabic - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664635-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0546",
+      "name": "Malay - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664637-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0547",
+      "name": "Chinese (Mandarin) - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664639-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0548",
+      "name": "Afrikaans - Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663202-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0549",
+      "name": "Hindi as a Second Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/719328-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0648",
+      "name": "Food & Nutrition",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697228-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0652",
+      "name": "Physical Science",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/664641-2025-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0695",
+      "name": "Vietnamese - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/683274-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0696",
+      "name": "Malay - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664645-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0697",
+      "name": "Marine Science",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721354-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0698",
+      "name": "Setswana - First Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663220-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0715",
+      "name": "Commerce",
+      "reason": "no edition covering 2026 or 2027"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0716",
+      "name": "Japanese - Foreign Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/722865-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0772",
+      "name": "English (as an Additional Language) (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697231-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0977",
+      "name": "History (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721357-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0978",
+      "name": "Music (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/694054-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0979",
+      "name": "Design & Technology (9-1)",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721373-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0989",
+      "name": "Art & Design (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/729780-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0990",
+      "name": "English - First Language (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/718785-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0991",
+      "name": "English as a Second Language (Count-in Speaking) (9-1)",
+      "reason": "no subject page on the board's current IGCSE listing"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0992",
+      "name": "English - Literature in English (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721390-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0993",
+      "name": "English as a Second Language (Speaking Endorsement) (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721392-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0994",
+      "name": "Drama (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721668-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "0995",
+      "name": "Physical Education (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721394-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7156",
+      "name": "French (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664663-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7159",
+      "name": "German (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664665-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7160",
+      "name": "Spanish (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664667-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7164",
+      "name": "Italian (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664669-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7180",
+      "name": "Arabic (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/712178-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "7184",
+      "name": "Arabic - First Language (9-1)",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697270-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8021",
+      "name": "English General Paper",
+      "reason": "the board's site refused the download (HTTP 406); to retry"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8022",
+      "name": "Spanish Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721321-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8027",
+      "name": "German - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/663716-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8028",
+      "name": "French Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664288-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8101",
+      "name": "US History to 1877",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718215-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8102",
+      "name": "US History since 1877",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718217-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8238",
+      "name": "Chinese Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721326-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8291",
+      "name": "Environmental Management",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/664522-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8293",
+      "name": "US Government and Politics",
+      "reason": "no edition covering 2026 or 2027"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8679",
+      "name": "Afrikaans - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721338-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8680",
+      "name": "Arabic - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721342-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8684",
+      "name": "Portuguese - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721345-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8686",
+      "name": "Urdu - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664531-2025-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8689",
+      "name": "Tamil - Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697346-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "8695",
+      "name": "English - Language and Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721351-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9093",
+      "name": "English Language",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721359-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9239",
+      "name": "Global Perspectives & Research",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/697359-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9274",
+      "name": "Classical Studies",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664534-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9479",
+      "name": "Art & Design",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/729788-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9481",
+      "name": "Digital Media & Design",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/693608-2026-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9482",
+      "name": "Drama",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721645-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9483",
+      "name": "Music",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721445-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9484",
+      "name": "Biblical Studies",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721366-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9487",
+      "name": "Hinduism",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/757378-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9488",
+      "name": "Islamic Studies",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721377-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9489",
+      "name": "History",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718292-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9607",
+      "name": "Media Studies",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721382-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9626",
+      "name": "Information Technology",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/662482-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9680",
+      "name": "Arabic",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721448-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9686",
+      "name": "Urdu - Pakistan only",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664551-2025-2026-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9689",
+      "name": "Tamil",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721408-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9693",
+      "name": "Marine Science",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/664553-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9694",
+      "name": "Thinking Skills",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/697412-2026-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9695",
+      "name": "English Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721410-2027-2028-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9696",
+      "name": "Geography",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718332-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9705",
+      "name": "Design & Technology",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/675267-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9718",
+      "name": "Portuguese",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721426-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9844",
+      "name": "Spanish - Language & Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721428-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9865",
+      "name": "Arabic",
+      "reason": "no edition covering 2026 or 2027"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9866",
+      "name": "Urdu Language & Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/719330-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9868",
+      "name": "Chinese - Language & Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/721432-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9897",
+      "name": "German Language & Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664366-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9898",
+      "name": "French Language & Literature",
+      "reason": "the parser found no numbered topic outline in this syllabus (languages, literature, the arts and option-based papers are laid out differently)",
+      "source_url": "https://www.cambridgeinternational.org/Images/664368-2025-2027-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9981",
+      "name": "European History",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718219-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9982",
+      "name": "International History",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/718222-2027-2029-syllabus.pdf"
+    },
+    {
+      "provider_key": "cambridge",
+      "syllabus_code": "9990",
+      "name": "Psychology",
+      "reason": "the parser could not read this layout cleanly; not loaded until it can",
+      "source_url": "https://www.cambridgeinternational.org/Images/721433-2027-syllabus.pdf"
     }
   ]
 }

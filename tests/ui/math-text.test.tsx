@@ -112,15 +112,111 @@ test("a written answer with \\text{} words is typeset as one expression", () => 
   expect(plain).toMatch(/a\s+head/u);
 });
 
-test("an ordinal superscript and an escaped dollar stay inside the expression (owner, 6 Oct 2026)", () => {
-  const text = "\\text{median} = 10^{th} pos = \\$32,000";
-  const { container } = render(<MathText text={text} />);
+/** What a student sees: everything except KaTeX's screen-reader MathML copy. */
+function visibleText(container: HTMLElement): string {
   const visible = container.cloneNode(true) as HTMLElement;
   visible.querySelectorAll(".katex-mathml").forEach((n) => n.remove());
-  const plain = visible.textContent ?? "";
+  // KaTeX sets the space inside \\text{} as a non-breaking space.
+  return (visible.textContent ?? "").replace(/\u00a0/g, " ");
+}
+
+test("a multi-line array environment in an answer typesets as one table, and the working after it still renders", () => {
+  const text = [
+    "\\begin{array}{|c|c|c|c|c|}",
+    "\\hline",
+    "X & 0 & 1 & 2 & 3 \\\\",
+    "\\hline",
+    "P & \\frac{1}{56} & \\frac{15}{56} & \\frac{15}{28} & \\frac{5}{28} \\\\",
+    "\\hline",
+    "\\end{array}",
+    "\\frac{3}{8} \\times \\frac{2}{7} \\times \\frac{1}{6} = \\frac{1}{56}",
+    "\\frac{5}{8} \\times \\frac{4}{7} \\times \\frac{3}{6} = \\frac{5}{28}",
+  ].join("\n");
+  const { container } = render(<MathText text={text} />);
   expect(container.querySelector(".math-raw")).toBeNull();
+  const display = container.querySelectorAll(".math-display");
+  expect(display).toHaveLength(1);
+  // KaTeX lays an array out as a grid of columns (.col-align-c) with rules for |.
+  expect(display[0].querySelectorAll(".col-align-c").length).toBe(5);
+  expect(display[0].querySelector(".katex-hline")).not.toBeNull();
+  expect(display[0].querySelector(".vertical-separator")).not.toBeNull();
+  // Table plus the two working lines.
+  expect(container.querySelectorAll(".katex")).toHaveLength(3);
+  // The student's line break between the two working lines survives.
+  expect(container.querySelectorAll("br")).toHaveLength(1);
+  const plain = visibleText(container);
+  expect(plain).not.toContain("\\begin");
+  expect(plain).not.toContain("\\hline");
+  expect(plain).not.toContain("\\frac");
+});
+
+test("prose around a multi-line environment keeps its own lines", () => {
+  const text = "The distribution is\n\\begin{aligned}\na &= 1 \\\\\nb &= 2\n\\end{aligned}\nso the total is 3.";
+  const { container } = render(<MathText text={text} />);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(container.querySelectorAll(".math-display")).toHaveLength(1);
+  const plain = visibleText(container);
+  expect(plain).toContain("The distribution is");
+  expect(plain).toContain("so the total is 3.");
+});
+
+test.each([
+  ["tabular", "\\begin{tabular}{|l|c|}\n\\hline\nTotal marks & 5 \\\\\n\\hline\n\\end{tabular}"],
+  ["matrix", "\\begin{matrix}\n1 & 2 \\\\\n3 & 4\n\\end{matrix}"],
+  ["pmatrix", "\\begin{pmatrix}\n1 & 2 \\\\\n3 & 4\n\\end{pmatrix}"],
+  ["bmatrix", "\\begin{bmatrix}\n1 & 2 \\\\\n3 & 4\n\\end{bmatrix}"],
+  ["align", "\\begin{align}\nx &= 2 \\\\\ny &= 3\n\\end{align}"],
+  ["align*", "\\begin{align*}\nx &= 2 \\\\\ny &= 3\n\\end{align*}"],
+  ["cases", "f(x) = \\begin{cases}\n1 & x > 0 \\\\\n0 & x \\le 0\n\\end{cases}"],
+  ["gathered", "\\begin{gathered}\nx = 2 \\\\\ny = 3\n\\end{gathered}"],
+])("a multi-line %s environment typesets instead of showing source", (_name, text) => {
+  const { container } = render(<MathText text={text} />);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(container.querySelector(".math-display .katex")).not.toBeNull();
+  expect(visibleText(container)).not.toContain("\\begin");
+});
+
+test("tabular words stay readable prose inside the typeset table", () => {
+  const { container } = render(<MathText text={"\\begin{tabular}{|l|c|}\nTotal marks & 5\n\\end{tabular}"} />);
+  expect(visibleText(container)).toContain("Total marks");
+});
+
+test("an environment KaTeX cannot parse falls back to its source, line breaks intact", () => {
+  const text = "\\begin{array}{|c|c|}\nX & \\frac{1}{ \\\\\n\\end{array}";
+  const { container } = render(<MathText text={text} />);
+  const raw = container.querySelector(".math-raw");
+  expect(raw).not.toBeNull();
+  expect(raw?.textContent).toBe(text);
+});
+
+test("mixed prose and maths on one line renders \\text, \\$, \\% and ^{th}", () => {
+  const text = "\\text{median} = 10^{th} pos = \\$32,000\nUQ = 75\\% \\times 19 = 15^{th}";
+  const { container } = render(<MathText text={text} />);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(container.querySelectorAll(".katex")).toHaveLength(2);
+  expect(container.querySelectorAll("br")).toHaveLength(1);
+  const plain = visibleText(container);
   expect(plain).not.toContain("\\text");
-  expect(plain).not.toContain("^{");
   expect(plain).not.toContain("\\$");
+  expect(plain).not.toContain("\\%");
+  expect(plain).not.toContain("^{");
+  expect(plain).toContain("median");
+  expect(plain).toContain("pos");
   expect(plain).toContain("$32,000");
+  expect(plain).toContain("75%");
+});
+
+test("an escaped dollar is never the opening of single-dollar maths", () => {
+  const { container } = render(<MathText text={"\\text{cost} = \\$5 + \\$7 = \\$12"} />);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(visibleText(container)).toContain("$12");
+});
+
+test("the review card's AcademicText renders the same array answer as a table", async () => {
+  const { default: AcademicText } = await import("../../src/ui/components/AcademicText");
+  const text = "\\begin{array}{|c|c|}\n\\hline\nX & 0 \\\\\n\\hline\nP & \\frac{1}{56} \\\\\n\\hline\n\\end{array}\n\\frac{1}{56} = \\frac{1}{56}";
+  const { container } = render(<AcademicText text={text} />);
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(container.querySelector(".math-display .katex-hline")).not.toBeNull();
+  expect(container.querySelectorAll(".katex")).toHaveLength(2);
 });

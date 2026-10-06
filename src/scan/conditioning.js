@@ -17,11 +17,7 @@
 // the mask carries the fine detail instead. See bench/README.md for why.
 
 import { CONDITIONING, ENHANCE } from './contract.js';
-import { warpPerspective, quadSize, outsetQuad } from './geometry.js';
-
-/** How far a detected page edge is widened before warping. Corners the student
-    placed by hand are used exactly. */
-export const CROP_OUTSET = 0.03;
+import { warpPerspective, quadSize, expandQuad } from './geometry.js';
 import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
 import { assessRescue, enhancePage, flattenPage } from './enhance.js';
@@ -183,16 +179,31 @@ async function encodeMask({ data, width, height }) {
 }
 
 /**
+ * The outward margin for a quad reaching the warp. Zero for corners the
+ * student placed by hand ('edges-adjusted'); CONDITIONING.QUAD_MARGIN for a
+ * quad the detector found.
+ *
+ * @param {string|null} capturePath
+ */
+export function quadMarginFor(capturePath) {
+  return capturePath === 'edges-adjusted' ? 0 : CONDITIONING.QUAD_MARGIN;
+}
+
+/**
  * Condition one captured or uploaded page.
  *
  * @param {ImageBitmap|HTMLImageElement|HTMLCanvasElement} source
  * @param {{quad?:Array, pageNumber?:number, capturePath?:string, liveGate?:Object, sourceKind?:string}} options
  */
-export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
+export async function conditionPage(source, { quad: detectedQuad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
-  const detectedQuad = quad;
-  if (quad && capturePath !== 'edges-adjusted') quad = outsetQuad(quad, CROP_OUTSET, sw, sh);
+
+  // A detected quad sits slightly inside the paper, so it is widened by
+  // CONDITIONING.QUAD_MARGIN before the warp (see contract.js). Corners the
+  // student placed by hand are what they chose and are used exactly.
+  const quadMargin = detectedQuad ? quadMarginFor(capturePath) : 0;
+  const quad = detectedQuad ? expandQuad(detectedQuad, sw, sh, quadMargin) : null;
 
   // ── the one geometric operation ──────────────────────────────────────────
   // Perspective correction and the scale to target are composed into a single
@@ -358,10 +369,11 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       // from the original, which is the only thing that makes "never discard
       // the original" worth anything.
       quad: quad ? quad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
-      // What the detector found, before the margin was widened.
-      detected_quad: detectedQuad && detectedQuad !== quad
-        ? detectedQuad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
-      crop_outset: detectedQuad && detectedQuad !== quad ? CROP_OUTSET : 0,
+      // The corners as detected (or placed by hand) before the margin above,
+      // and the margin itself, so the widening is visible in production data
+      // and can be re-tuned against real footage rather than guessed at.
+      detected_quad: detectedQuad ? detectedQuad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+      quad_margin: quadMargin,
       // 'camera' | 'upload' | 'pdf' | 'link'. Mirrors the `source_kind` column
       // rather than duplicating a judgement: both are written from the same
       // value at the same moment.

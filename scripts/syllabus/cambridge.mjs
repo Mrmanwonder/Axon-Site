@@ -238,7 +238,7 @@ const words = (s) => s.toLowerCase().normalize("NFKC").match(/[\p{L}\p{N}]+/gu) 
  * occur in the source in the same order, within a window a few times its own
  * length. That proves no word was invented or reordered.
  */
-export function auditParse(parsed, text) {
+export function auditParse(parsed, text, { maxLen = 800, minLen = 8, segments = false } = {}) {
   const source = words(text);
   const index = new Map();
   source.forEach((w, i) => { if (!index.has(w)) index.set(w, []); index.get(w).push(i); });
@@ -247,24 +247,28 @@ export function auditParse(parsed, text) {
   for (const u of parsed.units) for (const t of u.topics) {
     for (const o of t.objectives) {
       objectives += 1;
-      const ws = words(o.text);
-      const window = ws.length * 10 + 80;
-      const found = (index.get(ws[0]) ?? []).some((start) => {
-        let at = start;
-        for (const w of ws.slice(1)) {
-          const next = (index.get(w) ?? []).find((i) => i > at);
-          if (next === undefined || next - start > window) return false;
-          at = next;
-        }
-        return true;
+      // With segments, each bulleted part is checked on its own: a heading in
+      // the left column and its bullets in the right one are read separately.
+      const pieces = (segments ? o.text.split(/\s*•\s*/) : [o.text]).map(words).filter((ws) => ws.length);
+      const found = pieces.every((ws) => {
+        const window = ws.length * 10 + 80;
+        return (index.get(ws[0]) ?? []).some((start) => {
+          let at = start;
+          for (const w of ws.slice(1)) {
+            const next = (index.get(w) ?? []).find((i) => i > at);
+            if (next === undefined || next - start > window) return false;
+            at = next;
+          }
+          return true;
+        });
       });
       if (!found) problems.push(`${o.code} words not found in order in the source: "${o.text.slice(0, 70)}"`);
-      if (o.text.length < 8) problems.push(`${o.code} is suspiciously short: "${o.text}"`);
+      if (o.text.length < minLen) problems.push(`${o.code} is suspiciously short: "${o.text}"`);
       // What a broken extraction leaves behind: control characters, private-use
       // glyphs, unmapped font codes, and MathType's ASCII stand-ins (ω as "~",
       // × as "#", → as '"'), which never occur in board prose.
       if (/[\u0000-\u0008\u000b-\u001f-~#"]|\(cid:\d+\)/.test(o.text)) problems.push(`${o.code} has an unmapped glyph: "${o.text.slice(0, 70)}"`);
-      if (o.text.length > 800) problems.push(`${o.code} is suspiciously long (${o.text.length} chars)`);
+      if (o.text.length > maxLen) problems.push(`${o.code} is suspiciously long (${o.text.length} chars)`);
     }
   }
   return { units: parsed.units.length, topics: parsed.units.reduce((n, u) => n + u.topics.length, 0), objectives, problems };

@@ -1,7 +1,7 @@
 {
  "golden_set_version": "topic-tag-synthetic-v1",
  "stage": "topic_tag",
- "labels": "DRAFT: drafted by Claude, need a person's confirmation before they are truth",
+ "labels": "Drafted by Claude, confirmed by the owner on 2026-10-06",
  "cases": [
   {
    "id": "82403068-5862-5726-b199-d7e5c6bb1eec",
@@ -21,7 +21,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b50c95b3-9845-517a-a3e1-3bb54fe46528",
@@ -45,7 +45,7 @@
    "traps": [
     "shares words with straight lines; the marks are for the discriminant"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "15b017ca-7661-5976-ab6c-8312cdb98438",
@@ -65,7 +65,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "ce2a44ed-6e8f-584a-af97-e396fb734df4",
@@ -90,7 +90,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "1561f3e3-b5e6-5bbf-a123-1c541242339c",
@@ -108,7 +108,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "0609e850-0999-5849-b84a-2c135521ac91",
@@ -129,7 +129,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "ad7d401b-1150-551e-8dc7-6ebfc214d03f",
@@ -150,7 +150,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "af3be3a1-a8c3-57c4-ab09-721ce9ec585f",
@@ -171,7 +171,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "008222e9-28a9-5862-8fec-c27a73132040",
@@ -193,7 +193,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "5e1301f3-12d1-5b67-a466-9f7a0999705a",
@@ -214,7 +214,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "39fb637d-180f-5210-8ab0-b01bbc3b2148",
@@ -234,7 +234,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "a326e383-8869-50f2-9e0e-342cfa37b596",
@@ -254,7 +254,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "13e3053a-f721-5c28-a1fe-684f83aa48ff",
@@ -277,7 +277,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "0e347d3e-d98d-5334-a38d-ee02c05553a5",
@@ -298,7 +298,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "607bb843-3942-5f0b-95be-9481170e7850",
@@ -316,7 +316,7 @@
    "traps": [
     "a part with no stem cannot be placed; an empty answer beats a guess"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "7a33dd5c-5d9b-57fd-9b8b-0e23885cb1ac",
@@ -332,7 +332,7 @@
     "control": "off_syllabus"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "e79cedb6-7379-5494-9217-ab37cdf3df89",
@@ -350,7 +350,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b596123a-8078-57b7-b547-1e0cc47d749c",
@@ -370,7 +370,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "30c2d627-b58e-5caa-9d48-38c9e6a5e775",
@@ -388,7 +388,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b01defb1-78f3-5d69-992b-3b238653208e",
@@ -408,7 +408,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "30fafa7f-af57-5155-a7ad-3fbe28aaf5e3",
@@ -428,7 +428,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "6bd67b95-a9c0-5f82-8521-10224096aa7d",
@@ -451,7 +451,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "7bfe8337-599d-5aa4-89e5-b0005204a6ed",
@@ -471,7 +471,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "856b35ea-c223-5d96-9155-8054597e06c2",
@@ -489,7 +489,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "45d046ca-1805-5683-a949-d0b57cbf18a7",
@@ -509,7 +509,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "3c12a4d5-da15-5a82-9bd5-a3720ff7c347",
@@ -527,7 +527,7 @@
    "traps": [
     "unreadable stem: never tag from the surviving words"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "e879fe61-0812-5b03-ba6e-7f56bb9220ae",
@@ -548,7 +548,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "a7e0aeca-2a94-5e19-8b73-ab8bdba861b2",
@@ -566,7 +566,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "4bbc2f89-8492-5d12-af30-f5a49703e3ad",
@@ -588,7 +588,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "992460e4-3bf0-5168-af22-94b552f792d3",
@@ -609,7 +609,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "71e0e20c-84d1-5e07-b1c3-2034b8285724",
@@ -630,7 +630,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "bc7ad855-ee7a-57e7-b8fd-a05fecf0855f",
@@ -650,7 +650,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "c716294f-5a0d-5009-b4d8-92ce1ff26f10",
@@ -673,7 +673,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b759b12c-79c9-5812-aea5-bc65270a8c6b",
@@ -693,7 +693,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "2bd6d489-7dd8-53dc-a42f-16c00605a785",
@@ -715,7 +715,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "64fbc274-ad9e-55c4-b149-f835d0fa0718",
@@ -738,7 +738,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "40f58785-c6c1-54fb-adfb-cab681cbc5ab",
@@ -758,7 +758,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "6a0edda8-b5cb-5f2c-af81-035a86bf8968",
@@ -781,7 +781,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "2f185ecc-0a13-5e26-9eec-924bd2cd6427",
@@ -799,7 +799,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "2bc0b5c2-c715-5c33-adb1-b1b293753616",
@@ -817,7 +817,7 @@
    "traps": [
     "a chemistry question on a physics paper: no physics objective is assessed"
    ],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "85e4cb18-2a4a-50e2-ac9d-59126e037caa",
@@ -837,7 +837,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "014737f2-8b6e-5a05-a5f5-fad408706375",
@@ -858,7 +858,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "1c5132ec-5073-513e-9913-c29fd8d5b53e",
@@ -879,7 +879,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "5870a401-8ea3-567e-bd0e-57820a83819c",
@@ -903,7 +903,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "48e96a26-0aa1-5900-b420-aba7d20aa611",
@@ -923,7 +923,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "d4554b0d-f7b0-5852-b03f-be6f4e70e266",
@@ -947,7 +947,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b78e8b80-fd96-59f7-a0b1-aca1cb785734",
@@ -969,7 +969,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "5cd0d365-0f2d-5e07-a94f-37cb5e8a4dd4",
@@ -991,7 +991,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "919eae9b-700e-53a8-8186-4a54bcb5dceb",
@@ -1011,7 +1011,7 @@
     "control": null
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   },
   {
    "id": "b26f3ac2-4e91-5fed-83d4-151a306fa83a",
@@ -1027,7 +1027,7 @@
     "control": "off_syllabus"
    },
    "traps": [],
-   "needs_human_label": true
+   "needs_human_label": false
   }
  ]
 }

@@ -221,6 +221,18 @@ export const CONDITIONING = {
   // the mask carries the fine detail rather than the page.
   ENCODE_TYPES: ['image/webp', 'image/jpeg'],
   PREPROCESS_VERSION: 'v2',
+  // Outward margin added to an auto-detected page quad before it is warped, as
+  // a share of the quad's longer diagonal, on every side. The detector's
+  // corners tend to sit slightly inside the paper (its edge lines are fitted to
+  // the gradient, which peaks a few pixels in from the true edge, and the
+  // corners are then refined inward), so warping to them exactly trimmed the
+  // page edge and sometimes marking written near it. A thin band of desk is a
+  // far smaller cost than a lost mark. Applied only to detected quads; corners
+  // the student placed by hand (capturePath 'edges-adjusted') are used exactly.
+  //
+  // A conservative default, not a tuned value: tuning needs the owner's corpus
+  // of real phone footage (Axon.md §7), which has not been measured yet.
+  QUAD_MARGIN: 0.015,
 };
 
 // ── stage 1.5 · rescue ─────────────────────────────────────────────────────
