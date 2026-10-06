@@ -72,3 +72,16 @@ test("Insights accessibility @a11y", async ({ page }) => {
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);
 });
+
+test("below four papers: one coverage card with steps and the next action, and the map of tested topics", async ({ page }) => {
+  await page.goto("/tests/browser/index.html?view=insights&scenario=insights-early");
+  await expect(page.getByRole("img", { name: "3 of 4 papers counted" })).toBeVisible();
+  await expect(page.getByText("One more marked paper and Axon starts comparing them.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Scan a marked paper" })).toBeVisible();
+  await expect(page.getByText("Shading by marks lost starts at 4 Physics papers (2 so far).", { exact: false })).toBeVisible();
+  // A topic with evidence but no shading yet still reads as tested, never as blank.
+  await expect(page.getByRole("button", { name: /1\.2 Momentum: .*not shaded yet/ })).toHaveCSS("border-top-style", "solid");
+  expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);
+});

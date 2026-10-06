@@ -28,7 +28,7 @@ function Legend({ ready }: { ready: boolean }) {
   return (
     <div className="heatlegend" aria-hidden="true">
       {ready && <span className="ramp"><span>Fewer marks lost</span>{[0, 1, 2, 3, 4].map((l) => <i key={l} className={`heat l${l}`} />)}<span>More</span></span>}
-      <span className="key"><i className="heat early" />Early evidence</span>
+      <span className="key"><i className="heat early" />{ready ? "Early evidence" : "Tested"}</span>
       <span className="key"><i className="heat untested" />Not tested yet</span>
     </div>
   );
@@ -116,7 +116,7 @@ export default function SyllabusMap({ data, describe, initialSubject }: {
         <p className="lede">
           {map.papersPlaced === 0
             ? `None of your ${map.label} questions have been placed on the syllabus yet.`
-            : `Shading starts once ${PATTERN_PAPERS} ${map.label} papers are on the syllabus; ${map.papersPlaced} ${map.papersPlaced === 1 ? "is" : "are"} so far. Until then the map shows which topics you have been tested on.`}
+            : `Shading by marks lost starts at ${PATTERN_PAPERS} ${map.label} papers (${map.papersPlaced} so far). For now, the map shows which topics you have been tested on.`}
         </p>
       )}
       <Legend ready={map.shadingReady} />
@@ -131,7 +131,7 @@ export default function SyllabusMap({ data, describe, initialSubject }: {
                 onClick={() => setSelected(c.id === selected ? null : c.id)}>
                 <span className="cc">{c.code}</span>
                 <span className="ct">{c.title}</span>
-                {c.state !== "untested" && <span className="cq">{c.questions}</span>}
+                {c.state !== "untested" && <span className="cq" aria-hidden="true">{c.questions} {c.questions === 1 ? "question" : "questions"}</span>}
               </button>
             ))}
           </div>
@@ -139,7 +139,7 @@ export default function SyllabusMap({ data, describe, initialSubject }: {
         </section>
       ))}
       <p className="widgetnote">
-        Each topic is shaded by the share of its marks you lost, across {plural(map.questionsPlaced, "question")} in {plural(map.papersPlaced, "paper")}.
+        {map.shadingReady ? "Each topic is shaded by the share of its marks you lost, across" : "Placed so far:"} {plural(map.questionsPlaced, "question")} in {plural(map.papersPlaced, "paper")}.
         {map.questionsUnplaced > 0 ? ` ${plural(map.questionsUnplaced, "question")} in ${map.label} ${map.questionsUnplaced === 1 ? "is" : "are"} not on the map yet: still being placed, or not clearly on one topic.` : ""}
         {" "}Topics come from the board&rsquo;s published syllabus; which topic a question tests is worked out by Axon, and marks are your teacher&rsquo;s.
       </p>

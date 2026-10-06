@@ -150,10 +150,24 @@ function syllabusFixture() {
     documents: [doc], topics: rows, evidence,
   };
 }
-export const syllabusMapData = async () => ({ data: scenario === "insights" ? syllabusFixture() : { subjects: [], links: [], documents: [], topics: [], evidence: [] }, stale: false });
+// `insights-early`: the same student after three papers, below the pattern threshold.
+const EARLY = scenario === "insights-early";
+const earlyIds = new Set(["ip1", "ip2", "ip3"]);
+const earlyOnly = <T extends { paper_id?: unknown; id?: unknown }>(rows: T[], key: "paper_id" | "id") => (EARLY ? rows.filter((r) => earlyIds.has(String(r[key]))) : rows);
+export const syllabusMapData = async () => {
+  if (scenario !== "insights" && !EARLY) return { data: { subjects: [], links: [], documents: [], topics: [], evidence: [] }, stale: false };
+  const f = syllabusFixture();
+  return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
+};
 export const setPaperSubject = async () => {};
-export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : [], stale: false }; }
-export const insightEvidence = async () => ({ data: scenario === "insights" ? insightFixture() : { attempts: [], losses: [] }, stale: scenario === "cached" });
+export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export const insightEvidence = async () => {
+  if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
+  const f = insightFixture();
+  const attempts = earlyOnly(f.attempts as { paper_id?: unknown }[], "paper_id");
+  const ids = new Set(attempts.map((a) => (a as { id: string }).id));
+  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: false };
+};
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
 // `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).

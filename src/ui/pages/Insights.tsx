@@ -23,6 +23,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import PressBox from "../components/PressBox";
+import { InfoSymbol } from "../components/MaterialSymbols";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import { useIngestion } from "../data/useIngestion";
@@ -73,7 +74,7 @@ const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? o
 const sample = (t: { questions: number; papers: number }) => `${plural(t.questions, "question")} · ${plural(t.papers, "paper")}`;
 
 function EvidenceGap({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="card evidencegap"><div className="unknownmark" aria-hidden="true">?</div><div><h3>{title}</h3><p>{children}</p></div></div>;
+  return <div className="card evidencegap"><div className="unknownmark" aria-hidden="true"><InfoSymbol size={18} /></div><div><h3>{title}</h3><p>{children}</p></div></div>;
 }
 
 /** The questions a claim rests on. Every row opens the question itself. */
@@ -213,30 +214,36 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
   const evidenceLine = `${plural(ev.questions, "confirmed question")} · ${plural(ev.papers, "paper")}`;
 
   if (!ev.enough) {
+    const counted = Math.min(ev.papers, PATTERN_PAPERS);
     const left = Math.max(0, PATTERN_PAPERS - ev.papers);
     return <div className="igrid">
-      <section className="isection">
+      <section className="isection isection-wide">
         <div className="sectitle">Coverage</div>
-        <div className="card coveragecard">
-          <div className="coveragehead"><strong>{Math.min(ev.papers, PATTERN_PAPERS)} of {PATTERN_PAPERS} papers</strong><span>Building evidence</span></div>
-          <div className="covertrack"><i style={{ width: `${Math.min(100, (ev.papers / PATTERN_PAPERS) * 100)}%` }} /></div>
-          <p>{filtered
-            ? `This filter has ${plural(ev.papers, "confirmed paper")}. Axon needs ${PATTERN_PAPERS} before it calls anything a pattern.`
-            : `Scan ${plural(left, "more marked paper")} before Axon calls anything a pattern. One paper can describe a bad day; four can describe a habit.`}</p>
-          <PressBox as="button" type="button" className="miniadd" onClick={addPaper}>Add a paper</PressBox>
-        </div>
-      </section>
-      <section className="isection">
-        <div className="sectitle">What unlocks at {PATTERN_PAPERS} papers</div>
-        <div className="card unlockcard">
-          <ul>
-            <li>Mistakes that repeat across papers, with your own fix for each</li>
-            <li>A short list to read before your next paper</li>
-            <li>Where your marks go: knowledge, exam technique or finishing</li>
-            <li>Which question sizes, command words and topics cost you most</li>
-            <li>Whether questions at the end of your papers are left blank</li>
-          </ul>
-          <p className="widgetnote">Each paper you scan already has its own explanations in Library.</p>
+        <div className="card growcard">
+          <div className="growhead">
+            <div className="growcount"><strong>{counted}</strong><span>of {PATTERN_PAPERS} papers</span></div>
+            <div className="growtag">Patterns start at {PATTERN_PAPERS}</div>
+          </div>
+          <div className="growsteps" role="img" aria-label={`${counted} of ${PATTERN_PAPERS} papers counted`}>
+            {Array.from({ length: PATTERN_PAPERS }, (_, i) => <i key={i} className={i < counted ? "on" : ""} />)}
+          </div>
+          <p className="growline">{filtered
+            ? `This filter has ${plural(ev.papers, "confirmed paper")}. Patterns need ${PATTERN_PAPERS}.`
+            : left === 1
+              ? "One more marked paper and Axon starts comparing them. One paper can describe a bad day; four can describe a habit."
+              : `${plural(left, "more marked paper")} and Axon starts comparing them. One paper can describe a bad day; four can describe a habit.`}</p>
+          <div className="growlist">
+            <div className="growcap">What opens at {PATTERN_PAPERS} papers</div>
+            <ul>
+              <li>Mistakes you repeat, with your own fix for each</li>
+              <li>A short checklist for your next paper</li>
+              <li>Where your marks go: knowledge, technique or finishing</li>
+              <li>The question sizes, command words and topics that cost most</li>
+              <li>Questions left blank at the end of a paper</li>
+            </ul>
+          </div>
+          {!filtered && <PressBox as="button" type="button" className="btn primary growcta" onClick={addPaper}>Scan a marked paper</PressBox>}
+          <p className="widgetnote">Every paper you have scanned already has its own explanations in <Link to={paths.library}>Library</Link>.</p>
         </div>
       </section>
       {syllabus}

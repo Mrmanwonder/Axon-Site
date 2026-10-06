@@ -56,9 +56,27 @@
 .evrow .m { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .evrow .m small { margin-left: 4px; font-size: 11.5px; font-weight: 500; color: var(--label-2); }
 
-/* Below the threshold */
-.unlockcard { padding: 18px; }
-.unlockcard ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; font-size: 13.5px; line-height: 1.45; color: var(--label-2); }
+/* Below the threshold: one card. Where the student is (papers counted, as
+   steps, never a percentage), what opens next, and the one action. */
+.growcard { padding: 20px; }
+.growhead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.growcount { display: flex; align-items: baseline; gap: 7px; font-variant-numeric: tabular-nums; }
+.growcount strong { font-size: 28px; line-height: 1; font-weight: 700; letter-spacing: -.03em; color: var(--label); }
+.growcount span { font-size: 15px; font-weight: 600; color: var(--label); letter-spacing: -.012em; }
+.growtag { font-size: 12.5px; color: var(--label-2); padding-bottom: 2px; }
+.growsteps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 16px 0 14px; }
+.growsteps i { display: block; height: 6px; border-radius: 3px; background: var(--surface-sunk); }
+.growsteps i.on { background: var(--accent); }
+.growline { margin: 0; font-size: 14px; line-height: 1.5; color: var(--label); letter-spacing: -.008em; }
+.growlist { margin-top: 18px; padding-top: 16px; border-top: .5px solid var(--hairline); }
+.growcap { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--label-2); margin-bottom: 10px; }
+.growlist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.growlist li { display: grid; grid-template-columns: 6px minmax(0, 1fr); gap: 12px; align-items: baseline; font-size: 14px; line-height: 1.4; color: var(--label); letter-spacing: -.008em; }
+.growlist li::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--label-3); transform: translateY(-2px); }
+/* 19px bold is large text: white on the accent clears WCAG AA (3:1) without a new colour. */
+.growcta { width: 100%; margin-top: 20px !important; font-size: 19px !important; font-weight: 700 !important; }
+.growcard .widgetnote a { color: var(--accent); font-weight: 550; }
+.igrid .unknownmark svg { display: block; }
 
 /* Home · the one supported focus, quoted from the student's own question */
 .focuscard { margin-top: 12px; padding: 20px; }
@@ -105,20 +123,22 @@
 .heat.untested { border: 1px dashed var(--label-3); background: transparent; }
 .heat.early { border: 1px solid var(--accent); }
 .heat.early:not(.l0):not(.l1):not(.l2):not(.l3):not(.l4) { background: var(--accent-wash); }
+/* Tested before shading starts (fewer papers than the threshold): the same light bordered form. */
+.heat.evidence:not(.l0):not(.l1):not(.l2):not(.l3):not(.l4) { border: 1px solid var(--accent); background: var(--accent-wash); }
 .heatunit { padding: 10px 0 4px; border-top: .5px solid var(--hairline); }
 .heatunit:first-of-type { border-top: 0; }
 .uname { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 600; color: var(--label); margin-bottom: 8px; }
 .uname span { color: var(--label-2); font-variant-numeric: tabular-nums; }
 .uname em { font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--label-2); margin-left: auto; }
-.heatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
-.heatcell { position: relative; min-height: 64px; padding: 8px 8px 7px; border-radius: 10px; text-align: left; display: flex; flex-direction: column; gap: 3px; color: var(--label); transition: transform var(--d-state) var(--spring); }
+.heatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
+.heatcell { position: relative; min-height: 76px; padding: 9px 10px 8px; border-radius: 12px; text-align: left; display: flex; flex-direction: column; gap: 3px; color: var(--label); transition: transform var(--d-state) var(--spring); }
 .heatcell:active { transform: scale(.97); }
 .heatcell.on { outline: 2px solid var(--label); outline-offset: 2px; }
 .heatcell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .heatcell .cc { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .heatcell .ct { font-size: 11.5px; line-height: 1.25; color: var(--label); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .heatcell.untested .ct, .heatcell.untested .cc { color: var(--label-2); }
-.heatcell .cq { position: absolute; top: 7px; right: 8px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.heatcell .cq { margin-top: auto; padding-top: 4px; font-size: 11px; font-weight: 550; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .heatdetail { margin: 10px 0 6px; padding: 14px; border-radius: 12px; background: var(--surface-sunk); }
 .heatdetail .hdtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .heatdetail .code { font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
