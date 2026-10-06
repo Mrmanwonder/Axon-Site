@@ -34,6 +34,8 @@ import ResourceActions from "../components/ResourceActions";
 import { tutorEntryVisible } from "../data/tutor";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckSummary } from "../components/SchemeCheck";
 import "../styles/paper-overview.css";
 
 /** What the badge means, in words. "Likely" alone told the student nothing. */
@@ -124,6 +126,7 @@ export default function PaperOverview() {
   });
 
   const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
   const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
   const toast = useToast();
@@ -262,6 +265,8 @@ export default function PaperOverview() {
           <NextAction paperId={paperId!} structure={structure} />
         </section>
       )}
+
+      {schemeCheck.check && <SchemeCheckSummary check={schemeCheck.check} regions={schemeCheck.regions} />}
 
       {tutorEntryVisible() && attempts.length > 0 && (
         <div style={{ margin: "12px var(--gutter) 0" }}>
