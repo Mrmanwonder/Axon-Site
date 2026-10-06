@@ -21,6 +21,7 @@ import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import PageSkeleton from "../components/PageSkeleton";
 import { useToast } from "../components/ToastProvider";
+import { useOptionalScan } from "../scan/ScanProvider";
 
 /** The stacked lines that stand in for a page thumbnail until a real crop
     exists. Decorative. */
@@ -106,6 +107,7 @@ export default function Library() {
 
   const navigate = useNavigate();
   const toast = useToast();
+  const sends = useOptionalScan()?.sends ?? [];
   const [retrying, setRetrying] = useState<Set<string>>(() => new Set());
 
   const retryPaper = async (paperId: string) => {
@@ -408,7 +410,16 @@ export default function Library() {
         {filteredPapers.map((p) => {
           const pages = (p.paper_page as CountRow)?.[0]?.count ?? 0;
           const questions = (p.student_attempt as CountRow)?.[0]?.count ?? 0;
-          const presentation = paperPresentation(p, progressResource);
+          const send = sends.find((job) => job.paperId === p.id && ["sending", "waiting", "stuck"].includes(job.phase));
+          const base = paperPresentation(p, progressResource);
+          // A paper still leaving this phone says so, in pages (owner, 6 Oct 2026).
+          const presentation = send ? {
+            ...base, canOpen: true, canRetry: false, status: "sending",
+            statusLabel: send.phase === "sending"
+              ? `Sending · ${send.pages.filter((pg) => pg.sent).length} of ${send.pages.length} pages`
+              : send.phase === "waiting" ? "Waiting for a connection to finish sending" : "Waiting to send",
+            tone: send.phase === "sending" ? "wait" : "attention",
+          } : base;
           const status = { label: presentation.statusLabel, tone: presentation.tone };
           const lost = marksLost(p as Record<string, unknown>);
           const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });

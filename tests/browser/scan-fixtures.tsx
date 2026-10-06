@@ -2,7 +2,7 @@ import { createRef } from "react";
 import type { ScanValue, TrayPage, LiveState } from "../../src/ui/scan/ScanProvider";
 
 export const SCAN_STATES = [
-  "search", "locked", "saved", "reading", "dark", "small", "stuck", "flag", "review", "denied", "desk", "desk-pages",
+  "search", "locked", "saved", "reading", "offline", "dark", "small", "stuck", "flag", "review", "denied", "desk", "desk-pages",
 ] as const;
 export type ScanFixtureState = typeof SCAN_STATES[number];
 
@@ -95,14 +95,19 @@ export function scanFixture(state: ScanFixtureState, calls: Record<string, unkno
       onRemove: async (...args: unknown[]) => { record("onRemove")(...args); },
       onMove: async (...args: unknown[]) => { record("onMove")(...args); },
     },
-    progress: state === "reading" ? {
-      heading: "Sending your paper", now: "4 of 12 pages safely sent",
+    progress: null,
+    sends: state === "reading" || state === "offline" ? [{
+      id: "draft-1", paperId: "paper-1", runId: null, title: "Past paper",
+      phase: state === "offline" ? "waiting" : "sending", stage: "upload",
+      message: state === "offline" ? "No connection. Sending carries on by itself when you are back online." : "4 of 12 pages safely sent",
       pages: Array.from({ length: 12 }, (_, i) => ({ n: i + 1, thumb: paperThumb(i + 1), sent: i < 4 })),
       steps: [
         { label: "Sending the pages", state: "now" }, { label: "Finding the questions", state: "wait" },
         { label: "Reading the answers and the marking", state: "wait" }, { label: "Checking the marks add up", state: "wait" },
       ],
-    } : null,
+    }] : [],
+    focusedSend: state === "reading" || state === "offline" ? "draft-1" : null,
+    setFocusedSend: record("setFocusedSend"), retrySend: record("retrySend"), dismissSend: record("dismissSend"),
     drafts: state === "desk-pages" || state === "saved" ? [{ id: "d1", title: "Maths mock", pages: 3, updatedAt: Date.now() - 60_000, thumbs: [] }] : [],
     draftsHandlers: { onResume: record("onResume"), onDiscard: record("onDiscard") },
     resumable: null, review: null, reviewHandlers: null, reviewOpen: false, closeReview: noop,

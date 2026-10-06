@@ -1,0 +1,83 @@
+/* The reading screen: one paper on its way from the phone to review. Shared by
+   the scanner (over the camera) and the Library (as a page). */
+
+/* ── reading a paper ─────────────────────────────────────────────────────── */
+.sc-reading {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px max(24px, env(safe-area-inset-bottom));
+  color: var(--label);
+}
+/* Over the scanner it covers the whole camera screen. */
+.sc-reading.is-overlay { position: fixed; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto; }
+/* In the Library it is an ordinary page. */
+.sc-reading.is-page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--view-top, 0px) - var(--view-bottom, 0px));
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px var(--text-gutter, 20px) 24px;
+  color: var(--label);
+}
+.sc-reading-h[data-tone="attention"] + .sc-reading-now { color: var(--label); }
+.sc-reading-now[data-tone="attention"]::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 8px 1px 0;
+  border-radius: 50%; background: var(--attention);
+}
+.sc-reading-acts .btn + .btn { margin-top: 10px; }
+.sc-reading-top { display: flex; padding: max(8px, var(--top-inset, 8px)) 0 8px; margin-left: -6px; }
+.sc-reading .sc-close { color: var(--label); }
+.sc-reading .sc-close::before { background: var(--surface); border-color: var(--hairline); box-shadow: none; }
+.sc-reading-h { margin: 18px 0 6px; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; text-wrap: balance; }
+.sc-reading-now { margin: 0; font-size: 15px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.sc-reading-sub { margin: 10px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--label-3); }
+.sc-reading-steps { list-style: none; margin: 26px 0 0; padding: 0; }
+.sc-reading-steps .pline { padding: 11px 0; font-size: 15px; }
+.sc-reading-acts { margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; align-items: stretch; }
+.sc-reading-acts .sc-reading-sub { text-align: center; }
+
+
+.sc-reading-pages {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 10px;
+}
+.sc-reading-pages li { position: relative; }
+.sc-reading-pages .th {
+  display: block;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--surface-sunk);
+  box-shadow: 0 0 0 .5px var(--hairline);
+  opacity: .45;
+  transition: opacity 320ms ease-out;
+}
+.sc-reading-pages li[data-sent="true"] .th { opacity: 1; }
+.sc-reading-pages .th img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.sc-reading-pages .blank { display: block; width: 100%; height: 100%; background: #e6e2d8; opacity: .5; }
+.sc-reading-pages .n {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 0 0 .5px var(--hairline);
+  color: var(--label-2);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sc-reading-pages li[data-sent="true"] .n { background: var(--green); color: #fff; box-shadow: none; }
+.sc-reading-pages .n svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-reduced-motion: reduce) { .sc-reading-pages .th { transition: none; } }
+[data-motion="reduce"] .sc-reading-pages .th { transition: none; }
