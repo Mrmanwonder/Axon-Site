@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { ResumeReviewResult } from "../scan/ScanProvider";
 import { useApp } from "../data/AppProvider";
@@ -17,22 +17,10 @@ import type { ProgressRow } from "../data/modules";
 import { paths } from "../app/paths";
 import { retryAsMarked } from "../data/modules";
 import PageSkeleton from "../components/PageSkeleton";
+import ReadingScreen, { modelForSend } from "../scan/ReadingScreen";
+import type { ReadingModel, ReadingPage, SendJob } from "../scan/ReadingScreen";
 import { usePaperDelete } from "../data/usePaperDelete";
 import { useOptionalSheetControls } from "../components/SheetProvider";
-
-type WorkTask = {
-  key: string;
-  label: string;
-  statuses: string[];
-};
-
-const WORK_TASKS: WorkTask[] = [
-  { key: "triage", label: "Checking this is a marked paper", statuses: ["queued", "triaging"] },
-  { key: "structure", label: "Finding pages and questions", statuses: ["structure", "cropping"] },
-  { key: "content", label: "Reading answers and teacher marks", statuses: ["content"] },
-  { key: "attribution", label: "Matching marks to questions", statuses: ["attribution"] },
-  { key: "reconcile", label: "Checking totals and uncertain marks", statuses: ["reconciliation", "adjudicating"] },
-];
 
 const TERMINAL = new Set(["failed", "rejected", "committed"]);
 const REVIEWABLE = new Set(["needs_review", "explaining", "ready"]);
@@ -48,21 +36,33 @@ function withTimeout<T>(promise: Promise<T>, message: string, ms = REVIEW_OPEN_T
   });
 }
 
-function taskIndex(status?: string | null) {
-  const index = WORK_TASKS.findIndex((task) => task.statuses.includes(status ?? ""));
-  return index < 0 ? 0 : index;
-}
+// The same four steps the scanner shows, so a paper reads the same wherever
+// the student finds it (owner, 6 Oct 2026).
+const STEPS = [
+  { label: "Sending the pages", statuses: [] as string[] },
+  { label: "Finding the questions", statuses: ["queued", "triaging", "structure", "cropping"] },
+  { label: "Reading the answers and the marking", statuses: ["content", "attribution"] },
+  { label: "Checking the marks add up", statuses: ["reconciliation", "adjudicating"] },
+];
+const NOW_FOR_STATUS: Record<string, string> = {
+  queued: "Waiting to start",
+  triaging: "Checking this is a marked paper",
+  structure: "Finding the questions",
+  cropping: "Getting each question ready to read",
+  content: "Reading the answers and the marking",
+  attribution: "Matching the marks to the questions",
+  reconciliation: "Checking the marks add up",
+  adjudicating: "Checking the marks add up",
+};
 
-function liveDetail(run?: ProgressRow) {
-  if (!run) return "Getting the latest status…";
+export function liveDetail(run?: ProgressRow) {
+  if (!run) return "Getting the latest status";
   const pagesTotal = Number(run.pages_total ?? 0);
   const pagesDone = Number(run.pages_done ?? 0);
-  const questionsTotal = Number(run.questions_total ?? 0);
   // questions_done counts regions, which are parts. Compare it with the part
   // total, never with the logical question total (AXO-122).
   const partsTotal = Number(run.parts_total ?? run.questions_total ?? 0);
   const partsDone = Number(run.questions_done ?? 0);
-
   if (["structure", "cropping"].includes(run.status) && pagesTotal > 0) {
     return `${Math.min(pagesDone, pagesTotal)} of ${pagesTotal} pages mapped`;
   }
@@ -70,87 +70,63 @@ function liveDetail(run?: ProgressRow) {
     return `${Math.min(partsDone, partsTotal)} of ${partsTotal} part${partsTotal === 1 ? "" : "s"} read`;
   }
   if (["reconciliation", "adjudicating"].includes(run.status) && partsTotal > 0) {
+    const questionsTotal = Number(run.questions_total ?? 0);
     const parts = `${partsTotal} part${partsTotal === 1 ? "" : "s"}`;
     return questionsTotal > 0
       ? `${questionsTotal} question${questionsTotal === 1 ? "" : "s"} (${parts}) being checked together`
       : `${parts} being checked together`;
   }
-  if (["queued", "triaging"].includes(run.status) && pagesTotal > 0) {
-    return `${pagesTotal} page${pagesTotal === 1 ? "" : "s"} safely uploaded`;
-  }
-  return "This updates as the paper moves through Axon.";
+  return NOW_FOR_STATUS[run.status] ?? "Working through the paper";
 }
 
-function ProcessingVisual() {
+/** The paper's own pages, from the server, once each is stored. */
+function useServerPages(paperId: string | undefined, count: number): ReadingPage[] {
+  const [thumbs, setThumbs] = useState<(string | null)[]>([]);
+  useEffect(() => {
+    if (!paperId || count < 1) return;
+    let live = true;
+    void import("../../scan/crops.js").then(({ pageImageUrl }) =>
+      Promise.all(Array.from({ length: Math.min(count, 30) }, (_, i) => pageImageUrl(paperId, i + 1))),
+    ).then((urls) => { if (live) setThumbs(urls as (string | null)[]); }).catch(() => {});
+    return () => { live = false; };
+  }, [paperId, count]);
+  return Array.from({ length: Math.min(count, 30) }, (_, i) => ({ n: i + 1, thumb: thumbs[i] ?? null, sent: true }));
+}
+
+function ProcessingState({ paperId, run }: { paperId: string | undefined; run?: ProgressRow }) {
+  const navigate = useNavigate();
+  const pages = useServerPages(paperId, Number(run?.pages_total ?? 0));
+  const at = Math.max(1, STEPS.findIndex((st) => st.statuses.includes(run?.status ?? "")));
+  const model: ReadingModel = {
+    heading: "Reading your paper",
+    now: liveDetail(run),
+    pages,
+    steps: STEPS.map((st, i) => ({ label: st.label, state: i < at ? "done" : i === at ? "now" : "wait" })),
+  };
   return (
-    <div className="paperwork-visual" aria-hidden="true">
-      <div className="paperwork-glow" />
-      <svg className="paperwork-links" viewBox="0 0 240 170">
-        <path d="M42 52 C72 37 87 45 103 67" />
-        <path d="M198 45 C168 35 151 46 137 66" />
-        <path d="M48 126 C78 135 92 124 105 106" />
-        <path d="M191 129 C163 138 147 125 135 106" />
-      </svg>
-      <span className="paperwork-node n1" />
-      <span className="paperwork-node n2" />
-      <span className="paperwork-node n3" />
-      <span className="paperwork-node n4" />
-      <div className="paperwork-sheet">
-        <span className="paperwork-line l1" />
-        <span className="paperwork-line l2" />
-        <span className="paperwork-line l3" />
-        <span className="paperwork-mark m1" />
-        <span className="paperwork-mark m2" />
-        <span className="paperwork-beam" />
-      </div>
-    </div>
+    <ReadingScreen model={model} variant="page"
+      actions={[{ label: "Back to Library", run: () => navigate(paths.library) }]}
+      footnote="This carries on while you are away. The paper waits in your Library." />
   );
 }
 
-function ProcessingState({ run }: { run?: ProgressRow }) {
-  const current = taskIndex(run?.status);
-  const currentTask = WORK_TASKS[current];
-
+function LocalSendState({ job, onRetry }: { job: SendJob; onRetry: () => void }) {
+  const navigate = useNavigate();
+  const actions = [
+    ...(job.phase === "stuck" ? [{ label: "Try again", run: onRetry, primary: true }] : []),
+    { label: "Back to Library", run: () => navigate(paths.library) },
+  ];
   return (
-    <main className="paperwork">
-      <section className="paperwork-hero" role="status" aria-live="polite">
-        <ProcessingVisual />
-        <div className="paperwork-eyebrow">Working on your paper</div>
-        <h1>{currentTask.label}</h1>
-        <p>{liveDetail(run)}</p>
-      </section>
-
-      <section className="card paperwork-tasks" aria-label="Paper processing tasks">
-        {WORK_TASKS.map((task, index) => {
-          const state = index < current ? "done" : index === current ? "now" : "wait";
-          return (
-            <div className={"paperwork-task " + state} key={task.key}>
-              <span className={"paperwork-state " + state}>
-                {state === "done" && (
-                  <svg viewBox="0 0 12 12" aria-hidden="true">
-                    <path d="M2 6.5 4.5 9 10 3.5" />
-                  </svg>
-                )}
-              </span>
-              <span>{task.label}</span>
-            </div>
-          );
-        })}
-      </section>
-
-      <p className="paperwork-note">
-        You can leave this screen. Your pages are already saved and the work continues safely.
-      </p>
-      <Link to={paths.library} className="btn ghost paperwork-back">
-        Back to Library
-      </Link>
-    </main>
+    <ReadingScreen model={modelForSend(job)} variant="page" actions={actions}
+      footnote={job.phase === "stuck" ? null : "This carries on while you are away. The paper waits in your Library."} />
   );
 }
 
 export default function PaperReview() {
   const { draftId } = useParams();
-  const { ensureScan, reviewOpen } = useScan();
+  const { ensureScan, reviewOpen, sends, retrySend } = useScan();
+  // A paper still sending from this device: its own pages and progress.
+  const localSend = sends.find((job) => job.paperId === draftId || job.id === draftId) ?? null;
   const { student, progressResource, refreshLibrary } = useApp();
 
   const [result, setResult] = useState<ResumeReviewResult | null>(null);
@@ -244,6 +220,11 @@ export default function PaperReview() {
 
   if (reviewOpen) return null;
 
+  if (localSend && ["sending", "waiting", "stuck"].includes(localSend.phase)
+      || (localSend?.phase === "reading" && !REVIEWABLE.has(run?.status ?? ""))) {
+    return <LocalSendState job={localSend!} onRetry={() => retrySend(localSend!.id)} />;
+  }
+
   if (error) {
     const needing = Number(run?.questions_needing_you ?? 0);
     return (
@@ -271,7 +252,7 @@ export default function PaperReview() {
 
   const liveProcessing = Boolean(run && !TERMINAL.has(run.status) && !REVIEWABLE.has(run.status));
   if (liveProcessing || (result?.state === "processing" && !REVIEWABLE.has(run?.status ?? ""))) {
-    return <ProcessingState run={run} />;
+    return <ProcessingState paperId={draftId} run={run} />;
   }
 
   if (run && REVIEWABLE.has(run.status)) {

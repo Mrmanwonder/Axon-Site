@@ -59,3 +59,26 @@ test("untrusted table cells do not execute HTML or links", () => {
   expect(container.querySelector("a")).toBeNull();
   expect(container.textContent).toContain("<img");
 });
+
+test("a LaTeX array becomes a real table, and the working under it still typesets (owner, 6 Oct 2026)", () => {
+  const text = [
+    "\\begin{array}{|c|c|c|c|c|}", "\\hline", "X & 0 & 1 & 2 & 3 \\\\", "\\hline",
+    "P & \\frac{1}{56} & \\frac{15}{56} & \\frac{15}{28} & \\frac{5}{28} \\\\", "\\hline", "\\end{array}", "",
+    "\\frac{3}{8} \\times \\frac{2}{7} \\times \\frac{1}{6} = \\frac{1}{56}",
+  ].join("\n");
+  const blocks = academicBlocks(text);
+  expect(blocks[0]).toEqual({
+    kind: "table", header: false, rowHeaders: true,
+    rows: [["X", "0", "1", "2", "3"], ["P", "\\frac{1}{56}", "\\frac{15}{56}", "\\frac{15}{28}", "\\frac{5}{28}"]],
+  });
+  expect(blocks[1]).toEqual({ kind: "text", text: "\\frac{3}{8} \\times \\frac{2}{7} \\times \\frac{1}{6} = \\frac{1}{56}" });
+  const { container } = render(<AcademicText text={text} />);
+  expect(container.querySelectorAll("table th, table td").length).toBe(10);
+  expect(container.textContent).not.toContain("\\hline");
+  expect(container.textContent).not.toContain("\\begin");
+});
+
+test("a ragged LaTeX array is kept as source rather than shifting a column", () => {
+  const text = "\\begin{array}{cc} a & b \\\\ c \\end{array}";
+  expect(academicBlocks(text)[0].kind).toBe("text");
+});

@@ -47,6 +47,14 @@ test('cross-tab lease blocks a second sender and survives browser reload with un
   },id)).toBe(true);
   await page.reload();
   expect(await page.evaluate(async id=>{const d=await import('/src/scan/drafts.js'),draft=await d.readDraft(id);return {key:draft.pages[0].upload_assets.raw.key,bytes:await draft.pages[0].original.text()};},id)).toEqual({key:'issued-key',bytes:'raw'});
+  // The sending tab is gone (reloaded, closed, crashed): its lease is taken over
+  // at once instead of stranding the paper for minutes (owner, 6 Oct 2026).
+  expect(await sibling.evaluate(async id=>{
+    const d=await import('/src/scan/drafts.js'),draft=await d.readDraft(id);
+    await d.claimSendLease(draft,'second');const fresh=await d.readDraft(id);
+    await d.releaseSendLease(draft,'second');
+    return {owner:fresh.upload_lease.owner,key:fresh.pages[0].upload_assets.raw.key};
+  },id)).toEqual({owner:'second',key:'issued-key'});
   await sibling.close();
 });
 test('erasure and explicit deletion reject late upload persistence without recreating a draft',async({page})=>{
@@ -98,7 +106,7 @@ test('submitted originals survive review and app reload; retry attaches without 
     const draft=await d.readDraft(id);await backups.resumeOriginalBackups(draft);
     return d.readDraft(id);
   },id);
-  expect(remaining).toBeUndefined();expect(puts).toBe(4);expect(attachments).toBe(2);
+  expect(remaining).toBeNull();expect(puts).toBe(4);expect(attachments).toBe(2);
 });
 test('accepted retake clears the frozen manifest while uncertain submissions remain immutable',async({page})=>{
   const result=await page.evaluate(async()=>{

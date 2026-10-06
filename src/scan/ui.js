@@ -12,7 +12,7 @@ import {
 import {
   createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage, replacePage, saveDraft,
 } from './drafts.js';
-import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause } from './review.js';
+import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause, relabelRegion } from './review.js';
 import { releaseCrops } from './crops.js';
 import { paperTypesFor } from '../papers.js';
 import { providerKeyForStudent } from '../curriculum.js';
@@ -20,6 +20,7 @@ import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
 
 import { preloadUploadPolicy } from './upload-policy.js';
+import { sendQueue } from './send-queue.js';
 import { backupComplete } from './upload-plan.js';
 import { cancelOriginalBackups, resumeOriginalBackups, resumeStudentBackups, finishDraftReview } from './original-backups.js';
 
@@ -62,7 +63,7 @@ let host = {
   renderHint() {}, cameraLive() {}, submissionBusy() {}, scannerState() {},
   navigationIntent: () => null,
 
-  renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {},
+  renderTray() {}, renderDrafts() {}, draftToast() {}, renderProgress() {}, sendStarted() {},
   openSheet() {}, openReview() {}, renderReview() {}, closeReview() {},
   goto() {}, refreshLibrary: async () => {},
   reviewPages: null,
@@ -704,7 +705,7 @@ async function restoreDraft() {
   const epoch = S.epoch;
   const drafts = await listDrafts(S.ctx.student.id);
   if (epoch !== S.epoch) return;
-  const latest = drafts.find(d => !d.submission);
+  const latest = drafts.find(d => !d.submission && !d.send_requested && !d.submission_started);
   if (!latest) return;
   host.draftToast(
     { id: latest.id, pages: latest.pages.length },
@@ -722,7 +723,7 @@ async function paintDrafts() {
   // the student managing it. (Owner, 5 Oct 2026: two identical rows, and
   // tapping one "submitted" a paper that was already sent.)
   host.renderDrafts(
-    drafts.filter((d) => !d.submission && d.id !== S.draft?.id).map((d) => ({
+    drafts.filter((d) => !d.submission && !d.send_requested && !d.submission_started && d.id !== S.draft?.id).map((d) => ({
       id: d.id,
       title: d.paper_type
         ? paperTypes().find((t) => t.value === d.paper_type)?.label ?? 'Paper'
@@ -820,114 +821,47 @@ function sendPaper() {
   });
 }
 
+/**
+ * Hand the paper to the send queue and free the scanner (owner, 6 Oct 2026).
+ * The queue sends it in the background, through lost connections and closed
+ * tabs, while the student carries on scanning. The scanner shows the reading
+ * screen for this paper until the student chooses to continue scanning.
+ */
 async function run(paperType, sendStartedAt = performance.now()) {
-  if (S.submitting || S.busy) return;
+  if (S.submitting || S.busy || !S.draft) return;
   S.submitting = true;
   host.submissionBusy(true);
   const epoch = S.epoch;
-  const controller = new AbortController(); sendController = controller;
-  const intent = host.navigationIntent();
-  let recoverCamera = true;
-  stopCamera();
-  const steps = [
-    { key: 'upload', label: 'Sending the pages' },
-    { key: 'structure', label: 'Finding the questions' },
-    { key: 'content', label: 'Reading the answers and the marking' },
-    { key: 'reconcile', label: 'Checking the marks add up' },
-  ];
-  let current = 'upload';
-  // The paper the student took, page by page, in page order: each page's own
-  // picture, marked sent only once the server has confirmed what the reader
-  // needs for it (AXO-195). Never a file count.
-  let sentPages = new Set();
-  const pageStrip = () => (S.draft?.pages ?? []).map((p) => ({
-    n: p.page_number,
-    thumb: S.thumbs.get(p.page_number) ?? null,
-    sent: current !== 'upload' || sentPages.has(p.page_number),
-  }));
-
-  const paint = (now, sub) => host.renderProgress({
-    heading: current === 'upload' ? 'Sending your paper' : 'Reading your paper',
-    now,
-    sub,
-    pages: pageStrip(),
-    steps: steps.map((s) => ({
-      label: s.label,
-      state: stepIndex(steps, s.key) < stepIndex(steps, current) ? 'done'
-        : s.key === current ? 'now' : 'wait',
-    })),
-  });
-
-  paint('Getting ready');
-
+  const draft = S.draft;
   try {
-    const result = await ingest({
-      studentId: S.ctx.student.id,
-      draft: S.draft,
-      paperType,
-      sendStartedAt,
+    const queue = await sendQueue();
+    if (epoch !== S.epoch) return;
+    const title = paperTypes().find((t) => t.value === paperType)?.label ?? 'Paper';
+    const started = queue.start({
+      studentId: S.ctx.student.id, draft, paperType, title, sendStartedAt,
       onTelemetry: host.uploadTelemetry,
-      signal: controller.signal,
-      onBackupProgress: progress => { if (epoch === S.epoch) toast(progress.message, progress.complete ? undefined : 'warn'); },
-      onProgress: ({ stage, message, sentPages: sent }) => {
-        if (epoch !== S.epoch) return;
-        current = stage;
-        if (Array.isArray(sent)) sentPages = new Set(sent);
-        paint(message);
-      },
     });
-
-    if (epoch !== S.epoch) return;
-    if (result.processing) {
-      recoverCamera = false;
-      host.renderProgress({
-        heading: 'Your paper is submitted',
-        now: 'The server has not finished processing it yet.',
-        steps: [],
-        note: 'Your pages are saved. There is no need to send it again.',
-      });
-      await host.refreshLibrary();
-      return;
-    }
-    if (result.refused) {
-      host.renderProgress({
-        heading: 'This one we did not read',
-        now: result.message,
-        steps: [],
-        note: 'The pages are kept. If this really is a marked paper, retaking the first page usually fixes it.',
-      });
-      return;
-    }
-
-    S.run = result;
-    S.regions = result.regions;
+    // The send intent is written before anything else happens, so a closed tab
+    // still resumes. Only then is the scanner handed a fresh, empty paper.
+    host.sendStarted(draft.id);
+    S.draft = null;
+    S.retaking = null;
+    S.thumbs.forEach((url) => URL.revokeObjectURL(url));
+    S.thumbs.clear();
+    await paintTray();
+    refreshDrafts();
     firm();
-    // Explanations start only once review is done (save()), never here — the
-    // student has confirmed nothing at this point, and starting them now is
-    // guaranteed to 409 against reviewComplete's outstanding-review gate, every
-    // time. See AXON_FIX_BRIEF.md §4.A1.
-    recoverCamera = false;
-    await host.refreshLibrary();
-    if (epoch !== S.epoch) return;
-    await openReview(result.runId, intent);
-
+    void started.then(() => { if (epoch === S.epoch) void host.refreshLibrary(); });
   } catch (error) {
-    if (epoch !== S.epoch) return;
-    host.renderProgress({
-      heading: 'That did not finish',
-      now: error.message || 'Something went wrong reading this paper.',
-      steps: [],
-      note: 'Your pages are still here. Try again when you have a connection.',
-    });
+    if (epoch === S.epoch) toast(error?.message || 'This paper could not be handed over. Your pages are kept.', 'warn');
   } finally {
-    if (epoch !== S.epoch) return;
-    S.submitting = false;
-    host.submissionBusy(false);
-    if (recoverCamera && S.visible && host.navigationIntent() === intent) await startCamera();
+    if (epoch === S.epoch) {
+      S.submitting = false;
+      host.submissionBusy(false);
+    }
   }
 }
 
-const stepIndex = (steps, key) => steps.findIndex((s) => s.key === key);
 
 // ── review ─────────────────────────────────────────────────────────────────
 
@@ -940,6 +874,10 @@ async function openReview(runId, intent = null, recovery = null) {
   await refreshReview();
   if (epoch !== S.epoch || S.runId !== runId) return;
   if (S.draft?.paper_id === S.review?.paper?.id) S.reviewDraft = S.draft;
+  else if (S.review?.paper?.id) {
+    const sent = (await sendQueue()).draftForPaper(S.review.paper.id);
+    if (sent && epoch === S.epoch) S.reviewDraft = sent;
+  }
   host.openReview(S.review?.paper?.id, intent);
 }
 
@@ -1042,11 +980,11 @@ function paintReview() {
     cleanCount: S.review.cleanUnconfirmed.length,
     readableCount: S.review.readableUnconfirmed?.length ?? 0,
     saving: S.saving,
-    saveLabel: S.review.outstanding
-      ? `${S.review.outstanding} left to check`
-      : S.saving
-        ? 'Working out where marks were lost…'
-        : 'Save to Library',
+    saveLabel: !S.review.outstanding
+      ? 'Save to Library'
+      : canConfirmAndSave()
+        ? `Confirm all ${S.review.outstanding} and save`
+        : `${S.review.outstanding} left to check`,
     questions: S.review.questions.map((q) => ({
       id: q.id,
       label: q.label,
@@ -1059,6 +997,7 @@ function paintReview() {
       crop: q.crop,
       pageNumber: q.pageNumber,
       unreadableReason: q.unreadableReason,
+      regionType: q.regionType ?? null,
       alternatives: q.alternatives,
       allocationUnusable: q.allocationUnusable,
       explanation: q.explanation,
@@ -1069,6 +1008,10 @@ function paintReview() {
       catch (e) { toast(e.message, 'warn'); }
     },
     onAction: (id, action) => handleReviewAction(id, action),
+    onRelabel: async (id, label) => {
+      await relabelRegion(id, label);
+      await refreshReview();
+    },
     onConfirmClean: async () => {
       try {
         await confirmQuestions(S.review.cleanUnconfirmed);
@@ -1138,99 +1081,95 @@ function handleReviewAction(id, action) {
   }
 }
 
+/** Every outstanding reading has something on screen to vouch for. */
+function canConfirmAndSave() {
+  const left = S.review?.questions.filter((q) => !q.confirmed) ?? [];
+  return left.length > 0 && left.every((q) => q.tier !== 'unreadable');
+}
+
+/**
+ * Save closes review at once (owner, 6 Oct 2026: instant feedback). What is
+ * left — explanations, then committing the confirmed marks — runs in the
+ * background and does not need this screen. If it cannot finish, the paper
+ * stays in the Library ready to save again, and the student is told.
+ */
 async function save() {
   if (!S.runId || S.saving) return;
   if (S.review?.outstanding) {
-    toast(`${S.review.outstanding} question(s) still need a look. They are at the top.`);
-    return;
+    if (!canConfirmAndSave()) {
+      const left = S.review.questions.filter((q) => !q.confirmed && q.tier === 'unreadable').length;
+      toast(`${left} part${left === 1 ? '' : 's'} could not be read. Fix ${left === 1 ? 'it' : 'them'} or confirm ${left === 1 ? 'it' : 'them'} first. They are at the top.`);
+      return;
+    }
+    S.saving = true;
+    paintReview();
+    try {
+      await confirmQuestions(S.review.readableUnconfirmed ?? []);
+    } catch (error) {
+      S.saving = false;
+      paintReview();
+      toast(error?.message || 'That could not be confirmed. Try again with a connection.', 'warn');
+      return;
+    }
   }
 
   S.saving = true;
   const epoch = S.epoch;
   const runId = S.runId;
   const paperId = S.review?.paper?.id;
+  const regions = S.regions ?? [];
+  const started = S.explanationsStarted;
   const savedDraft = S.reviewDraft?.paper_id === paperId ? S.reviewDraft : null;
-  const current = () => epoch === S.epoch && runId === S.runId;
-  paintReview();
+
+  firm();
+  toast('Paper saved. Axon is working out where the marks went.');
+  host.closeReview(paperId);
+  host.renderProgress(null);
+  releaseCrops();
+  S.runId = null;
+  S.regions = null;
+  S.review = null;
+  S.explanationsStarted = false;
+  S.retaking = null;
+  S.saving = false;
+  ++S.reviewRecovery;
+  S.reviewDraft = null;
+
+  void finishSave({ runId, paperId, regions, started, savedDraft, epoch });
+}
+
+const COMMIT_RETRY_MS = [3000, 10000, 30000];
+
+async function finishSave({ runId, regions, started, savedDraft, epoch }) {
   try {
-    await refreshReview();
-    if (!current()) return;
-    try {
-      if (!S.explanationsStarted) {
-        await startExplanations(runId);
-        if (!current()) return;
-        S.explanationsStarted = true;
-      }
-
-      await watchExplanations({
-        runId,
-        regions: S.regions ?? [],
-        onQuestion: () => { if (current()) scheduleReviewRefresh(); },
-      });
-    } catch (error) {
-      if (!current()) return;
-      // Explanations are a layer on top of the marks, not a precondition for
-      // saving them. Log it, tell the student plainly, and still commit —
-      // the marks are real and confirmed either way.
-
-      console.error('explanations', error);
-      toast('We could not work out why marks were lost this time. Your marks are still saved.', 'warn');
-    }
-
-    if (!current()) return;
-    const result = await commitRun(runId);
-    if (!current()) return;
-    firm();
-    toast(`Saved. ${result.attempts_committed} question${result.attempts_committed === 1 ? '' : 's'} in your Library.`);
-    host.closeReview(S.review?.paper?.id);
-    // The paper is read, reviewed and saved: the progress panel is describing
-    // work that finished. Left standing it kept "Reading this paper" under the
-    // viewfinder for the rest of the session, so the next paper started against
-    // the last one's steps and Scan never returned to its idle state. This is
-    // the terminal path, and clearing it here is what makes the screen idle
-    // again. The refused and failed paths deliberately do NOT clear it — those
-    // panels are the only place the student is told what went wrong.
-
-    host.renderProgress(null);
-    releaseCrops();
-    S.runId = null;
-    S.regions = null;
-    S.explanationsStarted = false;
-    S.retaking = null;
-
-    ++S.reviewRecovery;
-    S.reviewDraft = null;
-    if (savedDraft) {
-      await finishDraftReview(savedDraft);
-      if (epoch !== S.epoch) return;
-      if (S.draft?.id === savedDraft.id) {
-      S.draft = null;
-      S.thumbs.forEach((url) => URL.revokeObjectURL(url));
-      S.thumbs.clear();
-      await paintTray();
-      if (epoch !== S.epoch) return;
-      await paintDrafts();
-      if (epoch !== S.epoch) return;
-      // The offer to resume outlived the thing it offered: the draft row is
-      // gone above, but the toast is only ever raised at boot, so it stayed on
-      // the viewfinder pointing at a deleted draft for the rest of the session.
-
-      host.draftToast(null, { onResume: resumeDraft });
-      }
-      await paintDrafts();
-    }
-    await host.refreshLibrary();
+    if (!started) await startExplanations(runId);
+    await watchExplanations({ runId, regions });
   } catch (error) {
-    if (epoch === S.epoch) toast(error.message || 'That could not be saved.', 'warn');
-  } finally {
-    if (epoch === S.epoch) {
-      S.saving = false;
-      // Busy state belongs to this operation, not to the next network read.
-      // Restore the action even when refreshing the retained review also fails.
-      paintReview();
-      if (S.runId) await refreshReview().catch(() => { toast("Review could not refresh. Try saving again.", "warn"); });
+    // Explanations sit on top of the marks; they never hold the marks back.
+    console.error('explanations', error);
+  }
+  // A different student now holds this session: their scope cannot commit the
+  // last student's run. The paper stays ready to save from its own profile.
+  if (epoch !== S.epoch) return;
+  let committed = false;
+  for (let attempt = 0; !committed; attempt++) {
+    try {
+      await commitRun(runId);
+      committed = true;
+    } catch (error) {
+      if (attempt >= COMMIT_RETRY_MS.length) {
+        if (epoch === S.epoch) toast('Your paper did not finish saving. Open it from the Library to save it again.', 'warn');
+        console.error('commit', error);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, COMMIT_RETRY_MS[attempt]));
     }
   }
+  if (savedDraft) {
+    try { await finishDraftReview(savedDraft); } catch { /* the backup job finishes it later */ }
+    if (epoch === S.epoch) refreshDrafts();
+  }
+  if (epoch === S.epoch) await host.refreshLibrary();
 }
 
 /** Uploaded photos enter the same transaction path as camera captures. */

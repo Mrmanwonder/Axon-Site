@@ -32,9 +32,52 @@ function isSeparator(cells: string[]) {
   return cells.every(cell => /^:?-{3,}:?$/.test(cell));
 }
 
-/** Only a markdown separator or the documented X/P distribution proves a table. */
+const ENVIRONMENT = /\\begin\s*\{(array|tabular|aligned|align\*?|matrix|pmatrix|bmatrix|cases)\}[\s\S]*?\\end\s*\{\1\}/g;
+
+/**
+ * A LaTeX array or tabular, as rows of cells: `&` between cells, `\\` between
+ * rows, `\hline` and the column spec dropped. Null when it is not a clean grid,
+ * so a ragged table stays visible as source rather than shifting a column.
+ */
+export function latexTable(env: string): AcademicBlock | null {
+  const m = env.match(/^\\begin\s*\{(array|tabular)\}\s*(?:\{[^{}]*\})?([\s\S]*)\\end\s*\{\1\}$/);
+  if (!m) return null;
+  const rows = m[2]
+    .replace(/\\(?:hline|toprule|midrule|bottomrule)\b/g, "")
+    .split(/\\\\(?:\[[^\]]*\])?/)
+    .map(row => row.trim())
+    .filter(Boolean)
+    .map(row => row.split(/(?<!\\)&/).map(cell => cell.trim()));
+  if (!rows.length || rows[0].length < 2 || rows.some(row => row.length !== rows[0].length)) return null;
+  const rowHeaders = rows.length >= 2 && rows.every(row => /^(?:[A-Za-z]{1,3}|P\s*\(.*\)|\\text\{[^{}]+\})$/.test(row[0]));
+  return { kind: "table", rows: rows.map(row => row.map(cell => cell.replace(/^\\text\{([^{}]*)\}$/, "$1"))), header: false, rowHeaders };
+}
+
+/** Only a markdown separator, the documented X/P distribution, or a LaTeX array proves a table. */
 export function academicBlocks(source: string): AcademicBlock[] {
-  const lines = normalizeAcademicText(source).split("\n");
+  // A LaTeX environment spans lines. Take each one out whole first: an array
+  // becomes a real table (owner, 6 Oct 2026: "the table is just not
+  // recognised"), and any other environment stays one block so it typesets.
+  const normalized = normalizeAcademicText(source);
+  if (/\\begin\s*\{/.test(normalized)) {
+    const out: AcademicBlock[] = [];
+    let last = 0;
+    for (const match of normalized.matchAll(ENVIRONMENT)) {
+      const index = match.index ?? 0;
+      const before = normalized.slice(last, index).replace(/^\n+|\n+$/g, "");
+      if (before.trim()) out.push(...linesToBlocks(before));
+      out.push(latexTable(match[0]) ?? { kind: "text", text: match[0] });
+      last = index + match[0].length;
+    }
+    const after = normalized.slice(last).replace(/^\n+|\n+$/g, "");
+    if (after.trim()) out.push(...linesToBlocks(after));
+    if (out.length) return out;
+  }
+  return linesToBlocks(normalized);
+}
+
+function linesToBlocks(text: string): AcademicBlock[] {
+  const lines = text.split("\n");
   const blocks: AcademicBlock[] = [];
   let pending: string[] = [];
   const flush = () => {

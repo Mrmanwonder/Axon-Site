@@ -42,6 +42,24 @@ export default function Dialog({ title, description, busy = false, onClose, chil
 
   useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
 
+  // The on-screen keyboard covers the layout viewport without resizing it, so a
+  // sheet pinned to the bottom sat behind the keyboard (owner, 6 Oct 2026). Fit
+  // the dialog to the visual viewport instead: the sheet then rests on top of
+  // the keyboard, on Android and iOS alike.
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = () => {
+      const keyboard = window.innerHeight - vv.height > 80;
+      setViewport(keyboard ? { top: vv.offsetTop, height: vv.height } : null);
+    };
+    fit();
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); };
+  }, []);
+
   useEffect(() => {
     const dialog = ref.current!;
     const trigger = restoreFocus ?? document.activeElement as HTMLElement | null;
@@ -72,7 +90,10 @@ export default function Dialog({ title, description, busy = false, onClose, chil
     }}
     aria-busy={busy || undefined} onCancel={event => { event.preventDefault(); if (!busy) dismiss(); }}
     onClick={event => { if (event.target === event.currentTarget && !busy) dismiss(); }}
-    style={{ padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", overflow: "hidden", background: "transparent", border: 0, color: "inherit" }}>
+    data-keyboard={viewport ? "" : undefined}
+    style={{ padding: 0, margin: 0, width: "100vw", height: viewport ? `${viewport.height}px` : "100dvh",
+      ...(viewport ? { inset: "auto", top: `${viewport.top}px`, left: 0, position: "fixed" as const } : {}),
+      maxWidth: "none", maxHeight: "none", overflow: "hidden", background: "transparent", border: 0, color: "inherit" }}>
     <DismissCtx.Provider value={dismiss}>
       <div className={`sheet ${className}`.trim()} style={{ transform: "none" }} tabIndex={-1}>
         <h4 id={titleId}>{title}</h4>

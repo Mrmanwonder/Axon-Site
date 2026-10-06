@@ -225,7 +225,9 @@ function firstBareCommand(text: string): { index: number; value: string } | null
  * letters, operators, brackets); the first ordinary word ("where") ends it.
  */
 // \text{...} and its kin carry words; take the whole braced group as one token.
-const MATH_TOKEN = /\\(?:text|mathrm|textbf|textit|mathbf|operatorname|mbox)\{[^{}]*\}|\\[A-Za-z]+\*?|\\[,;:! ]|[0-9]+(?:\.[0-9]+)?|[A-Za-z](?![A-Za-z])|[+\-=*/^_()[\]{}<>|!'.,]|\s+/y;
+// A braced super- or subscript ("10^{th}") and an escaped symbol ("\$32,000")
+// belong to the run too; stopping inside them left the rest as raw source.
+const MATH_TOKEN = /\\(?:text|mathrm|textbf|textit|mathbf|operatorname|mbox)\{[^{}]*\}|[\^_]\{[^{}]*\}|\\[A-Za-z]+\*?|\\[,;:! $%&#]|[0-9]+(?:[.,][0-9]+)*|[A-Za-z](?![A-Za-z])|[+\-=*/^_()[\]{}<>|!'.,%]|\s+/y;
 function firstBareLatexRun(text: string): { index: number; value: string } | null {
   const start = text.search(/\\[A-Za-z]+/);
   if (start < 0) return null;
@@ -238,6 +240,15 @@ function firstBareLatexRun(text: string): { index: number; value: string } | nul
   }
   let value = text.slice(start, cursor);
   value = value.replace(/[\s,.;:]+$/, "");
+  // Never hand KaTeX half a group: cut back to the last balanced point.
+  let depth = 0, balanced = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === "{" && value[i - 1] !== "\\") depth++;
+    else if (value[i] === "}" && value[i - 1] !== "\\") depth--;
+    if (depth === 0) balanced = i + 1;
+    if (depth < 0) break;
+  }
+  value = value.slice(0, balanced).replace(/[\s,.;:]+$/, "");
   if (!/\\[A-Za-z]+/.test(value) || REFUSED.test(value)) return null;
   return { index: start, value };
 }
@@ -317,7 +328,8 @@ export default function MathText({
         if (token.kind === "math") {
           return <SafeLatex key={index} latex={token.value} display={token.display} />;
         }
-        const lines = token.value.split("\n");
+        // An escaped symbol outside maths ("\$32,000") reads as the symbol.
+        const lines = token.value.replace(/\\([$%&#_])/g, "$1").split("\n");
         return (
           <Fragment key={index}>
             {lines.map((line, lineIndex) => (

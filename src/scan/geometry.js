@@ -40,6 +40,23 @@ export function orderQuad(points) {
   return [0, 1, 2, 3].map((i) => byAngle[(best + i) % 4]);
 }
 
+/**
+ * The quad pushed outward from its centre by `fraction` of each corner's
+ * distance, kept inside the frame. A detector that hugs the paper edge, or sits
+ * a hair inside it, cut off the margin where question numbers are printed, and
+ * the reader then took the page number for the question number (owner, 6 Oct
+ * 2026). A sliver of table is a smaller cost than a lost question number.
+ */
+export function outsetQuad(quad, fraction, width, height) {
+  const cx = quad.reduce((s, p) => s + p.x, 0) / quad.length;
+  const cy = quad.reduce((s, p) => s + p.y, 0) / quad.length;
+  const clamp = (v, max) => Math.min(max, Math.max(0, v));
+  return quad.map((p) => ({
+    x: clamp(p.x + (p.x - cx) * fraction, width),
+    y: clamp(p.y + (p.y - cy) * fraction, height),
+  }));
+}
+
 /** Output size for a warped quad: the longest opposing edge on each axis. */
 export function quadSize(quad) {
   const [tl, tr, br, bl] = quad;

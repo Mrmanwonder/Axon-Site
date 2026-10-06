@@ -111,3 +111,16 @@ test("a written answer with \\text{} words is typeset as one expression", () => 
   expect(plain).not.toContain("\\times");
   expect(plain).toMatch(/a\s+head/u);
 });
+
+test("an ordinal superscript and an escaped dollar stay inside the expression (owner, 6 Oct 2026)", () => {
+  const text = "\\text{median} = 10^{th} pos = \\$32,000";
+  const { container } = render(<MathText text={text} />);
+  const visible = container.cloneNode(true) as HTMLElement;
+  visible.querySelectorAll(".katex-mathml").forEach((n) => n.remove());
+  const plain = visible.textContent ?? "";
+  expect(container.querySelector(".math-raw")).toBeNull();
+  expect(plain).not.toContain("\\text");
+  expect(plain).not.toContain("^{");
+  expect(plain).not.toContain("\\$");
+  expect(plain).toContain("$32,000");
+});

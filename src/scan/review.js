@@ -280,6 +280,25 @@ export async function correctAnswer(regionId, text) {
 }
 
 /**
+ * Which question and part this is. The student has the paper, so placing a
+ * part is transcription and is accepted at once, the same as Fix this (owner,
+ * 6 Oct 2026: "I can't choose the question and part"). Two parts of one paper
+ * cannot share a label; the server refuses that, and the student is told which.
+ */
+export async function relabelRegion(regionId, label) {
+  const clean = String(label ?? '').replace(/\s+/g, '').slice(0, 24);
+  if (!/^\d{1,3}(\([a-z]\))?(\([ivx]{1,4}\))?$/.test(clean)) throw new Error('Choose the question number, and the part if it has one.');
+  const { error } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('id', regionId);
+  if (error) {
+    if (error.code === '23505') throw new Error(`Another part of this paper is already ${clean}. Change that one first.`);
+    throw error;
+  }
+  await countCorrection(regionId);
+}
+
+/**
  * "Not why I lost it."
  *
  * Accepted immediately and without argument. This is self-knowledge, and it is

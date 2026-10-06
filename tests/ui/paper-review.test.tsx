@@ -11,6 +11,8 @@ const fixture = vi.hoisted(() => ({
   reviewOpen: false,
   fetchedAt: 1,
   retryAsMarked: vi.fn(),
+  sends: [] as any[],
+  retrySend: vi.fn(),
 }));
 
 vi.mock("../../src/ui/data/modules", async (importOriginal) => ({
@@ -35,6 +37,8 @@ vi.mock("../../src/ui/scan/ScanProvider", () => ({
   useScan: () => ({
     ensureScan: fixture.ensureScan,
     reviewOpen: fixture.reviewOpen,
+    sends: fixture.sends,
+    retrySend: fixture.retrySend,
   }),
 }));
 
@@ -68,6 +72,7 @@ beforeEach(() => {
   fixture.progress = new Map();
   fixture.reviewOpen = false;
   fixture.fetchedAt = 1;
+  fixture.sends = [];
   fixture.refreshLibrary.mockResolvedValue(undefined);
   fixture.resumeDraftReview.mockResolvedValue({ state: "gone" });
   fixture.ensureScan.mockResolvedValue({ resumeDraftReview: fixture.resumeDraftReview });
@@ -81,7 +86,7 @@ test("a live retry run without a local draft is never rendered as gone", () => {
 
   mount();
 
-  expect(screen.getAllByText("Finding pages and questions").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Finding the questions").length).toBeGreaterThan(0);
   expect(screen.getByText("3 of 14 pages mapped")).toBeTruthy();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
   expect(fixture.resumeDraftReview).not.toHaveBeenCalled();
@@ -100,11 +105,11 @@ test("processing view names the current work and counts parts as parts and quest
 
   mount();
 
-  expect(screen.getAllByText("Reading answers and teacher marks").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Reading the answers and the marking").length).toBeGreaterThan(0);
   expect(screen.getByText("5 of 12 parts read")).toBeTruthy();
-  expect(screen.getByText("Checking this is a marked paper")).toBeTruthy();
-  expect(screen.getByText("Checking totals and uncertain marks")).toBeTruthy();
-  expect(screen.getByRole("link", { name: "Back to Library" })).toBeTruthy();
+  expect(screen.getByText("Sending the pages")).toBeTruthy();
+  expect(screen.getByText("Checking the marks add up")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Back to Library" })).toBeTruthy();
 });
 
 test("checking copy names questions and parts separately, and falls back to parts alone", () => {
@@ -264,4 +269,19 @@ test("other refusals do not offer to read again as marked", async () => {
   mount();
   await screen.findByText(/no answers written on it/);
   expect(screen.queryByRole("button", { name: "It is marked. Read it again" })).toBeNull();
+});
+
+test("a paper still sending from this phone shows its own pages, never 'not found'", () => {
+  fixture.sends = [{
+    id: "draft-1", paperId: "paper-1", runId: null, title: "Past paper", phase: "waiting", stage: "upload",
+    message: "No connection. Sending carries on by itself when you are back online.",
+    pages: [{ n: 1, thumb: null, sent: true }, { n: 2, thumb: null, sent: false }],
+    steps: [{ label: "Sending the pages", state: "now" }],
+  }];
+  mount();
+  expect(screen.getByText("Sending your paper")).toBeTruthy();
+  expect(screen.getByText("1 of 2 pages safely sent")).toBeTruthy();
+  expect(screen.getByText(/No connection/)).toBeTruthy();
+  expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
+  expect(screen.queryByText(/did not finish/i)).toBeNull();
 });

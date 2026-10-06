@@ -17,7 +17,11 @@
 // the mask carries the fine detail instead. See bench/README.md for why.
 
 import { CONDITIONING, ENHANCE } from './contract.js';
-import { warpPerspective, quadSize } from './geometry.js';
+import { warpPerspective, quadSize, outsetQuad } from './geometry.js';
+
+/** How far a detected page edge is widened before warping. Corners the student
+    placed by hand are used exactly. */
+export const CROP_OUTSET = 0.03;
 import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
 import { assessRescue, enhancePage, flattenPage } from './enhance.js';
@@ -187,6 +191,8 @@ async function encodeMask({ data, width, height }) {
 export async function conditionPage(source, { quad = null, pageNumber = 1, capturePath = null, liveGate = null, sourceKind = null } = {}) {
   const sw = source.width || source.naturalWidth;
   const sh = source.height || source.naturalHeight;
+  const detectedQuad = quad;
+  if (quad && capturePath !== 'edges-adjusted') quad = outsetQuad(quad, CROP_OUTSET, sw, sh);
 
   // ── the one geometric operation ──────────────────────────────────────────
   // Perspective correction and the scale to target are composed into a single
@@ -352,6 +358,10 @@ export async function conditionPage(source, { quad = null, pageNumber = 1, captu
       // from the original, which is the only thing that makes "never discard
       // the original" worth anything.
       quad: quad ? quad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+      // What the detector found, before the margin was widened.
+      detected_quad: detectedQuad && detectedQuad !== quad
+        ? detectedQuad.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) : null,
+      crop_outset: detectedQuad && detectedQuad !== quad ? CROP_OUTSET : 0,
       // 'camera' | 'upload' | 'pdf' | 'link'. Mirrors the `source_kind` column
       // rather than duplicating a judgement: both are written from the same
       // value at the same moment.
