@@ -49,6 +49,57 @@ export function quadSize(quad) {
   };
 }
 
+/**
+ * Push every side of a quad outward by `margin` times the quad's longer
+ * diagonal, then clamp the corners to a w×h image.
+ *
+ * Each side's line is moved along its outward normal (away from the centroid)
+ * and adjacent lines are intersected again, so a keystoned page gains the same
+ * band on all four sides rather than more at its wide end. A side whose
+ * neighbours are near-parallel (a degenerate quad) falls back to moving that
+ * corner straight out from the centroid. Pure; returns a new quad.
+ *
+ * @param {Quad} quad ordered tl, tr, br, bl
+ * @param {number} w image width in pixels
+ * @param {number} h image height in pixels
+ * @param {number} margin share of the diagonal, e.g. 0.015
+ * @returns {Quad}
+ */
+export function expandQuad(quad, w, h, margin) {
+  const clamp = (p) => ({
+    x: Math.min(w - 1, Math.max(0, p.x)),
+    y: Math.min(h - 1, Math.max(0, p.y)),
+  });
+  if (!(margin > 0)) return /** @type {Quad} */ (quad.map(clamp));
+  const cx = quad.reduce((sum, p) => sum + p.x, 0) / 4;
+  const cy = quad.reduce((sum, p) => sum + p.y, 0) / 4;
+  const offset = margin * Math.max(dist(quad[0], quad[2]), dist(quad[1], quad[3]));
+
+  // Each side as a point on the moved line plus its direction.
+  const lines = [0, 1, 2, 3].map((i) => {
+    const a = quad[i], b = quad[(i + 1) % 4];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    let nx = -dy / len, ny = dx / len;
+    // Outward is away from the centroid, whichever way the quad winds.
+    if (((a.x + b.x) / 2 - cx) * nx + ((a.y + b.y) / 2 - cy) * ny < 0) { nx = -nx; ny = -ny; }
+    return { x: a.x + nx * offset, y: a.y + ny * offset, dx, dy };
+  });
+
+  return /** @type {Quad} */ (quad.map((p, i) => {
+    const l1 = lines[(i + 3) % 4], l2 = lines[i];
+    const cross = l1.dx * l2.dy - l1.dy * l2.dx;
+    const scale = Math.hypot(l1.dx, l1.dy) * Math.hypot(l2.dx, l2.dy);
+    if (!scale || Math.abs(cross) / scale < 1e-3) {
+      const rx = p.x - cx, ry = p.y - cy;
+      const r = Math.hypot(rx, ry) || 1;
+      return clamp({ x: p.x + (rx / r) * offset, y: p.y + (ry / r) * offset });
+    }
+    const t = ((l2.x - l1.x) * l2.dy - (l2.y - l1.y) * l2.dx) / cross;
+    return clamp({ x: l1.x + l1.dx * t, y: l1.y + l1.dy * t });
+  }));
+}
+
 /** Share of a w×h frame the quad covers, by the shoelace formula. */
 export function quadFill(quad, w, h) {
   let area = 0;
