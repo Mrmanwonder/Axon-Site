@@ -167,6 +167,7 @@
 .radar .rring { fill: none; stroke: var(--label-3); stroke-opacity: .35; stroke-width: 1; }
 .radar .rspoke { stroke: var(--label-3); stroke-opacity: .5; stroke-width: 1; }
 .radar .rspoke.untested { stroke-dasharray: 3 4; }
+.radar .rspoke.tested { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2.5; stroke-linecap: round; }
 .radar .rarea { fill: var(--accent); fill-opacity: .28; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
 .radar .rline { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
 .radar .rpoint { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
@@ -181,7 +182,7 @@
 .radarlegend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 8px 0 0; font-size: 12px; color: var(--label-2); }
 .radarlegend .key { display: inline-flex; align-items: center; gap: 6px; }
 .radarlegend .rk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
-.radarlegend .rk.rim { background: var(--accent); }
+.radarlegend .rk.tested { width: 16px; height: 0; border-radius: 0; border-top: 2.5px solid var(--accent); }
 .radarlegend .rk.solid { background: var(--accent); }
 .radarlegend .rk.hollow { border: 2px solid var(--accent); width: 9px; height: 9px; }
 .radarlegend .ramp { display: inline-flex; align-items: center; gap: 3px; }

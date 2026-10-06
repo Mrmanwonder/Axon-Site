@@ -26,7 +26,7 @@ test("the syllabus radar shades tested units, leaves untested ones empty, and op
   await expect(page.getByRole("button", { name: /^2 Waves: Not tested yet/ })).toBeVisible();
   // One filled shape through the three tested units; none for the two untested ones.
   await expect(page.locator(".radar .rarea")).toHaveCount(1);
-  await expect(page.locator(".radar .rpoint")).toHaveCount(3);
+  await expect(page.locator(".radar circle")).toHaveCount(0);
   await page.getByRole("button", { name: /^1 Forces and motion: \d+ of \d+ marks lost/ }).click();
   await expect(page.locator(".radarpick")).toContainText("Forces and motion");
   await page.getByRole("link", { name: "In detail" }).click();
@@ -88,8 +88,8 @@ test("below four papers: one coverage card with steps and the next action, and t
   await expect(page.getByRole("button", { name: "Scan a marked paper" })).toBeVisible();
   await expect(page.getByText("Marks lost by unit appear at 4 Physics papers (2 so far).", { exact: false })).toBeVisible();
   // Below the threshold the web marks tested units on the rim and draws no values.
-  await expect(page.locator(".radar .rtested")).toHaveCount(3);
-  await expect(page.locator(".radar .rpoint")).toHaveCount(0);
+  await expect(page.locator(".radar .rspoke.tested")).toHaveCount(3);
+  await expect(page.locator(".radar .rarea")).toHaveCount(0);
   expect(await page.locator("body").innerText()).not.toMatch(/\d+\s?%/);
   const { violations } = await new AxeBuilder({ page }).analyze();
   expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);

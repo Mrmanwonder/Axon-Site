@@ -10,10 +10,10 @@
    · A unit with no placed question has a dashed spoke, a muted name and NO
      point. The shape joins the tested units only; it never drops an untested
      unit to the centre, because the centre means "nothing lost".
-   · Below the subject's shading threshold no values are drawn; tested units
-     are marked on the rim and the caption says why.
-   · Confidence is form: an early unit (few questions or one paper) is a
-     hollow point; a unit with evidence is solid. Survives greyscale.
+   · Below the subject's shading threshold no values are drawn; tested units'
+     spokes are drawn in the accent and the caption says why.
+   · No dots on the shape. Whether a unit's evidence is early is said in
+     words when it is chosen.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useId } from "react";
@@ -86,19 +86,11 @@ export default function SyllabusRadar({ units, ready, selected, onSelect, label 
         ))}
         {pts.map(({ u, i }) => {
           const end = at(i, n, R);
-          return <line key={u.id} className={`rspoke${u.state === "untested" ? " untested" : ""}`} x1={CX} y1={CY} x2={end.x} y2={end.y} />;
+          // Below the threshold a tested unit's spoke is drawn in the accent instead of a value.
+          return <line key={u.id} className={`rspoke${u.state === "untested" ? " untested" : !ready ? " tested" : ""}`} x1={CX} y1={CY} x2={end.x} y2={end.y} />;
         })}
         {plotted.length >= 3 && <polygon className="rarea" points={shape} />}
         {plotted.length === 2 && <polyline className="rline" points={shape} />}
-        {/* Below the threshold: tested units are marked on the rim, never given a value. */}
-        {!ready && pts.map(({ u, i }) => {
-          if (u.state === "untested") return null;
-          const q = at(i, n, R);
-          return <circle key={u.id} className="rtested" cx={q.x} cy={q.y} r={4.5} />;
-        })}
-        {plotted.map(({ u, p }) => (
-          <circle key={u.id} className={`rpoint ${u.state}${u.id === selected ? " on" : ""}`} cx={p!.x} cy={p!.y} r={u.id === selected ? 6 : 4.5} />
-        ))}
         {pts.map(({ u, i }) => {
           const q = at(i, n, R + 14);
           const cos = Math.cos(q.a), sin = Math.sin(q.a);

@@ -133,9 +133,7 @@ export default function SyllabusMap({ data, initialSubject }: {
             label={`${map.label}: marks lost by syllabus unit`} />
         : null}
       <div className="radarlegend" aria-hidden="true">
-        {map.shadingReady && <span className="key"><i className="rk solid" />Evidence</span>}
-        {map.shadingReady && <span className="key"><i className="rk hollow" />Early evidence</span>}
-        {!map.shadingReady && <span className="key"><i className="rk rim" />Tested</span>}
+        {!map.shadingReady && <span className="key"><i className="rk tested" />Tested</span>}
         <span className="key"><i className="rk dashed" />Not tested yet</span>
       </div>
       <div className="radarpick" aria-live="polite">
