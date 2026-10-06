@@ -29,6 +29,10 @@ const REFUSED = /\\(href|url|includegraphics|html(?:Class|Id|Style|Data)|color|t
  */
 function katexEnvironments(latex: string): string {
   return latex
+    // A bare % starts a comment in TeX, which silently swallows the rest of
+    // the expression and fails the whole line ("Small = 20% = (S \le x)").
+    // In a student's working it is always a percent sign.
+    .replace(/(?<!\\)%/g, "\\%")
     .replace(/\\begin\{tabular\}(\s*\{[^{}]*\})?([\s\S]*?)\\end\{tabular\}/g, (_m, spec: string | undefined, body: string) =>
       "\\begin{array}" + (spec ?? "") + wrapProseWords(body) + "\\end{array}")
     .replace(/\\(begin|end)\{align\*?\}/g, "\\$1{aligned}");
