@@ -1,0 +1,10 @@
+/* Scoped shared glyph; never touches the app navigation or glass geometry. */
+svg.material-symbol {
+  display: inline-block;
+  width: var(--material-symbol-size, 22px);
+  height: var(--material-symbol-size, 22px);
+  flex: 0 0 auto;
+  vertical-align: middle;
+  fill: currentColor;
+  stroke: none;
+}

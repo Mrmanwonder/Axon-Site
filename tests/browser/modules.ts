@@ -71,7 +71,7 @@ export const clearStudentScope = async () => {
 };
 export const takeProviderError = () => null;
 export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
-export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
+export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();
 export async function readConsentState() { if (scenario === "consent-error") throw new Error("Ledger unavailable"); return {}; }
@@ -229,7 +229,7 @@ const mk = (id: string, label: string, awarded: number | null, max: number, over
   marks_awarded: awarded, max_marks: max, marks_source: "teacher_pen", teacher_remark: null,
   extraction_confidence: "confirmed", student_confirmed_at: null, mark_loss_event: [], ...over,
 });
-export const readPaper = async () => ({
+const overviewPaper = async () => ({
   stale: scenario === "cached", offline: false,
   data: {
     id: "paper-1", type: "unit_test", tier: "tier_1", date_taken: "2026-09-07", subject: null,
@@ -247,6 +247,13 @@ export const readPaper = async () => ({
     ],
   },
 });
+// Source fixtures exercise actual reading components; no external mutations occur.
+export const readPaper = async () => {
+  if (!location.pathname.includes("paper-reading")) return overviewPaper();
+  if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
+  const { readingFixture } = await import("./reading-fixture");
+  return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };
+};
 export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
 export const relabelAttempt = async () => {};
 export const activeAcademicShare = async () => null;
@@ -295,3 +302,6 @@ export const saveExamPapers = async (_student: string, code: string, papers: num
   if (i >= 0) examPapersState.splice(i, 1);
   if (papers?.length) examPapersState.push({ syllabus_code: code, papers });
 };
+export const deleteQuestion = deletePaper;
+export const explainRetry = async () => {};
+export const recordExplanationFeedback = async () => ({});

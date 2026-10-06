@@ -16,6 +16,7 @@ import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import type { SheetConfig } from "../components/SheetProvider";
 import type { CropBox } from "../components/Crop";
+import type { AnswerBlock } from "../data/modules";
 import { captureUploadTelemetry } from '../lib/analytics';
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import type { SendJob } from "./ReadingScreen";
@@ -90,9 +91,15 @@ export type ReviewQuestion = {
   marksAwarded?: number | null;
   marksAvailable?: number | null;
   answer?: string | null;
+  questionText?: string | null;
+  answerBlock?: AnswerBlock | null;
+  identityNote?: string | null;
+  markStep?: number;
   remark?: string | null;
   crop?: { paperId: string; page: number; box: CropBox } | null;
   pageNumber?: number;
+  paperId?: string;
+  pageNumbers?: number[];
   unreadableReason?: string | null;
   /** "diagram" when the answer is drawn rather than written. */
   regionType?: string | null;
@@ -115,7 +122,7 @@ export type ReviewModel = {
 } | null;
 
 export type ReviewHandlers = {
-  onMark: (id: string, value: number) => void;
+  onMark: (id: string, value: number) => void | Promise<void>;
   onAction: (id: string, action: string) => void;
   onRelabel?: (id: string, label: string) => Promise<void>;
   onConfirmClean: () => void;

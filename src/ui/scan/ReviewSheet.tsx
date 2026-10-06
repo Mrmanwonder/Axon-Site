@@ -77,7 +77,7 @@ function Question({
     <div className="qcard" data-attention={attention ? "1" : undefined}>
       <div className="qhead">
         {onPlace ? (
-          <PressBox as="button" type="button" className="t1 qlabel" aria-label={`Question ${q.label || "not numbered"}. Change`}
+          <PressBox as="button" type="button" className="t1 qlabel" aria-label={`${/^(Question|Unassigned)/.test(q.label ?? "") ? q.label : `Question ${q.label || "not numbered"}`}. Change`}
                     onClick={() => { hapticTick(); onPlace(q); }}>
             {q.label || "This question"}
             <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" /></svg>
@@ -195,7 +195,8 @@ const PARTS = ["", "a", "b", "c", "d", "e", "f", "g", "h"];
 const SUBPARTS = ["", "i", "ii", "iii", "iv", "v", "vi"];
 
 function parseLabel(label?: string) {
-  const m = String(label ?? "").replace(/\s+/g, "").match(/^(\d{1,3})?(?:\(?([a-h])\)?)?(?:\(?((?:i|ii|iii|iv|v|vi))\)?)?$/i);
+  // Accepts "1(a)(ii)" and the display forms "Question 1(a)" / "Unassigned part (b)".
+  const m = String(label ?? "").replace(/\s+/g, "").replace(/^(question|unassignedpart)/i, "").match(/^(\d{1,3})?(?:\(?([a-h])\)?)?(?:\(?((?:i|ii|iii|iv|v|vi))\)?)?$/i);
   return { q: m?.[1] ? Number(m[1]) : null, part: (m?.[2] ?? "").toLowerCase(), sub: (m?.[3] ?? "").toLowerCase() };
 }
 

@@ -391,7 +391,7 @@ export async function readPaper(studentId, paperId) {
     const { data, error } = await sb
     .from('paper')
     .select(
-      `id,type,tier,date_taken,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
+      `id,type,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
       student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,answer_block,marks_awarded,max_marks,marks_source,
@@ -400,7 +400,7 @@ export async function readPaper(studentId, paperId) {
       command_word,command_word_note,model_answer,loss_reasons,
       grounding_status,model_answer_source,depends_on_parts,unresolved_parts,
       confidence,student_confirmed_at,student_rejected_at)),
-      question_region(id,run_id,committed_attempt_id,page_spans,crop_key,confidence_signals,explain_status)`,
+      question_region(id,run_id,order_index,question_label,question_text,student_answer,marks_awarded,marks_available,committed_attempt_id,page_spans,crop_key,confidence_signals,explain_status)`,
       )
     .eq('student_id', studentId)
     .eq('id', paperId)

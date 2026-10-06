@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const read = (path) => readFileSync(path, 'utf8');
+const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
 test('Library stays outside crawler-visible surfaces', () => {
   const sitemap = read('public/sitemap.xml');

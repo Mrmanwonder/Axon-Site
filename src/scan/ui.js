@@ -970,9 +970,7 @@ function paintReview() {
   const paper = S.review.paper;
 
   host.renderReview({
-    title: paper?.subject
-      ? `${paper.subject} · ${paperTypes().find((t) => t.value === paper.type)?.label ?? ''}`.trim()
-      : paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review',
+    title: paperTypes().find((t) => t.value === paper?.type)?.label ?? 'Review paper',
     lead: S.review.lead,
     delta: S.review.delta,
     noTotal: S.review.noTotal,
@@ -993,6 +991,12 @@ function paintReview() {
       marksAwarded: q.marksAwarded,
       marksAvailable: q.marksAvailable,
       answer: q.answer,
+      questionText: q.questionText,
+      answerBlock: q.answerBlock,
+      identityNote: q.identityNote,
+      markStep: q.markStep,
+      paperId: q.paperId,
+      pageNumbers: q.pageNumbers,
       remark: q.remark,
       crop: q.crop,
       pageNumber: q.pageNumber,
@@ -1003,9 +1007,14 @@ function paintReview() {
       explanation: q.explanation,
     })),
   }, {
+    // The mark picker saves on tap and has no error slot of its own, so a
+    // failed save is said here; the question stays unconfirmed either way.
     onMark: async (id, value) => {
-      try { await correctMark(id, value); await refreshReview(); }
-      catch (e) { toast(e.message, 'warn'); }
+      try {
+        if (!S.review?.questions.some(q => q.id === id)) throw new Error('This review has changed. Open the current question again.');
+        await correctMark(id, value);
+        await refreshReview();
+      } catch (e) { toast(e.message, 'warn'); }
     },
     onAction: (id, action) => handleReviewAction(id, action),
     onRelabel: async (id, label) => {
@@ -1051,13 +1060,13 @@ function handleReviewAction(id, action) {
       input: { label: "Your answer", id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
       onConfirm: async (value) => {
-        try { await correctAnswer(id, value ?? ''); await refreshReview(); }
-        catch (e) { toast(e.message, 'warn'); }
+        await correctAnswer(id, value ?? ''); await refreshReview();
       },
     });
     return;
   }
   if (action === 'rescan') {
+    if (!Number.isInteger(question.pageNumber) || question.pageNumber < 1) { toast('This reading has no source page to retake.', 'warn'); return; }
     if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
       title: `Take page ${question.pageNumber ?? ''} again?`,

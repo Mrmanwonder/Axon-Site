@@ -2,9 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
-export default defineConfig({ optimizeDeps: { entries: ["tests/browser/index.html"] }, plugins: [{ name: "test-only-data", enforce: "pre", resolveId(source, importer) {
+import { realpathSync } from "node:fs";
+export default defineConfig({ optimizeDeps: { entries: ["tests/browser/index.html", "tests/browser/paper-reading.html"] }, plugins: [{ name: "test-only-data", enforce: "pre", resolveId(source, importer) {
   if (!importer?.replaceAll("\\", "/").includes("/src/ui/")) return;
   if (source.endsWith("/modules")) return resolve("tests/browser/modules.ts");
   if (source.endsWith("/useIngestion")) return resolve("tests/browser/ingestion.ts");
   if (source.endsWith("/ScanProvider")) return resolve("tests/browser/scan.ts");
-} }, react(), tailwindcss()], server: { host: "127.0.0.1", port: 5174, strictPort: true } });
+  if (source.endsWith("/crops.js")) return resolve("tests/browser/source-crops.ts");
+} }, react(), tailwindcss()], server: { host: "127.0.0.1", port: 5174, strictPort: true, fs: { allow: [process.cwd(), realpathSync(resolve("node_modules"))] } } });

@@ -228,7 +228,9 @@ export default function PaperOverview() {
           <h1>{subjectLabel || typeLabel}</h1>
           <div className="sub po-meta">
             {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
-            <span>Dated {dated}</span>
+            {/* No exam date is recorded for a paper yet; date_taken is the day it
+                was added, so it is labelled that way (Axon.md §4, Dates on a paper). */}
+            <span>Added {dated}</span>
             {stale && <span>offline copy</span>}
           </div>
         </div>

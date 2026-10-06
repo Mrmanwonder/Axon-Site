@@ -85,20 +85,30 @@ export function placeRegions(regions) {
  * @param {Array<{order_index?: number, label: string|null, page: number|null, y: number|null, evidence: boolean}>} regions
  *   evidence is true when the region carries a mark, an answer or question text.
  */
-export function countQuestions(regions) {
-  const tops = new Set();
-  let parts = 0;
-  let unassigned = 0;
-  for (const e of placeRegions(regions)) {
-    if (!e.counted) continue;
-    parts += 1;
-    if (e.unassigned) unassigned += 1;
-    if (e.q !== null) tops.add(e.q);
-  }
+export function projectQuestionRegions(regions) {
+  const placed = placeRegions(regions);
+  const entries = placed.map(e => ({ region: e.region, question: e.q, part: e.part, inherited: e.inferred, counted: e.counted }));
+  const tops = new Set(placed.filter(e => e.counted && e.q !== null).map(e => e.q));
+  const parts = placed.filter(e => e.counted).length;
+  const unassigned = placed.filter(e => e.counted && e.unassigned).length;
   return {
-    questions_total: tops.size,
-    parts_total: parts,
-    unassigned_parts: unassigned,
-    raw_region_count: regions.length,
+    entries,
+    counts: {
+      questions_total: tops.size,
+      parts_total: parts,
+      unassigned_parts: unassigned,
+      raw_region_count: regions.length,
+    },
   };
+}
+
+/** Count and reading/grouping surfaces consume the same assignment decision. */
+export function countQuestions(regions) {
+  return projectQuestionRegions(regions).counts;
+}
+
+/** Display only; takes the shared projection's assignment, never changes storage. */
+export function questionDisplayPath(question, part) {
+  const suffix = part ? (part.startsWith('(') ? part : `(${part[0]})${part.slice(1)}`) : '';
+  return question == null ? `Unassigned part${suffix ? ` ${suffix}` : ''}` : `Question ${question}${suffix}`;
 }

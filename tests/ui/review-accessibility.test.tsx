@@ -71,3 +71,15 @@ test("the student places a part by tapping its label: question, then part", asyn
   await user.click(screen.getByRole("button", { name: "This is 4(a)" }));
   expect(onRelabel).toHaveBeenCalledWith("question", "4(a)");
 });
+
+test("a label shown as 'Question 3(b)' opens the place sheet on question 3, part (b)", async () => {
+  const onRelabel = vi.fn().mockResolvedValue(undefined);
+  fixture.state = { ...fixture.state, review: { ...review, questions: [{ ...review.questions[0], label: "Question 3(b)" }] },
+    reviewHandlers: { ...(fixture.state.reviewHandlers as object), onRelabel } };
+  const user = userEvent.setup();
+  render(<ReviewSheet />);
+  await user.click(screen.getByRole("button", { name: "Question 3(b). Change" }));
+  expect(within(screen.getByRole("radiogroup", { name: "Question number" })).getByRole("radio", { name: "3" }).getAttribute("aria-checked")).toBe("true");
+  expect(within(screen.getByRole("radiogroup", { name: "Part" })).getByRole("radio", { name: "(b)" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("button", { name: "This is 3(b)" })).toBeTruthy();
+});
