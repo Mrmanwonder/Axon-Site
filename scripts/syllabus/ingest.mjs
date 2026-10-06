@@ -25,6 +25,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCambridgeSyllabus, auditParse } from "./cambridge.mjs";
 import { parseCambridgeOutline, plausibility } from "./cambridge-outline.mjs";
+import { parseCbseSyllabus, cbsePlausibility, cbseAuditProblems } from "./cbse.mjs";
 
 const execFileP = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -38,6 +39,11 @@ const PARSERS = {
   "cambridge-outline": {
     parse: parseCambridgeOutline,
     audit: (p, t) => [...auditParse(p, t, { maxLen: 1500, minLen: 5, segments: true }).problems, ...plausibility(p)],
+  },
+  // One CBSE file covers two classes; a manifest entry names the class it loads.
+  cbse: {
+    parse: (t, doc) => parseCbseSyllabus(t, { classLabel: doc.class }),
+    audit: (p, t) => [...cbseAuditProblems(auditParse(p, t, { maxLen: 1500, minLen: 5 }).problems), ...cbsePlausibility(p)],
   },
 };
 /** Bumped when extract.py changes what it writes, so a re-load retags. */
@@ -82,6 +88,19 @@ export function contentHash(rows) {
   return createHash("sha256").update(JSON.stringify(rows.map((r) => [r.id, r.code, r.title, r.objective_text]))).digest("hex").slice(0, 16);
 }
 
+/**
+ * Which catalog subjects a document belongs to. Cambridge offerings carry the
+ * syllabus code. Most CBSE offerings carry no code, so a CBSE entry names its
+ * class (stage key) and the catalog's own subject names.
+ */
+export function linkPredicate(doc) {
+  if (doc.stage_key && Array.isArray(doc.offering_names) && doc.offering_names.length) {
+    return `join public.curriculum_stage st on st.id = so.stage_id
+  where cp.key = ${q(doc.provider_key)} and st.key = ${q(doc.stage_key)} and so.display_name in (${doc.offering_names.map(q).join(", ")})`;
+  }
+  return `where cp.key = ${q(doc.provider_key)} and so.external_code = ${q(doc.syllabus_code)}`;
+}
+
 export function sqlFor(doc, parsed, fetchedAt) {
   const { docId, rows } = rowsFor(doc, parsed);
   const notes = `parser=${doc.parser} extractor=${EXTRACTOR} style=${parsed.style} content=${contentHash(rows)}`;
@@ -115,7 +134,7 @@ begin
   from public.subject_offering so
   join public.curriculum_programme pr on pr.id = so.programme_id
   join public.curriculum_provider cp on cp.id = pr.provider_id
-  where cp.key = ${q(doc.provider_key)} and so.external_code = ${q(doc.syllabus_code)}
+  ${linkPredicate(doc)}
   on conflict do nothing;
 end $$;
 `;
@@ -135,7 +154,7 @@ async function prepare(doc, work) {
   const { stdout: text } = await execFileP("python3", [join(ROOT, "scripts/syllabus/extract.py"), pdf], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const parser = PARSERS[doc.parser];
   if (!parser) return { error: `${doc.syllabus_code}: unknown parser "${doc.parser}"` };
-  const parsed = parser.parse(text);
+  const parsed = parser.parse(text, doc);
   const problems = parser.audit(parsed, text);
   const objectives = parsed.units.reduce((n, u) => n + u.topics.reduce((k, t) => k + t.objectives.length, 0), 0);
   const summary = `${doc.syllabus_code} ${doc.version_label}: ${parsed.units.length} units, ${objectives} objectives, ${problems.length} problems`;
