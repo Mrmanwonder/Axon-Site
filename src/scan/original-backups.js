@@ -31,7 +31,10 @@ export function resumeOriginalBackups(draft, parentSignal, onProgress) {
       const snapshot = draft.pages.map(p => ({ page_number: p.page_number, upload_revision: p.upload_revision }));
       onProgress?.({ complete: false, message: 'Your paper is submitted. Original backups are still pending on this device.' });
       await uploadDraftAssets({ draft, studentId: draft.student_id, paperId: draft.paper_id,
-        mode: 'batch', concurrency: 3, signal: controller.signal,
+        mode: 'batch',
+        // One original at a time: backups run after the paper is accepted and
+        // must not crowd the uplink while the next paper sends its pages.
+        concurrency: 1, signal: controller.signal,
         transport: { uploadIntent, uploadComplete, putObject },
         persist: (d, updates) => updateAssets(d, updates, owner),
         guard: () => touchSendLease(draft, owner) });

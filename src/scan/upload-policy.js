@@ -33,6 +33,18 @@ export function preloadUploadPolicy(signal) {
   return pending;
 }
 
+/**
+ * The policy for a send that is about to start. A send resumed when Axon opens
+ * (owner, 6 Oct 2026) can start before the scanner ever loaded the policy, and
+ * without one it fell back to the one-file-at-a-time uploader with the full
+ * originals inline. Wait for the policy once (bounded by its 3 s timeout)
+ * instead; a policy already in hand is used at once.
+ */
+export async function resolvePolicyForDraft(id, signal) {
+  if (!hasSuccessfulPolicy) await preloadUploadPolicy(signal);
+  return policyForDraft(id);
+}
+
 export function policyForDraft(id) {
   if (Date.now() - loadedAt >= 30000) void preloadUploadPolicy();
   if (!hasSuccessfulPolicy) return { mode: 'legacy', earlySubmit: false };

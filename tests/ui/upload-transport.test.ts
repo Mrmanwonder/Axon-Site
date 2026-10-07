@@ -64,11 +64,17 @@ test('intent and PUTs survive JWT expiry at confirmation without a new capabilit
     throw new Error('Unexpected request '+url);
   });
   vi.stubGlobal('fetch',fetcher);
+  // After the refresh the client holds the fresh session, as supabase-js does.
+  f.refresh.mockImplementation(async()=>{const session={access_token:'fresh',user:{id:'owner'}};f.session.mockResolvedValue(session);return {data:{session},error:null};});
   const options={draft,studentId:'student',paperId:'paper',transport:{uploadIntent,uploadComplete,putObject},persist:async(current,updates)=>applyAssetUpdates(current,updates)};
   await uploadDraftAssets(options);await uploadDraftAssets(options);
   expect(processingReady(draft.pages[0])).toBe(true);expect(f.refresh).toHaveBeenCalledTimes(1);
   expect(fetcher.mock.calls.filter(([url])=>String(url).endsWith('/upload-intent'))).toHaveLength(1);
   expect(fetcher.mock.calls.filter(([_url,init])=>init.method==='PUT')).toHaveLength(3);
+  // Files are confirmed as they land, so there may be more than one batch; the
+  // one refused for an expired session is retried with exactly the same body.
   const confirms=fetcher.mock.calls.filter(([url])=>String(url).endsWith('/upload-complete'));
-  expect(confirms).toHaveLength(2);expect(confirms[1][1].body).toBe(confirms[0][1].body);
+  expect(confirms[1][1].body).toBe(confirms[0][1].body);
+  const keys=confirms.slice(1).flatMap(([_url,init])=>JSON.parse(init.body).uploads.map(o=>o.key));
+  expect(new Set(keys).size).toBe(3);expect(keys).toHaveLength(3);
 });

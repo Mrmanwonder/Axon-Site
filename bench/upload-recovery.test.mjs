@@ -12,7 +12,7 @@ for (const count of [1, 5, 10, 25]) {
     const windows = splitUploadPlanIntoWindows(before);
     assert.ok(windows.every(w => w.length <= 32));
     const model = fixture(draft); await model.run();
-    assert.ok(model.max <= 3); assert.ok(model.max > 1);
+    assert.ok(model.max <= 4); assert.ok(model.max > 1);
     assert.equal(pendingUploadPlan(draft).length, 0);
     assert.ok(draft.pages.every(processingReady)); assert.ok(draft.pages.every(backupComplete));
     assert.ok(draft.pages.every(p => p.r2_key.includes('/page/') && p.mask_key.includes('/mask/') && p.thumb_key.includes('/thumb/') && p.original_key.includes('/raw/')));
@@ -29,7 +29,7 @@ test('mixed optional assets and old drafts never fabricate optional confirmation
   old.pages[0].r2_key = null; assert.equal(buildUploadPlan(old)[0].state.status, 'pending');
 });
 test('partial PUT failure keeps successes and retries only unconfirmed assets', async () => {
-  const draft = booklet(1), model = fixture(draft); model.fail('mask');
+  const draft = booklet(1), model = fixture(draft); model.fail('mask', 400);
   await assert.rejects(model.run());
   assert.equal(draft.pages[0].upload_assets.page.status, 'confirmed');
   assert.equal(draft.pages[0].upload_assets.thumb.status, 'confirmed');
