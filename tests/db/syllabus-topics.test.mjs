@@ -69,8 +69,15 @@ async function setup() {
   await paper("20000000-0000-0000-0000-000000000002", "Physics", "low");
   await paper("20000000-0000-0000-0000-000000000003", "Chemistry", "high");
   await paper("20000000-0000-0000-0000-000000000004", "mathematics 9709", "high");
+  // AXO-214: the production case. Free text says "Mathematics", the printed code
+  // says 9231. The 4 Oct rule files it under 9709; the 7 Oct migration corrects it.
+  await db.exec(`
+    insert into public.paper(id, student_id) values ('20000000-0000-0000-0000-000000000006', '${STUDENT}');
+    insert into public.extraction_run(paper_id, tier_routing) values ('20000000-0000-0000-0000-000000000006',
+      '{"triage":{"subject":"Mathematics","confidence":"high","assessment_identity":{"subject_code":"9231","confidence":"high"}}}');`);
   await db.exec(await MIG("20261004100000_syllabus_topics_and_mastery.sql"));
   await db.exec(await MIG("20261004110000_paper_subject_auto_and_topic_tagging.sql"));
+  await db.exec(await MIG("20261007130000_auto_subject_by_printed_code.sql"));
   return db;
 }
 
@@ -89,6 +96,27 @@ test("triage's suggestion is assigned only when confident and matching exactly o
   await db.exec(`insert into public.paper(id, student_id) values ('20000000-0000-0000-0000-000000000005', '${STUDENT}');
     insert into public.extraction_run(paper_id, tier_routing) values ('20000000-0000-0000-0000-000000000005', '{"triage":{"subject":"Further Mathematics","confidence":"high"}}')`);
   assert.equal((await subjectOf(db, "20000000-0000-0000-0000-000000000005")).o, FMATH);
+});
+
+test("a printed syllabus code decides the subject, not the free-text name (AXO-214)", async () => {
+  const db = await setup();
+  // Filed under 9709 by the old rule, corrected to 9231 by the migration.
+  assert.deepEqual(await subjectOf(db, "20000000-0000-0000-0000-000000000006"), { o: FMATH, s: "triage", c: "auto" });
+
+  const run = (id, routing) => db.exec(`insert into public.paper(id, student_id) values ('${id}', '${STUDENT}');
+    insert into public.extraction_run(paper_id, tier_routing) values ('${id}', '${JSON.stringify(routing)}')`);
+  // Code read: matched by code even though the name says Mathematics.
+  await run("20000000-0000-0000-0000-000000000007", { triage: { subject: "Mathematics", confidence: "high", assessment_identity: { subject_code: "9231", confidence: "high" } } });
+  assert.equal((await subjectOf(db, "20000000-0000-0000-0000-000000000007")).o, FMATH);
+  // A code the student does not take: nothing, never a fallback to the name.
+  await run("20000000-0000-0000-0000-000000000008", { triage: { subject: "Mathematics", confidence: "high", assessment_identity: { subject_code: "9990", confidence: "high" } } });
+  assert.equal((await subjectOf(db, "20000000-0000-0000-0000-000000000008")).o, null);
+  // A code read without confidence: nothing.
+  await run("20000000-0000-0000-0000-000000000009", { triage: { subject: "Mathematics", confidence: "high", assessment_identity: { subject_code: "9231", confidence: "low" } } });
+  assert.equal((await subjectOf(db, "20000000-0000-0000-0000-000000000009")).o, null);
+  // No code at all: the name rule as before.
+  await run("20000000-0000-0000-0000-000000000010", { triage: { subject: "Physics", confidence: "high", assessment_identity: { subject_code: null } } });
+  assert.equal((await subjectOf(db, "20000000-0000-0000-0000-000000000010")).o, PHYS);
 });
 
 test("the student can change a subject; nobody can write the columns directly", async () => {
