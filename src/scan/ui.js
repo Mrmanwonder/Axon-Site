@@ -782,10 +782,10 @@ export function setPendingPaperType(type) {
   S.pendingType = type ?? null;
 }
 
+/** The first page that needs a look, judged by the same rule the tray shows,
+    so Done and the Review it can turn into never disagree. */
 function unresolvedPage() {
-  return S.draft?.pages.find((p) =>
-    (p.meta?.geometry_confirmed === false && !p.meta?.geometry_accepted)
-    || (p.quality?.verdict === 'fail' && !p.quality?.accepted)) ?? null;
+  return S.draft?.pages.find((p) => flagFor(p)) ?? null;
 }
 
 function sendPaper() {
@@ -798,7 +798,7 @@ function sendPaper() {
   const unresolved = unresolvedPage();
   if (unresolved) {
     if (host.reviewPages) { host.reviewPages(); return; }
-    if (unresolved.meta?.geometry_confirmed === false && !unresolved.meta?.geometry_accepted) {
+    if (flagFor(unresolved).kind === 'edges') {
       offerGeometryRetake(unresolved);
     } else {
       offerRetake(unresolved);
