@@ -16,11 +16,13 @@
    which is the most confident lie the interface can tell." It also runs
    straight into hard rule 4 — never fill a gap with a plausible guess.
 
-   So this screen renders from `papers` and `useAnalytics` and from nothing else.
-   Where there is no data there is no card. In particular there is deliberately
-   no headline insight card here: no table holds a generated insight yet, and a
-   card that had to invent its own sentence would be the same bug wearing a
-   React hat.
+   So this screen renders from `papers`, `useAnalytics` and the Insights engine
+   and from nothing else. Where there is no data there is no card. The one
+   insight Home may show is `nextFocus`: a mistake that has cost marks in two
+   or more papers of one subject, inside at least four papers of evidence, with
+   the student's own fix quoted from the question it came from. Home never
+   writes that sentence itself; when the engine has nothing supported, there is
+   no card.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { Link, useNavigate } from "react-router-dom";
@@ -35,6 +37,12 @@ import PageSkeleton from "../components/PageSkeleton";
 import { useIngestion } from "../data/useIngestion";
 import { isPartialTotal } from "../data/paperTotals";
 import { homeAttention } from "../data/homeAttention";
+import { useInsights } from "../data/useInsights";
+import { ALL_FILTERS, nextFocus } from "../data/insights";
+import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
+import { paths } from "../app/paths";
+import { ExamCard } from "../components/ExamPlan";
+import "../styles/insights.css";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -44,6 +52,8 @@ export default function Home() {
   const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
   const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
   const { addPaper } = useIngestion();
+  const insights = useInsights(ALL_FILTERS);
+  const focus = insights.model ? nextFocus(insights.model) : null;
 
   const navigate = useNavigate();
 
@@ -92,6 +102,7 @@ export default function Home() {
             Add your first paper
           </PressBox>
         </div>
+        <ExamCard quiet />
       </>
     );
   }
@@ -155,6 +166,21 @@ export default function Home() {
         </PressBox>
       )}
 
+      {focus && (
+        <div className="card focuscard">
+          <div className="eyebrow">Before your next paper</div>
+          <div className="line">{focus.fix.text}</div>
+          <div className="why">
+            <span className="sw2" style={{ background: CAUSE_HUE[focus.pattern.cause] }} aria-hidden="true" />
+            {CAUSE_LABEL[focus.pattern.cause]}{focus.pattern.subject ? ` · ${focus.pattern.subject}` : ""} · in {focus.pattern.recentHits} of your last {focus.pattern.recentWindow} papers · {focus.pattern.papers} papers in all
+          </div>
+          <div className="actions">
+            <PressBox as={Link} to={paths.question(focus.fix.ref.paperId, focus.fix.ref.attemptId)} className="textaction">Open {focus.fix.ref.label} <Chevron /></PressBox>
+            <PressBox as={Link} to={paths.insights} className="textaction">All patterns <Chevron /></PressBox>
+          </div>
+        </div>
+      )}
+
       <div className="sectitle">Recent scans</div>
       <div className="list">
         {recent.map((p) => { const presentation = paperPresentation(p, progressResource); return (
@@ -195,9 +221,7 @@ export default function Home() {
       )}
 
 
-      <div className="card examcard">
-        <div><div className="eyebrow">What&rsquo;s coming up</div><div className="t1">No exam date set</div><div className="t2">Axon won&rsquo;t guess your school calendar. Exam planning will appear here when dates can be saved.</div></div>
-      </div>
+      <ExamCard />
     </>
   );
 }

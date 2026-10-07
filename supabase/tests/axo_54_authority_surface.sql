@@ -47,7 +47,9 @@ select public._t('authenticated may execute exactly the audited browser-facing p
     = array['begin_guardian_verification','claim_guardian_verification','clear_student_scope','commit_extraction_run','delete_my_account',
             'get_cross_subject_signal','get_entitlements','parent_mode_state',
             'record_explanation_feedback',  -- #169: student from the attempt, gated by student_scope_allows
-            'resolve_academic_share','set_student_scope','student_scope_state',
+            'resolve_academic_share',
+            'set_paper_subject',  -- 4 Oct 2026: student from the paper, gated by student_scope_allows; only the student's own subjects
+            'set_student_scope','student_scope_state',
             'tutor_enabled'],  -- AXO-126: no arguments; reads only the caller's own flag via auth.uid()
   (select string_agg(name, ', ' order by name) from _definer where schema = 'public' and auth_x));
 

@@ -131,7 +131,7 @@ test("the pictured paper renders as grouped questions with an honest unassigned 
 
   expect(await screen.findByRole("heading", { level: 1, name: "Class test" })).toBeTruthy();
   expect(screen.getByText("Subject not identified")).toBeTruthy();
-  expect(screen.getByText(/Dated 7 Sep/)).toBeTruthy();
+  expect(screen.getByText(/Added 7 Sep/)).toBeTruthy();
   expect(screen.getByText("15 of 22 from your teacher · 2 questions · 7 parts")).toBeTruthy();
   // The overview no longer badges settled rows; that state lives on the question.
   expect(screen.queryByText("Confirmed by you")).toBeNull();

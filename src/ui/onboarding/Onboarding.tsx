@@ -66,10 +66,12 @@ import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
+  NOTICE_LANGUAGES, noticeStrings, purposeLabel, noticeIsComplete,
   paperTypesFor,
   startCheckout,
 } from "../data/modules";
-import type { Guardian, Student } from "../data/modules";
+import type { Guardian, Student, NoticeLanguage } from "../data/modules";
+import GlideSegment from "../components/GlideSegment";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
@@ -161,6 +163,10 @@ export default function Onboarding() {
   const { guard: guardParentMode } = useParentMode(guardian?.contact || contact);
   const [purposes, setPurposes] = useState<Purpose[] | null>(null);
   const [consent, setConsent] = useState<Record<string, boolean>>({});
+  /* The language the parent chose for the notice. DPDP requires the notice in
+     English or an Eighth Schedule language at the data principal's option, and
+     the choice is recorded with every decision on this step. */
+  const [noticeLang, setNoticeLang] = useState<NoticeLanguage>("en");
 
   /* Set by the return from Stripe, read by the step it lands on. `null` is the
      ordinary case: nobody has been to Checkout in this run of the flow. */
@@ -554,6 +560,15 @@ export default function Onboarding() {
 
   // ── itemised consent ─────────────────────────────────────────────────────
   if (step === "consent") {
+    /* Hindi is offered only when every purpose on this notice has its Hindi
+       label in src/notice.js. A purpose added in SQL and not translated would
+       otherwise fall back to English mid-notice, and a half-translated legal
+       notice informs nobody. Until purposes load, completeness is unknown, so
+       the choice waits for them. */
+    const hindiReady = purposes ? noticeIsComplete(purposes, "hi") : false;
+    const lang: NoticeLanguage = hindiReady ? noticeLang : "en";
+    const t = noticeStrings(lang);
+
     const give = () => {
       hapticFirm();
       setError(null);
@@ -569,7 +584,9 @@ export default function Onboarding() {
         try {
           // Guardian-scope: the student profile does not exist yet, which is
           // exactly why consent_event.student_id is nullable.
-          await recordConsent({ guardianId: guardian!.id, studentId: null, decisions: consent });
+          await recordConsent({
+            guardianId: guardian!.id, studentId: null, decisions: consent, noticeLanguage: lang,
+          });
           go("plan");
         } catch (e) { fail(e, "Consent could not be recorded."); }
       });
@@ -579,18 +596,22 @@ export default function Onboarding() {
       // A purpose added to the table without an entry here still renders, with a
       // neutral icon and its label alone. Better a plain row than a missing one.
       const [tone, icon, note] = PURPOSES[p.purpose] ?? ["ic-n", ICONS.shield, ""];
+      const label = purposeLabel(p.purpose, p.label, lang);
       return (
         <SRow
           key={p.purpose}
           tone={tone}
           icon={icon}
-          label={p.label}
-          small={note}
+          label={label}
+          /* The one-liners under each purpose exist in English only. In Hindi
+             they are left out rather than shown untranslated: the notice is
+             wholly in one language or it is not shown in that language. */
+          small={lang === "en" ? note : ""}
           trailing={p.is_required
-            ? <span className="locked">Required</span>
+            ? <span className="locked">{t.requiredTag}</span>
             : (
               <Switch
-                label={p.label}
+                label={label}
                 on={consent[p.purpose] === true}
                 onChange={(next) => setConsent((c) => ({ ...c, [p.purpose]: next }))}
               />
@@ -600,32 +621,46 @@ export default function Onboarding() {
     };
 
     return (
-      <Shell {...shellProps} title="What you're agreeing to">
-        <Err message={error} />
+      <Shell {...shellProps} title={t.title} lang={lang === "en" ? undefined : lang}>
+        {/* Error copy is English-only, so it is marked as English inside a
+            Hindi notice. */}
+        <Err message={error} lang={lang === "en" ? undefined : "en"} />
+        {purposes && (hindiReady ? (
+          <div className="oblang">
+            <GlideSegment<NoticeLanguage>
+              label={t.langLabel}
+              options={NOTICE_LANGUAGES.map((l) => ({
+                value: l.code, label: l.label, lang: l.code,
+              }))}
+              value={lang}
+              onChange={(next) => { hapticTick(); setNoticeLang(next); }}
+            />
+          </div>
+        ) : (
+          <div className="subnote" lang="en">
+            The Hindi notice is incomplete, so this notice is in English only for now.
+          </div>
+        ))}
         {purposes && (
           <>
-            <div className="sectitle tight">What we need to do</div>
+            <div className="sectitle tight">{t.requiredSection}</div>
             <div className="list">{purposes.filter((p) => p.is_required).map(row)}</div>
-            <div className="sectitle">Optional — off unless you turn it on</div>
+            <div className="sectitle">{t.optionalSection}</div>
             <div className="list">{purposes.filter((p) => !p.is_required).map(row)}</div>
           </>
         )}
-        <div className="sectitle">What we never do</div>
+        <div className="sectitle">{t.neverSection}</div>
         <div className="list">
-          {["Advertising of any kind", "Behavioural advertising", "Selling data to anyone",
-            "Ranking against other students"].map((label) => (
+          {t.neverItems.map((label) => (
             <SRow key={label} tone="ic-n" icon={ICONS.never} label={label}
-                  trailing={<span className="tier t1">Never</span>} />
+                  trailing={<span className="tier t1">{t.never}</span>} />
           ))}
         </div>
-        <div className="subnote">
-          You can withdraw any optional consent later in Settings — one tap, no
-          email required.
-        </div>
+        <div className="subnote">{t.withdrawNote}</div>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary" disabled={!purposes}
                     onClick={give}>
-            Give consent
+            {t.action}
           </PressBox>
         </div>
       </Shell>

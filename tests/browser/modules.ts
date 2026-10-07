@@ -1,5 +1,7 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
+// `exams` / `exams-setup`: a Cambridge A Level student with real November 2026 zone 4 rows.
+const EXAMS = scenario === "exams" || scenario === "exams-setup";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
 let householdScope = HOUSEHOLD
   ? (sessionStorage.getItem("axon.test.household.scope") ?? "student-a")
@@ -13,10 +15,14 @@ export const sb = {
               { id: "student-a", first_name: "Alpha", programme_id: null, stage_id: null },
               { id: "student-b", first_name: "Beta", programme_id: null, stage_id: null },
             ]
-          : [{ id: "student", first_name: "Sam", programme_id: null, stage_id: null }] }) }
+          : [{ id: "student", first_name: "Sam", programme_id: EXAMS ? "prog-al" : null, stage_id: null }] }) }
         : Promise.resolve({ data: [{ subject: "physics" }] }),
       in: async () => ({
-        data: table === "student_subject"
+        data: EXAMS && table === "curriculum_programme" ? [{ id: "prog-al", provider_id: "prov-c", key: "cambridge_a_level", label: "Cambridge International A Level" }]
+          : EXAMS && table === "curriculum_provider" ? [{ id: "prov-c", key: "cambridge", name: "Cambridge" }]
+          : EXAMS && table === "student_subject" ? [["Mathematics", "9709"], ["Physics", "9702"], ["Computer Science", "9618"]].map(([subject, code]) => ({
+              student_id: "student", subject, subject_offering_id: `off-${code}`, selected_level: null, display_name_snapshot: subject, external_code_snapshot: code }))
+          : table === "student_subject"
           ? (HOUSEHOLD
             ? ["student-a", "student-b"].map(student_id => ({
                 student_id,
@@ -65,7 +71,7 @@ export const clearStudentScope = async () => {
 };
 export const takeProviderError = () => null;
 export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
-export const readLocal = () => ({ theme: "dark", text_size: "m", reduce_motion: true });
+export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();
 export async function readConsentState() { if (scenario === "consent-error") throw new Error("Ledger unavailable"); return {}; }
@@ -78,7 +84,102 @@ export const signOut = async () => {
   await LocalDataService.clearAll();
   sessionStorage.setItem("axon.test.household.signed-out", "1");
 };
-export async function listPapers() { await wait(); return { data: [], stale: false }; }
+// `insights`: six marked Physics and Mathematics papers with repeating causes, for judging the Insights screen.
+const INSIGHT_PAPERS = [
+  ["ip1", "Physics", "2026-05-12", 40, 27], ["ip2", "Mathematics", "2026-06-02", 50, 38], ["ip3", "Physics", "2026-07-08", 40, 29],
+  ["ip4", "Mathematics", "2026-08-11", 50, 41], ["ip5", "Physics", "2026-09-03", 40, 33], ["ip6", "Physics", "2026-09-24", 40, 34],
+].map(([id, subject, date, available, awarded]) => ({
+  id, subject, subject_display_snapshot: subject, subject_offering_id: subject === "Physics" ? "off-phys" : "off-math",
+  subject_identity_source: "triage", subject_identity_confidence: "auto",
+  type: "unit_test", tier: "tier_1", date_taken: date, created_at: date,
+  total_available: available, total_awarded: awarded, total_partial: false, student_attempt: [{ count: 6 }],
+}));
+function insightFixture() {
+  const attempts: Record<string, unknown>[] = []; const losses: Record<string, unknown>[] = [];
+  const add = (paper: string, n: number, label: string, max: number, got: number, loss?: Record<string, unknown>, blank = false) => {
+    const id = `${paper}-a${n}`;
+    attempts.push({ id, paper_id: paper, question_label: label, max_marks: max, marks_awarded: got, question_order: n, answer_blank: blank });
+    if (loss) losses.push({ id: `${id}-l`, attempt_id: id, marks_lost: max - got, created_at: "2026-09-25T00:00:00Z", concepts: null, loss_reasons: null, depends_on_parts: null, command_word: null, do_this_next: null, ...loss });
+  };
+  for (const p of INSIGHT_PAPERS) {
+    const physics = p.subject === "Physics";
+    add(p.id, 0, "1(a)", 2, 2);
+    add(p.id, 1, "1(b)", 3, 1, physics
+      ? { cause: "keyword_miss", command_word: "Explain", concepts: ["Newton's second law"], do_this_next: "Name the law in your first sentence, then apply it to this situation.",
+          loss_reasons: [{ cause: "keyword_miss", marks: 2, error_type: "presentation" }] }
+      : { cause: "procedural_slip", command_word: "Calculate", concepts: ["Expected value"], do_this_next: "Round only the final answer, to 3 significant figures.",
+          loss_reasons: [{ cause: "procedural_slip", marks: 2, error_type: "final_answer" }] });
+    add(p.id, 2, "2", 4, 4);
+    add(p.id, 3, "3(a)", 6, 3, { cause: "incomplete", command_word: "Describe", concepts: physics ? ["Energy transfers"] : ["Variance"], do_this_next: "Make one point per mark: six marks means six separate, linked statements.", depends_on_parts: physics ? [] : ["2"] });
+    add(p.id, 4, "3(b)", 8, 6, { cause: "conceptual_gap", command_word: "Explain", concepts: physics ? ["Momentum"] : ["Normal distribution"] });
+    const blank = p.id === "ip3" || p.id === "ip5";
+    add(p.id, 5, "4", 3, blank ? 0 : 3, blank ? { cause: "timed_out" } : undefined, blank);
+  }
+  return { attempts, losses };
+}
+// Syllabus map fixture: an invented two-unit syllabus (no board text), Physics only.
+function syllabusFixture() {
+  const doc = { id: "doc-phys", provider_key: "cambridge", syllabus_code: "0000", title: "Example Physics", version_label: "2026",
+    valid_from_year: 2026, valid_to_year: 2026, source_url: "https://example.test/syllabus.pdf", fetched_at: "2026-10-04T00:00:00Z" };
+  const rows: Record<string, unknown>[] = [];
+  let order = 0;
+  const unit = (code: string, title: string, topics: [string, string, string[]][]) => {
+    rows.push({ id: `u${code}`, document_id: doc.id, parent_id: null, code, kind: "unit", title, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+    for (const [tc, tt, objectives] of topics) {
+      rows.push({ id: `t${tc}`, document_id: doc.id, parent_id: `u${code}`, code: tc, kind: "topic", title: tt, objective_text: null, notes_text: null, group_title: null, qualification_scope: "AS", sort_order: order++ });
+      objectives.forEach((o, i) => rows.push({ id: `o${tc}.${i + 1}`, document_id: doc.id, parent_id: `t${tc}`, code: `${tc}.${i + 1}`, kind: "objective", title: o, objective_text: o, notes_text: i === 0 ? "Example note for this objective." : null, group_title: null, qualification_scope: "AS", sort_order: order++ }));
+    }
+  };
+  unit("1", "Forces and motion", [
+    ["1.1", "Newton's laws", ["state the first example law", "apply the second example law to a moving body"]],
+    ["1.2", "Momentum", ["define example momentum", "use conservation in a collision"]],
+    ["1.3", "Energy transfers", ["describe example energy stores", "calculate efficiency"]],
+    ["1.4", "Circular motion", ["describe example circular motion"]],
+  ]);
+  unit("2", "Waves", [
+    ["2.1", "Wave properties", ["describe example waves"]],
+    ["2.2", "Superposition", ["explain example interference"]],
+  ]);
+  unit("3", "Electricity", [
+    ["3.1", "Current and charge", ["define example current"]],
+    ["3.2", "Circuits", ["analyse an example circuit"]],
+  ]);
+  unit("4", "Thermal physics", [["4.1", "Internal energy", ["describe example internal energy"]]]);
+  unit("5", "Nuclear physics", [["5.1", "Radioactive decay", ["describe example decay"]]]);
+  const evidence: Record<string, unknown>[] = [];
+  const { attempts } = insightFixture();
+  const topicFor: Record<string, string> = { "1(b)": "o1.1.2", "3(a)": "o1.3.1", "3(b)": "o1.2.1", "2": "o1.2.2", "1(a)": "o3.1.1", "4": "o4.1.1" };
+  for (const a of attempts as { id: string; paper_id: string; question_label: string; max_marks: number; marks_awarded: number }[]) {
+    if (!a.paper_id || !["ip1", "ip3", "ip5", "ip6"].includes(a.paper_id) || !topicFor[a.question_label]) continue;
+    evidence.push({ attempt_id: a.id, paper_id: a.paper_id, topic_id: topicFor[a.question_label], document_id: doc.id, is_primary: true, max_marks: a.max_marks, marks_awarded: a.marks_awarded });
+  }
+  return {
+    subjects: [
+      { subject: "Physics", subject_offering_id: "off-phys", display_name_snapshot: "Physics", external_code_snapshot: "0000" },
+      { subject: "Mathematics", subject_offering_id: "off-math", display_name_snapshot: "Mathematics", external_code_snapshot: "0001" },
+    ],
+    links: [{ subject_offering_id: "off-phys", document_id: doc.id }],
+    documents: [doc], topics: rows, evidence,
+  };
+}
+// `insights-early`: the same student after three papers, below the pattern threshold.
+const EARLY = scenario === "insights-early";
+const earlyIds = new Set(["ip1", "ip2", "ip3"]);
+const earlyOnly = <T extends { paper_id?: unknown; id?: unknown }>(rows: T[], key: "paper_id" | "id") => (EARLY ? rows.filter((r) => earlyIds.has(String(r[key]))) : rows);
+export const syllabusMapData = async () => {
+  if (scenario !== "insights" && !EARLY) return { data: { subjects: [], links: [], documents: [], topics: [], evidence: [] }, stale: false };
+  const f = syllabusFixture();
+  return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
+};
+export const setPaperSubject = async () => {};
+export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export const insightEvidence = async () => {
+  if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
+  const f = insightFixture();
+  const attempts = earlyOnly(f.attempts as { paper_id?: unknown }[], "paper_id");
+  const ids = new Set(attempts.map((a) => (a as { id: string }).id));
+  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: false };
+};
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
 // `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
@@ -103,6 +204,7 @@ export const legacyCurriculumForStudent = () => ({ providerKey: "cambridge", pro
 export const statusKeyForRun = () => null;
 export const PAPER_STATUS = {};
 export const retryFailedPaper = async () => ({ retry: "started", queued: true, run_id: "run-retry" });
+export const retryAsMarked = async () => ({ retry: "started", queued: true, run_id: "run-retry" });
 export const searchLibrary = async () => [];
 export const AVATAR_PRESETS = [{
   kind: "gradient",
@@ -127,7 +229,7 @@ const mk = (id: string, label: string, awarded: number | null, max: number, over
   marks_awarded: awarded, max_marks: max, marks_source: "teacher_pen", teacher_remark: null,
   extraction_confidence: "confirmed", student_confirmed_at: null, mark_loss_event: [], ...over,
 });
-export const readPaper = async () => ({
+const overviewPaper = async () => ({
   stale: scenario === "cached", offline: false,
   data: {
     id: "paper-1", type: "unit_test", tier: "tier_1", date_taken: "2026-09-07", subject: null,
@@ -145,6 +247,13 @@ export const readPaper = async () => ({
     ],
   },
 });
+// Source fixtures exercise actual reading components; no external mutations occur.
+export const readPaper = async () => {
+  if (!location.pathname.includes("paper-reading")) return overviewPaper();
+  if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
+  const { readingFixture } = await import("./reading-fixture");
+  return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };
+};
 export const deletePaper = async () => ({ deleted: true, paper_id: "paper-1" });
 export const relabelAttempt = async () => {};
 export const activeAcademicShare = async () => null;
@@ -152,3 +261,47 @@ export const academicShareUrl = (token: string) => `https://example.invalid/shar
 export const createAcademicShare = async () => ({ share_id: "s", resource_type: "paper", expires_at: "2099-01-01", token: "t" });
 export const presentAcademicShare = async () => "copied";
 export const revokeAcademicShare = async () => ({ revoked: true });
+
+// ── exam dates ──
+import examFixture from "./exam-fixture.json";
+const EXAM_SRC = "https://www.cambridgeinternational.org/Images/757649-november-2026-zone-4-timetable.pdf";
+const examTimetables = [
+  { id: "t-nov4", provider_key: "cambridge", series_key: "2026-11", series_label: "November 2026", zone: 4, timetable_variant: "", status: "final", version_label: "Version 1, April 2026", source_url: EXAM_SRC, fetched_at: "2026-10-06T00:00:00Z", errata: [], first_date: "2026-09-24", last_date: "2026-11-13" },
+  { id: "t-mar4", provider_key: "cambridge", series_key: "2027-03", series_label: "March 2027", zone: 4, timetable_variant: "", status: "final", version_label: "Version 1, July 2026", source_url: EXAM_SRC, fetched_at: "2026-10-06T00:00:00Z", errata: [], first_date: "2027-02-03", last_date: "2027-03-10" },
+];
+const examLocationRows = [
+  { location_key: "India, Kolkata - India Standard Time", lookup_value: "Kolkata", label: "India, Kolkata - India Standard Time", country: "India", zone: 4, timetable_variant: "" },
+  { location_key: "United Arab Emirates, Dubai - Arabian Standard Time", lookup_value: "Dubai", label: "United Arab Emirates, Dubai - Arabian Standard Time", country: "United Arab Emirates", zone: 4, timetable_variant: "" },
+  { location_key: "United States, New York - Eastern Standard Time", lookup_value: "New York", label: "United States, New York - Eastern Standard Time", country: "United States", zone: 2, timetable_variant: "" },
+  { location_key: "United States, Los Angeles - Pacific Standard Time", lookup_value: "Los Angeles", label: "United States, Los Angeles - Pacific Standard Time", country: "United States", zone: 1, timetable_variant: "" },
+];
+const examRoute = (code: string, programme_key: string, kind: string, papers: number[]) => ({ syllabus_code: code, programme_key, kind, papers, source_url: "https://www.cambridgeinternational.org/Images/697427-2026-2027-syllabus.pdf" });
+let examPlanState = scenario === "exams" ? { location_key: examLocationRows[0].location_key, series_key: "2026-11" } : null;
+const examPapersState: { syllabus_code: string; papers: number[] }[] = scenario === "exams" ? [{ syllabus_code: "9709", papers: [3, 6] }] : [];
+export const examLocations = async () => ({ data: examLocationRows, stale: false, offline: false });
+export const examPlanData = async () => {
+  const location = examLocationRows.find((l) => l.location_key === examPlanState?.location_key) ?? null;
+  const chosen = location && examPlanState?.series_key === "2026-11" && location.zone === 4;
+  return { data: {
+    subjects: [{ subject: "Computer Science", syllabus_code: "9618" }, { subject: "Mathematics", syllabus_code: "9709" }, { subject: "Physics", syllabus_code: "9702" }],
+    plan: examPlanState, location, papers: examPapersState, timetables: examTimetables,
+    routes: [
+      examRoute("9709", "cambridge_a_level", "whole", [1, 3, 4, 5]), examRoute("9709", "cambridge_a_level", "whole", [1, 3, 5, 6]),
+      examRoute("9709", "cambridge_a_level", "complete", [3, 5]), examRoute("9709", "cambridge_a_level", "complete", [3, 4]), examRoute("9709", "cambridge_a_level", "complete", [3, 6]),
+      examRoute("9702", "cambridge_a_level", "whole", [1, 2, 3, 4, 5]), examRoute("9702", "cambridge_a_level", "complete", [4, 5]),
+      examRoute("9618", "cambridge_a_level", "whole", [1, 2, 3, 4]), examRoute("9618", "cambridge_a_level", "complete", [3, 4]),
+    ],
+    sittings: chosen ? examFixture.sittings : [],
+  }, stale: false, offline: false };
+};
+export const saveExamPlan = async (_student: string, plan: { locationKey: string | null; seriesKey: string | null }) => {
+  examPlanState = { location_key: plan.locationKey, series_key: plan.seriesKey };
+};
+export const saveExamPapers = async (_student: string, code: string, papers: number[] | null) => {
+  const i = examPapersState.findIndex((p) => p.syllabus_code === code);
+  if (i >= 0) examPapersState.splice(i, 1);
+  if (papers?.length) examPapersState.push({ syllabus_code: code, papers });
+};
+export const deleteQuestion = deletePaper;
+export const explainRetry = async () => {};
+export const recordExplanationFeedback = async () => ({});

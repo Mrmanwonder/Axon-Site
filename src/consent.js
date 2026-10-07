@@ -10,6 +10,9 @@
 
 import { sb } from './supabase.js';
 import { CONSENT_NOTICE_VERSION } from './config.js';
+import { LANGUAGES } from './notice.js';
+
+const NOTICE_LANGUAGES = LANGUAGES.map((l) => l.code);
 
 /** Catalogue of purposes, with the required/optional split. */
 export async function listPurposes() {
@@ -52,14 +55,24 @@ export async function readConsentState(guardianId, studentId = null) {
  * @param {string|null} args.studentId  null during onboarding, before the profile exists
  * @param {Record<string, boolean>} args.decisions
  * @param {'in_app_itemised'|'in_app_withdrawal'} args.method
+ * @param {'en'|'hi'} [args.noticeLanguage]  the language the notice was shown
+ *   in. English unless the guardian chose Hindi on the consent step.
  */
-export async function recordConsent({ guardianId, studentId = null, decisions, method = 'in_app_itemised' }) {
+export async function recordConsent({
+  guardianId, studentId = null, decisions, method = 'in_app_itemised', noticeLanguage = 'en',
+}) {
+  // The database constrains this to the same two values; refusing here keeps a
+  // bad value from becoming a confusing write error after the parent taps.
+  if (!NOTICE_LANGUAGES.includes(noticeLanguage)) {
+    throw new Error(`Unknown consent notice language: ${noticeLanguage}`);
+  }
   const rows = Object.entries(decisions).map(([purpose, granted]) => ({
     guardian_id: guardianId,
     student_id: studentId,
     purpose,
     granted,
     notice_version: CONSENT_NOTICE_VERSION,
+    notice_language: noticeLanguage,
     method,
   }));
   if (!rows.length) return [];
@@ -94,7 +107,7 @@ export async function hasAllRequiredConsents(guardianId, studentId = null) {
 export async function consentHistory(guardianId) {
   const { data, error } = await sb
     .from('consent_event')
-    .select('seq,purpose,granted,notice_version,method,student_id,created_at')
+    .select('seq,purpose,granted,notice_version,notice_language,method,student_id,created_at')
     .eq('guardian_id', guardianId)
     .order('seq', { ascending: false });
   if (error) throw error;

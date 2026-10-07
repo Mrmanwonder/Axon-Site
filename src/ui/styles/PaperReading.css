@@ -1,0 +1,17 @@
+.question-reading { --reading-secondary:color-mix(in srgb,var(--label) 76%,var(--bg)); --reading-link:color-mix(in srgb,var(--accent) 84%,var(--label)); color:var(--label); min-width:0; width:100%; max-width:920px; margin:0 auto; padding:16px var(--gutter) 32px; box-sizing:border-box; font-size:16px; line-height:1.55; }
+.question-reading nav { font-size:14px; margin-bottom:16px; }
+.question-reading nav a { color:var(--reading-link); }
+.question-reading a:focus-visible { outline:var(--focus-ring); outline-offset:var(--focus-offset); }
+.question-reading .qcard { margin:16px 0!important; padding:20px; min-width:0; }
+.question-reading .qfield { margin:16px 0; }
+.question-reading .qfield .k { font-size:14px; color:var(--reading-secondary); }
+.question-reading .qfield .v { font-size:16px; line-height:1.65; overflow-wrap:anywhere; }
+.question-reading .qhead { flex-wrap:wrap; gap:8px; }
+.question-reading .qhead h1 { margin:0; font-size:22px; }
+.question-reading .qmarks { font-size:22px; }
+.question-reading .rvhead { flex-wrap:wrap; padding:0; gap:12px; }
+.question-reading .rvtitle { min-width:0; overflow-wrap:anywhere; }
+.question-reading .rvback { min-width:44px; min-height:44px; }
+.question-reading .subnote { color:var(--reading-secondary); font-size:14px; line-height:1.55; }
+
+.question-reading .qmarks small,.question-reading .conf:not(.confirmed) { color:var(--reading-secondary); }

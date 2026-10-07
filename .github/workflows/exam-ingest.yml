@@ -1,0 +1,51 @@
+name: Ingest exam timetables
+
+# Loads official exam dates, Cambridge administrative zones and syllabus paper
+# routes listed in curriculum/exams/. Each timetable PDF must match its recorded
+# SHA-256 and its weekly and A-Z views must agree, or nothing loads.
+
+on:
+  workflow_run:
+    workflows: ["Apply migrations"]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "curriculum/exams/**"
+      - "scripts/exams/**"
+      - ".github/workflows/exam-ingest.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: exam-ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the PDF reader and psql
+        run: |
+          python -m pip install --quiet -r scripts/syllabus/requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Timetable reader tests
+        run: python scripts/exams/test_timetable.py
+      - name: Fetch, verify and parse
+        run: python scripts/exams/ingest.py > "$RUNNER_TEMP/exams.sql"
+      - name: Load
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/exams.sql"

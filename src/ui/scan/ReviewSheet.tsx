@@ -23,13 +23,14 @@
    · **Nothing is locked because we were confident.**
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
 import { useScan } from "./ScanProvider";
 import type { ReviewQuestion } from "./ScanProvider";
 import PressBox from "../components/PressBox";
 import Crop from "../components/Crop";
 import { hapticTick, hapticFirm } from "../lib/haptics";
-import { CAUSE_HUE, CAUSE_LABEL, numMark as num } from "../data/causes";
+import { numMark as num } from "../data/causes";
 const AcademicText = lazy(() => import("../components/AcademicText"));
 
 function RichText({ text }: { text: string }) {
@@ -40,7 +41,7 @@ function RichText({ text }: { text: string }) {
   );
 }
 
-function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
+function Field({ k, v, steps, empty = "Not read" }: { k: string; v?: string | null; steps?: boolean; empty?: string }) {
   return (
     <div className="qfield">
       <div className="k">{k}</div>
@@ -48,18 +49,19 @@ function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean 
           working is the answer in a notation-dense subject, and reading it
           back as one paragraph is reading someone else's answer. */}
       <div className={"v" + (v ? "" : " empty") + (steps && v ? " steps" : "")}>
-        {v ? <RichText text={v} /> : "Not read"}
+        {v ? <RichText text={v} /> : empty}
       </div>
     </div>
   );
 }
 
 function Question({
-  q, onAction, onMark,
+  q, onAction, onMark, onPlace,
 }: {
   q: ReviewQuestion;
   onAction: (id: string, action: string) => void;
   onMark: (id: string, value: number) => void;
+  onPlace?: (q: ReviewQuestion) => void;
 }) {
   const attention = !q.confirmed && q.tier !== "confident";
 
@@ -74,7 +76,13 @@ function Question({
   return (
     <div className="qcard" data-attention={attention ? "1" : undefined}>
       <div className="qhead">
-        <span className="t1">{q.label || "This question"}</span>
+        {onPlace ? (
+          <PressBox as="button" type="button" className="t1 qlabel" aria-label={`${/^(Question|Unassigned)/.test(q.label ?? "") ? q.label : `Question ${q.label || "not numbered"}`}. Change`}
+                    onClick={() => { hapticTick(); onPlace(q); }}>
+            {q.label || "This question"}
+            <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" /></svg>
+          </PressBox>
+        ) : <span className="t1">{q.label || "This question"}</span>}
         {conf}
         {q.marksAwarded != null && q.marksAvailable != null && (
           <span className="qmarks">
@@ -109,48 +117,13 @@ function Question({
         </div>
       )}
 
-      {!!q.alternatives?.length && (
-        <>
-          <div className="qfield"><div className="k">Which number did your teacher write?</div></div>
-          <div className="qalts" role="radiogroup" aria-label="Which number did your teacher write?">
-            {q.alternatives.map((a) => (
-              <label key={a} className={"qalt" + (a === q.marksAwarded ? " on" : "")}>
-                <input type="radio" name={`mark-${q.id}`} value={a} checked={a === q.marksAwarded}
-                  onChange={() => { hapticTick(); onMark(q.id, a); }} />
-                {num(a)}
-              </label>
-            ))}
-          </div>
-        </>
-      )}
+      {!!q.alternatives?.length && <MarkPicker q={q} onMark={onMark} />}
 
-      <Field k="Your answer" v={q.answer} steps />
+      <Field k="Your answer" v={q.answer} steps
+             empty={q.regionType === "diagram"
+               ? "A drawn answer. Axon does not turn drawings into text, so the picture above is the record."
+               : "Not read. Fix this to type it, or keep the picture above as the record."} />
       {q.remark && <Field k="Your teacher wrote" v={q.remark} steps />}
-
-      {q.explanation?.cause && (
-        <div className="qfield">
-          <div className="k">Why the mark went</div>
-          <div className="v">
-            <span className="cause" style={{ "--c": CAUSE_HUE[q.explanation.cause] ?? "var(--cause-timed-out)" } as React.CSSProperties}>
-              <span className="sw" />
-              {CAUSE_LABEL[q.explanation.cause] ?? q.explanation.cause}
-            </span>
-          </div>
-          {q.explanation.body && (
-            <div className="v" style={{ marginTop: 7, color: "var(--label-2)" }}>
-              <RichText text={q.explanation.body} />
-            </div>
-          )}
-          {/* Rendered only when it clears the bar: specific to this answer, and
-              performable during an exam. An empty slot is honest; generic advice
-              trains students to stop reading. */}
-          {q.explanation.doThisNext && (
-            <div className="v" style={{ marginTop: 9 }}>
-              <b>Do this next.</b>{" "}<RichText text={q.explanation.doThisNext} />
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="qacts">
         {!q.confirmed && (
@@ -167,12 +140,138 @@ function Question({
                   onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
           Rescan this page
         </PressBox>
-        {q.explanation?.cause && !q.causeRejected && (
-          <PressBox as="button" type="button" className="qact"
-                    onClick={() => { hapticTick(); onAction(q.id, "cause"); }}>
-            Not why I lost it
-          </PressBox>
-        )}
+      </div>
+    </div>
+  );
+}
+
+/* Which number did the teacher write? The onboarding selector, so the choice
+   reads as one control, not a row of radio buttons (owner, 6 Oct 2026). More
+   than six options wrap as plain number keys of the same size. */
+function MarkPicker({ q, onMark }: { q: ReviewQuestion; onMark: (id: string, value: number) => void }) {
+  const options = q.alternatives ?? [];
+  const label = "Which number did your teacher write?";
+  const chosen = options.findIndex((a) => a === q.marksAwarded);
+  const pick = (a: number) => { if (a !== q.marksAwarded) { hapticTick(); onMark(q.id, a); } };
+  // The radio keyboard pattern: one tab stop, arrows move and choose.
+  const focusIndex = chosen < 0 ? 0 : chosen;
+  const onKey = (event: React.KeyboardEvent<HTMLButtonElement>, i: number) => {
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1
+      : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const next = (i + step + options.length) % options.length;
+    const group = event.currentTarget.parentElement;
+    group?.querySelectorAll<HTMLButtonElement>("button")[next]?.focus();
+    pick(options[next]);
+  };
+  return (
+    <div className="qfield qmarkpick">
+      <div className="k" id={`mk-${q.id}`}>{label}</div>
+      {options.length <= 6 ? (
+        <div className={"gseg qmarkseg" + (chosen < 0 ? " is-empty" : "")} role="radiogroup" aria-labelledby={`mk-${q.id}`}
+             style={{ "--gseg-n": options.length, "--gseg-i": Math.max(0, chosen) } as React.CSSProperties}>
+          <span className="gseg-pill" aria-hidden="true" />
+          {options.map((a, i) => (
+            <button type="button" key={a} role="radio" aria-checked={a === q.marksAwarded}
+                    tabIndex={i === focusIndex ? 0 : -1} onKeyDown={(e) => onKey(e, i)}
+                    onClick={() => pick(a)}>{num(a)}</button>
+          ))}
+        </div>
+      ) : (
+        <div className="qmarkkeys" role="radiogroup" aria-labelledby={`mk-${q.id}`}>
+          {options.map((a, i) => (
+            <button type="button" key={a} role="radio" aria-checked={a === q.marksAwarded}
+                    tabIndex={i === focusIndex ? 0 : -1} onKeyDown={(e) => onKey(e, i)}
+                    onClick={() => pick(a)}>{num(a)}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PARTS = ["", "a", "b", "c", "d", "e", "f", "g", "h"];
+const SUBPARTS = ["", "i", "ii", "iii", "iv", "v", "vi"];
+
+function parseLabel(label?: string) {
+  // Accepts "1(a)(ii)" and the display forms "Question 1(a)" / "Unassigned part (b)".
+  const m = String(label ?? "").replace(/\s+/g, "").replace(/^(question|unassignedpart)/i, "").match(/^(\d{1,3})?(?:\(?([a-h])\)?)?(?:\(?((?:i|ii|iii|iv|v|vi))\)?)?$/i);
+  return { q: m?.[1] ? Number(m[1]) : null, part: (m?.[2] ?? "").toLowerCase(), sub: (m?.[3] ?? "").toLowerCase() };
+}
+
+/* Place a part by hand: question number, part, sub-part, each a tap. The
+   student has the paper in front of them; their answer is the label. */
+function PlaceSheet({ q, highest, onClose, onPlace }: {
+  q: ReviewQuestion; highest: number; onClose: () => void; onPlace: (id: string, label: string) => Promise<void>;
+}) {
+  const start = parseLabel(q.label);
+  const [num, setNum] = useState<number | null>(start.q);
+  const [part, setPart] = useState(start.part);
+  const [sub, setSub] = useState(start.sub);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const count = Math.min(40, Math.max(12, highest + 3));
+  const label = num ? `${num}${part ? `(${part})` : ""}${sub ? `(${sub})` : ""}` : "";
+  return (
+    <Dialog title="Which question is this?" description="Choose it as it is printed on your paper." className="qplace-sheet"
+            busy={busy} onClose={onClose}>
+      <PlaceBody q={q} count={count} num={num} setNum={setNum} part={part} setPart={setPart} sub={sub} setSub={setSub}
+                 label={label} error={error} busy={busy}
+                 onSave={async (dismiss) => {
+                   if (!label) { setError("Choose the question number."); return; }
+                   setBusy(true); setError(null);
+                   try { await onPlace(q.id, label); dismiss(); }
+                   catch (e) { setError(e instanceof Error ? e.message : "That could not be changed. Try again."); }
+                   finally { setBusy(false); }
+                 }} />
+    </Dialog>
+  );
+}
+
+function PlaceBody({ q, count, num, setNum, part, setPart, sub, setSub, label, error, busy, onSave }: {
+  q: ReviewQuestion; count: number; num: number | null; setNum: (n: number) => void;
+  part: string; setPart: (p: string) => void; sub: string; setSub: (p: string) => void;
+  label: string; error: string | null; busy: boolean; onSave: (dismiss: () => void) => void;
+}) {
+  const dismiss = useDialogDismiss();
+  return (
+    <div className="qplace">
+      {q.crop && (
+        <div className="qplace-crop">
+          <Crop paperId={q.crop.paperId} pageNumber={q.crop.page} box={q.crop.box} missing="" />
+        </div>
+      )}
+      <div className="qplace-k">Question</div>
+      <div className="qplace-keys" role="radiogroup" aria-label="Question number">
+        {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
+          <button type="button" key={n} role="radio" aria-checked={n === num} onClick={() => { hapticTick(); setNum(n); }}>{n}</button>
+        ))}
+      </div>
+      <div className="qplace-k">Part</div>
+      <div className="qplace-keys" role="radiogroup" aria-label="Part">
+        {PARTS.map((p) => (
+          <button type="button" key={p || "none"} role="radio" aria-checked={p === part}
+                  onClick={() => { hapticTick(); setPart(p); if (!p) setSub(""); }}>{p ? `(${p})` : "None"}</button>
+        ))}
+      </div>
+      {part && (
+        <>
+          <div className="qplace-k">Sub-part</div>
+          <div className="qplace-keys" role="radiogroup" aria-label="Sub-part">
+            {SUBPARTS.map((p) => (
+              <button type="button" key={p || "none"} role="radio" aria-checked={p === sub}
+                      onClick={() => { hapticTick(); setSub(p); }}>{p ? `(${p})` : "None"}</button>
+            ))}
+          </div>
+        </>
+      )}
+      {error && <p className="qplace-err" role="alert">{error}</p>}
+      <div className="acts">
+        <button type="button" className="btn primary" disabled={!label || busy} aria-busy={busy || undefined}
+                onClick={() => onSave(dismiss)}>
+          {label ? `This is ${label}` : "Choose the question"}
+        </button>
       </div>
     </div>
   );
@@ -182,8 +281,10 @@ export default function ReviewSheet() {
   const { review, reviewHandlers, reviewOpen, closeReview } = useScan();
 
   const root = useRef<HTMLDivElement>(null);
+  const [placing, setPlacing] = useState<ReviewQuestion | null>(null);
   useEffect(() => { if (reviewOpen) root.current?.focus(); }, [reviewOpen]);
   if (!reviewOpen || !review || !reviewHandlers) return null;
+  const highest = review.questions.reduce((m, q) => Math.max(m, parseLabel(q.label).q ?? 0), 0);
 
   return (
     <div className={"reviewsheet" + (reviewOpen ? " open" : "")}
@@ -219,26 +320,41 @@ export default function ReviewSheet() {
           </div>
         )}
 
-        {review.noTotal && <div className="subnote" style={{ marginTop: 14 }}>{review.noTotal}</div>}
-
-        {review.lead && <div className="subnote" style={{ marginTop: 14 }}>{review.lead}</div>}
+        {(review.lead || review.noTotal) && (
+          <div className="subnote rv-lead">
+            {review.lead}
+            {review.noTotal && <span className="rv-lead-2">{review.noTotal}</span>}
+          </div>
+        )}
 
         {review.questions.map((q) => (
           <Question key={q.id} q={q}
                     onAction={reviewHandlers.onAction}
-                    onMark={reviewHandlers.onMark} />
+                    onMark={reviewHandlers.onMark}
+                    onPlace={reviewHandlers.onRelabel ? setPlacing : undefined} />
         ))}
 
-        {/* Every question still has to be confirmed before the paper can be
-            saved — enforced in SQL, not here — but a required step costing
-            fourteen identical taps is a step people learn to rush past. */}
-        {review.cleanCount > 0 && (
+        {/* Every reading still has to be confirmed before the paper can be
+            saved (enforced in SQL), but nineteen identical taps on a paper the
+            reader got right is how a required step gets rushed. Once the
+            student has scrolled past them all, one tap vouches for every
+            reading they can see. Unreadable ones are not included. */}
+        {(review.readableCount ?? 0) > 0 && reviewHandlers.onConfirmAll ? (
+          <div className="bulkrow">
+            <div className="b">
+              <div className="t1">Checked them all?</div>
+              <div className="t2">Confirm the {review.readableCount} readings above in one go.</div>
+            </div>
+            <PressBox as="button" type="button" className="qact accent"
+                      onClick={() => { hapticFirm(); reviewHandlers.onConfirmAll?.(); }}>
+              All {review.readableCount} are right
+            </PressBox>
+          </div>
+        ) : review.cleanCount > 0 && (
           <div className="bulkrow">
             <div className="b">
               <div className="t1">{review.cleanCount} read cleanly</div>
-              <div className="t2">
-                Their crops are above. Accept them together, or check them one at a time.
-              </div>
+              <div className="t2">Accept them together, or check them one at a time.</div>
             </div>
             <PressBox as="button" type="button" className="qact accent"
                       onClick={() => { hapticFirm(); reviewHandlers.onConfirmClean(); }}>
@@ -248,9 +364,7 @@ export default function ReviewSheet() {
         )}
 
         <div className="subnote">
-          Nothing here is locked because we were confident. If the mark itself
-          looks wrong, that is a conversation with your teacher — we go by what
-          they wrote.
+          If a mark itself looks wrong, talk to your teacher. We go by what they wrote.
         </div>
 
         <div style={{ margin: "20px var(--gutter) 4px" }}>
@@ -262,6 +376,13 @@ export default function ReviewSheet() {
           </PressBox>
         </div>
       </div>
+      {placing && reviewHandlers.onRelabel && (
+        <PlaceSheet q={placing} highest={highest} onClose={() => setPlacing(null)}
+                    onPlace={async (id, label) => {
+                      await reviewHandlers.onRelabel!(id, label);
+                      window.setTimeout(() => hapticFirm(), SHEET_EXIT_MS);
+                    }} />
+      )}
     </div>
   );
 }

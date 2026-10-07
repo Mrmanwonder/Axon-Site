@@ -339,6 +339,32 @@
     font-variant-numeric:tabular-nums;cursor:pointer;will-change:transform;}
   .qalt.on{background:var(--blue);color:#fff;}
 
+  /* The label is a control: tap it to say which question this is. */
+  .qhead .qlabel{flex:1;display:inline-flex;align-items:center;gap:4px;min-height:44px;margin:-10px 0;padding:0;
+    border:0;background:none;color:var(--label);font:inherit;font-size:15.5px;font-weight:600;letter-spacing:-.018em;text-align:left;cursor:pointer;}
+  .qhead .qlabel svg{width:12px;height:12px;flex:none;fill:none;stroke:var(--label-3);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* Which number did the teacher write: the glide selector, or number keys. */
+  .qmarkpick .k{margin-bottom:9px;}
+  .qmarkseg button{font-size:17px;font-variant-numeric:tabular-nums;}
+  .qmarkseg.is-empty .gseg-pill{opacity:0;}
+  .qmarkseg button[aria-checked="true"]{color:var(--label);font-weight:var(--fw-semibold);}
+  .qmarkkeys{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;}
+  .qmarkkeys button,.qplace-keys button{min-height:44px;border:0;border-radius:12px;background:var(--surface-sunk);
+    color:var(--label-2);font:inherit;font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;cursor:pointer;
+    transition:background 120ms ease,color 120ms ease,transform 120ms ease;}
+  .qmarkkeys button[aria-checked="true"],.qplace-keys button[aria-checked="true"]{background:var(--blue);color:#fff;font-weight:600;}
+  .qmarkkeys button:active,.qplace-keys button:active{transform:scale(.95);}
+
+  /* Placing a part by hand. */
+  .qplace{display:flex;flex-direction:column;}
+  .qplace-crop{margin:4px 0 6px;border-radius:14px;overflow:hidden;max-height:160px;}
+  .qplace-k{margin:14px 0 8px;font-size:11.5px;font-weight:600;letter-spacing:.01em;text-transform:uppercase;color:var(--label-3);}
+  .qplace-keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(48px,1fr));gap:6px;}
+  .qplace-err{margin:12px 0 0;font-size:13.5px;color:var(--label);}
+  .qplace .acts{margin-top:18px;}
+  @media (prefers-reduced-motion: reduce){.qmarkkeys button,.qplace-keys button{transition:none;}}
+
   .bulkrow{margin:14px var(--gutter) 0;padding:14px 16px;border-radius:var(--r-card);
     background:var(--surface);border:.5px solid var(--hairline);
     display:flex;align-items:center;gap:12px;}
@@ -1025,6 +1051,8 @@
      has to say which taps move you forward. */
   #obroot .method .chev{opacity:.28;}
   #obroot .list + .subnote{margin-top:11px;}
+  /* The consent notice's language choice sits above the purposes, on the list gutter. */
+  #obroot .oblang{margin:20px var(--gutter) 0;}
   /* Cause hues stay on the landing motif, where they mean causes. Everywhere
      else in the flow an icon is blue for accent, amber for attention or green
      for something already settled — spending the cause palette on decoration
@@ -1318,6 +1346,12 @@ dialog[open]::backdrop { animation: scrim-in 320ms ease-out both; }
 dialog.is-closing > .sheet { animation: sheet-out var(--sheet-out) var(--ease-sheet-out) both; }
 dialog.is-closing::backdrop { animation: scrim-out var(--sheet-out) ease-in both; }
 .sheet:focus { outline: none; }
+/* Above the on-screen keyboard. Dialog.tsx sets --kb to the height of the
+   layout viewport the keyboard covers, and --vvh to what is still visible, from
+   window.visualViewport (src/ui/lib/keyboardInset.ts). A plain offset, never
+   animated; the rise itself stays a transform. Without a keyboard both fall
+   back to the resting sheet: bottom 0, capped 8px short of the screen. */
+dialog > .sheet { bottom: var(--kb, 0px); max-height: calc(var(--vvh, 100%) - 8px); }
 @media (prefers-reduced-motion: reduce) {
   dialog[open] > .sheet, dialog[open]::backdrop, dialog.is-closing > .sheet, dialog.is-closing::backdrop { animation: none; }
 }
@@ -1377,3 +1411,12 @@ dialog.is-closing::backdrop { animation: scrim-out var(--sheet-out) ease-in both
 .gseg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .gseg-pill, .gseg button { transition: none; } }
 [data-motion="reduce"] .gseg-pill, [data-motion="reduce"] .gseg button { transition: none; }
+
+/* Library row status (owner, 5 Oct 2026: one line, not chips over paragraphs). */
+.lib-status{margin-top:6px;display:flex;align-items:center;gap:7px;font-size:13px;color:var(--label-2);min-width:0;}
+.lib-status i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--label-3);}
+.lib-status[data-tone="attention"]{color:var(--label);}
+.lib-status[data-tone="attention"] i{background:var(--attention);}
+.lib-status[data-tone="stopped"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--attention);}
+.rv-lead{margin-top:14px;}
+.rv-lead-2{display:block;margin-top:2px;}

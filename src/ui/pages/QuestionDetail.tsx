@@ -23,11 +23,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { deleteQuestion, explainRetry, paperTypeLabel, providerKeyForStudent, recordExplanationFeedback } from "../data/modules";
-import type { StudentAttempt } from "../data/modules";
-import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
+import type { Segment, StudentAttempt } from "../data/modules";
 import Crop from "../components/Crop";
+import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
+import SourceEvidence from "../components/SourceEvidence";
+import MaterialSymbol from "../components/MaterialSymbol";
+import { paperIdentity, paperReading, partPath } from "../data/paperReading";
+import "../styles/PaperReading.css";
 import AnswerBlockView from "../components/AnswerBlock";
-import type { Segment } from "../data/modules";
 import Disclose from "../components/Disclose";
 import PageSkeleton from "../components/PageSkeleton";
 import MathText from "../components/MathText";
@@ -41,6 +44,8 @@ import { useToast } from "../components/ToastProvider";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
 import { tutorEntryVisible } from "../data/tutor";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckQuestion } from "../components/SchemeCheck";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -115,6 +120,7 @@ export default function QuestionDetail() {
   });
 
   const { paper, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   // Which part of the transcription the student tapped, highlighted in the crop.
   const [picked, setPicked] = useState<Segment | null>(null);
@@ -175,10 +181,16 @@ export default function QuestionDetail() {
   // provenance rule: committed_attempt_id is the one column that traces a saved
   // attempt back to the region it came from, and page_spans carries the box.
   const region = paper.question_region.find((r) => r.committed_attempt_id === attempt.id);
+  const checkResult = region?.id ? schemeCheck.regions.get(region.id) ?? null : null;
   const sourcePick = attempt.answer_block?.source_space === "page_pixels_v1" ? picked?.bbox : null;
   const span = (sourcePick?.page != null
     ? region?.page_spans?.find(s => s.page === sourcePick.page)
     : region?.page_spans?.[0]);
+  const identity = paperIdentity(paper, paperTypeLabel(paper.type, providerKeyForStudent(student)));
+  const reading = paperReading(paper);
+  const readingPart = reading.parts.find(p => p.attempt.id === attempt.id);
+  const sharedStem = reading.groups.find(g => g.question === readingPart?.question)?.sharedStem;
+  const questionLabel = readingPart?.label ?? partPath(null, null);
 
   // Three-valued, and read from the region rather than inferred: "unknown" is a
   // real state and must not be shown as a clean read.
@@ -212,21 +224,19 @@ export default function QuestionDetail() {
   };
 
   return (
-    <div style={{ padding: "0 0 32px" }}>
+    <div className="question-reading">
+      <nav aria-label="Question breadcrumb"><Link to={paths.library}>Library</Link><span aria-hidden="true"> / </span><Link to={paths.paper(paperId!)}>{identity.title}</Link></nav>
       <div className="rvhead detailhead" style={{ position: "static" }}>
         <Link to={paths.paper(paperId!)} className="rvback" aria-label="Back to the paper">
-          <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"
-               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M15 5 8 12l7 7" />
-          </svg>
+          <MaterialSymbol name="back" />
         </Link>
-        <div className="rvtitle">{paperTypeLabel(paper.type, providerKeyForStudent(student))}</div>
+        <div className="rvtitle">{identity.title}</div>
         <ResourceActions resourceLabel="question" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
 
       <div className="qcard" style={{ margin: "12px var(--gutter) 0" }}>
         <div className="qhead">
-          <span className="t1">{attempt.question_label || "This question"}</span>
+          <h1 className="t1">{questionLabel}</h1>
           <span className={"conf " + attempt.extraction_confidence}>
             {CONF_LABEL[attempt.extraction_confidence] ?? attempt.extraction_confidence}
           </span>
@@ -254,12 +264,10 @@ export default function QuestionDetail() {
           ))}
         </div>
 
-        {attempt.question_text && (
-          <div className="qfield">
-            <div className="k">Question</div>
-            <div className="v"><AcademicText text={attempt.question_text} /></div>
-          </div>
-        )}
+        <div className="qfield"><div className="k">Question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
+        {sharedStem && sharedStem !== attempt.question_text && <Field k="Shared question context" v={sharedStem} steps />}
+        {readingPart?.inherited && <p className="subnote">Parent linked by source order; the printed label has no parent number.</p>}
+        <SourceEvidence inspectOnly paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />
 
         {/* Not "Your answer". The crop above is the student's answer; this is
             what we made of it, and the live data shows what that can cost —
@@ -271,6 +279,20 @@ export default function QuestionDetail() {
           recognition={recognition}
           onPick={setPicked}
         />
+
+        <div className="qfield"><div className="k">Teacher’s mark</div><div className="v">{attempt.marks_awarded == null ? "Not read" : numMark(attempt.marks_awarded)}{attempt.max_marks != null ? ` out of ${numMark(attempt.max_marks)}` : " · Maximum not read"}</div></div>
+        {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
+
+        {/* An unmarked paper checked against its published scheme: Axon's
+            estimate, never shown as a teacher mark (owner decision, 6 Oct 2026). */}
+        {checkResult && <SchemeCheckQuestion result={checkResult} />}
+
+        {!checkResult && (
+          <div className="qfield">
+            <div className="k">Marked from</div>
+            <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
+          </div>
+        )}
 
         {/* How this question is answered, one tap below the student's own, in
             the same step shape so the two can be read against each other.
@@ -336,13 +358,6 @@ export default function QuestionDetail() {
             )}
           </div>
         )}
-
-        {attempt.teacher_remark && <Field k="Your teacher wrote" v={attempt.teacher_remark} steps />}
-
-        <div className="qfield">
-          <div className="k">Marked from</div>
-          <div className="v">{attempt.marks_source === "official_scheme" ? "Official marking scheme" : "Teacher's pen"}</div>
-        </div>
 
         {loss?.cause && (
           <div className="qfield">

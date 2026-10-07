@@ -6,7 +6,7 @@ Answer the six decisions in `docs/claude_axon-decisions-2026-10-02.md` whenever 
 
 ---
 
-### 1. Apply the database migrations (unblocks AXO-116, 54, 57, 121)
+### 1. Apply the database migrations (unblocks AXO-116, 54, 57, 121) — done 2026-10-02, migrate.yml run 37035695347
 
 **Simplest path, now that `migrate.yml` is on `main`:**
 1. Add the repository secret `SUPABASE_DB_URL` under GitHub → Axon-Site → Settings → Secrets → Actions. The value comes from Supabase Dashboard → Connect → "Session pooler", `postgres` role.
@@ -34,7 +34,7 @@ supabase db push --include-all
 
 ---
 
-### 2. Merge axon-backend#143 (deploys the AXO-116 structure fix)
+### 2. Merge axon-backend#143 (deploys the AXO-116 structure fix) — done 2026-10-02, deploy run 37063896124
 
 Merge it after step 1 succeeds. The push to `main` runs the deploy workflow.
 
@@ -44,9 +44,11 @@ Merge it after step 1 succeeds. The push to `main` runs the deploy workflow.
 
 ---
 
-### 3. Retry the 14-page paper (AXO-116, unblocks AXO-70)
+### 3. Re-read the 14-page paper (AXO-116, unblocks AXO-70)
 
-Open Library, then the 14-page paper that kept losing pages, then **Try again**. Wait for processing to finish.
+**Try again won't work for this paper.** Its last run is `committed` (6 pages were admitted as unreadable), and `/paper-retry` only re-runs a `failed` run. Checked 2026-10-05: your retry started nothing.
+
+Instead, upload the same 14 pages as a new paper and wait for processing to finish. After checking it, delete the old copy from its paper screen.
 
 **Expected:**
 - all 14 pages structured, with no "could not read this page" on a readable page;

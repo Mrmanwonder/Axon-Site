@@ -1,0 +1,2135 @@
+{
+ "$comment": "Cambridge's own location-to-administrative-zone lookup, one row per option it offers. Regenerate with scripts/exams/cambridge_zones.py; never edit by hand. United Kingdom centres use the separate UK timetable.",
+ "source_url": "https://www.cambridgeinternational.org/exam-administration/cambridge-exams-officers-guide/phase-1-preparation/timetabling-exams/administrative-zone/",
+ "fetched_at": "2026-10-06T07:30:00Z",
+ "locations": [
+  {
+   "location_key": "Afghanistan, Kabul - Afghanistan Standard Time",
+   "lookup_value": "Kabul",
+   "label": "Afghanistan, Kabul - Afghanistan Standard Time",
+   "country": "Afghanistan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Åland Islands, Mariehamn - E. Europe Standard Time",
+   "lookup_value": "Mariehamn",
+   "label": "Åland Islands, Mariehamn - E. Europe Standard Time",
+   "country": "Åland Islands",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Albania, Tirane - Central European Standard Time",
+   "lookup_value": "Tirane",
+   "label": "Albania, Tirane - Central European Standard Time",
+   "country": "Albania",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Algeria, Algiers - Central Europe Standard Time",
+   "lookup_value": "Algiers",
+   "label": "Algeria, Algiers - Central Europe Standard Time",
+   "country": "Algeria",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Andorra, Andorra - Central Europe Standard Time",
+   "lookup_value": "Andorra",
+   "label": "Andorra, Andorra - Central Europe Standard Time",
+   "country": "Andorra",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Angola, Luanda - W. Central Africa Standard Time",
+   "lookup_value": "Luanda",
+   "label": "Angola, Luanda - W. Central Africa Standard Time",
+   "country": "Angola",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Anguilla, Anguilla - Atlantic Standard Time",
+   "lookup_value": "Anguilla",
+   "label": "Anguilla, Anguilla - Atlantic Standard Time",
+   "country": "Anguilla",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Antigua and Barbuda, Antigua - Atlantic Standard Time",
+   "lookup_value": "Antigua",
+   "label": "Antigua and Barbuda, Antigua - Atlantic Standard Time",
+   "country": "Antigua and Barbuda",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Argentina, Buenos Aires - Argentina Standard Time",
+   "lookup_value": "Buenos Aires",
+   "label": "Argentina, Buenos Aires - Argentina Standard Time",
+   "country": "Argentina",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Armenia, Yerevan - Caucasus Standard Time",
+   "lookup_value": "Yerevan",
+   "label": "Armenia, Yerevan - Caucasus Standard Time",
+   "country": "Armenia",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Aruba, Aruba - Atlantic Standard Time",
+   "lookup_value": "Aruba",
+   "label": "Aruba, Aruba - Atlantic Standard Time",
+   "country": "Aruba",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ascension Islands, Georgetown - Greenwich Mean Time",
+   "lookup_value": "St Helena",
+   "label": "Ascension Islands, Georgetown - Greenwich Mean Time",
+   "country": "Ascension Islands",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Australia, Adelaide - Cen. Australia Standard Time",
+   "lookup_value": "Adelaide",
+   "label": "Australia, Adelaide - Cen. Australia Standard Time",
+   "country": "Australia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Australia, Eucla - Cen. Australia Standard Time",
+   "lookup_value": "Eucla",
+   "label": "Australia, Eucla - Cen. Australia Standard Time",
+   "country": "Australia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Australia, Lord Howe - Central Pacific Standard Time",
+   "lookup_value": "Lord Howe",
+   "label": "Australia, Lord Howe - Central Pacific Standard Time",
+   "country": "Australia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Australia, Perth - W. Australia Standard Time",
+   "lookup_value": "Perth",
+   "label": "Australia, Perth - W. Australia Standard Time",
+   "country": "Australia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Australia, Sydney - AUS Eastern Standard Time",
+   "lookup_value": "Sydney",
+   "label": "Australia, Sydney - AUS Eastern Standard Time",
+   "country": "Australia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Austria, Vienna - Central European Standard Time",
+   "lookup_value": "Vienna",
+   "label": "Austria, Vienna - Central European Standard Time",
+   "country": "Austria",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Azerbaijan, Baku - Azerbaijan Standard Time",
+   "lookup_value": "Baku",
+   "label": "Azerbaijan, Baku - Azerbaijan Standard Time",
+   "country": "Azerbaijan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bahamas, Nassau - Eastern Standard Time",
+   "lookup_value": "Nassau",
+   "label": "Bahamas, Nassau - Eastern Standard Time",
+   "country": "Bahamas",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bahrain, Bahrain - Arabic Standard Time",
+   "lookup_value": "Bahrain",
+   "label": "Bahrain, Bahrain - Arabic Standard Time",
+   "country": "Bahrain",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bangladesh, Dhaka - N. Central Asia Standard Time",
+   "lookup_value": "Dhaka",
+   "label": "Bangladesh, Dhaka - N. Central Asia Standard Time",
+   "country": "Bangladesh",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Barbados, Barbados - Atlantic Standard Time",
+   "lookup_value": "Barbados",
+   "label": "Barbados, Barbados - Atlantic Standard Time",
+   "country": "Barbados",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Belarus, Minsk - E. Europe Standard Time",
+   "lookup_value": "Minsk",
+   "label": "Belarus, Minsk - E. Europe Standard Time",
+   "country": "Belarus",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Belgium, Brussels - Central European Standard Time",
+   "lookup_value": "Brussels",
+   "label": "Belgium, Brussels - Central European Standard Time",
+   "country": "Belgium",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Belize, Belize - Central Standard Time (Mexico)",
+   "lookup_value": "Belize",
+   "label": "Belize, Belize - Central Standard Time (Mexico)",
+   "country": "Belize",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Benin, Porto-Novo - W. Central Africa Standard Time",
+   "lookup_value": "Porto-Novo",
+   "label": "Benin, Porto-Novo - W. Central Africa Standard Time",
+   "country": "Benin",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bermuda, Bermuda - Atlantic Standard Time",
+   "lookup_value": "Bermuda",
+   "label": "Bermuda, Bermuda - Atlantic Standard Time",
+   "country": "Bermuda",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bhutan, Thimphu - N. Central Asia Standard Time",
+   "lookup_value": "Thimphu",
+   "label": "Bhutan, Thimphu - N. Central Asia Standard Time",
+   "country": "Bhutan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bolivia, La Paz - SA Western Standard Time",
+   "lookup_value": "La Paz",
+   "label": "Bolivia, La Paz - SA Western Standard Time",
+   "country": "Bolivia",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bosnia and Herzegovina, Sarajevo - Central European Standard Time",
+   "lookup_value": "Sarajevo",
+   "label": "Bosnia and Herzegovina, Sarajevo - Central European Standard Time",
+   "country": "Bosnia and Herzegovina",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Botswana, Gaborone - South Africa Standard Time",
+   "lookup_value": "Gaborone",
+   "label": "Botswana, Gaborone - South Africa Standard Time",
+   "country": "Botswana",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Brazil, Boa Vista - Central Brazilian Standard Time",
+   "lookup_value": "Boa Vista",
+   "label": "Brazil, Boa Vista - Central Brazilian Standard Time",
+   "country": "Brazil",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Brazil, Noronha - Mid-Atlantic Standard Time",
+   "lookup_value": "Noronha",
+   "label": "Brazil, Noronha - Mid-Atlantic Standard Time",
+   "country": "Brazil",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Brazil, Rio Branco - SA Pacific Standard Time",
+   "lookup_value": "Rio Branco",
+   "label": "Brazil, Rio Branco - SA Pacific Standard Time",
+   "country": "Brazil",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Brazil, Sao Paulo - E. South America Standard Time",
+   "lookup_value": "Sao Paulo",
+   "label": "Brazil, Sao Paulo - E. South America Standard Time",
+   "country": "Brazil",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "British Indian Ocean Territory, Chagos - Central Asia Standard Time",
+   "lookup_value": "Chagos",
+   "label": "British Indian Ocean Territory, Chagos - Central Asia Standard Time",
+   "country": "British Indian Ocean Territory",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "British Virgin Islands, Tortola - Atlantic Standard Time",
+   "lookup_value": "Tortola",
+   "label": "British Virgin Islands, Tortola - Atlantic Standard Time",
+   "country": "British Virgin Islands",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Brunei Darussalam Brunei - North Asia East Standard Time",
+   "lookup_value": "Brunei",
+   "label": "Brunei Darussalam Brunei - North Asia East Standard Time",
+   "country": "Brunei Darussalam",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Bulgaria, Sofia - E. Europe Standard Time",
+   "lookup_value": "Sofia",
+   "label": "Bulgaria, Sofia - E. Europe Standard Time",
+   "country": "Bulgaria",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Burkina Faso, Ouagadougou - Greenwich Mean Time",
+   "lookup_value": "Ouagadougou",
+   "label": "Burkina Faso, Ouagadougou - Greenwich Mean Time",
+   "country": "Burkina Faso",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Burundi, Bujumbura - South Africa Standard Time",
+   "lookup_value": "Bujumbura",
+   "label": "Burundi, Bujumbura - South Africa Standard Time",
+   "country": "Burundi",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cambodia, Phnom Penh - SE Asia Standard Time",
+   "lookup_value": "Phnom Penh",
+   "label": "Cambodia, Phnom Penh - SE Asia Standard Time",
+   "country": "Cambodia",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cameroon, Douala - W. Central Africa Standard Time",
+   "lookup_value": "Douala",
+   "label": "Cameroon, Douala - W. Central Africa Standard Time",
+   "country": "Cameroon",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, Edmonton - Mountain Standard Time",
+   "lookup_value": "Edmonton",
+   "label": "Canada, Edmonton - Mountain Standard Time",
+   "country": "Canada",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, Halifax - Atlantic Standard Time",
+   "lookup_value": "Halifax",
+   "label": "Canada, Halifax - Atlantic Standard Time",
+   "country": "Canada",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, Montreal - Eastern Standard Time",
+   "lookup_value": "Montreal",
+   "label": "Canada, Montreal - Eastern Standard Time",
+   "country": "Canada",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, St Johns - Newfoundland Standard Time",
+   "lookup_value": "St Johns",
+   "label": "Canada, St Johns - Newfoundland Standard Time",
+   "country": "Canada",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, Vancouver - Pacific Standard Time",
+   "lookup_value": "Vancouver",
+   "label": "Canada, Vancouver - Pacific Standard Time",
+   "country": "Canada",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canada, Winnipeg - Central Standard Time",
+   "lookup_value": "Winnipeg",
+   "label": "Canada, Winnipeg - Central Standard Time",
+   "country": "Canada",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Canary Islands, Canary - W. Europe Standard Time",
+   "lookup_value": "Canary",
+   "label": "Canary Islands, Canary - W. Europe Standard Time",
+   "country": "Canary Islands",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cape Verde, Cape Verde - Cape Verde Standard Time",
+   "lookup_value": "Cape Verde",
+   "label": "Cape Verde, Cape Verde - Cape Verde Standard Time",
+   "country": "Cape Verde",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cayman Islands, Cayman - Eastern Standard Time",
+   "lookup_value": "Cayman",
+   "label": "Cayman Islands, Cayman - Eastern Standard Time",
+   "country": "Cayman Islands",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Central African Republic, Bangui - W. Central Africa Standard Time",
+   "lookup_value": "Bangui",
+   "label": "Central African Republic, Bangui - W. Central Africa Standard Time",
+   "country": "Central African Republic",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Chad, Ndjamena - W. Central Africa Standard Time",
+   "lookup_value": "Ndjamena",
+   "label": "Chad, Ndjamena - W. Central Africa Standard Time",
+   "country": "Chad",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Chile, Santiago - SA Western Standard Time",
+   "lookup_value": "Santiago",
+   "label": "Chile, Santiago - SA Western Standard Time",
+   "country": "Chile",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "China, Shanghai - China Standard Time",
+   "lookup_value": "Shanghai",
+   "label": "China, Shanghai - China Standard Time",
+   "country": "China",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "China, Hong Kong SAR - Hong Kong Time",
+   "lookup_value": "Hong Kong",
+   "label": "China, Hong Kong SAR - Hong Kong Time",
+   "country": "China",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "China, Macau SAR - China Standard Time",
+   "lookup_value": "Macau",
+   "label": "China, Macau SAR - China Standard Time",
+   "country": "China",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Christmas Island, Christmas - SE Asia Standard Time",
+   "lookup_value": "Christmas",
+   "label": "Christmas Island, Christmas - SE Asia Standard Time",
+   "country": "Christmas Island",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cocos (Keeling) Islands, Cocos - Myanmar Standard Time",
+   "lookup_value": "Cocos",
+   "label": "Cocos (Keeling) Islands, Cocos - Myanmar Standard Time",
+   "country": "Cocos (Keeling) Islands",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Colombia, Bogota - SA Pacific Standard Time",
+   "lookup_value": "Bogota",
+   "label": "Colombia, Bogota - SA Pacific Standard Time",
+   "country": "Colombia",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Comoros, Comoro - E. Africa Standard Time",
+   "lookup_value": "Comoro",
+   "label": "Comoros, Comoro - E. Africa Standard Time",
+   "country": "Comoros",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Costa Rica, Costa Rica - Central Standard Time (Mexico)",
+   "lookup_value": "Costa Rica",
+   "label": "Costa Rica, Costa Rica - Central Standard Time (Mexico)",
+   "country": "Costa Rica",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Côte d'Ivoire, Abidjan - Greenwich Mean Time",
+   "lookup_value": "Abidjan",
+   "label": "Côte d'Ivoire, Abidjan - Greenwich Mean Time",
+   "country": "Côte d'Ivoire",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Croatia, Zagreb - Central European Standard Time",
+   "lookup_value": "Zagreb",
+   "label": "Croatia, Zagreb - Central European Standard Time",
+   "country": "Croatia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cuba, Havana - SA Pacific Standard Time",
+   "lookup_value": "Havana",
+   "label": "Cuba, Havana - SA Pacific Standard Time",
+   "country": "Cuba",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Cyprus, Nicosia - Middle East Standard Time",
+   "lookup_value": "Nicosia",
+   "label": "Cyprus, Nicosia - Middle East Standard Time",
+   "country": "Cyprus",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Czech Republic, Prague - Central European Standard Time",
+   "lookup_value": "Prague",
+   "label": "Czech Republic, Prague - Central European Standard Time",
+   "country": "Czech Republic",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Democratic Republic of the Congo, Kinshasa - W. Central Africa Standard Time",
+   "lookup_value": "Kinshasa",
+   "label": "Democratic Republic of the Congo, Kinshasa - W. Central Africa Standard Time",
+   "country": "Democratic Republic of the Congo",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Democratic Republic of the Congo, Lubumbashi - South Africa Standard Time",
+   "lookup_value": "Lubumbashi",
+   "label": "Democratic Republic of the Congo, Lubumbashi - South Africa Standard Time",
+   "country": "Democratic Republic of the Congo",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Denmark, Copenhagen - Central European Standard Time",
+   "lookup_value": "Copenhagen",
+   "label": "Denmark, Copenhagen - Central European Standard Time",
+   "country": "Denmark",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Djibouti, Djibouti - E. Africa Standard Time",
+   "lookup_value": "Djibouti",
+   "label": "Djibouti, Djibouti - E. Africa Standard Time",
+   "country": "Djibouti",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Dominica, Dominica - Atlantic Standard Time",
+   "lookup_value": "Dominica",
+   "label": "Dominica, Dominica - Atlantic Standard Time",
+   "country": "Dominica",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Dominican Republic, Santo Domingo - Atlantic Standard Time",
+   "lookup_value": "Santo Domingo",
+   "label": "Dominican Republic, Santo Domingo - Atlantic Standard Time",
+   "country": "Dominican Republic",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ecuador, Guayaquil - SA Pacific Standard Time",
+   "lookup_value": "Guayaquil",
+   "label": "Ecuador, Guayaquil - SA Pacific Standard Time",
+   "country": "Ecuador",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Egypt, Cairo - Egypt Standard Time",
+   "lookup_value": "Cairo",
+   "label": "Egypt, Cairo - Egypt Standard Time",
+   "country": "Egypt",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "El Salvador, El Salvador - Central Standard Time (Mexico)",
+   "lookup_value": "El Salvador",
+   "label": "El Salvador, El Salvador - Central Standard Time (Mexico)",
+   "country": "El Salvador",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Equatorial Guinea, Malabo - W. Central Africa Standard Time",
+   "lookup_value": "Malabo",
+   "label": "Equatorial Guinea, Malabo - W. Central Africa Standard Time",
+   "country": "Equatorial Guinea",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Eritrea, Asmara - E. Africa Standard Time",
+   "lookup_value": "Asmara",
+   "label": "Eritrea, Asmara - E. Africa Standard Time",
+   "country": "Eritrea",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Estonia, Tallinn - E. Europe Standard Time",
+   "lookup_value": "Tallinn",
+   "label": "Estonia, Tallinn - E. Europe Standard Time",
+   "country": "Estonia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Eswatini, Mbabane - South Africa Standard Time",
+   "lookup_value": "Mbabane",
+   "label": "Eswatini, Mbabane - South Africa Standard Time",
+   "country": "Eswatini",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ethiopia, Addis Ababa - E. Africa Standard Time",
+   "lookup_value": "Addis Ababa",
+   "label": "Ethiopia, Addis Ababa - E. Africa Standard Time",
+   "country": "Ethiopia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Falkland Islands, Stanley - Pacific SA Standard Time",
+   "lookup_value": "Stanley",
+   "label": "Falkland Islands, Stanley - Pacific SA Standard Time",
+   "country": "Falkland Islands",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Faroe Islands, Faroe - W. Europe Standard Time",
+   "lookup_value": "Faroe",
+   "label": "Faroe Islands, Faroe - W. Europe Standard Time",
+   "country": "Faroe Islands",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Federated States of Micronesia, Kosrae - Central Pacific Standard Time",
+   "lookup_value": "Kosrae",
+   "label": "Federated States of Micronesia, Kosrae - Central Pacific Standard Time",
+   "country": "Federated States of Micronesia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Federated States of Micronesia, Truk - West Pacific Standard Time",
+   "lookup_value": "Truk",
+   "label": "Federated States of Micronesia, Truk - West Pacific Standard Time",
+   "country": "Federated States of Micronesia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Fiji, Fiji - Fiji Standard Time",
+   "lookup_value": "Fiji",
+   "label": "Fiji, Fiji - Fiji Standard Time",
+   "country": "Fiji",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Finland, Helsinki - E. Europe Standard Time",
+   "lookup_value": "Helsinki",
+   "label": "Finland, Helsinki - E. Europe Standard Time",
+   "country": "Finland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "France, Paris - Central European Standard Time",
+   "lookup_value": "Paris",
+   "label": "France, Paris - Central European Standard Time",
+   "country": "France",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "French Guiana, Cayenne - SA Eastern Standard Time",
+   "lookup_value": "Cayenne",
+   "label": "French Guiana, Cayenne - SA Eastern Standard Time",
+   "country": "French Guiana",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "French Polynesia, Marquesas - Pacific Standard Time (Mexico)",
+   "lookup_value": "Marquesas",
+   "label": "French Polynesia, Marquesas - Pacific Standard Time (Mexico)",
+   "country": "French Polynesia",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "French Southern Territories, Kerguelen - West Asia Standard Time",
+   "lookup_value": "Kerguelen",
+   "label": "French Southern Territories, Kerguelen - West Asia Standard Time",
+   "country": "French Southern Territories",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Gabon, Libreville - W. Central Africa Standard Time",
+   "lookup_value": "Libreville",
+   "label": "Gabon, Libreville - W. Central Africa Standard Time",
+   "country": "Gabon",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Gambia, Banjul - Greenwich Mean Time",
+   "lookup_value": "Banjul",
+   "label": "Gambia, Banjul - Greenwich Mean Time",
+   "country": "Gambia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Georgia (country), Tbilisi - Arabian Standard Time",
+   "lookup_value": "Tbilisi",
+   "label": "Georgia (country), Tbilisi - Arabian Standard Time",
+   "country": "Georgia (country)",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Germany, Berlin - W. Europe Standard Time",
+   "lookup_value": "Berlin",
+   "label": "Germany, Berlin - W. Europe Standard Time",
+   "country": "Germany",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ghana, Accra - Greenwich Mean Time",
+   "lookup_value": "Accra",
+   "label": "Ghana, Accra - Greenwich Mean Time",
+   "country": "Ghana",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Gibraltar, Gibraltar - Central European Standard Time",
+   "lookup_value": "Gibraltar",
+   "label": "Gibraltar, Gibraltar - Central European Standard Time",
+   "country": "Gibraltar",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Greece, Athens - E. Europe Standard Time",
+   "lookup_value": "Athens",
+   "label": "Greece, Athens - E. Europe Standard Time",
+   "country": "Greece",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Greenland, Danmarkshavn - Greenwich Mean Time",
+   "lookup_value": "Danmarkshavn",
+   "label": "Greenland, Danmarkshavn - Greenwich Mean Time",
+   "country": "Greenland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Greenland, Godthab - Greenland Standard Time",
+   "lookup_value": "Godthab",
+   "label": "Greenland, Godthab - Greenland Standard Time",
+   "country": "Greenland",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Greenland, Scoresbysund - Azores Standard Time",
+   "lookup_value": "Scoresbysund",
+   "label": "Greenland, Scoresbysund - Azores Standard Time",
+   "country": "Greenland",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Greenland, Thule - Atlantic Standard Time",
+   "lookup_value": "Thule",
+   "label": "Greenland, Thule - Atlantic Standard Time",
+   "country": "Greenland",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Grenada, Grenada - Atlantic Standard Time",
+   "lookup_value": "Grenada",
+   "label": "Grenada, Grenada - Atlantic Standard Time",
+   "country": "Grenada",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guadeloupe, Guadeloupe - Atlantic Standard Time",
+   "lookup_value": "Guadeloupe",
+   "label": "Guadeloupe, Guadeloupe - Atlantic Standard Time",
+   "country": "Guadeloupe",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guam, Guam - West Pacific Standard Time",
+   "lookup_value": "Guam",
+   "label": "Guam, Guam - West Pacific Standard Time",
+   "country": "Guam",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guatemala, Guatemala - Central Standard Time (Mexico)",
+   "lookup_value": "Guatemala",
+   "label": "Guatemala, Guatemala - Central Standard Time (Mexico)",
+   "country": "Guatemala",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guernsey, Guernsey - GMT Standard Time",
+   "lookup_value": "Guernsey",
+   "label": "Guernsey, Guernsey - GMT Standard Time",
+   "country": "Guernsey",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guinea, Conakry - Greenwich Mean Time",
+   "lookup_value": "Conakry",
+   "label": "Guinea, Conakry - Greenwich Mean Time",
+   "country": "Guinea",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guinea-Bissau, Bissau - Greenwich Mean Time",
+   "lookup_value": "Bissau",
+   "label": "Guinea-Bissau, Bissau - Greenwich Mean Time",
+   "country": "Guinea-Bissau",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Guyana, Guyana - SA Western Standard Time",
+   "lookup_value": "Guyana",
+   "label": "Guyana, Guyana - SA Western Standard Time",
+   "country": "Guyana",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Haiti, Port-au-Prince - Eastern Standard Time",
+   "lookup_value": "Port-au-Prince",
+   "label": "Haiti, Port-au-Prince - Eastern Standard Time",
+   "country": "Haiti",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Honduras, Tegucigalpa - Central Standard Time (Mexico)",
+   "lookup_value": "Tegucigalpa",
+   "label": "Honduras, Tegucigalpa - Central Standard Time (Mexico)",
+   "country": "Honduras",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Hungary, Budapest - Central European Standard Time",
+   "lookup_value": "Budapest",
+   "label": "Hungary, Budapest - Central European Standard Time",
+   "country": "Hungary",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Iceland, Reykjavik - Greenwich Mean Time",
+   "lookup_value": "Reykjavik",
+   "label": "Iceland, Reykjavik - Greenwich Mean Time",
+   "country": "Iceland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "India, Kolkata - India Standard Time",
+   "lookup_value": "Kolkata",
+   "label": "India, Kolkata - India Standard Time",
+   "country": "India",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Indonesia, Jakarta - SE Asia Standard Time",
+   "lookup_value": "Jakarta",
+   "label": "Indonesia, Jakarta - SE Asia Standard Time",
+   "country": "Indonesia",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Indonesia, Jayapura - Korea Standard Time",
+   "lookup_value": "Jayapura",
+   "label": "Indonesia, Jayapura - Korea Standard Time",
+   "country": "Indonesia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Indonesia, Makassar - Malay Peninsula Standard Time",
+   "lookup_value": "Makassar",
+   "label": "Indonesia, Makassar - Malay Peninsula Standard Time",
+   "country": "Indonesia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Iran, Tehran - Iran Standard Time",
+   "lookup_value": "Tehran",
+   "label": "Iran, Tehran - Iran Standard Time",
+   "country": "Iran",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Iraq, Baghdad - Arabic Standard Time",
+   "lookup_value": "Baghdad",
+   "label": "Iraq, Baghdad - Arabic Standard Time",
+   "country": "Iraq",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ireland, Dublin - GMT Standard Time",
+   "lookup_value": "Dublin",
+   "label": "Ireland, Dublin - GMT Standard Time",
+   "country": "Ireland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Isle of Man, Isle of Man - GMT Standard Time",
+   "lookup_value": "Isle of Man",
+   "label": "Isle of Man, Isle of Man - GMT Standard Time",
+   "country": "Isle of Man",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Israel, Jerusalem - Middle East Standard Time",
+   "lookup_value": "Jerusalem",
+   "label": "Israel, Jerusalem - Middle East Standard Time",
+   "country": "Israel",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Italy, Rome - W. Europe Standard Time",
+   "lookup_value": "Rome",
+   "label": "Italy, Rome - W. Europe Standard Time",
+   "country": "Italy",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Jamaica, Jamaica - Eastern Standard Time",
+   "lookup_value": "Jamaica",
+   "label": "Jamaica, Jamaica - Eastern Standard Time",
+   "country": "Jamaica",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Japan, Tokyo - Tokyo Standard Time",
+   "lookup_value": "Tokyo",
+   "label": "Japan, Tokyo - Tokyo Standard Time",
+   "country": "Japan",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Jersey, Jersey - GMT Standard Time",
+   "lookup_value": "Jersey",
+   "label": "Jersey, Jersey - GMT Standard Time",
+   "country": "Jersey",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Jordan, Amman - Jordan Standard Time",
+   "lookup_value": "Amman",
+   "label": "Jordan, Amman - Jordan Standard Time",
+   "country": "Jordan",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kazakhstan, Almaty - Central Asia Standard Time",
+   "lookup_value": "Almaty",
+   "label": "Kazakhstan, Almaty - Central Asia Standard Time",
+   "country": "Kazakhstan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kazakhstan, Oral - Ekaterinburg Standard Time",
+   "lookup_value": "Oral",
+   "label": "Kazakhstan, Oral - Ekaterinburg Standard Time",
+   "country": "Kazakhstan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kenya, Nairobi - E. Africa Standard Time",
+   "lookup_value": "Nairobi",
+   "label": "Kenya, Nairobi - E. Africa Standard Time",
+   "country": "Kenya",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kiribati, Enderbury - Tonga Standard Time",
+   "lookup_value": "Enderbury",
+   "label": "Kiribati, Enderbury - Tonga Standard Time",
+   "country": "Kiribati",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kiribati, Kiritimati - Tonga Standard Time",
+   "lookup_value": "Kiritimati",
+   "label": "Kiribati, Kiritimati - Tonga Standard Time",
+   "country": "Kiribati",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kiribati, Tarawa - Fiji Standard Time",
+   "lookup_value": "Tarawa",
+   "label": "Kiribati, Tarawa - Fiji Standard Time",
+   "country": "Kiribati",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kuwait, Kuwait - Arabic Standard Time",
+   "lookup_value": "Kuwait",
+   "label": "Kuwait, Kuwait - Arabic Standard Time",
+   "country": "Kuwait",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Kyrgyzstan, Bishkek - Central Asia Standard Time",
+   "lookup_value": "Bishkek",
+   "label": "Kyrgyzstan, Bishkek - Central Asia Standard Time",
+   "country": "Kyrgyzstan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Laos, Vientiane - SE Asia Standard Time",
+   "lookup_value": "Vientiane",
+   "label": "Laos, Vientiane - SE Asia Standard Time",
+   "country": "Laos",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Latvia, Riga - E. Europe Standard Time",
+   "lookup_value": "Riga",
+   "label": "Latvia, Riga - E. Europe Standard Time",
+   "country": "Latvia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Lebanon, Beirut - Middle East Standard Time",
+   "lookup_value": "Beirut",
+   "label": "Lebanon, Beirut - Middle East Standard Time",
+   "country": "Lebanon",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Lesotho, Maseru - South Africa Standard Time",
+   "lookup_value": "Maseru",
+   "label": "Lesotho, Maseru - South Africa Standard Time",
+   "country": "Lesotho",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Liberia, Monrovia - Greenwich Mean Time",
+   "lookup_value": "Monrovia",
+   "label": "Liberia, Monrovia - Greenwich Mean Time",
+   "country": "Liberia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Libya, Tripoli - South Africa Standard Time",
+   "lookup_value": "Tripoli",
+   "label": "Libya, Tripoli - South Africa Standard Time",
+   "country": "Libya",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Liechtenstein, Vaduz - W. Europe Standard Time",
+   "lookup_value": "Vaduz",
+   "label": "Liechtenstein, Vaduz - W. Europe Standard Time",
+   "country": "Liechtenstein",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Lithuania, Vilnius - E. Europe Standard Time",
+   "lookup_value": "Vilnius",
+   "label": "Lithuania, Vilnius - E. Europe Standard Time",
+   "country": "Lithuania",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Luxembourg, Luxembourg - Central European Standard Time",
+   "lookup_value": "Luxembourg",
+   "label": "Luxembourg, Luxembourg - Central European Standard Time",
+   "country": "Luxembourg",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Madagascar, Antananarivo - E. Africa Standard Time",
+   "lookup_value": "Antananarivo",
+   "label": "Madagascar, Antananarivo - E. Africa Standard Time",
+   "country": "Madagascar",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Malawi, Blantyre - South Africa Standard Time",
+   "lookup_value": "Blantyre",
+   "label": "Malawi, Blantyre - South Africa Standard Time",
+   "country": "Malawi",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Malaysia, Kuala Lumpur - Malay Peninsula Standard Time",
+   "lookup_value": "Kuala Lumpur",
+   "label": "Malaysia, Kuala Lumpur - Malay Peninsula Standard Time",
+   "country": "Malaysia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Maldives, Maldives - West Asia Standard Time",
+   "lookup_value": "Maldives",
+   "label": "Maldives, Maldives - West Asia Standard Time",
+   "country": "Maldives",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mali, Bamako - Greenwich Mean Time",
+   "lookup_value": "Bamako",
+   "label": "Mali, Bamako - Greenwich Mean Time",
+   "country": "Mali",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Malta, Malta - Central European Standard Time",
+   "lookup_value": "Malta",
+   "label": "Malta, Malta - Central European Standard Time",
+   "country": "Malta",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Marshall Islands, Kwajalein - Fiji Standard Time",
+   "lookup_value": "Kwajalein",
+   "label": "Marshall Islands, Kwajalein - Fiji Standard Time",
+   "country": "Marshall Islands",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Martinique, Martinique - Atlantic Standard Time",
+   "lookup_value": "Martinique",
+   "label": "Martinique, Martinique - Atlantic Standard Time",
+   "country": "Martinique",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mauritania, Nouakchott - Greenwich Mean Time",
+   "lookup_value": "Nouakchott",
+   "label": "Mauritania, Nouakchott - Greenwich Mean Time",
+   "country": "Mauritania",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mauritius, Mauritius - Azerbaijan Standard Time",
+   "lookup_value": "Mauritius",
+   "label": "Mauritius, Mauritius - Azerbaijan Standard Time",
+   "country": "Mauritius",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mayotte, Mayotte - E. Africa Standard Time",
+   "lookup_value": "Mayotte",
+   "label": "Mayotte, Mayotte - E. Africa Standard Time",
+   "country": "Mayotte",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mexico, Chihuahua - Mountain Standard Time (Mexico)",
+   "lookup_value": "Chihuahua",
+   "label": "Mexico, Chihuahua - Mountain Standard Time (Mexico)",
+   "country": "Mexico",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mexico, Mexico City - Central Standard Time (Mexico)",
+   "lookup_value": "Mexico City",
+   "label": "Mexico, Mexico City - Central Standard Time (Mexico)",
+   "country": "Mexico",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mexico, Tijuana - Pacific Standard Time (Mexico)",
+   "lookup_value": "Tijuana",
+   "label": "Mexico, Tijuana - Pacific Standard Time (Mexico)",
+   "country": "Mexico",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Moldova, Chisinau - E. Europe Standard Time",
+   "lookup_value": "Chisinau",
+   "label": "Moldova, Chisinau - E. Europe Standard Time",
+   "country": "Moldova",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Monaco, Monaco - Central European Standard Time",
+   "lookup_value": "Monaco",
+   "label": "Monaco, Monaco - Central European Standard Time",
+   "country": "Monaco",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mongolia, Ulaanbaatar - North Asia East Standard Time",
+   "lookup_value": "Ulaanbaatar",
+   "label": "Mongolia, Ulaanbaatar - North Asia East Standard Time",
+   "country": "Mongolia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Montenegro, Podgorica - Central European Standard Time",
+   "lookup_value": "Podgorica",
+   "label": "Montenegro, Podgorica - Central European Standard Time",
+   "country": "Montenegro",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Montserrat, Montserrat - Atlantic Standard Time",
+   "lookup_value": "Montserrat",
+   "label": "Montserrat, Montserrat - Atlantic Standard Time",
+   "country": "Montserrat",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Morocco, Casablanca - Greenwich Mean Time",
+   "lookup_value": "Casablanca",
+   "label": "Morocco, Casablanca - Greenwich Mean Time",
+   "country": "Morocco",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Mozambique, Maputo - South Africa Standard Time",
+   "lookup_value": "Maputo",
+   "label": "Mozambique, Maputo - South Africa Standard Time",
+   "country": "Mozambique",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Myanmar, Rangoon - Myanmar Standard Time",
+   "lookup_value": "Rangoon",
+   "label": "Myanmar, Rangoon - Myanmar Standard Time",
+   "country": "Myanmar",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Namibia, Windhoek - W. Central Africa Standard Time",
+   "lookup_value": "Windhoek",
+   "label": "Namibia, Windhoek - W. Central Africa Standard Time",
+   "country": "Namibia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Nauru, Nauru - Fiji Standard Time",
+   "lookup_value": "Nauru",
+   "label": "Nauru, Nauru - Fiji Standard Time",
+   "country": "Nauru",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Nepal, Katmandu - Nepal Standard Time",
+   "lookup_value": "Katmandu",
+   "label": "Nepal, Katmandu - Nepal Standard Time",
+   "country": "Nepal",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Netherlands Antilles, Curacao - Atlantic Standard Time",
+   "lookup_value": "Curacao",
+   "label": "Netherlands Antilles, Curacao - Atlantic Standard Time",
+   "country": "Netherlands Antilles",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Netherlands, Amsterdam - W. Europe Standard Time",
+   "lookup_value": "Amsterdam",
+   "label": "Netherlands, Amsterdam - W. Europe Standard Time",
+   "country": "Netherlands",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "New Caledonia, Noumea - Central Pacific Standard Time",
+   "lookup_value": "Noumea",
+   "label": "New Caledonia, Noumea - Central Pacific Standard Time",
+   "country": "New Caledonia",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "New Zealand, Auckland - New Zealand Standard Time",
+   "lookup_value": "Auckland",
+   "label": "New Zealand, Auckland - New Zealand Standard Time",
+   "country": "New Zealand",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "New Zealand, Chatham - Fiji Standard Time",
+   "lookup_value": "Chatham",
+   "label": "New Zealand, Chatham - Fiji Standard Time",
+   "country": "New Zealand",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Nicaragua, Managua - Central Standard Time (Mexico)",
+   "lookup_value": "Managua",
+   "label": "Nicaragua, Managua - Central Standard Time (Mexico)",
+   "country": "Nicaragua",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Niger, Niamey - W. Central Africa Standard Time",
+   "lookup_value": "Niamey",
+   "label": "Niger, Niamey - W. Central Africa Standard Time",
+   "country": "Niger",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Nigeria, Lagos - W. Central Africa Standard Time",
+   "lookup_value": "Lagos",
+   "label": "Nigeria, Lagos - W. Central Africa Standard Time",
+   "country": "Nigeria",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Norfolk Island, Norfolk - Central Pacific Standard Time",
+   "lookup_value": "Norfolk",
+   "label": "Norfolk Island, Norfolk - Central Pacific Standard Time",
+   "country": "Norfolk Island",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "North Korea, Pyongyang - Korea Standard Time",
+   "lookup_value": "Pyongyang",
+   "label": "North Korea, Pyongyang - Korea Standard Time",
+   "country": "North Korea",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Northern Mariana Islands, Saipan - West Pacific Standard Time",
+   "lookup_value": "Saipan",
+   "label": "Northern Mariana Islands, Saipan - West Pacific Standard Time",
+   "country": "Northern Mariana Islands",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Norway, Oslo - Central European Standard Time",
+   "lookup_value": "Oslo",
+   "label": "Norway, Oslo - Central European Standard Time",
+   "country": "Norway",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Oman, Muscat - Arabian Standard Time",
+   "lookup_value": "Muscat",
+   "label": "Oman, Muscat - Arabian Standard Time",
+   "country": "Oman",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Pakistan, Karachi - West Asia Standard Time",
+   "lookup_value": "Karachi",
+   "label": "Pakistan, Karachi - West Asia Standard Time",
+   "country": "Pakistan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Palau, Palau - Tokyo Standard Time",
+   "lookup_value": "Palau",
+   "label": "Palau, Palau - Tokyo Standard Time",
+   "country": "Palau",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Palestinian territories, Gaza - Middle East Standard Time",
+   "lookup_value": "Gaza",
+   "label": "Palestinian territories, Gaza - Middle East Standard Time",
+   "country": "Palestinian territories",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Panama, Panama - Eastern Standard Time",
+   "lookup_value": "Panama",
+   "label": "Panama, Panama - Eastern Standard Time",
+   "country": "Panama",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Papua New Guinea, Port Moresby - West Pacific Standard Time",
+   "lookup_value": "Port Moresby",
+   "label": "Papua New Guinea, Port Moresby - West Pacific Standard Time",
+   "country": "Papua New Guinea",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Paraguay, Asuncion - Central Brazilian Standard Time",
+   "lookup_value": "Asuncion",
+   "label": "Paraguay, Asuncion - Central Brazilian Standard Time",
+   "country": "Paraguay",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Peru, Lima - SA Pacific Standard Time",
+   "lookup_value": "Lima",
+   "label": "Peru, Lima - SA Pacific Standard Time",
+   "country": "Peru",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Philippines, Manila - Malay Peninsula Standard Time",
+   "lookup_value": "Manila",
+   "label": "Philippines, Manila - Malay Peninsula Standard Time",
+   "country": "Philippines",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Pitcairn, Pitcairn - Pacific Standard Time",
+   "lookup_value": "Pitcairn",
+   "label": "Pitcairn, Pitcairn - Pacific Standard Time",
+   "country": "Pitcairn",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Poland, Warsaw - Central European Standard Time",
+   "lookup_value": "Warsaw",
+   "label": "Poland, Warsaw - Central European Standard Time",
+   "country": "Poland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Portugal, Lisbon - W. Europe Standard Time",
+   "lookup_value": "Lisbon",
+   "label": "Portugal, Lisbon - W. Europe Standard Time",
+   "country": "Portugal",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Puerto Rico, Puerto Rico - Atlantic Standard Time",
+   "lookup_value": "Puerto Rico",
+   "label": "Puerto Rico, Puerto Rico - Atlantic Standard Time",
+   "country": "Puerto Rico",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Qatar, Qatar - Arabic Standard Time",
+   "lookup_value": "Qatar",
+   "label": "Qatar, Qatar - Arabic Standard Time",
+   "country": "Qatar",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Republic of Macedonia, Skopje - Central European Standard Time",
+   "lookup_value": "Skopje",
+   "label": "Republic of Macedonia, Skopje - Central European Standard Time",
+   "country": "Republic of Macedonia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Republic of the Congo, Brazzaville - W. Central Africa Standard Time",
+   "lookup_value": "Brazzaville",
+   "label": "Republic of the Congo, Brazzaville - W. Central Africa Standard Time",
+   "country": "Republic of the Congo",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Réunion, Reunion - Arabian Standard Time",
+   "lookup_value": "Reunion",
+   "label": "Réunion, Reunion - Arabian Standard Time",
+   "country": "Réunion",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Romania, Bucharest - E. Europe Standard Time",
+   "lookup_value": "Bucharest",
+   "label": "Romania, Bucharest - E. Europe Standard Time",
+   "country": "Romania",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Russia, Moscow - Russian Standard Time",
+   "lookup_value": "Moscow",
+   "label": "Russia, Moscow - Russian Standard Time",
+   "country": "Russia",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Rwanda, Kigali - South Africa Standard Time",
+   "lookup_value": "Kigali",
+   "label": "Rwanda, Kigali - South Africa Standard Time",
+   "country": "Rwanda",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Barthélemy, St Barthélemy - Atlantic Standard Time",
+   "lookup_value": "St Barthelemy",
+   "label": "Saint Barthélemy, St Barthélemy - Atlantic Standard Time",
+   "country": "Saint Barthélemy",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Helena, St Helena - Greenwich Mean Time",
+   "lookup_value": "St Helena",
+   "label": "Saint Helena, St Helena - Greenwich Mean Time",
+   "country": "Saint Helena",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Kitts and Nevis, St Kitts - Atlantic Standard Time",
+   "lookup_value": "St Kitts",
+   "label": "Saint Kitts and Nevis, St Kitts - Atlantic Standard Time",
+   "country": "Saint Kitts and Nevis",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Lucia, St Lucia - Atlantic Standard Time",
+   "lookup_value": "St Lucia",
+   "label": "Saint Lucia, St Lucia - Atlantic Standard Time",
+   "country": "Saint Lucia",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Pierre and Miquelon, Miquelon - Greenland Standard Time",
+   "lookup_value": "Miquelon",
+   "label": "Saint Pierre and Miquelon, Miquelon - Greenland Standard Time",
+   "country": "Saint Pierre and Miquelon",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saint Vincent and the Grenadines, St Vincent - Atlantic Standard Time",
+   "lookup_value": "St Vincent",
+   "label": "Saint Vincent and the Grenadines, St Vincent - Atlantic Standard Time",
+   "country": "Saint Vincent and the Grenadines",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "San Marino, San Marino - Central European Standard Time",
+   "lookup_value": "San Marino",
+   "label": "San Marino, San Marino - Central European Standard Time",
+   "country": "San Marino",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "São Tomé and Príncipe, Sao Tome - Greenwich Mean Time",
+   "lookup_value": "Sao Tome",
+   "label": "São Tomé and Príncipe, Sao Tome - Greenwich Mean Time",
+   "country": "São Tomé and Príncipe",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Saudi Arabia, Riyadh - Arabic Standard Time",
+   "lookup_value": "Riyadh",
+   "label": "Saudi Arabia, Riyadh - Arabic Standard Time",
+   "country": "Saudi Arabia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Senegal, Dakar - Greenwich Mean Time",
+   "lookup_value": "Dakar",
+   "label": "Senegal, Dakar - Greenwich Mean Time",
+   "country": "Senegal",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Serbia, Belgrade - Central Europe Standard Time",
+   "lookup_value": "Belgrade",
+   "label": "Serbia, Belgrade - Central Europe Standard Time",
+   "country": "Serbia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Seychelles, Mahe - Arabian Standard Time",
+   "lookup_value": "Mahe",
+   "label": "Seychelles, Mahe - Arabian Standard Time",
+   "country": "Seychelles",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Sierra Leone, Freetown - Greenwich Mean Time",
+   "lookup_value": "Freetown",
+   "label": "Sierra Leone, Freetown - Greenwich Mean Time",
+   "country": "Sierra Leone",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Singapore, Singapore - Malay Peninsula Standard Time",
+   "lookup_value": "Singapore",
+   "label": "Singapore, Singapore - Malay Peninsula Standard Time",
+   "country": "Singapore",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Slovakia, Bratislava - Central European Standard Time",
+   "lookup_value": "Bratislava",
+   "label": "Slovakia, Bratislava - Central European Standard Time",
+   "country": "Slovakia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Slovenia, Ljubljana - Central European Standard Time",
+   "lookup_value": "Ljubljana",
+   "label": "Slovenia, Ljubljana - Central European Standard Time",
+   "country": "Slovenia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Solomon Islands, Guadalcanal - Central Pacific Standard Time",
+   "lookup_value": "Guadalcanal",
+   "label": "Solomon Islands, Guadalcanal - Central Pacific Standard Time",
+   "country": "Solomon Islands",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Somalia, Mogadishu - E. Africa Standard Time",
+   "lookup_value": "Mogadishu",
+   "label": "Somalia, Mogadishu - E. Africa Standard Time",
+   "country": "Somalia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "South Africa, Johannesburg - South Africa Standard Time",
+   "lookup_value": "Johannesburg",
+   "label": "South Africa, Johannesburg - South Africa Standard Time",
+   "country": "South Africa",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "South Korea, Seoul - Korea Standard Time",
+   "lookup_value": "Seoul",
+   "label": "South Korea, Seoul - Korea Standard Time",
+   "country": "South Korea",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Spain, Madrid - Central European Standard Time",
+   "lookup_value": "Madrid",
+   "label": "Spain, Madrid - Central European Standard Time",
+   "country": "Spain",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Sri Lanka, Colombo - Sri Lanka Standard Time",
+   "lookup_value": "Colombo",
+   "label": "Sri Lanka, Colombo - Sri Lanka Standard Time",
+   "country": "Sri Lanka",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Sudan, Khartoum - E. Africa Standard Time",
+   "lookup_value": "Khartoum",
+   "label": "Sudan, Khartoum - E. Africa Standard Time",
+   "country": "Sudan",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Suriname, Paramaribo - SA Eastern Standard Time",
+   "lookup_value": "Paramaribo",
+   "label": "Suriname, Paramaribo - SA Eastern Standard Time",
+   "country": "Suriname",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Sweden, Stockholm - W. Europe Standard Time",
+   "lookup_value": "Stockholm",
+   "label": "Sweden, Stockholm - W. Europe Standard Time",
+   "country": "Sweden",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Switzerland, Zurich - Central European Standard Time",
+   "lookup_value": "Zurich",
+   "label": "Switzerland, Zurich - Central European Standard Time",
+   "country": "Switzerland",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Syria, Damascus - Middle East Standard Time",
+   "lookup_value": "Damascus",
+   "label": "Syria, Damascus - Middle East Standard Time",
+   "country": "Syria",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Taiwan, Taipei - China Standard Time",
+   "lookup_value": "Taipei",
+   "label": "Taiwan, Taipei - China Standard Time",
+   "country": "Taiwan",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Tajikistan, Dushanbe - West Asia Standard Time",
+   "lookup_value": "Dushanbe",
+   "label": "Tajikistan, Dushanbe - West Asia Standard Time",
+   "country": "Tajikistan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Tanzania, Dar es Salaam - E. Africa Standard Time",
+   "lookup_value": "Dar es Salaam",
+   "label": "Tanzania, Dar es Salaam - E. Africa Standard Time",
+   "country": "Tanzania",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Thailand, Bangkok - SE Asia Standard Time",
+   "lookup_value": "Bangkok",
+   "label": "Thailand, Bangkok - SE Asia Standard Time",
+   "country": "Thailand",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Timor-Leste, Dili - Korea Standard Time",
+   "lookup_value": "Dili",
+   "label": "Timor-Leste, Dili - Korea Standard Time",
+   "country": "Timor-Leste",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Togo, Lome - Greenwich Mean Time",
+   "lookup_value": "Lome",
+   "label": "Togo, Lome - Greenwich Mean Time",
+   "country": "Togo",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Tonga, Tongatapu - Tonga Standard Time",
+   "lookup_value": "Tongatapu",
+   "label": "Tonga, Tongatapu - Tonga Standard Time",
+   "country": "Tonga",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Trinidad and Tobago, Port of Spain - Atlantic Standard Time",
+   "lookup_value": "Port of Spain",
+   "label": "Trinidad and Tobago, Port of Spain - Atlantic Standard Time",
+   "country": "Trinidad and Tobago",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Tunisia, Tunis - Central Europe Standard Time",
+   "lookup_value": "Tunis",
+   "label": "Tunisia, Tunis - Central Europe Standard Time",
+   "country": "Tunisia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Türkiye, Istanbul - E. Europe Standard Time",
+   "lookup_value": "Istanbul",
+   "label": "Türkiye, Istanbul - E. Europe Standard Time",
+   "country": "Türkiye",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Turkmenistan, Ashgabat - West Asia Standard Time",
+   "lookup_value": "Ashgabat",
+   "label": "Turkmenistan, Ashgabat - West Asia Standard Time",
+   "country": "Turkmenistan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Turks and Caicos Islands, Grand Turk - Eastern Standard Time",
+   "lookup_value": "Grand Turk",
+   "label": "Turks and Caicos Islands, Grand Turk - Eastern Standard Time",
+   "country": "Turks and Caicos Islands",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Tuvalu, Funafuti - Fiji Standard Time",
+   "lookup_value": "Funafuti",
+   "label": "Tuvalu, Funafuti - Fiji Standard Time",
+   "country": "Tuvalu",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Uganda, Kampala - E. Africa Standard Time",
+   "lookup_value": "Kampala",
+   "label": "Uganda, Kampala - E. Africa Standard Time",
+   "country": "Uganda",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Ukraine, Kiev - E. Europe Standard Time",
+   "lookup_value": "Kiev",
+   "label": "Ukraine, Kiev - E. Europe Standard Time",
+   "country": "Ukraine",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United Arab Emirates, Dubai - Arabian Standard Time",
+   "lookup_value": "Dubai",
+   "label": "United Arab Emirates, Dubai - Arabian Standard Time",
+   "country": "United Arab Emirates",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United Kingdom, London - GMT Standard Time",
+   "lookup_value": "London",
+   "label": "United Kingdom, London - GMT Standard Time",
+   "country": "United Kingdom",
+   "zone": 3,
+   "timetable_variant": "uk"
+  },
+  {
+   "location_key": "United States Virgin Islands, St Thomas - Atlantic Standard Time",
+   "lookup_value": "St Thomas",
+   "label": "United States Virgin Islands, St Thomas - Atlantic Standard Time",
+   "country": "United States Virgin Islands",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, Anchorage - Alaskan Standard Time",
+   "lookup_value": "Anchorage",
+   "label": "United States, Anchorage - Alaskan Standard Time",
+   "country": "United States",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, Chicago - Central Standard Time",
+   "lookup_value": "Chicago",
+   "label": "United States, Chicago - Central Standard Time",
+   "country": "United States",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, Denver - Mountain Standard Time",
+   "lookup_value": "Denver",
+   "label": "United States, Denver - Mountain Standard Time",
+   "country": "United States",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, Los Angeles - Pacific Standard Time",
+   "lookup_value": "Los Angeles",
+   "label": "United States, Los Angeles - Pacific Standard Time",
+   "country": "United States",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, New York - Eastern Standard Time",
+   "lookup_value": "New York",
+   "label": "United States, New York - Eastern Standard Time",
+   "country": "United States",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "United States, Phoenix - Mountain Standard Time",
+   "lookup_value": "Phoenix",
+   "label": "United States, Phoenix - Mountain Standard Time",
+   "country": "United States",
+   "zone": 1,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Uruguay, Montevideo - Montevideo Standard Time",
+   "lookup_value": "Montevideo",
+   "label": "Uruguay, Montevideo - Montevideo Standard Time",
+   "country": "Uruguay",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Uzbekistan, Samarkand - West Asia Standard Time",
+   "lookup_value": "Samarkand",
+   "label": "Uzbekistan, Samarkand - West Asia Standard Time",
+   "country": "Uzbekistan",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Vanuatu, Efate - Central Pacific Standard Time",
+   "lookup_value": "Efate",
+   "label": "Vanuatu, Efate - Central Pacific Standard Time",
+   "country": "Vanuatu",
+   "zone": 5,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Vatican City, Vatican - W. Europe Standard Time",
+   "lookup_value": "Vatican",
+   "label": "Vatican City, Vatican - W. Europe Standard Time",
+   "country": "Vatican City",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Venezuela, Caracas - Venezuelan Standard Time",
+   "lookup_value": "Caracas",
+   "label": "Venezuela, Caracas - Venezuelan Standard Time",
+   "country": "Venezuela",
+   "zone": 2,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Viet Nam, Ho Chi Minh - SE Asia Standard Time",
+   "lookup_value": "Ho Chi Minh",
+   "label": "Viet Nam, Ho Chi Minh - SE Asia Standard Time",
+   "country": "Viet Nam",
+   "zone": 4,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Wallis and Futuna, Wallis - Fiji Standard Time",
+   "lookup_value": "Wallis",
+   "label": "Wallis and Futuna, Wallis - Fiji Standard Time",
+   "country": "Wallis and Futuna",
+   "zone": 6,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Western Sahara, El Aaiun - Greenwich Mean Time",
+   "lookup_value": "El Aaiun",
+   "label": "Western Sahara, El Aaiun - Greenwich Mean Time",
+   "country": "Western Sahara",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Yemen, Aden - Arabic Standard Time",
+   "lookup_value": "Aden",
+   "label": "Yemen, Aden - Arabic Standard Time",
+   "country": "Yemen",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Zambia, Lusaka - South Africa Standard Time",
+   "lookup_value": "Lusaka",
+   "label": "Zambia, Lusaka - South Africa Standard Time",
+   "country": "Zambia",
+   "zone": 3,
+   "timetable_variant": ""
+  },
+  {
+   "location_key": "Zimbabwe, Harare - South Africa Standard Time",
+   "lookup_value": "Harare",
+   "label": "Zimbabwe, Harare - South Africa Standard Time",
+   "country": "Zimbabwe",
+   "zone": 3,
+   "timetable_variant": ""
+  }
+ ]
+}

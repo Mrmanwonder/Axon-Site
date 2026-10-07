@@ -31,3 +31,4 @@ deno.lock
 # Review-only output from the official-source curriculum reconciler.
 /curriculum/generated/
 .ph-static/
+__pycache__/

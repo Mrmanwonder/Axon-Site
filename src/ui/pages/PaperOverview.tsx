@@ -11,13 +11,15 @@
    to open. This screen assumes it is being asked for a paper that has been saved.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
+import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
+import { paperTypeLabel, providerKeyForStudent, setPaperSubject } from "../data/modules";
+import AppDropdown from "../components/AppDropdown";
 import { usePaperDelete } from "../data/usePaperDelete";
 import { relabelAttempt } from "../data/modules";
 import { useSheetControls } from "../components/SheetProvider";
@@ -32,6 +34,8 @@ import ResourceActions from "../components/ResourceActions";
 import { tutorEntryVisible } from "../data/tutor";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
+import { useSchemeCheck } from "../data/schemeCheck";
+import { SchemeCheckSummary } from "../components/SchemeCheck";
 import "../styles/paper-overview.css";
 
 /** What the badge means, in words. "Likely" alone told the student nothing. */
@@ -57,7 +61,7 @@ function PartRow({ paperId, part, label }: { paperId: string; part: PaperPart; l
           {part.page != null && <span className="po-page">Page {part.page}</span>}
         </div>
         <div className={"po-prompt" + (part.prompt ? "" : " none")}>
-          {part.prompt ?? "Question text not read"}
+          {part.prompt ? <MathText text={part.prompt} /> : "Question text not read"}
         </div>
         {/* The list says only what needs the student. "Confirmed by you" and
             "Read clearly" live on the question itself, beside its confidence. */}
@@ -113,7 +117,7 @@ function NextAction({ paperId, structure }: { paperId: string; structure: PaperS
 
 export default function PaperOverview() {
   const { paperId } = useParams();
-  const { student, papers, progressResource } = useApp();
+  const { student, papers, progressResource, refreshLibrary } = useApp();
   const deletePaperSheet = usePaperDelete();
   const { activeShare, shareStatusKnown, requestShare } = useAcademicShare({
     resourceType: "paper",
@@ -122,10 +126,24 @@ export default function PaperOverview() {
   });
 
   const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const schemeCheck = useSchemeCheck(paperId);
+  const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
   const toast = useToast();
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   const structure = useMemo(() => (paper ? paperStructure(paper) : null), [paper]);
+  // Save closes review at once; the paper fills in here when its marks are
+  // committed. Until then, say what is happening and keep checking.
+  const runStatus = paperId ? progressResource?.data?.get(paperId)?.status : undefined;
+  const saving = !!paper && !paper.student_attempt.length && ["needs_review", "explaining", "ready"].includes(runStatus ?? "");
+  useEffect(() => {
+    if (!saving) return;
+    const timer = window.setInterval(() => { void refreshLibrary().catch(() => {}); }, 3000);
+    return () => window.clearInterval(timer);
+  }, [saving, refreshLibrary]);
+  useEffect(() => {
+    if (runStatus === "committed" && paper && !paper.student_attempt.length) void reload();
+  }, [runStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadError) {
     return (
@@ -156,6 +174,26 @@ export default function PaperOverview() {
     ? subjectPresentation(listed, undefined, progressResource?.data?.get(paper.id))
     : subjectPresentation(paper as never);
   const subjectLabel = subjectInfo.state === "unknown" ? null : subjectInfo.label;
+  const subjectOptions = [
+    ...(student?.subject_selections ?? []).map((sel) => ({ value: sel.offering_id, label: sel.external_code ? `${sel.subject} · ${sel.external_code}` : sel.subject })),
+    { value: "", label: "Not set" },
+  ];
+  const changeSubject = async (value: string) => {
+    if ((paper.subject_offering_id ?? "") === value) return;
+    setSavingSubject(true);
+    try {
+      await setPaperSubject(paper.id, value || null);
+      await reload();
+      void refreshLibrary();
+      toast(value ? "Subject changed. Its questions will move to that syllabus shortly." : "Subject cleared.");
+    } catch (cause) {
+      toast(cause instanceof Error && /official assessment/.test(cause.message)
+        ? "This paper's subject comes from its official assessment and can't be changed."
+        : "The subject couldn't be changed. Try again with a connection.");
+    } finally {
+      setSavingSubject(false);
+    }
+  };
   const dated = new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   const requestDelete = () => { if (paperId) deletePaperSheet(paperId); };
@@ -190,12 +228,23 @@ export default function PaperOverview() {
           <h1>{subjectLabel || typeLabel}</h1>
           <div className="sub po-meta">
             {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
-            <span>Dated {dated}</span>
+            {/* No exam date is recorded for a paper yet; date_taken is the day it
+                was added, so it is labelled that way (Axon.md §4, Dates on a paper). */}
+            <span>Added {dated}</span>
             {stale && <span>offline copy</span>}
           </div>
         </div>
         <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
+
+      {paper.subject_identity_source !== "assessment_identity" && (student?.subject_selections?.length ?? 0) > 0 && (
+        <div className="po-subject">
+          <span className="k">Subject</span>
+          <AppDropdown ariaLabel="Paper subject" value={paper.subject_offering_id ?? ""} options={subjectOptions}
+            onChange={(v) => { if (!savingSubject) void changeSubject(v); }} selected={!!paper.subject_offering_id} />
+          {paper.subject_identity_source === "triage" && <span className="hint">Set from the paper. Change it if it&rsquo;s wrong.</span>}
+        </div>
+      )}
 
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">
@@ -231,6 +280,8 @@ export default function PaperOverview() {
         </section>
       )}
 
+      {schemeCheck.check && <SchemeCheckSummary check={schemeCheck.check} regions={schemeCheck.regions} />}
+
       {tutorEntryVisible() && attempts.length > 0 && (
         <div style={{ margin: "12px var(--gutter) 0" }}>
           <Link to={paths.tutor({ paperId: paperId! })} className="btn ghost" style={{ display: "inline-flex" }}>
@@ -239,7 +290,18 @@ export default function PaperOverview() {
         </div>
       )}
 
-      {!attempts.length && (
+      {saving && (
+        <div className="list" role="status">
+          <div className="srow noicon">
+            <div className="lbl">
+              Saving this paper
+              <small>Axon is working out where the marks went. The questions appear here by themselves.</small>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!attempts.length && !saving && (
         <>
           <h2 className="sectitle">Questions</h2>
           <div className="list">

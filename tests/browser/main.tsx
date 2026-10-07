@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "../../src/ui/data/AppProvider";
 import Library from "../../src/ui/pages/Library";
 import Home from "../../src/ui/pages/Home";
 import Insights from "../../src/ui/pages/Insights";
+import SyllabusDetail from "../../src/ui/pages/SyllabusDetail";
 import AppRouteErrorBoundary from "../../src/ui/pages/AppRouteErrorBoundary";
 import NotFound from "../../src/ui/pages/NotFound";
 import TabNav from "../../src/ui/shell/TabNav";
@@ -16,9 +17,10 @@ import ReviewSheet from "../../src/ui/scan/ReviewSheet";
 import PaperOverview from "../../src/ui/pages/PaperOverview";
 import { Route, Routes } from "react-router-dom";
 import Scan from "../../src/ui/pages/Scan";
+import { ExamSettings } from "../../src/ui/components/ExamPlan";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
-if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen") {
+if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
   await Promise.all([
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
@@ -61,7 +63,9 @@ function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "insights" ? <Insights /> : <Library />}</>;
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
+    ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
+    : <Library />}</>;
 }
 const root = createRoot(document.getElementById("root")!);
 if (params.get("view") === "scan-screen") {

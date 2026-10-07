@@ -84,22 +84,52 @@ test.describe("camera screen on a phone", () => {
     expect(await calls(page, "onRetake")).toEqual([[2]]);
   });
 
-  test("review sheet leads with the page that needs a look", async ({ page }) => {
+  test("review shows the paper as a grid in page order, with the flagged page outlined", async ({ page }) => {
     await open(page, "review");
     await shot(page, "m-review");
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading", { name: "1 page needs a look" })).toBeVisible();
-    await expect(dialog.getByText("The other 2 can be read.")).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Retake page 2" })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Adjust edges" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "3 pages" })).toBeVisible();
+    await expect(dialog.getByText("Page 2 needs a look. Tap a page to fix it.")).toBeVisible();
+    const tiles = dialog.locator(".sc-tile");
+    await expect(tiles).toHaveCount(3);
+    await expect(tiles.nth(1)).toHaveAttribute("data-flagged", "true");
+    // Two across on a phone.
+    const [a, b] = await Promise.all([tiles.nth(0).boundingBox(), tiles.nth(1).boundingBox()]);
+    expect(Math.abs((a?.y ?? 0) - (b?.y ?? 1))).toBeLessThan(2);
     await expect(dialog.getByRole("button", { name: "Read as it is" })).toBeVisible();
-    // Flagged page first.
-    await expect(dialog.locator(".sc-pg").first()).toContainText("Page 2");
+    // Nothing shows beneath the footer: it is solid to the sheet's bottom edge.
+    const gap = await page.evaluate(() => {
+      const sheet = document.querySelector(".sheet.sc-review")!.getBoundingClientRect();
+      const acts = document.querySelector(".sc-review-acts")!.getBoundingClientRect();
+      return Math.round(sheet.bottom - acts.bottom);
+    });
+    expect(gap).toBeLessThanOrEqual(1);
+  });
+
+  test("every page, flagged or not, opens with Adjust edges, Retake, reorder and remove", async ({ page }) => {
+    await open(page, "review");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Page 3", exact: true }).click();
+    await expect(dialog.getByRole("heading", { name: "Page 3" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Adjust edges" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Retake" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Move earlier" }).click();
+    expect(await calls(page, "onMove")).toEqual([[3, 2]]);
+  });
+
+  test("removing a page states what happens before it happens", async ({ page }) => {
+    await open(page, "review");
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Page 1", exact: true }).click();
+    await dialog.getByRole("button", { name: "Remove this page" }).click();
+    await dialog.getByRole("button", { name: "Remove page 1. The pages after it move up." }).click();
+    expect(await calls(page, "onRemove")).toEqual([[1]]);
   });
 
   test("adjust edges opens the editor on the original photo and returns four corners", async ({ page }) => {
     await open(page, "review");
     await page.waitForTimeout(300);
+    await page.getByRole("button", { name: "Page 2, needs a look" }).click();
     await page.getByRole("button", { name: "Adjust edges" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("heading", { name: "Page 2 edges" })).toBeVisible();
@@ -149,6 +179,44 @@ test.describe("camera screen on a phone", () => {
     expect(landed.focused).not.toBe("BUTTON");
     await dialog.getByRole("button", { name: "On", exact: true }).click();
     expect(await calls(page, "setTorchMode")).toEqual([["on"]]);
+  });
+
+  test("a saved draft shows what it holds and can be opened or deleted", async ({ page }) => {
+    await open(page, "saved");
+    await page.getByRole("button", { name: /Saved drafts/ }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("3 pages")).toBeVisible();
+    await expect(dialog.getByText(/Maths mock · Today/)).toBeVisible();
+    await dialog.getByRole("button", { name: "Delete draft, 3 pages" }).click();
+    await dialog.getByRole("button", { name: "Delete 3 pages from this phone" }).click();
+    expect(await calls(page, "onDiscard")).toEqual([["d1"]]);
+    await dialog.getByRole("button", { name: /Open draft, 3 pages/ }).click();
+    await expect.poll(async () => (await calls(page, "onResume")).length).toBe(1);
+  });
+
+  test("sending is told in pages, shows the real pages, and can always be left", async ({ page }) => {
+    await open(page, "reading");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/files?\b/i)).toHaveCount(0);
+    const pages = page.locator(".sc-reading-pages li");
+    await expect(pages).toHaveCount(12);
+    await expect(pages.nth(0)).toHaveAttribute("data-sent", "true");
+    await expect(pages.nth(4)).not.toHaveAttribute("data-sent", "true");
+    await expect(page.locator(".sc-reading-pages img")).toHaveCount(12);
+    await expect(page.getByRole("button", { name: "Go to Library" }).first()).toBeVisible();
+    // The whole scanner is this paper's screen until the student moves on.
+    await page.getByRole("button", { name: "Continue scanning" }).click();
+    expect(await calls(page, "setFocusedSend")).toEqual([[null]]);
+  });
+
+  test("a lost connection waits and says so; it never says the send did not finish", async ({ page }) => {
+    await open(page, "offline");
+    await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    await expect(page.getByText(/No connection\. Sending carries on by itself/)).toBeVisible();
+    await expect(page.getByText("4 of 12 pages safely sent")).toBeVisible();
+    await expect(page.getByText(/did not finish|another tab/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue scanning" })).toBeVisible();
   });
 
   test("saved drafts with nothing saved offers one way out", async ({ page }) => {

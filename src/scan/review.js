@@ -11,7 +11,7 @@
 // misread it.
 
 import { sb } from '../supabase.js';
-import { countQuestions } from '../questionCount.js';
+import { projectQuestionRegions, questionDisplayPath } from '../questionCount.js';
 import { reviewLeadFor } from './reviewSummary.js';
 import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
 import { assessmentRulesFor, providerKeyForBoard } from '../curriculum.js';
@@ -64,7 +64,7 @@ export async function loadReview(runId) {
       sb.from('paper').select('id, type, tier, subject, date_taken, reported_total, total_awarded, total_available')
         .eq('id', run.paper_id).single(),
       sb.from('question_region')
-        .select('id, order_index, question_label, question_text, student_answer, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, student_confirmed_at, student_corrected, page_spans')
+        .select('id, order_index, question_label, question_text, student_answer, answer_block, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, student_confirmed_at, student_corrected, page_spans')
         .eq('run_id', runId).order('order_index'),
       sb.from('paper_page').select('page_number, r2_key, quality_verdict, layer_fallback, status')
         .eq('paper_id', run.paper_id).order('page_number'),
@@ -81,6 +81,12 @@ export async function loadReview(runId) {
 
   const byRegion = new Map((explanations ?? []).map((e) => [e.region_id, e]));
   const pageByNumber = new Map((pages ?? []).map((p) => [p.page_number, p]));
+  const projection = projectQuestionRegions((regions ?? []).map(r => ({
+    id: r.id, label: r.question_label, order_index: r.order_index,
+    page: r.page_spans?.[0]?.page ?? null, y: r.page_spans?.[0]?.box?.y ?? null,
+    evidence: r.marks_awarded != null || r.marks_available != null || !!r.student_answer || !!r.question_text,
+  })));
+  const identities = new Map(projection.entries.map(entry => [entry.region.id, entry]));
 
   const questions = await Promise.all((regions ?? []).map(async (r) => {
     const span = (r.page_spans ?? [])[0];
@@ -93,14 +99,19 @@ export async function loadReview(runId) {
     return {
       id: r.id,
       order: r.order_index,
-      label: r.question_label ?? `Unassigned part ${r.order_index + 1}`,
+      label: questionDisplayPath(identities.get(r.id)?.question ?? null, identities.get(r.id)?.part ?? null),
+      identityNote: identities.get(r.id)?.inherited ? `Parent linked by source order. Printed label: ${r.question_label}` : null,
       tier: r.confidence_tier,
       confirmed: !!r.student_confirmed_at,
       corrected: !!r.student_corrected,
       marksAwarded: r.marks_awarded === null ? null : Number(r.marks_awarded),
       marksAvailable: r.marks_available === null ? null : Number(r.marks_available),
       answer: r.student_answer,
+      answerBlock: r.answer_block ?? null,
       questionText: r.question_text,
+      markStep: markRules.markStep,
+      paperId: run.paper_id,
+      pageNumbers: [...new Set((r.page_spans ?? []).map(s => s.page))],
       remark: r.teacher_remark,
       regionType: r.region_type,
       crop,
@@ -129,13 +140,7 @@ export async function loadReview(runId) {
   // Unreadable first, then unsure, then the rest — and within each, paper order.
   const rank = { unreadable: 0, unsure: 1, confident: 2 };
   questions.sort((a, b) => (Number(a.confirmed) - Number(b.confirmed)) || (rank[a.tier] - rank[b.tier]) || (a.order - b.order));
-  const counts = countQuestions((regions ?? []).map(r => ({
-    label: r.question_label,
-    order_index: r.order_index,
-    page: r.page_spans?.[0]?.page ?? null,
-    y: r.page_spans?.[0]?.box?.y ?? null,
-    evidence: r.marks_awarded != null || r.marks_available != null || !!r.student_answer || !!r.question_text,
-  })));
+  const counts = projection.counts;
 
   return {
     run,
@@ -160,6 +165,11 @@ export async function loadReview(runId) {
     // say "yes, that is what my paper says" is how a required step becomes a
     // step people learn to rush.
     cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.confirmed).map((q) => q.id),
+    // Every reading the student can vouch for in one go once they have looked:
+    // anything with a reading on screen. An unreadable region has nothing to
+    // vouch for and stays out (owner, 5 Oct 2026: nineteen taps on a paper the
+    // reader got right).
+    readableUnconfirmed: questions.filter((q) => q.tier !== 'unreadable' && !q.confirmed).map((q) => q.id),
   };
 }
 
@@ -185,7 +195,7 @@ export function deltaFor(run, paper, regions) {
  */
 function noTotalFor(run) {
   return run.status_reason_code === 'no_printed_total'
-    ? 'No total is printed on this paper, so there is nothing to check these marks against. Axon will add up the marks it reads.'
+    ? 'No total is printed on this paper. Axon adds up the marks it reads.'
     : null;
 }
 
@@ -245,7 +255,9 @@ export async function correctMark(regionId, value) {
   const { error } = await sb.from('question_region').update({
     marks_awarded: value,
     marks_awarded_box: box,
-    student_confirmed_at: new Date().toISOString(),
+    // A changed field invalidates whole-question confirmation. Only the
+    // explicit confirm action accepts the other readings.
+    student_confirmed_at: null,
     student_corrected: true,
     updated_at: new Date().toISOString(),
   }).eq('id', regionId);
@@ -263,14 +275,35 @@ export async function correctAnswer(regionId, text) {
   const value = String(text ?? '').trim();
   const { error } = await sb.from('question_region').update({
     student_answer: value || null,
+    // The old structured transcription no longer represents this correction.
+    // Commit must carry the corrected raw text, without stale model segments.
     answer_block: null,
     student_answer_box: value ? (region.student_answer_box ?? spanBox(region.page_spans)) : null,
-    student_confirmed_at: new Date().toISOString(),
+    student_confirmed_at: null,
     student_corrected: true,
     updated_at: new Date().toISOString(),
   }).eq('id', regionId);
   if (error) throw error;
 
+  await countCorrection(regionId);
+}
+
+/**
+ * Which question and part this is. The student has the paper, so placing a
+ * part is transcription and is accepted at once, the same as Fix this (owner,
+ * 6 Oct 2026: "I can't choose the question and part"). Two parts of one paper
+ * cannot share a label; the server refuses that, and the student is told which.
+ */
+export async function relabelRegion(regionId, label) {
+  const clean = String(label ?? '').replace(/\s+/g, '').slice(0, 24);
+  if (!/^\d{1,3}(\([a-z]\))?(\([ivx]{1,4}\))?$/.test(clean)) throw new Error('Choose the question number, and the part if it has one.');
+  const { error } = await sb.from('question_region')
+    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .eq('id', regionId);
+  if (error) {
+    if (error.code === '23505') throw new Error(`Another part of this paper is already ${clean}. Change that one first.`);
+    throw error;
+  }
   await countCorrection(regionId);
 }
 

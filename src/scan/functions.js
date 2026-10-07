@@ -86,6 +86,8 @@ export const submitPaper = (body, options) => post('/paper-submit', body, option
 
 /** Retry a failed saved paper using the server-owned stored page keys. */
 export const retryFailedPaper = (paperId) => post('/paper-retry', { paper_id: paperId });
+/** A paper refused as unmarked, read again because the student says it is marked (AXO-196). */
+export const retryAsMarked = (paperId) => post('/paper-retry', { paper_id: paperId, marked: true });
 
 /** Stage 8's gate: nothing is explained until every region has been through review. */
 export const reviewComplete = (body) => post('/review-complete', body);

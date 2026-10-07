@@ -22,6 +22,7 @@
 import * as supabaseMod from "../../supabase.js";
 import * as prefsMod from "../../prefs.js";
 import * as consentMod from "../../consent.js";
+import * as noticeMod from "../../notice.js";
 import * as papersMod from "../../papers.js";
 import * as sharesMod from "../../shares.js";
 import * as accountMod from "../../account.js";
@@ -31,6 +32,7 @@ import * as billingMod from "../../billing.js";
 import * as curriculumMod from "../../curriculum.js";
 import * as avatarMod from "../../avatar.js";
 import * as scanApiMod from "../../scan/functions.js";
+import * as examsMod from "../../exams.js";
 
 export type Prefs = {
   theme: "system" | "light" | "dark";
@@ -279,6 +281,7 @@ export const recordConsent = consentMod.recordConsent as (a: {
   studentId?: string | null;
   decisions: Record<string, boolean>;
   method?: "in_app_itemised" | "in_app_withdrawal";
+  noticeLanguage?: NoticeLanguage;
 }) => Promise<unknown>;
 export const withdrawConsent = consentMod.withdrawConsent as (a: {
   guardianId: string;
@@ -288,6 +291,31 @@ export const withdrawConsent = consentMod.withdrawConsent as (a: {
 export const listPurposes = consentMod.listPurposes as () => Promise<
   { purpose: string; label: string; is_required: boolean; sort_order: number }[]
 >;
+
+// ── consent notice text (English and Hindi) ──────────────────────────────────
+export type NoticeLanguage = "en" | "hi";
+export type NoticeStrings = {
+  title: string;
+  requiredSection: string;
+  optionalSection: string;
+  neverSection: string;
+  requiredNote: string;
+  optionalNote: string;
+  requiredTag: string;
+  never: string;
+  neverItems: string[];
+  withdrawNote: string;
+  action: string;
+  langLabel: string;
+};
+export const NOTICE_LANGUAGES = noticeMod.LANGUAGES as { code: NoticeLanguage; label: string }[];
+export const noticeStrings = noticeMod.noticeStrings as (lang: NoticeLanguage) => NoticeStrings;
+export const purposeLabel = noticeMod.purposeLabel as (
+  purpose: string, englishLabel: string, lang: NoticeLanguage,
+) => string;
+export const noticeIsComplete = noticeMod.noticeIsComplete as (
+  purposes: { purpose: string }[], lang: NoticeLanguage,
+) => boolean;
 
 // ── papers ─────────────────────────────────────────────────────────────────
 export const listPapers = papersMod.listPapers as unknown as (
@@ -524,6 +552,12 @@ export type PaperPage = {
 export type QuestionRegionRef = {
   /** Absent on offline copies cached before the tutor needed it. */
   id?: string;
+  order_index?: number;
+  question_label?: string | null;
+  question_text?: string | null;
+  student_answer?: string | null;
+  marks_awarded?: number | null;
+  marks_available?: number | null;
   run_id: string;
   /** queued | running | done | skipped | failed. The machine reason is deliberately not selected: it is not user copy. */
   explain_status: string | null;
@@ -546,7 +580,16 @@ export type PaperDetail = {
   type: string;
   tier: string | null;
   date_taken: string;
+  /** Existing date_taken is an added-on date, not evidence of an exam date. */
+  created_at?: string;
+  subject_identity_confidence?: string | null;
+  subject_verified_at?: string | null;
   subject: string | null;
+  subject_offering_id?: string | null;
+  subject_display_snapshot?: string | null;
+  subject_external_code_snapshot?: string | null;
+  /** assessment_identity (official, fixed) · student (they chose it) · triage (assigned automatically) */
+  subject_identity_source?: "assessment_identity" | "student" | "triage" | null;
   reported_total: number | null;
   stated_maximum: number | null;
   total_awarded: number | null;
@@ -671,6 +714,7 @@ export const explainRetry = scanApiMod.explainRetry as unknown as (
 export const retryFailedPaper = scanApiMod.retryFailedPaper as unknown as (
   paperId: string,
 ) => Promise<RetryPaperResult>;
+export const retryAsMarked = scanApiMod.retryAsMarked as unknown as (paperId: string) => Promise<{ retry: string; run_id?: string; queued?: boolean }>;
 
 /** What `/tutor` returns (axon-intelligence TutorResponseSchema). */
 export type TutorReply = {
@@ -717,6 +761,31 @@ export const needsCheck = papersMod.needsCheck as unknown as (
 export const unreadablePages = papersMod.unreadablePages as unknown as (
   studentId: string,
 ) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
+
+/** Every eligible attempt and loss event Insights reasons over, from the
+    analytics views only (hard rule 3). */
+export const insightEvidence = papersMod.insightEvidence as unknown as (
+  studentId: string,
+) => Promise<Cached<{
+  attempts: import("./insights").InsightAttempt[];
+  losses: import("./insights").InsightLoss[];
+}>>;
+
+/** The student sets or clears a paper's subject (one of their own subjects). */
+export const setPaperSubject = papersMod.setPaperSubject as unknown as (paperId: string, subjectOfferingId: string | null) => Promise<void>;
+
+/** Syllabus documents, topics and eligible topic evidence for the syllabus map. */
+export const syllabusMapData = papersMod.syllabusMapData as unknown as (
+  studentId: string,
+) => Promise<Cached<import("./syllabusMap").SyllabusMapInput>>;
+
+// ── exam dates (AXO-207) ───────────────────────────────────────────────────
+export const examLocations = examsMod.examLocations as unknown as () => Promise<Cached<import("./examPlan").ExamLocation[]>>;
+export const examPlanData = examsMod.examPlanData as unknown as (studentId: string) => Promise<Cached<import("./examPlan").ExamPlanInput>>;
+export const saveExamPlan = examsMod.saveExamPlan as unknown as (
+  studentId: string, plan: { locationKey: string | null; seriesKey: string | null },
+) => Promise<void>;
+export const saveExamPapers = examsMod.saveExamPapers as unknown as (studentId: string, syllabusCode: string, papers: number[] | null) => Promise<void>;
 
 /** Sample size, and whether there is enough to show an insight at all. */
 export const analyticsReadiness = papersMod.analyticsReadiness as unknown as (

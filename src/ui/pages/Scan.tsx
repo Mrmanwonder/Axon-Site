@@ -23,13 +23,14 @@ import { useApp } from "../data/AppProvider";
 import PressBox from "../components/PressBox";
 import Dialog, { SHEET_EXIT_MS, useDialogDismiss } from "../components/Dialog";
 import GlideSegment from "../components/GlideSegment";
-import { DraftAlert } from "../components/ScanDrafts";
 import CameraLevel from "../scan/CameraLevel";
 import PaperStack, { DoneButton, needsLook } from "../scan/PaperStack";
 import PageReview from "../scan/PageReview";
+import DraftsSheet from "../scan/DraftsSheet";
 import ImportDesk from "../scan/ImportDesk";
+import ReadingScreen, { modelForSend } from "../scan/ReadingScreen";
+import type { SendJob } from "../scan/ReadingScreen";
 import { useDeskMode } from "../scan/useDeskMode";
-import { useSheetControls } from "../components/SheetProvider";
 import { hapticTick } from "../lib/haptics";
 import { CheckSymbol, CropFreeSymbol, InfoSymbol } from "../components/MaterialSymbols";
 import Chevron from "../components/Chevron";
@@ -52,14 +53,14 @@ type Strip = {
 
 export default function Scan() {
   const {
-    videoRef, overlayRef, camera, hint, tray, trayHandlers, progress,
-    resumable, drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
+    videoRef, overlayRef, camera, hint, tray, trayHandlers,
+    drafts, draftsHandlers, onScreenVisible, ensureScan, shoot,
     setAutoCapture, setTorchMode, auto, submitting, pendingCaptureCount,
     pageReviewOpen, openPageReview, closePageReview,
+    sends, focusedSend, setFocusedSend, retrySend,
   } = useScan();
   const { ingestFiles, addPaper, addLink } = useIngestion();
   const { student } = useApp();
-  const { openSheet } = useSheetControls();
   const navigate = useNavigate();
   const desk = useDeskMode();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,15 +77,26 @@ export default function Scan() {
   };
   const cameraApp = useRef<HTMLInputElement>(null);
 
+  // The paper just handed over, while its reading screen covers the camera.
+  const focused = sends.find((job) => job.id === focusedSend) ?? null;
+  const covered = Boolean(focused);
+
   useEffect(() => {
     document.documentElement.classList.add("scanner-active");
     if (desk) void ensureScan().catch(() => { /* the screen still takes files */ });
-    else onScreenVisible(true);
+    else onScreenVisible(!covered);
     return () => {
       document.documentElement.classList.remove("scanner-active");
       if (!desk) onScreenVisible(false);
     };
-  }, [desk, onScreenVisible, ensureScan]);
+  }, [desk, onScreenVisible, ensureScan, covered]);
+
+  // The paper is read while the student is still looking at it: open review.
+  useEffect(() => {
+    if (focused?.phase !== "review" || !focused.paperId) return;
+    setFocusedSend(null);
+    navigate(paths.review(focused.paperId));
+  }, [focused?.phase, focused?.paperId, setFocusedSend, navigate]);
 
   // iOS Safari handles pinch through gesture events outside touch-action.
   useEffect(() => {
@@ -119,24 +131,8 @@ export default function Scan() {
 
   const flaggedPages = tray.filter(needsLook);
 
-  const openDrafts = () => {
-    hapticTick();
-    openSheet({
-      title: "Saved drafts",
-      body: drafts.length
-        ? "These unfinished scans are stored on this device until you resume and send them."
-        : "No saved scans yet. Pages you capture will be stored on this device until you send them.",
-      choices: drafts.length
-        ? drafts.map((draft) => ({
-            label: `${draft.title} · ${draft.pages} page${draft.pages === 1 ? "" : "s"}`,
-            value: draft.id,
-          }))
-        : undefined,
-      // Nothing to choose: one way out, not Done beside Cancel.
-      acknowledge: drafts.length ? undefined : "OK",
-      onChoice: (id) => draftsHandlers.onResume?.(id),
-    });
-  };
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const openDrafts = () => { hapticTick(); setDraftsOpen(true); };
 
   const review = pageReviewOpen && <PageReview onClose={closePageReview} />;
 
@@ -145,7 +141,7 @@ export default function Scan() {
       <>
         <ImportDesk onReview={openPageReview} />
         {review}
-        {progress && <ProgressPanel progress={progress} />}
+        {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
         {!student && <div className="subnote">Create a student profile before scanning.</div>}
       </>
     );
@@ -244,9 +240,6 @@ export default function Scan() {
               <button type="button" className="sc-btn ghost" onClick={addPaper}>Import photos</button>
             </div>
           )}
-          {resumable && draftsHandlers.onResume && tray.length === 0 && (
-            <DraftAlert draft={resumable} onResume={draftsHandlers.onResume} />
-          )}
         </div>
 
         <div className="sc-strip" data-tone={strip.tone} role="status" aria-live="polite">
@@ -317,11 +310,37 @@ export default function Scan() {
 </Dialog>
       )}
 
+      {draftsOpen && (
+        <DraftsSheet drafts={drafts} onClose={() => setDraftsOpen(false)}
+          onOpen={(id) => draftsHandlers.onResume?.(id)}
+          onDelete={(id) => draftsHandlers.onDiscard?.(id)} />
+      )}
+
       {review}
-      {progress && <ProgressPanel progress={progress} />}
+      {focused && <SendingScreen job={focused} onContinue={() => setFocusedSend(null)} onRetry={() => retrySend(focused.id)} />}
 
       {!student && <div className="subnote">Create a student profile before scanning.</div>}
     </>
+  );
+}
+
+/* The scanner after Read (owner, 6 Oct 2026): the whole screen becomes this
+   paper's reading screen. Continue scanning hands the camera back for the next
+   paper while this one carries on; Go to Library leaves it to finish there. */
+function SendingScreen({ job, onContinue, onRetry }: { job: SendJob; onContinue: () => void; onRetry: () => void }) {
+  const navigate = useNavigate();
+  const toLibrary = () => navigate(paths.library);
+  const actions = job.phase === "stuck"
+    ? [{ label: "Try again", run: onRetry, primary: true }, { label: "Continue scanning", run: onContinue }]
+    : job.phase === "refused"
+      ? [{ label: "Continue scanning", run: onContinue, primary: true }, { label: "Go to Library", run: toLibrary }]
+      : [{ label: "Continue scanning", run: () => { hapticTick(); onContinue(); }, primary: true }, { label: "Go to Library", run: toLibrary }];
+  return (
+    <ReadingScreen model={modelForSend(job)} variant="overlay" onClose={toLibrary} closeLabel="Go to Library"
+      actions={actions}
+      footnote={["sending", "waiting", "reading"].includes(job.phase)
+        ? "This carries on while you scan the next paper or leave. It waits in your Library."
+        : null} />
   );
 }
 
@@ -332,34 +351,4 @@ function MoreMenu({ then, children }: { then: (fn: () => void) => void; children
   // system's own action sheets. A row closes the sheet first, then acts.
   const go = (fn: () => void) => { dismiss(); window.setTimeout(() => then(fn), SHEET_EXIT_MS + 10); };
   return <>{children(go)}</>;
-}
-
-function ProgressPanel({ progress }: { progress: NonNullable<ReturnType<typeof useScan>["progress"]> }) {
-  return (
-    <div className="scanbelow">
-      <div className="sectitle tight">{progress.heading ?? "Reading this paper"}</div>
-      <div className="card proc">
-        <div className="hd">{progress.now}</div>
-        {progress.sub && <div className="sub">{progress.sub}</div>}
-        {progress.steps.map((st, i) => (
-          <div key={i} className={"pline" + (st.state === "now" ? " now" : "")}>
-            <span className={"st " + st.state}>
-              {st.state === "done" && (
-                <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5 4.5 9 10 3.5" /></svg>
-              )}
-            </span>
-            <span className="lb">{st.label}</span>
-          </div>
-        ))}
-        {progress.skeleton && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div className="skel" style={{ width: "82%" }} />
-            <div className="skel" style={{ width: "64%" }} />
-            <div className="skel" style={{ width: "73%" }} />
-          </div>
-        )}
-      </div>
-      {progress.note && <div className="subnote">{progress.note}</div>}
-    </div>
-  );
 }

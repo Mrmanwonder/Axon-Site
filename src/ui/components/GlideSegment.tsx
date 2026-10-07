@@ -6,7 +6,10 @@ import type { CSSProperties } from "react";
    four short options. */
 export default function GlideSegment<T extends string>({ label, options, value, onChange, className = "" }: {
   label: string;
-  options: { value: T; label: string }[];
+  /* `lang` marks an option whose label is in another language than the page
+     around it, such as हिन्दी on an English screen, so it is announced and
+     shaped as that language. */
+  options: { value: T; label: string; lang?: string }[];
   value: T;
   onChange: (value: T) => void;
   className?: string;
@@ -17,7 +20,7 @@ export default function GlideSegment<T extends string>({ label, options, value, 
          style={{ "--gseg-n": options.length, "--gseg-i": index } as CSSProperties}>
       <span className="gseg-pill" aria-hidden="true" />
       {options.map((o) => (
-        <button type="button" key={o.value} aria-pressed={o.value === value}
+        <button type="button" key={o.value} aria-pressed={o.value === value} lang={o.lang}
                 onClick={() => { if (o.value !== value) onChange(o.value); }}>
           {o.label}
         </button>
