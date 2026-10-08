@@ -41,9 +41,9 @@ HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
   yet, the surface says so rather than showing the numbers this file was prototyped with:
   Insights stays on its empty state until there are four papers, and the sections that
   need extracted attempts stay hidden until something computes them.
-- **Library filters and search** — over the columns a paper actually has: date, type and
-  tier. There is no subject filter because a paper carries no subject until something
-  reads one off the page.
+- **Library filters and search** — by available paper metadata, including subject
+  identity when confirmed or suggested. A suggested subject remains explicitly
+  unverified in filtering and data semantics; it does not change a teacher's marks.
 - **Guardian verification** — a swappable adapter. The development stub is wired;
   DigiLocker is the intended production adapter and needs a server-side token
   exchange. Only a reference and a timestamp are ever stored.
@@ -61,9 +61,11 @@ HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
   import screen (drop, paste, QR to continue on a phone) rather than a webcam. Detection
   thresholds are first guesses until they are tuned on real phone footage.
 - **Ingestion** — upload from the gallery or files, or paste a link. Uploads take the
-  same road as captures rather than bypassing conditioning, but imported photos are not
-  yet page-detected or cropped. The paper type is asked once because it decides Tier 1
-  vs Tier 2.
+  same road as captures rather than bypassing conditioning. The send path no longer
+  opens a paper-type sheet before the reading screen (7 Oct 2026 decision D7): an
+  unspecified type starts as a school test; server triage may identify an official
+  past paper from a confidently read printed code. Type can be corrected on the paper.
+  The upload queue begins only when the student chooses to read the pages.
 - **The pipeline** — the ten stages of `SCANNING_SYSTEM.md`: conditioning and teacher-ink
   separation on device (today this isolates red ink only; teacher ink can be any colour,
   which is a known gap), then structure, content, mark attribution, reconciliation, tier
