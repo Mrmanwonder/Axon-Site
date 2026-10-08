@@ -13,7 +13,7 @@ export function booklet(count, mixed = false) {
 export function fixture(draft) {
   let nonce = 0, active = 0, max = 0;
   const issued = new Map(), arrived = new Set(), puts = new Map(), calls = [];
-  let failKind = null, failStatus, onPut;
+  let failKind = null, failStatus, failTimes = 0, onPut;
   const transport = {
     async uploadIntent(body) {
       calls.push(['intent', body]); assert.ok(body.objects.length > 0 && body.objects.length <= 60);
@@ -29,7 +29,7 @@ export function fixture(draft) {
       puts.set(cap.name, (puts.get(cap.name) || 0) + 1);
       try {
         await Promise.resolve(); signal?.throwIfAborted();
-        if (cap.kind === failKind) { failKind = null; throw Object.assign(new Error('interrupted'), { status: failStatus }); }
+        if (cap.kind === failKind) { if (--failTimes <= 0) failKind = null; throw Object.assign(new Error('interrupted'), { status: failStatus }); }
         arrived.add(cap.key); onPut?.(cap);
       } finally { active--; }
     },
@@ -42,7 +42,7 @@ export function fixture(draft) {
     },
   };
   return { transport, puts, calls, arrived, issued, get max() { return max; },
-    fail(kind, status) { failKind = kind; failStatus = status; }, onPut(fn) { onPut = fn; },
+    fail(kind, status, times = 1) { failKind = kind; failStatus = status; failTimes = times; }, onPut(fn) { onPut = fn; },
     run(options = {}) { return uploadDraftAssets({ draft, studentId: 'student', paperId: 'paper', mode: 'batch',
-      transport, persist: async (d, updates) => applyAssetUpdates(d, updates), ...options }); } };
+      transport, persist: async (d, updates) => applyAssetUpdates(d, updates), putRetryDelays: [0, 0], ...options }); } };
 }

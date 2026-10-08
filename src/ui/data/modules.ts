@@ -316,6 +316,7 @@ export const purposeLabel = noticeMod.purposeLabel as (
 export const noticeIsComplete = noticeMod.noticeIsComplete as (
   purposes: { purpose: string }[], lang: NoticeLanguage,
 ) => boolean;
+export const purposeNote = noticeMod.purposeNote as (purpose: string, lang: NoticeLanguage) => string;
 
 // ── papers ─────────────────────────────────────────────────────────────────
 export const listPapers = papersMod.listPapers as unknown as (

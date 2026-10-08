@@ -1,6 +1,24 @@
 import { sanitizeUploadTelemetry } from '../../scan/upload-telemetry.js';
 export type AnalyticsConsent = "granted" | "denied" | null;
 
+/**
+ * Who is using the page right now, as far as analytics is concerned.
+ *
+ * - `unknown`: not yet established (boot, profile choice, boot error, the
+ *   public landing step a student may be reading, legal pages outside the app
+ *   shell). Analytics does not start, and nothing is sent.
+ * - `student`: a student profile is active (Student Mode). Only the explicitly
+ *   consented, allowlisted reliability events are sent: no pageviews, no
+ *   page-leave, no autocapture, no replay, no exceptions.
+ * - `parent`: a guardian-only step (account, verification, consent, plan,
+ *   creating the student profile). Coarse pageviews, exceptions and the
+ *   allowlisted events only; still no autocapture, page-leave or replay.
+ *
+ * The default is `unknown`, so analytics fails closed until the app declares
+ * the audience (AXO-217, council D2: "Never: behavioural tracking").
+ */
+export type AnalyticsAudience = "unknown" | "student" | "parent";
+
 export type AnalyticsEvent = {
   event?: string;
   properties?: Record<string, unknown>;
@@ -35,6 +53,62 @@ const STUB_METHODS = [
 ] as const;
 
 let state: "idle" | "loading" | "ready" = "idle";
+let audience: AnalyticsAudience = "unknown";
+
+/** Reliability events the app sends on purpose, with a property allowlist. */
+const RELIABILITY_EVENTS: ReadonlySet<string> = new Set(["paper_send_completed", "paper_send_failed"]);
+
+/**
+ * Everything PostHog may ingest, per audience. An allowlist rather than a
+ * blocklist: an SDK upgrade that adds a new automatic event ($web_vitals,
+ * $heatmap, $dead_click, a future one) is dropped by default instead of
+ * reaching PostHog from a minor's session.
+ */
+const ALLOWED_EVENTS: Record<AnalyticsAudience, ReadonlySet<string>> = {
+  unknown: new Set(),
+  student: RELIABILITY_EVENTS,
+  parent: new Set(["$pageview", "$exception", ...RELIABILITY_EVENTS]),
+};
+
+/** Onboarding steps only a guardian completes. Everything else in onboarding
+    (the public landing, the "ask a parent" dead end, the student's first-run
+    screens) is either unknown or the student's own. */
+const GUARDIAN_ONBOARDING_STEPS: ReadonlySet<string> = new Set([
+  "account", "otp", "nameOnly", "consent", "plan", "student",
+]);
+const STUDENT_ONBOARDING_STEPS: ReadonlySet<string> = new Set(["firstRun", "firstUpload"]);
+
+/**
+ * The audience for an app-shell gate. `null` means onboarding is showing and
+ * owns the decision. Any active student profile makes it a student session,
+ * whatever else is true; every other state is unknown.
+ */
+export function audienceForGate(gate: string, hasStudent: boolean): AnalyticsAudience | null {
+  if (gate === "onboarding") return null;
+  return gate === "ready" && hasStudent ? "student" : "unknown";
+}
+
+/** The audience for one onboarding step. */
+export function audienceForOnboardingStep(step: string): AnalyticsAudience {
+  if (STUDENT_ONBOARDING_STEPS.has(step)) return "student";
+  if (GUARDIAN_ONBOARDING_STEPS.has(step)) return "parent";
+  return "unknown";
+}
+
+export function getAnalyticsAudience(): AnalyticsAudience {
+  return audience;
+}
+
+/**
+ * Declare who is using the page. Called by the app shell (a student profile
+ * is active) and by onboarding (a guardian-only step), and reset to `unknown`
+ * when either unmounts. Analytics starts only once the audience is known and
+ * the separate analytics choice is granted.
+ */
+export function setAnalyticsAudience(next: AnalyticsAudience): void {
+  audience = next;
+  if (next !== "unknown" && getAnalyticsConsent() === "granted") initAnalytics();
+}
 
 const PRIVATE_LIBRARY_AUTOCAPTURE_EVENTS = new Set([
   "$autocapture",
@@ -95,6 +169,9 @@ function eventPath(event: AnalyticsEvent): string | null {
  */
 export function filterSensitiveAnalyticsEvent(event: AnalyticsEvent | null): AnalyticsEvent | null {
   if (!event) return null;
+  // Audience gate first. Read at send time, not at init, so a page that moves
+  // from a parent step into a student session in one load is covered.
+  if (!event.event || !ALLOWED_EVENTS[audience].has(event.event)) return null;
   const sanitized = sanitizeAnalyticsEventUrls(event);
   const path = eventPath(sanitized);
   const privateLibrary = path === "/library" || Boolean(path?.startsWith("/library/"));
@@ -117,10 +194,20 @@ export function filterSensitiveAnalyticsEvent(event: AnalyticsEvent | null): Ana
  *   from `$autocapture` events.
  */
 export const POSTHOG_PRIVACY_CONFIG = {
-  autocapture: true,
+  // Behavioural capture is off for everyone. Students are minors and parent
+  // surfaces need none of it; the consent notice says "Never: behavioural
+  // tracking" (AXO-217, council D2). The audience gate in before_send is the
+  // second line: it drops anything these switches miss.
+  autocapture: false,
   capture_pageview: "history_change",
-  capture_pageleave: true,
+  capture_pageleave: false,
   capture_exceptions: true,
+  capture_dead_clicks: false,
+  rageclick: false,
+  capture_heatmaps: false,
+  capture_performance: false,
+  disable_session_recording: true,
+  disable_surveys: true,
   mask_all_text: true,
   mask_all_element_attributes: true,
   before_send: filterSensitiveAnalyticsEvent,
@@ -149,7 +236,7 @@ export function setAnalyticsConsent(granted: boolean): void {
 
   if (granted) {
     if (state === "ready") window.posthog?.opt_in_capturing?.();
-    else initAnalytics();
+    else initAnalytics(); // still waits for a known audience
   } else {
     // This also works while the SDK is loading: our bootstrap stub queues the
     // opt-out call and PostHog processes it once array.js is ready.
@@ -197,6 +284,8 @@ function installPostHogStub(): PostHogBootstrap {
  */
 export function initAnalytics() {
   if (state !== "idle" || typeof window === "undefined" || getAnalyticsConsent() !== "granted") return;
+  // Fail closed: nothing loads until the app has said who is using it.
+  if (audience === "unknown") return;
   // Supabase OAuth returns credentials in the fragment. PostHog derives replay
   // start_url before before_send can sanitize it, so do not bootstrap analytics
   // at all on that page load. The next clean navigation or reload can opt in.
@@ -256,6 +345,6 @@ export function initAnalytics() {
 
 /** Explicitly consented aggregate send timings, with a property allowlist. */
 export function captureUploadTelemetry(event: string, properties: Record<string, unknown>) {
-  if (getAnalyticsConsent() !== 'granted' || !['paper_send_completed', 'paper_send_failed'].includes(event)) return;
+  if (getAnalyticsConsent() !== 'granted' || audience === 'unknown' || !RELIABILITY_EVENTS.has(event)) return;
   window.posthog?.capture?.(event, sanitizeUploadTelemetry(properties));
 }

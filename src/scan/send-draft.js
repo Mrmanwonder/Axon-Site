@@ -14,7 +14,7 @@ export function submissionPage(page) {
 }
 /** Full durable handoff, separate from the potentially long processing watch. */
 export async function sendDraft({ studentId, draft, paperType, dateTaken, mode = 'legacy',
-  earlySubmit = false, concurrency = 3, signal, sendStartedAt, onTelemetry, onProgress }, services) {
+  earlySubmit = false, concurrency = 4, signal, sendStartedAt, onTelemetry, onProgress }, services) {
   const timing = uploadTiming({ startedAt: sendStartedAt, emit: onTelemetry, mode });
   const callerSignal = signal, controller = new AbortController();
   const cancel = () => controller.abort(callerSignal.reason);

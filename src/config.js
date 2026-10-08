@@ -16,8 +16,21 @@ export const MASTERY_API_URL = 'https://mastery-api.tanmay-harkawat.workers.dev'
 // Version of the consent notice text currently shown in the UI. Bump this
 // whenever the wording or the set of purposes changes: every consent_event
 // records it, so a historical decision stays tied to what was actually agreed.
-// A change here means returning guardians are asked to consent again.
-export const CONSENT_NOTICE_VERSION = '1.0.0';
+// The exact text of each version is stored in public.consent_notice_text
+// (one row per version and language, seeded by migration), and
+// tests/ui/consent-notice-text.test.ts fails if src/notice.js drifts from the
+// stored text for this version.
+//
+// A bump does NOT re-prompt returning guardians. Nothing compares a stored
+// notice_version with this constant: whether consent is needed is decided by
+// the current grant of each required purpose (consent_current), not by which
+// version it was given under. A future change that must force re-consent has
+// to be built and decided explicitly; it is not a side effect of this value.
+//
+// 1.1.0 (7 Oct 2026, council D2): the notice as restored by PR #224, English
+// and Hindi, with "Never: behavioural tracking". Consents given under 1.0.0
+// stay valid.
+export const CONSENT_NOTICE_VERSION = '1.1.0';
 
 // Which guardian-verification adapter to use.
 //

@@ -54,7 +54,7 @@ vi.mock("../../src/ui/data/modules", async () => {
     OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
     listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
     NOTICE_LANGUAGES: notice.LANGUAGES, noticeStrings: notice.noticeStrings,
-    purposeLabel: notice.purposeLabel, noticeIsComplete: notice.noticeIsComplete,
+    purposeLabel: notice.purposeLabel, purposeNote: notice.purposeNote, noticeIsComplete: notice.noticeIsComplete,
     startCheckout: vi.fn(),
     paperTypesFor: () => [],
     PROVIDER_KEYS: ["cambridge", "cbse", "ib"],

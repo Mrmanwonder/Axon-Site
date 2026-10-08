@@ -535,7 +535,7 @@ export default function Settings() {
         <div className="srow noicon">
           <div className="lbl">
             Product analytics
-            <small>Optional PostHog analytics and masked session replay</small>
+            <small>Optional PostHog analytics. No session replay or click tracking.</small>
           </div>
           <Switch
             label="Product analytics"
