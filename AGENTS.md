@@ -1,10 +1,12 @@
 # Working in this repo
 
-`index.html` is the entire front end: all markup, styles and script in one static
-file, with no build step, package manager or framework. Don't introduce one without
-being asked. It also serves as the design system — the tokens, the type scale, the
-glass lens and the spring engine are the reference implementation, so read it
-before building UI.
+Axon is a Vite-built React app (`src/ui/`); `index.html` is the HTML entry point,
+not the app implementation. Install dependencies with `npm ci`, develop with
+`npm run dev`, check with `npm run typecheck`, `npm test`, `npm run test:ui`, and
+build with `npm run build`. Read `Axon.md` first: it is the product and design
+source of truth. Current design primitives and tokens live in `src/ui/styles/`;
+`src/ui/styles/system.css` preserves component styling from the pre-React port.
+Do not treat historical code in `index.html` as shipping architecture.
 
 `src/ui/` is the React app. `src/` holds the data and scanning modules it imports,
 still plain ES modules — see "The scanning pipeline" below for why they stay that
@@ -47,10 +49,11 @@ Two rules the render bridges were meant to hold, which the screens hold now:
   — not a tap affordance. It used to toggle on a second tap, which showed a
   populated chart to a student who had nothing in it.
 
-`src/curriculum.js` is the single source for the board, the stages, the
-class-level mapping and the syllabus codes. Nothing else should hardcode "CAIE",
-a stage name or a four-digit code. Onboarding did, until the port; it offered a
-CBSE picker and wrote `board: 'CBSE'` while `curriculum.js` said otherwise.
+The live curriculum catalog in the database is authoritative for offerings,
+subjects and syllabus codes. `src/curriculum.js` supplies taxonomy, caching,
+and formatting helpers rather than a hard-coded catalog. Do not hard-code
+board, stage or syllabus choices into components; onboarding must use the
+catalog and keep existing student identities stable.
 
 ## Some CSS is addressed by id, and that is load-bearing
 
