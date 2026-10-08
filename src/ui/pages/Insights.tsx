@@ -30,6 +30,7 @@ import { useIngestion } from "../data/useIngestion";
 import PageSkeleton from "../components/PageSkeleton";
 import Disclose from "../components/Disclose";
 import { useInsights, useSyllabusMaps } from "../data/useInsights";
+import { BANDS } from "../data/questionDifficulty";
 import SyllabusMap from "../components/SyllabusMap";
 import type { SyllabusMaps } from "../data/syllabusMap";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
@@ -139,7 +140,7 @@ export default function Insights() {
   const { addPaper } = useIngestion();
   const [filters, setFilters] = useState<InsightFilters>(ALL_FILTERS);
   const set = (k: keyof InsightFilters) => (v: string) => setFilters((f) => ({ ...f, [k]: v }));
-  const { state, model, stale } = useInsights(filters);
+  const { state, model, difficulty, stale } = useInsights(filters);
   const syllabus = useSyllabusMaps(filters);
 
   const subjects = useMemo(() => {
@@ -180,6 +181,18 @@ export default function Insights() {
       <AppDropdown ariaLabel="Filter insights by date" value={filters.range} options={rangeOptions} onChange={set("range")} selected={filters.range !== "all"} />
       <AppDropdown ariaLabel="Filter insights by tier" value={filters.tier} options={tierOptions} onChange={set("tier")} selected={filters.tier !== "all"} />
     </div>
+
+    {difficulty?.rated ? <section className="isection">
+      <div className="sectitle">Difficulty and topics</div>
+      <div className="card tallycard">
+        <p className="lede">Difficulty estimates are about the questions, not your ability. {plural(difficulty.rated, "question")} have a recorded difficulty rating.</p>
+        {difficulty.rows.length ? difficulty.rows.map(row => <div className="tallyrow" key={row.topic + row.band}>
+          <div className="top"><span className="n">{row.topic} · {BANDS[row.band - 1]} questions</span><span className="v">{numMark(row.lost)}<small>marks lost</small></span></div>
+          <div className="meta">{plural(row.count, "question")} across {plural(row.papers, "paper")} · {row.confidence === "low" ? "low-confidence estimates" : row.confidence === "mixed" ? "mixed confidence" : "supported estimates"}</div>
+        </div>) : <p className="widgetnote">A topic-specific pattern needs at least three rated questions across two papers. Low-confidence estimates stay estimates, not official ratings.</p>}
+        <p className="widgetnote">Based on saved teacher-marked questions. Official evidence outranks estimates; method versions and evidence are retained separately.</p>
+      </div>
+    </section> : null}
 
     {model.evidence.papers === 0 && filtered && papers.length > 0
       ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no confirmed evidence for this combination yet.</p><button onClick={() => setFilters(ALL_FILTERS)}>Clear filters</button></div>
