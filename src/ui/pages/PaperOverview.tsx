@@ -18,7 +18,10 @@ import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
 import { useApp } from "../data/AppProvider";
-import { paperTypeLabel, providerKeyForStudent, setPaperSubject } from "../data/modules";
+import { paperTypeLabel, paperTypesFor, providerKeyForStudent, setPaperSubject, setPaperType } from "../data/modules";
+import { openFlags } from "../data/flaggedParts";
+import type { OpenFlag } from "../data/flaggedParts";
+import { FlaggedCard } from "../components/FlaggedPart";
 import AppDropdown from "../components/AppDropdown";
 import { usePaperDelete } from "../data/usePaperDelete";
 import { relabelAttempt } from "../data/modules";
@@ -98,19 +101,16 @@ function suggestedLabel(part: PaperPart, structure: PaperStructure): string | nu
   return q ? `${q}(${tail.toLowerCase()})` : null;
 }
 
-function NextAction({ paperId, structure }: { paperId: string; structure: PaperStructure }) {
+/** What needs the student, counted from the parts that actually ask (AXO-216). The
+    cards themselves sit on the parts below; this only says how many there are. */
+function NextAction({ structure, flags }: { structure: PaperStructure; flags: OpenFlag[] }) {
   const all = [...structure.questions.flatMap((q) => q.parts), ...structure.unassigned];
-  const unsure = all.filter((p) => !p.confirmed && p.confidence === "unsure");
   const unmarked = all.filter((p) => p.marks.kind === "unread");
-  const target = unsure[0] ?? unmarked[0];
-  if (!target) return null;
+  if (!flags.length && !unmarked.length) return null;
   return (
     <div className="po-next" role="status">
-      {unsure.length > 0 && <div>{plural(unsure.length, "part")} {unsure.length === 1 ? "needs" : "need"} checking.</div>}
+      {flags.length > 0 && <div>{plural(flags.length, "part")} {flags.length === 1 ? "needs" : "need"} a look. {flags.length === 1 ? "It is" : "They are"} marked below.</div>}
       {unmarked.length > 0 && <div>{plural(unmarked.length, "part")} {unmarked.length === 1 ? "has" : "have"} no readable mark.</div>}
-      <Link to={paths.question(paperId, target.attemptId)} className="po-next-link">
-        Open {target.path}
-      </Link>
     </div>
   );
 }
@@ -132,6 +132,11 @@ export default function PaperOverview() {
   const toast = useToast();
   const loadError = error?.message || (error ? "That paper could not be opened." : null);
   const structure = useMemo(() => (paper ? paperStructure(paper) : null), [paper]);
+  // One card per part with a measured reason that the student has not checked or put off.
+  const flags = useMemo(() => (paper && structure
+    ? openFlags(paper, new Set(structure.unassigned.map((p) => p.attemptId)))
+    : []), [paper, structure]);
+  const [savingType, setSavingType] = useState(false);
   // Save closes review at once; the paper fills in here when its marks are
   // committed. Until then, say what is happening and keep checking.
   const runStatus = paperId ? progressResource?.data?.get(paperId)?.status : undefined;
@@ -194,6 +199,29 @@ export default function PaperOverview() {
       setSavingSubject(false);
     }
   };
+  // D7: the type is the student's to change. A past paper is matched to its
+  // official scheme; a school test is explained from the teacher's marks.
+  const typeOptions = paperTypesFor(providerKeyForStudent(student)).map((t) => ({ value: t.value, label: t.label }));
+  const changeType = async (value: string) => {
+    if (!value || value === paper.type) return;
+    setSavingType(true);
+    try {
+      await setPaperType(paper.id, value);
+      await reload();
+      void refreshLibrary();
+      toast("Paper type changed.");
+    } catch {
+      toast("The paper type couldn't be changed. Try again with a connection.");
+    } finally {
+      setSavingType(false);
+    }
+  };
+  const flagByAttempt = new Map(flags.filter((f) => f.attemptId).map((f) => [f.attemptId!, f]));
+  const unsavedFlags = flags.filter((f) => !f.attemptId);
+  const flagCard = (flag: OpenFlag, label: string) => (
+    <FlaggedCard key={`flag-${flag.region.id}`} label={label} reason={flag.reason} region={flag.region}
+                 paperId={paper.id} onChanged={async () => { await reload(); void refreshLibrary(); }} />
+  );
   const dated = new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   const requestDelete = () => { if (paperId) deletePaperSheet(paperId); };
@@ -246,6 +274,14 @@ export default function PaperOverview() {
         </div>
       )}
 
+      <div className="po-subject">
+        <span className="k">Paper type</span>
+        <AppDropdown ariaLabel="Paper type" value={paper.type} options={typeOptions}
+          onChange={(v) => { if (!savingType) void changeType(v); }} selected />
+        {paper.type_source === "triage" && <span className="hint">Set from the paper code printed on it. Change it if it&rsquo;s wrong.</span>}
+        {paper.type_source === "default" && <span className="hint">Treated as a school test. Change it if this is a past paper.</span>}
+      </div>
+
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">
           {/* One headline, one line of facts, and a note only when the number
@@ -276,8 +312,18 @@ export default function PaperOverview() {
               {numMark(Number(paper.reported_total))}. Worth a look at the questions below.
             </div>
           )}
-          <NextAction paperId={paperId!} structure={structure} />
+          <NextAction structure={structure} flags={flags} />
         </section>
+      )}
+
+      {/* Opt-in: the whole reading, part by part, for a student who wants to
+          look. Never opened for them (council D1). */}
+      {(attempts.length > 0 || unsavedFlags.length > 0) && (
+        <div style={{ margin: "12px var(--gutter) 0" }}>
+          <Link to={`${paths.review(paper.id)}?check=1`} className="btn ghost" style={{ display: "inline-flex" }}>
+            Check the reading
+          </Link>
+        </div>
       )}
 
       {schemeCheck.check && <SchemeCheckSummary check={schemeCheck.check} regions={schemeCheck.regions} />}
@@ -319,9 +365,16 @@ export default function PaperOverview() {
         <section key={q.number} aria-labelledby={`po-q-${q.number}`}>
           <h2 className="sectitle po-qtitle" id={`po-q-${q.number}`}>Question {q.number}</h2>
           <div className="list">
-            {q.parts.map((part) => (
-              <PartRow key={part.attemptId} paperId={paperId!} part={part} label={part.partTail ? `${q.number}${part.partTail}` : "Whole question"} />
-            ))}
+            {q.parts.map((part) => {
+              const label = part.partTail ? `${q.number}${part.partTail}` : "Whole question";
+              const flag = flagByAttempt.get(part.attemptId);
+              return (
+                <div key={part.attemptId}>
+                  <PartRow paperId={paperId!} part={part} label={label} />
+                  {flag && flagCard(flag, part.partTail ? label : `Question ${q.number}`)}
+                </div>
+              );
+            })}
           </div>
         </section>
       ))}
@@ -339,8 +392,39 @@ export default function PaperOverview() {
                 <button type="button" className="po-place" onClick={() => placePart(part)}>
                   Place under a question
                 </button>
+                {flagByAttempt.get(part.attemptId) && flagCard(flagByAttempt.get(part.attemptId)!, part.path === "Part" ? "This part" : `Part ${part.path}`)}
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* Parts the pipeline could not save because a mark was missing or the
+          part could not be read. Shown, never dropped (hard rule 4): giving the
+          teacher's mark saves the part. */}
+      {unsavedFlags.length > 0 && (
+        <section aria-labelledby="po-unsaved">
+          <h2 className="sectitle po-qtitle" id="po-unsaved">Parts not saved yet</h2>
+          <p className="subnote po-note">
+            Axon could not save these parts as read. Fix one to add it to this paper.
+          </p>
+          <div className="list">
+            {unsavedFlags.map((flag) => {
+              const label = flag.region.placed_label || flag.region.question_label || "Part with no label";
+              return (
+                <div key={flag.region.id} className="po-unplaced">
+                  <div className="row po-part">
+                    <div className="b">
+                      <div className="t1 po-part-label">
+                        <span>{label}</span>
+                        {flag.region.page_spans?.[0] && <span className="po-page">Page {flag.region.page_spans[0].page}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  {flagCard(flag, label)}
+                </div>
+              );
+            })}
           </div>
         </section>
       )}

@@ -32,6 +32,10 @@ vi.mock("../../src/ui/data/modules", () => ({
   deleteQuestion: fixture.deleteQuestion,
   providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
   paperTypeLabel: () => "Class test",
+  paperTypesFor: () => [{ value: "unit_test", label: "Class test" }],
+  setPaperType: vi.fn(),
+  fixSavedPart: vi.fn(),
+  deferPart: vi.fn(),
 }));
 
 vi.mock("../../src/cache.js", () => ({

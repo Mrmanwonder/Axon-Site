@@ -43,7 +43,6 @@ export type SheetConfig = {
 type SheetValue = { openSheet: (cfg: SheetConfig) => void; closeSheet: () => void };
 
 const Ctx = createContext<SheetValue | null>(null);
-const PAPER_TYPE_SHEET = "What kind of paper is this?";
 
 /** For components that can live outside the provider (tests, isolated screens). */
 export function useOptionalSheetControls(): SheetValue | null {
@@ -83,14 +82,9 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     const base = current.pathname + (params.size ? `?${params}` : "") + current.hash;
     const id = crypto.randomUUID();
     const focused = document.activeElement as HTMLElement | null;
-    // Paper type starts the scanner's full send transaction. It predates the
-    // generic dismiss-before-choice option, so preserve the safe behavior here
-    // for both scanner and file-ingestion callers without changing every other
-    // consequence sheet's await-and-show-error semantics.
-    const effective = cfg.dismissBeforeChoice === undefined && cfg.title === PAPER_TYPE_SHEET
-      ? { ...cfg, dismissBeforeChoice: true }
-      : cfg;
-    entries.current.set(id, { cfg: effective, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
+    // The paper-type sheet that needed a special case here is gone (council D7);
+    // a caller that navigates after a choice passes dismissBeforeChoice itself.
+    entries.current.set(id, { cfg, base, trigger: focused && focused !== document.body ? focused : pointerTrigger.current });
     params.set("sheet", id);
     setInputValue(""); setError(null); setCompleted(null);
     navigate({ pathname: current.pathname, search: `?${params}`, hash: current.hash }, { replace: replacing });

@@ -18,6 +18,10 @@ vi.mock("../../src/ui/data/modules", () => ({
   deletePaper: vi.fn(),
   paperTypeLabel: () => "Class test",
   providerKeyForStudent: () => null,
+  paperTypesFor: () => [{ value: "unit_test", label: "Class test" }, { value: "pyq", label: "Past paper" }],
+  setPaperType: vi.fn(),
+  fixSavedPart: vi.fn(),
+  deferPart: vi.fn(),
 }));
 vi.mock("../../src/cache.js", () => ({ getCached: fixture.getCached }));
 
@@ -158,15 +162,54 @@ test("headline is marks lost, with at-least framing whenever a mark is unread", 
   expect(screen.getByText(/1 part has no readable mark\./)).toBeTruthy();
 });
 
-test("a needs-checking part is the next action and links to that exact part", async () => {
+test("a flagged part asks on the paper with its measured reason, Fix this and Not now", async () => {
+  const flaggedRegion = {
+    ...region("a2", 1, 20), id: "r2", order_index: 1, needs_review: true, student_confirmed_at: null,
+    review_deferred_at: null, confidence_tier: "unsure", marks_awarded: 3, marks_available: 2,
+    confidence_signals: { recognition: true, plausibility: false },
+  };
+  const cleanRegion = { ...region("a1", 1, 10), id: "r1", order_index: 0, needs_review: false, marks_awarded: 1, marks_available: 2 };
   fixture.readPaper.mockResolvedValue({
-    data: { ...base, student_attempt: [attempt("a1", "1"), attempt("a2", "2", { extraction_confidence: "unsure" })], question_region: [] },
+    data: {
+      ...base,
+      student_attempt: [attempt("a1", "1"), attempt("a2", "2", { extraction_confidence: "unsure" })],
+      question_region: [cleanRegion, flaggedRegion],
+      extraction_run: [{ id: "run-1", status: "committed", committed_at: "2026-10-07T10:00:00Z" }],
+    },
     stale: false, offline: false,
   });
   mount();
-  const link = await screen.findByRole("link", { name: "Open 2" });
-  expect(link.getAttribute("href")).toBe("/library/paper-1/a2");
-  expect(screen.getByText("Needs checking")).toBeTruthy();
+  const card = await screen.findByRole("group", { name: "Question 2 needs a look" });
+  expect(within(card).getByText("The mark read is more than this part is worth.")).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Fix this" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "Not now" })).toBeTruthy();
+  // One card: the clean part does not ask.
+  expect(screen.getAllByRole("group", { name: /needs a look/ })).toHaveLength(1);
+  expect(screen.getByText(/1 part needs a look/)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Check the reading" }).getAttribute("href")).toBe("/scan/review/paper-1?check=1");
+});
+
+test("a part put off with Not now stops asking but stays unsure", async () => {
+  fixture.readPaper.mockResolvedValue({
+    data: {
+      ...base,
+      student_attempt: [attempt("a2", "2", { extraction_confidence: "unsure" })],
+      question_region: [{ ...region("a2", 1, 20), id: "r2", needs_review: true, student_confirmed_at: null,
+        review_deferred_at: "2026-10-07T10:00:00Z", marks_awarded: 1, marks_available: 2 }],
+      extraction_run: [{ id: "run-1", status: "committed", committed_at: "2026-10-07T10:00:00Z" }],
+    },
+    stale: false, offline: false,
+  });
+  mount();
+  expect(await screen.findByText("Needs checking")).toBeTruthy();
+  expect(screen.queryByRole("group", { name: /needs a look/ })).toBeNull();
+});
+
+test("the paper type can be changed on the paper", async () => {
+  fixture.readPaper.mockResolvedValue({ data: { ...base, ...pictured, type_source: "default" }, stale: false, offline: false });
+  mount();
+  expect(await screen.findByText("Treated as a school test. Change it if this is a past paper.")).toBeTruthy();
+  expect(screen.getByLabelText("Paper type")).toBeTruthy();
 });
 
 test("an unassigned part can be placed under a question by hand", async () => {

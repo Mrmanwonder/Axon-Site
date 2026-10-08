@@ -14,6 +14,8 @@ const fixture = vi.hoisted(() => ({
   watchExplanations: vi.fn(),
   currentRunForPaper: vi.fn(),
   regionsForRun: vi.fn(),
+  storePlacedLabels: vi.fn(),
+  confirmQuestions: vi.fn(),
 }));
 
 vi.mock("../../src/scan/capture.js", () => ({
@@ -42,8 +44,11 @@ vi.mock("../../src/scan/original-backups.js", () => ({
   resumeOriginalBackups: vi.fn().mockResolvedValue(undefined), finishDraftReview: fixture.finishDraftReview,
 }));
 vi.mock("../../src/scan/review.js", () => ({
-  commitRun: fixture.commitRun, confirmQuestion: vi.fn(), confirmQuestions: vi.fn(),
+  commitRun: fixture.commitRun, confirmQuestion: vi.fn(), confirmQuestions: fixture.confirmQuestions,
   correctAnswer: vi.fn(), correctMark: vi.fn(), loadReview: fixture.loadReview, rejectCause: vi.fn(), relabelRegion: vi.fn(),
+  storePlacedLabels: fixture.storePlacedLabels,
+  saveFailureMessage: (error: Error) => `Your paper did not finish saving. ${error.message}`,
+  isSaveRefusal: (error: { code?: string }) => error?.code === "42501",
 }));
 vi.mock("../../src/scan/crops.js", () => ({ releaseCrops: fixture.releaseCrops }));
 vi.mock("../../src/scan/enhance.js", () => ({ RESCUED_NOTICE: "rescued" }));
@@ -51,6 +56,8 @@ vi.mock("../../src/papers.js", () => ({
   PAPER_TYPES: [{ label: "Class test", value: "unit_test" }],
   paperTypesFor: () => [{ label: "Class test", value: "unit_test" }],
   tierForType: () => "tier_1",
+  fixSavedPart: vi.fn(),
+  relabelAttempt: vi.fn(),
 }));
 
 import { initScanUI, resetScan, openReview, resumeDraftReview } from "../../src/scan/ui.js";
@@ -110,30 +117,51 @@ test("a commit that keeps failing is retried, then the student is told the paper
   expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/did not finish saving/), "warn");
 });
 
-test("Save confirms the readings still on screen in the same tap", async () => {
+test("Save confirms nothing on the student's behalf; unchecked flagged parts save as unsure (AXO-216)", async () => {
   const { save, closeReview } = await reviewFixture();
-  const confirm = (await import("../../src/scan/review.js")).confirmQuestions as unknown as ReturnType<typeof vi.fn>;
   fixture.loadReview.mockResolvedValue({
-    paper: { id: "paper", type: "unit_test" }, outstanding: 2, cleanUnconfirmed: ["q1"],
-    readableUnconfirmed: ["q1", "q2"],
-    questions: [{ id: "q1", tier: "confident", confirmed: false }, { id: "q2", tier: "unsure", confirmed: false }],
+    paper: { id: "paper", type: "unit_test" }, outstanding: 2, cleanUnconfirmed: [],
+    questions: [{ id: "q1", tier: "confident", confirmed: false, flagged: true }, { id: "q2", tier: "unreadable", confirmed: false, flagged: true }],
   });
   await openReview("run");
   await save();
-  expect(confirm).toHaveBeenCalledWith(["q1", "q2"]);
   expect(closeReview).toHaveBeenCalledWith("paper");
+  await waitFor(() => expect(fixture.commitRun).toHaveBeenCalledWith("run"));
+  expect(fixture.confirmQuestions).not.toHaveBeenCalled();
+  expect(fixture.storePlacedLabels).toHaveBeenCalledWith("run");
 });
 
-test("Save with an unreadable part left keeps review open and says why", async () => {
-  const { save, closeReview, toast } = await reviewFixture();
-  fixture.loadReview.mockResolvedValue({
-    paper: { id: "paper", type: "unit_test" }, outstanding: 1, cleanUnconfirmed: [], readableUnconfirmed: [],
-    questions: [{ id: "q1", tier: "unreadable", confirmed: false }],
-  });
-  await openReview("run");
+test("a refused save is not retried, and the student sees the database's own reason", async () => {
+  const { save, toast } = await reviewFixture();
+  fixture.commitRun.mockReset().mockRejectedValue(Object.assign(
+    new Error("Two parts of this paper are both read as 3(c), so Axon cannot tell which mark belongs to which. Choose Check the reading and change the label on one of them."),
+    { code: "42501" },
+  ));
   await save();
-  expect(closeReview).not.toHaveBeenCalled();
-  expect(toast).toHaveBeenCalledWith(expect.stringMatching(/could not be read/), undefined);
+  await waitFor(() => expect(toast).toHaveBeenLastCalledWith(expect.stringMatching(/both read as 3\(c\)/), "warn"));
+  expect(fixture.commitRun).toHaveBeenCalledTimes(1);
+  // Opening the paper again shows the reason instead of saving into the same refusal.
+  fixture.currentRunForPaper.mockResolvedValue({ id: "run", status: "ready" });
+  await expect(resumeDraftReview("paper")).resolves.toEqual(expect.objectContaining({ state: "save_failed", paperId: "paper" }));
+});
+
+test("opening a read paper saves it on its own instead of opening review", async () => {
+  fixture.listDrafts.mockResolvedValue([]);
+  fixture.currentRunForPaper.mockResolvedValue({ id: "run", status: "needs_review" });
+  fixture.regionsForRun.mockResolvedValue([{ id: "q1", order_index: 0, question_label: "1" }]);
+  fixture.commitRun.mockReset().mockResolvedValue({ attempts_committed: 1 });
+  fixture.startExplanations.mockReset().mockRejectedValue(new Error("1 question still needs your eyes."));
+  fixture.watchExplanations.mockReset().mockResolvedValue(undefined);
+  const open = vi.fn();
+  const renderReview = vi.fn();
+  await initScanUI({ student: { id: "student" } }, { renderReview, openReview: open, refreshLibrary: vi.fn() });
+  await expect(resumeDraftReview("paper")).resolves.toEqual({ state: "saving", paperId: "paper" });
+  await waitFor(() => expect(fixture.commitRun).toHaveBeenCalledWith("run"));
+  expect(fixture.storePlacedLabels).toHaveBeenCalledWith("run");
+  // Explanations that never started are not waited for.
+  expect(fixture.watchExplanations).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
+  expect(renderReview).not.toHaveBeenCalled();
 });
 
 test("leaving a student context during explanations cannot commit or navigate the next student", async () => {
@@ -169,7 +197,7 @@ test("canonical paper review does not wait for hanging IndexedDB reads", async (
   const open = vi.fn();
   initScanUI({ student: { id: "student" } }, { renderReview, openReview: open });
 
-  const reopening = resumeDraftReview("paper");
+  const reopening = resumeDraftReview("paper", { check: true });
 
   await waitFor(() => expect(fixture.currentRunForPaper).toHaveBeenCalledWith("paper"));
   await expect(reopening).resolves.toEqual({ state: "reviewing" });
@@ -204,7 +232,7 @@ test("legacy draft-id review falls back to the local paper id only after server 
   const open = vi.fn();
   initScanUI({ student: { id: "student" } }, { renderReview: vi.fn(), openReview: open });
 
-  await expect(resumeDraftReview("legacy-draft")).resolves.toEqual({ state: "reviewing" });
+  await expect(resumeDraftReview("legacy-draft", { check: true })).resolves.toEqual({ state: "reviewing" });
   expect(fixture.currentRunForPaper.mock.calls.map(([id]) => id)).toEqual(["legacy-draft", "paper"]);
   expect(fixture.readDraft).toHaveBeenCalledWith("legacy-draft");
   expect(open).toHaveBeenCalledWith("paper", null);
@@ -216,7 +244,7 @@ test("review re-entry cannot restore a previous student's work after switching p
   fixture.currentRunForPaper.mockResolvedValue({ id: "old-run", status: "needs_review" });
   const pending = deferred<unknown[]>();
   fixture.regionsForRun.mockReturnValueOnce(pending.promise);
-  const reopening = resumeDraftReview("old-paper");
+  const reopening = resumeDraftReview("old-paper", { check: true });
   await waitFor(() => expect(fixture.regionsForRun).toHaveBeenCalledTimes(1));
   resetScan();
   const nextRender = vi.fn();
@@ -285,7 +313,7 @@ test("saving a server review without a local draft preserves another unfinished 
   });
   await waitFor(() => expect(resume).toBeDefined());
   await resume("draft-a");
-  await resumeDraftReview("paper-b");
+  await resumeDraftReview("paper-b", { check: true });
   await save();
   await waitFor(() => expect(fixture.commitRun).toHaveBeenCalled());
   expect(fixture.deleteDraft).not.toHaveBeenCalled();
@@ -304,10 +332,10 @@ test("a delayed draft lookup cannot replace the next review's matching draft", a
   initScanUI({ student: { id: "student" } }, { renderReview: (_m: unknown, h: any) => { save = h.onSave; } });
   await Promise.resolve();
   fixture.listDrafts.mockReturnValueOnce(pending.promise);
-  await resumeDraftReview("paper-a");
+  await resumeDraftReview("paper-a", { check: true });
   const draftB = { id: "draft-b", paper_id: "paper-b", student_id: "student", pages: [] };
   fixture.listDrafts.mockResolvedValue([draftB]);
-  await resumeDraftReview("paper-b");
+  await resumeDraftReview("paper-b", { check: true });
   pending.resolve([{ id: "draft-a", paper_id: "paper-a", student_id: "student", pages: [] }]);
   await Promise.resolve();
   await save();

@@ -3,10 +3,9 @@
 
    The marks, the teacher's remark, the crop, and the explanation — the whole
    promise of the product on one screen, for one question, from a paper
-   already saved to the Library. Read-only: a correction happens during
-   review, before the paper is saved (see ReviewSheet); once
-   commit_extraction_run has run there is no "edit a committed attempt" path,
-   and building one is not what AXON_FIX_BRIEF.md §6.4 asks for here.
+   already saved to the Library. A part the pipeline asked about and the
+   student has not checked offers Fix this here, through public.fix_saved_part
+   (AXO-216); its explanation is held back until then.
 
    Crops are cut client-side from the stored page image, the same mechanism
    ReviewSheet uses (src/scan/crops.js) — there is no server-side crop_key yet
@@ -46,6 +45,8 @@ import { usePaperResource } from "../data/usePaperResource";
 import { tutorEntryVisible } from "../data/tutor";
 import { useSchemeCheck } from "../data/schemeCheck";
 import { SchemeCheckQuestion } from "../components/SchemeCheck";
+import { awaitingCheck } from "../data/flaggedParts";
+import { FixPartSheet } from "../components/FlaggedPart";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -127,6 +128,7 @@ export default function QuestionDetail() {
 
   const attempt: StudentAttempt | undefined = paper?.student_attempt.find((a) => a.id === qId);
   const [retrying, setRetrying] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const explainStatus = paper?.question_region.find((r) => r.committed_attempt_id === qId)?.explain_status ?? null;
 
@@ -200,7 +202,10 @@ export default function QuestionDetail() {
     : rawRecognition === undefined || rawRecognition === null ? null
     : "unknown";
 
-  const loss = attempt.mark_loss_event.find((e) => !e.student_rejected_at) ?? null;
+  // A part the pipeline asked about and the student has not checked is unsure: its
+  // explanation is held back until they have (AXO-216, council D1).
+  const held = awaitingCheck(region);
+  const loss = held ? null : attempt.mark_loss_event.find((e) => !e.student_rejected_at) ?? null;
   // The corrected working and the diagnosis come out of one call on one bundle
   // of evidence, so one field decides what either of them may claim.
   const withheld = withheldWorking(loss?.grounding_status, loss?.unresolved_parts);
@@ -346,7 +351,7 @@ export default function QuestionDetail() {
             Lower visual weight than a real answer, never alarmist, and never in
             our own vocabulary: the student is not asked to know what
             "off topic" meant to a gate they cannot see. */}
-        {!loss?.model_answer && withheld && (
+        {!held && !loss?.model_answer && withheld && (
           <div className="qfield">
             <div className="k">How this question is answered</div>
             <div className="v empty">{withheld.note}</div>
@@ -468,7 +473,20 @@ export default function QuestionDetail() {
           </div>
         )}
 
-        {!loss && marksLost != null && marksLost > 0 && explainStatus === "failed" && region && (
+        {held && region && (
+          <div className="subnote" style={{ margin: "10px 0 0" }}>
+            <div>Check this reading against your paper first. The explanation appears once you have, and until then this part stays out of your patterns.</div>
+            <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => setFixing(true)}>
+              Fix this
+            </button>
+            {fixing && (
+              <FixPartSheet label={questionLabel} region={region} paperId={paperId!}
+                            onClose={() => setFixing(false)} onSaved={async () => { await reload(); }} />
+            )}
+          </div>
+        )}
+
+        {!held && !loss && marksLost != null && marksLost > 0 && explainStatus === "failed" && region && (
           <div className="subnote" style={{ margin: "10px 0 0" }}>
             <div>We couldn&rsquo;t write the explanation for this one. Your marks and the page are unchanged.</div>
             <button
@@ -484,13 +502,13 @@ export default function QuestionDetail() {
           </div>
         )}
 
-        {!loss && marksLost != null && marksLost > 0 && writing && (
+        {!held && !loss && marksLost != null && marksLost > 0 && writing && (
           <div className="subnote" style={{ margin: "10px 0 0" }}>
             The explanation for this one is being written. It will appear here.
           </div>
         )}
 
-        {!loss && marksLost != null && marksLost > 0 && explainStatus !== "failed" && !writing && (
+        {!held && !loss && marksLost != null && marksLost > 0 && explainStatus !== "failed" && !writing && (
           <div className="subnote" style={{ margin: "10px 0 0" }}>
             Marks were lost here, but we don&rsquo;t have an explanation for this one yet.
           </div>

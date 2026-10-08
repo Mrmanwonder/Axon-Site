@@ -15,13 +15,16 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}{location.search}</output>;
 }
 
+// The paper-type sheet that first needed this is gone (council D7); the
+// behaviour is now opt-in for any choice that navigates when it finishes.
 function Harness({ pending, started }: { pending: ReturnType<typeof deferred>; started: ReturnType<typeof deferred> }) {
   const { openSheet } = useSheetControls();
   const navigate = useNavigate();
   return <>
     <button onClick={() => openSheet({
-      title: "What kind of paper is this?",
-      choices: [{ label: "Test / Exam", value: "test" }],
+      title: "Move this paper",
+      choices: [{ label: "Move it", value: "move" }],
+      dismissBeforeChoice: true,
       onChoice: async () => {
         started.resolve();
         await pending.promise;
@@ -32,7 +35,7 @@ function Harness({ pending, started }: { pending: ReturnType<typeof deferred>; s
   </>;
 }
 
-test("paper type choice removes the route-backed overlay before the long submit can navigate", async () => {
+test("a long choice that navigates removes the route-backed overlay first", async () => {
   const pending = deferred();
   const started = deferred();
   render(
@@ -47,21 +50,17 @@ test("paper type choice removes the route-backed overlay before the long submit 
   );
 
   await userEvent.click(screen.getByText("Send"));
-  expect(screen.getByText("What kind of paper is this?")).toBeTruthy();
+  expect(screen.getByText("Move this paper")).toBeTruthy();
   expect(screen.getByTestId("location").textContent).toMatch(/\?sheet=/);
 
-  await userEvent.click(screen.getByText("Test / Exam"));
+  await userEvent.click(screen.getByText("Move it"));
   await act(async () => { await started.promise; });
 
-  // The submit is deliberately still unresolved here. The old implementation
-  // kept the sheet mounted and its ?sheet= history entry alive until this
-  // promise finished, which allowed destination navigation to strand the
-  // overlay and required repeated Back presses.
-  await waitFor(() => expect(screen.queryByText("What kind of paper is this?")).toBeNull());
+  await waitFor(() => expect(screen.queryByText("Move this paper")).toBeNull());
   expect(screen.getByTestId("location").textContent).toBe("/scan");
 
   await act(async () => pending.resolve());
   expect(await screen.findByText("Paper destination")).toBeTruthy();
   expect(screen.getByTestId("location").textContent).toBe("/library/paper-1");
-  expect(screen.queryByText("What kind of paper is this?")).toBeNull();
+  expect(screen.queryByText("Move this paper")).toBeNull();
 });

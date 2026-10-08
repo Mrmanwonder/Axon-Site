@@ -4,12 +4,14 @@
    Review is server-resumable. A paper may have been retried from Library or
    started on another device, so this route must never depend on a local draft
    existing in IndexedDB. Library progress is the live source of truth while
-   the pipeline is running; once the run becomes reviewable, ScanProvider opens
-   the existing ReviewSheet over this route.
+   the pipeline is running. Once the run is read, the paper saves on its own and
+   this route hands over to the paper (AXO-216). With ?check=1 ("Check the
+   reading") ScanProvider opens the ReviewSheet over this route instead, for a
+   saved paper or one whose save was refused.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { ResumeReviewResult } from "../scan/ScanProvider";
 import { useApp } from "../data/AppProvider";
@@ -124,6 +126,11 @@ function LocalSendState({ job, onRetry }: { job: SendJob; onRetry: () => void })
 
 export default function PaperReview() {
   const { draftId } = useParams();
+  const navigate = useNavigate();
+  // "Check the reading" (opt-in). Without it, a read paper saves on its own and
+  // the student lands on the paper (AXO-216, council D1).
+  const [search] = useSearchParams();
+  const check = search.get("check") === "1";
   const { ensureScan, reviewOpen, sends, retrySend } = useScan();
   // A paper still sending from this device: its own pages and progress.
   const localSend = sends.find((job) => job.paperId === draftId || job.id === draftId) ?? null;
@@ -140,7 +147,7 @@ export default function PaperReview() {
 
     const settleFromServer = () => {
       if (!run) return false;
-      if (run.status === "committed") {
+      if (run.status === "committed" && !check) {
         setResult({ state: "committed", paperId: draftId });
         setError(null);
         return true;
@@ -150,7 +157,7 @@ export default function PaperReview() {
         setError(null);
         return true;
       }
-      if (!REVIEWABLE.has(run.status)) {
+      if (!REVIEWABLE.has(run.status) && run.status !== "committed") {
         setResult({ state: "processing" });
         setError(null);
         return true;
@@ -169,10 +176,14 @@ export default function PaperReview() {
         );
         if (cancelled) return;
         const next = await withTimeout(
-          scan.resumeDraftReview(draftId),
+          scan.resumeDraftReview(draftId, check ? { check: true } : undefined),
           "The review data is taking too long to load. Try again.",
         );
         if (cancelled) return;
+        if (next.state === "saving") {
+          navigate(paths.paper(next.paperId), { replace: true });
+          return;
+        }
 
         // If Library already proves a live run exists, a second surface is not
         // allowed to contradict it with "gone". Keep showing the live server
@@ -194,7 +205,7 @@ export default function PaperReview() {
     })();
 
     return () => { cancelled = true; };
-  }, [draftId, student?.id, ensureScan, run?.status, run?.status_reason, progressResource.state === "ready" ? progressResource.fetchedAt : progressResource.lastSuccessAt, retryToken]);
+  }, [draftId, student?.id, ensureScan, check, run?.status, run?.status_reason, progressResource.state === "ready" ? progressResource.fetchedAt : progressResource.lastSuccessAt, retryToken]);
 
   // Realtime is the fast path. Polling is the recovery path for a socket that
   // dropped while the app was backgrounded, and means a processing screen can
@@ -255,13 +266,27 @@ export default function PaperReview() {
     return <ProcessingState paperId={draftId} run={run} />;
   }
 
+  // The save was refused. Say why, in the database's own words for the student,
+  // and offer the whole reading so they can fix it there.
+  if (result?.state === "save_failed") {
+    return (
+      <div style={{ padding: "16px var(--text-gutter)" }}>
+        <p className="subnote" role="alert">{result.reason}</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+          <Link to={`${paths.review(result.paperId)}?check=1`} className="btn primary" style={{ display: "inline-flex" }}>
+            Check the reading
+          </Link>
+          <Link to={paths.library} className="btn ghost" style={{ display: "inline-flex" }}>Back to Library</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (run && REVIEWABLE.has(run.status)) {
     return (
       <PageSkeleton
         variant="review"
-        label={run.questions_needing_you > 0
-          ? `Opening ${run.questions_needing_you} part${run.questions_needing_you === 1 ? "" : "s"} that need your eyes…`
-          : "Opening review…"}
+        label={check ? "Opening the reading…" : "Saving your paper…"}
       />
     );
   }
