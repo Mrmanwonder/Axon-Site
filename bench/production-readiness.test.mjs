@@ -78,7 +78,9 @@ test('academic share route stays public, noindex and outside analytics', () => {
   assert.ok(sharePosition >= 0 && sharePosition < rootPosition, 'share route must live outside authenticated Root');
   assert.match(page, /path="\/share"[\s\S]*noIndex/);
   assert.match(main, /academicShareRoute = isAcademicSharePath\(location\.pathname\)/);
-  assert.match(main, /!academicShareRoute && getAnalyticsConsent\(\) === "granted"/);
+  // Analytics never starts from main.tsx: it waits for the app shell or
+  // onboarding to declare the audience, and neither mounts on /share.
+  assert.doesNotMatch(main, /initAnalytics\(/);
   assert.match(main, /!academicShareRoute && <CookieConsent/);
   assert.doesNotMatch(sitemap, /\/share<\/loc>/);
 });
@@ -88,8 +90,13 @@ test('optional PostHog analytics is consent gated', () => {
   const analytics = read('src/ui/lib/analytics.ts');
   const banner = read('src/ui/components/CookieConsent.tsx');
   const settings = read('src/ui/pages/Settings.tsx');
-  assert.match(main, /getAnalyticsConsent\(\) === "granted"/);
+  assert.doesNotMatch(main, /initAnalytics\(/);
   assert.match(analytics, /getAnalyticsConsent\(\) !== "granted"/);
+  // Fail closed until the audience is known (AXO-217).
+  assert.match(analytics, /if \(audience === "unknown"\) return;/);
+  assert.match(analytics, /autocapture: false/);
+  assert.match(analytics, /capture_pageleave: false/);
+  assert.match(analytics, /disable_session_recording: true/);
   assert.match(analytics, /opt_out_capturing/);
   assert.match(analytics, /state = "idle"/);
   assert.match(analytics, /state = "ready"/);

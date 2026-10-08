@@ -13,7 +13,8 @@
 //   · It does not carry its own version number. `CONSENT_NOTICE_VERSION` in
 //     config.js covers both languages at once — they say the same thing, so a
 //     change to one is a change to the notice, and both must move together.
-//     If you edit any string here, bump that constant.
+//     If you edit any string here, bump that constant and add a migration
+//     that stores the new text in public.consent_notice_text.
 //
 // Purpose labels are keyed by `consent_purpose.purpose`, the table's primary
 // key, rather than added as a `label_hi` column. The keys are seeded in
@@ -80,6 +81,60 @@ const PURPOSE_HI = {
   weekly_parent_digest: 'अभिभावक को साप्ताहिक सारांश',
   improve_extraction: 'सुधारों से एक्सट्रैक्शन बेहतर करना',
 };
+
+// The one-line explanation under each purpose. English only: in Hindi the
+// consent step leaves them out rather than show them untranslated. Kept here,
+// not in the onboarding component, because they are part of the notice text
+// stored per version in public.consent_notice_text.
+const PURPOSE_NOTE_EN = {
+  store_papers: 'The pages you upload, kept in the account',
+  extract_text: 'Reading the questions, answers and remarks',
+  generate_explanations: 'Grounded in the marks the teacher gave',
+  track_progress: 'So a repeated cause shows up over time',
+  weekly_parent_digest: 'A short email to you, once a week',
+  improve_extraction: 'Uses anonymised corrections',
+};
+
+/** The note shown under a purpose, or '' when none is shown in this language. */
+export function purposeNote(purpose, lang) {
+  if (lang !== 'en') return '';
+  return PURPOSE_NOTE_EN[purpose] ?? '';
+}
+
+/**
+ * The notice exactly as the consent step renders it, as structured data.
+ *
+ * This is what public.consent_notice_text stores for each version and
+ * language, so a recorded decision can be read against the words the guardian
+ * saw. `purposes` are consent_purpose rows ({ purpose, label, is_required,
+ * sort_order }); `label` is the English label from the database.
+ * tests/ui/consent-notice-text.test.ts fails if this output drifts from the
+ * row stored for CONSENT_NOTICE_VERSION, which is the signal to bump the
+ * version and add a migration with the new text.
+ */
+export function noticeContent(lang, purposes) {
+  const t = STRINGS[lang];
+  if (!t) throw new Error(`Unknown consent notice language: ${lang}`);
+  const ordered = [...purposes].sort((a, b) => a.sort_order - b.sort_order);
+  const item = (p, tag) => ({
+    purpose: p.purpose,
+    label: purposeLabel(p.purpose, p.label, lang),
+    note: purposeNote(p.purpose, lang),
+    control: tag ? 'required' : 'switch_off_by_default',
+    ...(tag ? { tag } : {}),
+  });
+  return {
+    title: t.title,
+    language_label: t.langLabel,
+    sections: [
+      { heading: t.requiredSection, items: ordered.filter((p) => p.is_required).map((p) => item(p, t.requiredTag)) },
+      { heading: t.optionalSection, items: ordered.filter((p) => !p.is_required).map((p) => item(p, null)) },
+      { heading: t.neverSection, items: t.neverItems.map((label) => ({ label, tag: t.never })) },
+    ],
+    withdraw_note: t.withdrawNote,
+    action: t.action,
+  };
+}
 
 /** Notice chrome for a language. Falls back to English for an unknown code. */
 export function noticeStrings(lang) {

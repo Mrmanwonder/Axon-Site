@@ -4,7 +4,10 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "./app/routes";
 import CookieConsent from "./components/CookieConsent";
 import { isAcademicSharePath } from "./lib/shareRoute";
-import { getAnalyticsConsent, initAnalytics } from "./lib/analytics";
+// Analytics is not started here. It waits until the app shell or onboarding
+// declares who is using the page (setAnalyticsAudience), so it cannot start in
+// a student session before the scope is known. The share route never mounts
+// either, so it never starts analytics.
 import "./styles/app.css";
 import "./styles/system.css";
 import "./styles/shell.css";
@@ -12,7 +15,6 @@ import "./styles/performance.css";
 import "./styles/cookie-consent.css";
 
 const academicShareRoute = isAcademicSharePath(location.pathname);
-if (!academicShareRoute && getAnalyticsConsent() === "granted") initAnalytics();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

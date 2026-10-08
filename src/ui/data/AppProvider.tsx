@@ -37,6 +37,7 @@ import {
 } from "./modules";
 import type { Prefs, Guardian, Student, ProviderError, ConsentState, Paper, ProgressRow } from "./modules";
 import { getCached, clearStudentLocalData } from "../../cache.js";
+import { audienceForGate, setAnalyticsAudience } from "../lib/analytics";
 
 
 /** What the boot sequence concluded about who this is.
@@ -467,6 +468,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await signOut();
     location.reload();
   }, []);
+
+  // ── analytics audience ──────────────────────────────────────────────────
+  // Tell analytics who is using the page. An active student profile is a
+  // student session: no pageviews, autocapture, page-leave or replay. Until the
+  // gate settles the audience is unknown and analytics does not start, so it
+  // cannot run in a student session before the scope is known. Onboarding sets
+  // its own audience per step; the cleanup resets to unknown on every change
+  // and when the app shell unmounts (a legal page, sign-out).
+  const hasStudent = student !== null;
+  useEffect(() => {
+    const next = audienceForGate(gate, hasStudent);
+    if (next === null) return;
+    setAnalyticsAudience(next);
+    return () => setAnalyticsAudience("unknown");
+  }, [gate, hasStudent]);
 
   // ── boot ────────────────────────────────────────────────────────────────
   useEffect(() => {
