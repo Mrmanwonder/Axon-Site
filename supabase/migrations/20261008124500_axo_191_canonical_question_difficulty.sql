@@ -56,8 +56,8 @@ returns smallint language sql immutable set search_path = '' as $$
   select least(5, greatest(
     case when p_marks <= 1 then 1 when p_marks <= 3 then 2
          when p_marks <= 5 then 3 when p_marks <= 8 then 4 else 5 end,
-    case when coalesce(p_question, '') ~* '^\\s*(evaluate|assess|justify|discuss|analyse|analyze)\\b' then 4
-         when coalesce(p_question, '') ~* '^\\s*(explain|compare|derive|prove)\\b' then 3
+    case when coalesce(p_question, '') ~* '^[[:space:]]*(evaluate|assess|justify|discuss|analyse|analyze)([[:space:][:punct:]]|$)' then 4
+         when coalesce(p_question, '') ~* '^[[:space:]]*(explain|compare|derive|prove)([[:space:][:punct:]]|$)' then 3
          else 1 end
   ))::smallint;
 $$;
