@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 // AXO-217 (council D2): public.consent_notice_text holds the exact text of each
 // notice version, is append-only, readable by authenticated users only, and
 // writable by nobody but a migration.
-const MIGRATION = new URL('../../supabase/migrations/20261007160000_consent_notice_text.sql', import.meta.url);
+const MIGRATION = new URL('../../supabase/migrations/20261007170000_consent_notice_text.sql', import.meta.url);
 
 async function freshDb() {
   const db = new PGlite();
