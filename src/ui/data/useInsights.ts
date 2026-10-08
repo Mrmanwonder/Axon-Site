@@ -22,13 +22,16 @@ import type { SyllabusMapInput } from "./syllabusMap";
 import { useApp } from "./AppProvider";
 import { getCached } from "../../cache.js";
 import { buildInsights } from "./insights";
+import { difficultyInsights } from "./questionDifficulty";
+import type { DifficultyEvidence, DifficultyInsight } from "./questionDifficulty";
 import type { InsightAttempt, InsightLoss, InsightFilters, InsightsModel, InsightPaper } from "./insights";
 
-type Evidence = { attempts: InsightAttempt[]; losses: InsightLoss[] };
+type Evidence = { attempts: InsightAttempt[]; losses: InsightLoss[]; difficulty: DifficultyEvidence[] };
 
 export type InsightsRead = {
   state: "loading" | "ready" | "failed";
   model: InsightsModel | null;
+  difficulty: { rated: number; rows: DifficultyInsight[] } | null;
   stale: boolean;
   reload: () => Promise<void>;
 };
@@ -63,7 +66,12 @@ export function useInsights(filters: InsightFilters): InsightsRead {
     () => (evidence ? buildInsights({ papers, attempts: evidence.attempts, losses: evidence.losses, filters }) : null),
     [evidence, papers, filters.subject, filters.type, filters.tier, filters.range],
   );
-  return { state: libraryPending ? "loading" : resource.state, model, stale: isStale(resource), reload };
+  const difficulty = useMemo(
+    () => evidence ? difficultyInsights({ papers, attempts: evidence.attempts,
+      losses: evidence.losses, ratings: evidence.difficulty ?? [], filters }) : null,
+    [evidence, papers, filters.subject, filters.type, filters.tier, filters.range],
+  );
+  return { state: libraryPending ? "loading" : resource.state, model, difficulty, stale: isStale(resource), reload };
 }
 
 /** The per-subject syllabus maps, filtered like the rest of Insights. */
