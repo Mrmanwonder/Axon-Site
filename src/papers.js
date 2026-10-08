@@ -492,9 +492,17 @@ async function readAllPages(build) {
   }
 }
 
+export async function readQuestionDifficulty(attemptId) {
+  const { data, error } = await sb.from('question_difficulty_analytics')
+    .select('attempt_id,paper_id,band,normalized_score,confidence,source,method_version,max_marks,marks_awarded')
+    .eq('attempt_id', attemptId).maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
 export async function insightEvidence(studentId) {
   return readThrough(`insights:${studentId}`, async () => {
-    const [attempts, losses] = await Promise.all([
+    const [attempts, losses, difficulty] = await Promise.all([
       readAllPages(() => sb
         .from('attempt_analytics')
         .select('id,paper_id,question_label,max_marks,marks_awarded,question_order,answer_blank')
@@ -505,8 +513,12 @@ export async function insightEvidence(studentId) {
         .select('id,attempt_id,cause,marks_lost,do_this_next,command_word,concepts,loss_reasons,depends_on_parts,created_at')
         .eq('student_id', studentId)
         .order('id', { ascending: true })),
+      readAllPages(() => sb.from('question_difficulty_analytics')
+        .select('attempt_id,paper_id,band,normalized_score,confidence,source,method_version,max_marks,marks_awarded')
+        .eq('student_id', studentId)
+        .order('attempt_id', { ascending: true })),
     ]);
-    return { attempts, losses };
+    return { attempts, losses, difficulty };
   });
 }
 
