@@ -9,7 +9,7 @@ create table if not exists public.paper_perceived_difficulty (
   responded_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint paper_perceived_difficulty_choice_check
-    check ((rating between 1 and 5 and not skipped) or (rating is null and skipped)),
+    check ((rating is not null and rating between 1 and 5 and not skipped) or (rating is null and skipped)),
   constraint paper_perceived_difficulty_version_check
     check (length(prompt_version) between 1 and 32)
 );
