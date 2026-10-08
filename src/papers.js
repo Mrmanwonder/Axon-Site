@@ -492,9 +492,31 @@ async function readAllPages(build) {
   }
 }
 
+export async function paperDifficultyFeedback(studentId, paperId) {
+  const { data, error } = await sb.from('paper_perceived_difficulty')
+    .select('rating,skipped').eq('student_id', studentId).eq('paper_id', paperId).maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+}
+
+export async function savePaperDifficultyFeedback({ paperId, studentId, rating, skipped }) {
+  requireOnline('Saving paper difficulty');
+  if (!(rating === null && skipped) && !(Number.isInteger(rating) && rating >= 1 && rating <= 5 && !skipped)) {
+    throw new Error('Choose a difficulty, or Not now.');
+  }
+  const { error } = await sb.from('paper_perceived_difficulty').upsert({
+    paper_id: paperId, student_id: studentId, rating, skipped,
+    prompt_version: 'v1', updated_at: new Date().toISOString(),
+  }, { onConflict: 'paper_id' });
+  if (error) throw error;
+  await clearCache();
+}
+
+/** Only categorical responses cross into Insights; neither OCR text nor marks
+ * are sent to product analytics from this interaction. */
 export async function insightEvidence(studentId) {
   return readThrough(`insights:${studentId}`, async () => {
-    const [attempts, losses] = await Promise.all([
+    const [attempts, losses, felt] = await Promise.all([
       readAllPages(() => sb
         .from('attempt_analytics')
         .select('id,paper_id,question_label,max_marks,marks_awarded,question_order,answer_blank')
@@ -505,8 +527,12 @@ export async function insightEvidence(studentId) {
         .select('id,attempt_id,cause,marks_lost,do_this_next,command_word,concepts,loss_reasons,depends_on_parts,created_at')
         .eq('student_id', studentId)
         .order('id', { ascending: true })),
+      readAllPages(() => sb.from('paper_difficulty_analytics')
+        .select('paper_id,rating,responded_at')
+        .eq('student_id', studentId)
+        .order('paper_id', { ascending: true })),
     ]);
-    return { attempts, losses };
+    return { attempts, losses, felt };
   });
 }
 
