@@ -19,6 +19,8 @@ vi.mock("../../src/ui/data/useAcademicShare", () => ({
 }));
 vi.mock("../../src/ui/data/modules", () => ({
   readPaper: fixture.readPaper,
+  paperDifficultyFeedback: vi.fn().mockResolvedValue({ rating: null, skipped: true }),
+  savePaperDifficultyFeedback: vi.fn(),
   deletePaper: vi.fn(),
   paperTypeLabel: () => "Class test",
   providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
