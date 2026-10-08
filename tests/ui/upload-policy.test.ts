@@ -45,3 +45,19 @@ test('failed refresh preserves the last authenticated fast policy',async()=>{
   expect(policy.policyForDraft('draft')).toEqual({mode:'batch',earlySubmit:true});
   now.mockRestore();
 });
+
+test('a send resumed before the scanner loaded the policy waits for it instead of falling back to one file at a time',async()=>{
+  const policy=await import('../../src/scan/upload-policy.js');
+  f.load.mockResolvedValue({batch_percent:100,originals_percent:100});
+  expect(await policy.resolvePolicyForDraft('draft')).toEqual({mode:'batch',earlySubmit:true});
+  expect(f.load).toHaveBeenCalledTimes(1);
+  // Once known, the policy is used at once; no second request blocks the send.
+  expect(await policy.resolvePolicyForDraft('draft')).toEqual({mode:'batch',earlySubmit:true});
+  expect(f.load).toHaveBeenCalledTimes(1);
+});
+
+test('a policy that cannot be loaded still lets the send start, on the legacy uploader',async()=>{
+  const policy=await import('../../src/scan/upload-policy.js');
+  f.load.mockRejectedValue(new Error('offline'));
+  expect(await policy.resolvePolicyForDraft('draft')).toEqual({mode:'legacy',earlySubmit:false});
+});

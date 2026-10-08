@@ -19,7 +19,7 @@
 // false. There is no bar and no spinner anywhere in here.
 
 import { sendDraft } from './send-draft.js';
-import { policyForDraft } from './upload-policy.js';
+import { resolvePolicyForDraft } from './upload-policy.js';
 import { resumeOriginalBackups } from './original-backups.js';
 import { watchRun } from './run-watch.js';
 import { sb } from '../supabase.js';
@@ -195,7 +195,7 @@ async function waitForReview(runId, say) {
  */
 export async function ingest({ studentId, draft, paperType, dateTaken, onProgress, sendStartedAt, onTelemetry, signal, onBackupProgress }) {
   const say = (stage, message, extra = {}) => onProgress?.({ stage, message, ...extra });
-  const policy = policyForDraft(draft.id);
+  const policy = await resolvePolicyForDraft(draft.id, signal);
   const { paperId, submission } = await sendDraft({ studentId, draft, paperType, dateTaken, sendStartedAt,
     onTelemetry, signal, ...policy,
     onProgress: progress => say('upload', progress.message, progress),
