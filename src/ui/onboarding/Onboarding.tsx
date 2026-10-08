@@ -66,7 +66,7 @@ import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
-  NOTICE_LANGUAGES, noticeStrings, purposeLabel, noticeIsComplete,
+  NOTICE_LANGUAGES, noticeStrings, purposeLabel, purposeNote, noticeIsComplete,
   paperTypesFor,
   startCheckout,
 } from "../data/modules";
@@ -79,6 +79,7 @@ import AvatarPicker from "../components/AvatarPicker";
 import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
 import type { CurriculumSelection } from "../components/CurriculumEditor";
 import { useParentMode } from "../data/useParentMode";
+import { audienceForOnboardingStep, setAnalyticsAudience } from "../lib/analytics";
 
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
@@ -116,14 +117,16 @@ const CAUSES: [string, string][] = [
 /* Icon and a specific one-liner per purpose. The generic alternative —
    repeating "Required" down four rows — turns the most consequential screen in
    the flow into a wall of identical switches, which is how blanket consent gets
-   clicked through. Each row has to say what it actually permits. */
-const PURPOSES: Record<string, [string, ReactNode, string]> = {
-  store_papers: ["ic-b", ICONS.paper, "The pages you upload, kept in the account"],
-  extract_text: ["ic-b", ICONS.read, "Reading the questions, answers and remarks"],
-  generate_explanations: ["ic-b", ICONS.explain, "Grounded in the marks the teacher gave"],
-  track_progress: ["ic-b", ICONS.trend, "So a repeated cause shows up over time"],
-  weekly_parent_digest: ["ic-a", ICONS.mail, "A short email to you, once a week"],
-  improve_extraction: ["ic-a", ICONS.spark, "Uses anonymised corrections"],
+   clicked through. Each row has to say what it actually permits. The
+   one-liners themselves are notice text and live in src/notice.js
+   (purposeNote), so the stored text of each notice version covers them. */
+const PURPOSES: Record<string, [string, ReactNode]> = {
+  store_papers: ["ic-b", ICONS.paper],
+  extract_text: ["ic-b", ICONS.read],
+  generate_explanations: ["ic-b", ICONS.explain],
+  track_progress: ["ic-b", ICONS.trend],
+  weekly_parent_digest: ["ic-a", ICONS.mail],
+  improve_extraction: ["ic-a", ICONS.spark],
 };
 
 type Purpose = { purpose: string; label: string; is_required: boolean; sort_order: number };
@@ -149,6 +152,13 @@ export default function Onboarding() {
   const [step, setStep] = useState<Step>(
     s ? "nameOnly" : providerError ? "account" : "landing",
   );
+  /* Analytics audience follows the step: guardian-only steps are a parent
+     surface, the landing (which a student may be reading) is unknown, and the
+     student's first-run screens are a student session. See lib/analytics.ts. */
+  useEffect(() => {
+    setAnalyticsAudience(audienceForOnboardingStep(step));
+    return () => setAnalyticsAudience("unknown");
+  }, [step]);
   const [error, setError] = useState<string | null>(providerError?.message ?? null);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
@@ -595,7 +605,7 @@ export default function Onboarding() {
     const row = (p: Purpose) => {
       // A purpose added to the table without an entry here still renders, with a
       // neutral icon and its label alone. Better a plain row than a missing one.
-      const [tone, icon, note] = PURPOSES[p.purpose] ?? ["ic-n", ICONS.shield, ""];
+      const [tone, icon] = PURPOSES[p.purpose] ?? ["ic-n", ICONS.shield];
       const label = purposeLabel(p.purpose, p.label, lang);
       return (
         <SRow
@@ -606,7 +616,7 @@ export default function Onboarding() {
           /* The one-liners under each purpose exist in English only. In Hindi
              they are left out rather than shown untranslated: the notice is
              wholly in one language or it is not shown in that language. */
-          small={lang === "en" ? note : ""}
+          small={purposeNote(p.purpose, lang)}
           trailing={p.is_required
             ? <span className="locked">{t.requiredTag}</span>
             : (
