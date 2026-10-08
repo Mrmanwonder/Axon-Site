@@ -30,6 +30,7 @@ import { useIngestion } from "../data/useIngestion";
 import PageSkeleton from "../components/PageSkeleton";
 import Disclose from "../components/Disclose";
 import { useInsights, useSyllabusMaps } from "../data/useInsights";
+import { FELT_LABELS } from "../data/perceivedDifficulty";
 import SyllabusMap from "../components/SyllabusMap";
 import type { SyllabusMaps } from "../data/syllabusMap";
 import { CAUSE_HUE, CAUSE_LABEL, numMark } from "../data/causes";
@@ -139,7 +140,7 @@ export default function Insights() {
   const { addPaper } = useIngestion();
   const [filters, setFilters] = useState<InsightFilters>(ALL_FILTERS);
   const set = (k: keyof InsightFilters) => (v: string) => setFilters((f) => ({ ...f, [k]: v }));
-  const { state, model, stale } = useInsights(filters);
+  const { state, model, felt, stale } = useInsights(filters);
   const syllabus = useSyllabusMaps(filters);
 
   const subjects = useMemo(() => {
@@ -180,6 +181,23 @@ export default function Insights() {
       <AppDropdown ariaLabel="Filter insights by date" value={filters.range} options={rangeOptions} onChange={set("range")} selected={filters.range !== "all"} />
       <AppDropdown ariaLabel="Filter insights by tier" value={filters.tier} options={tierOptions} onChange={set("tier")} selected={filters.tier !== "all"} />
     </div>
+
+    {felt && <div className="igrid">
+      <section className="isection">
+        <div className="sectitle">How the papers felt</div>
+        <div className="card tallycard">
+          <p className="lede">You rated {plural(felt.rated, "paper")}. {felt.hard > 0
+            ? `${plural(felt.hard, "paper")} felt hard or very hard.`
+            : felt.easy > 0 ? `${plural(felt.easy, "paper")} felt easy or very easy.` : "These felt about right."}</p>
+          {felt.hardAndHeld > 0 && <p className="lede">On {plural(felt.hardAndHeld, "paper")} that felt hard, your teacher awarded most of the available marks. How it feels and what the marks show can differ.</p>}
+          {felt.easyAndLost > 0 && <p className="lede">On {plural(felt.easyAndLost, "paper")} that felt easy, some marks were lost. It may be worth reviewing those questions.</p>}
+          {felt.rows.slice(0, 4).map((r) => <div className="tallyrow" key={r.paperId}>
+            <div className="top"><Link to={paths.paper(r.paperId)} className="n">{r.label}</Link><span className="v">{FELT_LABELS[r.rating - 1]}</span></div>
+          </div>)}
+          <p className="widgetnote">Your optional responses, newest first. Feelings are not official question ratings. Comparisons use only complete teacher-marked totals, never other students.</p>
+        </div>
+      </section>
+    </div>}
 
     {model.evidence.papers === 0 && filtered && papers.length > 0
       ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no confirmed evidence for this combination yet.</p><button onClick={() => setFilters(ALL_FILTERS)}>Clear filters</button></div>
