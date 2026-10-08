@@ -87,6 +87,10 @@ export type ReviewQuestion = {
   label?: string;
   tier: "confident" | "unsure" | "unreadable";
   confirmed?: boolean;
+  /** The pipeline asked about this part (needs_review). */
+  flagged?: boolean;
+  /** Its measured reason in words, or null when none was recorded. */
+  reason?: string | null;
   causeRejected?: boolean;
   marksAwarded?: number | null;
   marksAvailable?: number | null;
@@ -115,8 +119,9 @@ export type ReviewModel = {
   noTotal?: string | null;
   outstanding: number;
   cleanCount: number;
-  readableCount?: number;
   saving?: boolean;
+  /** "Check the reading" on a saved paper: fixes save at once, no rescan. */
+  committed?: boolean;
   saveLabel: string;
   questions: ReviewQuestion[];
 } | null;
@@ -126,12 +131,15 @@ export type ReviewHandlers = {
   onAction: (id: string, action: string) => void;
   onRelabel?: (id: string, label: string) => Promise<void>;
   onConfirmClean: () => void;
-  onConfirmAll?: () => void;
   onSave: () => void;
 };
 
 export type ResumeReviewResult =
   | { state: "reviewing" }
+  /** The paper is read and saving on its own (AXO-216); open the paper. */
+  | { state: "saving"; paperId: string }
+  /** The save was refused; the reason is for the student. */
+  | { state: "save_failed"; paperId: string; reason: string }
   | { state: "committed"; paperId: string }
   | { state: "processing" }
   | { state: "stopped"; reason: string | null }
@@ -151,7 +159,8 @@ type ScanModule = {
   shoot: () => void;
   setAutoCapture: (on: boolean) => void;
   setTorchMode: (mode: TorchMode) => Promise<void> | void;
-  resumeDraftReview: (draftId: string) => Promise<ResumeReviewResult>;
+  resumeDraftReview: (draftId: string, options?: { check?: boolean }) => Promise<ResumeReviewResult>;
+  autoSavePaper: (paperId: string) => Promise<void>;
 };
 
 type ScanValue = {
@@ -397,6 +406,23 @@ export function ScanProvider({ children }: { children: ReactNode }) {
     }
   }, [toast, openSheet, gotoScan, navigate]);
 
+
+  // A read paper saves on its own, even when the student never opens it
+  // (AXO-216, council D1). Once per paper per session; a refused save is kept
+  // with its reason by the scan module and not retried into the same refusal.
+  const autoSaved = useRef(new Set<string>());
+  const progressRows = app.progressResource?.data;
+  useEffect(() => { autoSaved.current = new Set(); }, [app.student?.id]);
+  useEffect(() => {
+    if (!app.student?.id || !progressRows) return;
+    const ready = [...progressRows.values()].filter((row) =>
+      ["needs_review", "explaining", "ready"].includes(row.status) && !autoSaved.current.has(row.paper_id));
+    if (!ready.length) return;
+    for (const row of ready) autoSaved.current.add(row.paper_id);
+    void ensureScan()
+      .then((scan) => Promise.all(ready.map((row) => scan.autoSavePaper(row.paper_id))))
+      .catch((error) => console.warn("[scan] a read paper could not start saving", error));
+  }, [app.student?.id, progressRows, ensureScan]);
 
   const setCameraVisible = useCallback((visible: boolean, retry = false) => {
     if (visibleRef.current === visible && !retry) return;

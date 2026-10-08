@@ -51,3 +51,16 @@
 .po-place { display: block; min-height: 44px; margin: -6px 18px 8px; padding: 0 14px; border: 0; border-radius: 12px;
   background: var(--accent-wash); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 
+
+/* AXO-216: one card per flagged part, under its row. Amber carries attention;
+   the part's own chip keeps the dashed "unsure" form. */
+.flagcard { margin: 0 var(--gutter, 16px) 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45;
+  background: var(--attention-wash-soft); border: .5px solid var(--attention-rim); }
+.flagcard-t { font-weight: 600; color: var(--label); }
+.flagcard-n { margin-top: 2px; color: var(--po-secondary, var(--label-2)); font-size: 13px; }
+.flagcard-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.flagcard-acts .qact { min-height: 44px; }
+.flagcard-err { margin: 6px 0 0; font-size: 13px; color: var(--label); }
+.fixpart { display: grid; gap: 12px; }
+.fixpart-crop { border-radius: 10px; overflow: hidden; }
+.fixpart textarea { width: 100%; min-height: 44px; font: inherit; }

@@ -163,8 +163,8 @@ test("processing state hands off to review when a fresh progress read becomes re
     </MemoryRouter>,
   );
 
-  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1"));
-  expect(await screen.findByText("Opening 2 parts that need your eyes…")).toBeTruthy();
+  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1", undefined));
+  expect(await screen.findByText("Saving your paper…")).toBeTruthy();
   expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
 });
 
@@ -182,8 +182,8 @@ test("server progress reaching reviewable state re-enters review without a local
 
   mount();
 
-  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1"));
-  expect(await screen.findByText("Opening 2 parts that need your eyes…")).toBeTruthy();
+  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1", undefined));
+  expect(await screen.findByText("Saving your paper…")).toBeTruthy();
   expect(screen.queryByText("Preparing the parts that need your eyes")).toBeNull();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
 });
@@ -204,7 +204,7 @@ test("a hanging review start becomes a retry state instead of an infinite skelet
 
     mount();
 
-    expect(screen.getByText("Opening 12 parts that need your eyes…")).toBeTruthy();
+    expect(screen.getByText("Saving your paper…")).toBeTruthy();
     await act(async () => {
       vi.advanceTimersByTime(10_001);
       await Promise.resolve();
@@ -284,4 +284,44 @@ test("a paper still sending from this phone shows its own pages, never 'not foun
   expect(screen.getByText(/No connection/)).toBeTruthy();
   expect(screen.queryByText(/couldn.t find this paper/i)).toBeNull();
   expect(screen.queryByText(/did not finish/i)).toBeNull();
+});
+
+test("a read paper saves on its own and hands over to the paper (AXO-216)", async () => {
+  fixture.progress = new Map([["paper-1", progress("ready", { questions_needing_you: 3 })]]);
+  fixture.resumeDraftReview.mockResolvedValue({ state: "saving", paperId: "paper-1" });
+  render(
+    <MemoryRouter initialEntries={["/scan/review/paper-1"]}>
+      <Routes>
+        <Route path="/scan/review/:draftId" element={<PaperReview />} />
+        <Route path="/library/:paperId" element={<div>The paper</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText("The paper")).toBeTruthy();
+  expect(screen.queryByText(/need your eyes/)).toBeNull();
+});
+
+test("a refused save shows the real reason and offers Check the reading", async () => {
+  fixture.progress = new Map([["paper-1", progress("ready")]]);
+  fixture.resumeDraftReview.mockResolvedValue({
+    state: "save_failed", paperId: "paper-1",
+    reason: "Your paper did not finish saving. Two parts of this paper are both read as 3(c), so Axon cannot tell which mark belongs to which. Choose Check the reading and change the label on one of them.",
+  });
+  mount();
+  expect(await screen.findByText(/both read as 3\(c\)/)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Check the reading" }).getAttribute("href")).toBe("/scan/review/paper-1?check=1");
+});
+
+test("Check the reading asks for the whole reading, even on a saved paper", async () => {
+  fixture.progress = new Map([["paper-1", progress("committed")]]);
+  fixture.resumeDraftReview.mockResolvedValue({ state: "reviewing" });
+  render(
+    <MemoryRouter initialEntries={["/scan/review/paper-1?check=1"]}>
+      <Routes>
+        <Route path="/scan/review/:draftId" element={<PaperReview />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await waitFor(() => expect(fixture.resumeDraftReview).toHaveBeenCalledWith("paper-1", { check: true }));
+  expect(screen.queryByText(/already saved/)).toBeNull();
 });

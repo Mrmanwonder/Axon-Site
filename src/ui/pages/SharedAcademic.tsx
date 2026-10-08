@@ -275,14 +275,26 @@ export default function SharedAcademic() {
                   ))
                 : <section className="shared-state"><p>No readable questions were saved on this paper.</p></section>}
             </div>
+            {(snapshot.withheld_parts ?? 0) > 0 && (
+              <section className="shared-state">
+                <p>
+                  {snapshot.withheld_parts} part{snapshot.withheld_parts === 1 ? " is" : "s are"} not shown because the
+                  student has not checked how {snapshot.withheld_parts === 1 ? "it was" : "they were"} read yet, so the paper total is not shown either.
+                </p>
+              </section>
+            )}
           </>
         )}
 
-        {snapshot.kind === "question" && (
+        {snapshot.kind === "question" && (snapshot.withheld ? (
+          <section className="shared-state">
+            <p>This question is not shown because the student has not checked how it was read yet.</p>
+          </section>
+        ) : (
           <div className="shared-question-list">
             <QuestionSnapshot question={snapshot.question} />
           </div>
-        )}
+        ))}
 
         <footer className="shared-footer">
           Only this saved {snapshot.kind} was shared. This page cannot edit the student&rsquo;s Axon account or open other papers.

@@ -561,6 +561,14 @@ export type QuestionRegionRef = {
   run_id: string;
   /** queued | running | done | skipped | failed. The machine reason is deliberately not selected: it is not user copy. */
   explain_status: string | null;
+  /** AXO-216. Absent on offline copies cached before they were read. */
+  placed_label?: string | null;
+  confidence_tier?: "confident" | "unsure" | "unreadable";
+  /** The pipeline asks the student to look at this part (a measured reason). */
+  needs_review?: boolean;
+  student_confirmed_at?: string | null;
+  /** The student chose "Not now" on its card. */
+  review_deferred_at?: string | null;
   committed_attempt_id: string | null;
   page_spans: { page: number; box: { x: number; y: number; w: number; h: number } }[] | null;
   crop_key: string | null;
@@ -601,6 +609,10 @@ export type PaperDetail = {
   page_unreadable: { page_number: number; reason: string; storage_path: string | null }[];
   student_attempt: StudentAttempt[];
   question_region: QuestionRegionRef[];
+  /** The paper's runs, to tell the saved one apart. Absent on older offline copies. */
+  extraction_run?: { id: string; status: string; committed_at: string | null }[];
+  /** default (nobody chose), triage (a printed paper code), student (they chose). */
+  type_source?: "default" | "triage" | "student";
 };
 
 /** One paper with its attempts and losses — the analysis, cached for offline. */
@@ -622,6 +634,12 @@ export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
 export const relabelAttempt = papersMod.relabelAttempt as unknown as (attemptId: string, label: string) => Promise<void>;
+export const setPaperType = papersMod.setPaperType as unknown as (paperId: string, type: string) => Promise<void>;
+export const fixSavedPart = papersMod.fixSavedPart as unknown as (
+  regionId: string,
+  fix?: { marksAwarded?: number; marksAvailable?: number; answer?: string },
+) => Promise<{ region_id: string; attempt_id: string | null; run_id: string; explain: boolean }>;
+export const deferPart = papersMod.deferPart as unknown as (regionId: string) => Promise<void>;
 
 
 export type AcademicShareState = {
@@ -666,6 +684,8 @@ export type SharedAcademicSnapshot =
         total_awarded: number | null; total_available: number | null; reconciled: boolean | null;
       };
       questions: SharedQuestionSnapshot[];
+      /** Parts not shown because the student has not checked them (AXO-216). */
+      withheld_parts?: number;
     }
   | {
       found: true;
@@ -673,6 +693,15 @@ export type SharedAcademicSnapshot =
       expires_at: string;
       paper: { type: string; tier: string | null; date_taken: string; subject: string | null };
       question: SharedQuestionSnapshot;
+      withheld?: false;
+    }
+  | {
+      found: true;
+      kind: "question";
+      expires_at: string;
+      paper: { type: string; tier: string | null; date_taken: string; subject: string | null };
+      /** An unchecked reading is not shared (AXO-216). */
+      withheld: true;
     }
   | { found: false };
 

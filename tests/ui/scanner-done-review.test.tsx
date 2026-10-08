@@ -106,9 +106,9 @@ test("Done with every page fine, warn-only and imported pages included, goes on 
   const { host, rows } = await pressDone([camera(1, "ok"), camera(2, "warn"), imported(3, "warn"), unchecked(4)]);
   expect(rows.filter(needsLook)).toHaveLength(0);
   expect(host.reviewPages).not.toHaveBeenCalled();
-  // The next step toward reading: the paper's type, asked once, never Review.
-  expect(host.openSheet).toHaveBeenCalledTimes(1);
-  expect(host.openSheet.mock.calls[0][0].title).toBe("What kind of paper is this?");
+  // Straight to reading: no "What kind of paper is this?" (council D7), never Review.
+  expect(host.openSheet).not.toHaveBeenCalled();
+  await waitFor(() => expect(host.sendStarted).toHaveBeenCalledTimes(1));
 });
 
 test("Done with a flagged page opens Review instead of reading", async () => {

@@ -12,9 +12,12 @@ import {
 import {
   createDraft, deleteDraft, listDrafts, movePage, readDraft, removePage, replacePage, saveDraft,
 } from './drafts.js';
-import { commitRun, confirmQuestion, confirmQuestions, correctAnswer, correctMark, loadReview, rejectCause, relabelRegion } from './review.js';
+import {
+  commitRun, confirmQuestions, correctAnswer, correctMark, isSaveRefusal, loadReview,
+  rejectCause, relabelRegion, saveFailureMessage, storePlacedLabels,
+} from './review.js';
 import { releaseCrops } from './crops.js';
-import { paperTypesFor } from '../papers.js';
+import { fixSavedPart, paperTypesFor, relabelAttempt } from '../papers.js';
 import { providerKeyForStudent } from '../curriculum.js';
 import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
@@ -54,6 +57,9 @@ const S = {
   explanationsStarted: false,
   retaking: null,
   saving: false,        // true while save() is waiting on explanations before commit
+  reviewCommitted: false, // the open review is "Check the reading" on a saved paper
+  saves: new Map(),       // runId -> the save in flight, so one run saves once (AXO-216)
+  saveFailures: new Map(), // runId -> why its save was refused, shown instead of retrying
 
 };
 
@@ -118,6 +124,7 @@ export function resetScan() {
   detachSurface();
   S.ctx = null; S.draft = null; S.run = null; S.runId = null; S.review = null; S.regions = null;
   S.busy = false; S.pendingCaptures = 0; S.submitting = false; S.saving = false; S.retaking = null; S.explanationsStarted = false;
+  S.reviewCommitted = false; S.saves = new Map(); S.saveFailures = new Map();
   captureTail = Promise.resolve();
   S.thumbs.forEach(url => URL.revokeObjectURL(url)); S.thumbs.clear(); S.placeholders.clear();
   releaseCrops();
@@ -806,19 +813,12 @@ function sendPaper() {
     return;
   }
 
-  const type = S.draft.paper_type ?? S.pendingType;
-  if (type) {
-    S.pendingType = null;
-    return run(type, sendStartedAt);
-  }
-
-  host.openSheet({
-    title: 'What kind of paper is this?',
-    body: 'This decides whether we can match it to an official marking scheme.',
-    items: [],
-    choices: paperTypes().map((t) => ({ label: t.label, value: t.value })),
-    onChoice: (value) => run(value, sendStartedAt),
-  });
+  // No "What kind of paper is this?" (council D7, 7 Oct 2026). Without a type the
+  // paper is a school test, and it becomes a past paper only when triage reads a
+  // printed paper code with high confidence. The type can be changed on the paper.
+  const type = S.draft.paper_type ?? S.pendingType ?? null;
+  S.pendingType = null;
+  return run(type, sendStartedAt);
 }
 
 /**
@@ -837,6 +837,7 @@ async function run(paperType, sendStartedAt = performance.now()) {
     const queue = await sendQueue();
     if (epoch !== S.epoch) return;
     const title = paperTypes().find((t) => t.value === paperType)?.label ?? 'Paper';
+    // paperType null: nobody chose, so the server's default and triage decide (D7).
     const started = queue.start({
       studentId: S.ctx.student.id, draft, paperType, title, sendStartedAt,
       onTelemetry: host.uploadTelemetry,
@@ -865,9 +866,10 @@ async function run(paperType, sendStartedAt = performance.now()) {
 
 // ── review ─────────────────────────────────────────────────────────────────
 
-async function openReview(runId, intent = null, recovery = null) {
+async function openReview(runId, intent = null, recovery = null, { committed = false } = {}) {
   if (recovery === null) { ++S.reviewRecovery; S.reviewDraft = null; }
   if (S.runId !== runId) S.explanationsStarted = false;
+  S.reviewCommitted = committed;
   const epoch = S.epoch;
 
   S.runId = runId;
@@ -890,7 +892,16 @@ function readDraftWithin(id, ms = LEGACY_DRAFT_LOOKUP_MS) {
   ]);
 }
 
-export async function resumeDraftReview(routeId) {
+/**
+ * Open a paper that is read, or its reading.
+ *
+ * Since AXO-216 a read paper saves on its own: this starts the save and says
+ * so (`saving`), and the route takes the student to the paper. With
+ * `check`, it opens the whole reading instead ("Check the reading"), for a saved
+ * paper or for one whose save was refused. A refused save is reported with its
+ * reason (`save_failed`) rather than retried into the same refusal.
+ */
+export async function resumeDraftReview(routeId, { check = false } = {}) {
   const recovery = ++S.reviewRecovery;
   S.reviewDraft = null;
   const epoch = S.epoch;
@@ -929,12 +940,23 @@ export async function resumeDraftReview(routeId) {
     }).catch((error) => console.warn('[scan] local draft lookup failed during review', error));
   }
 
-  if (run.status === 'committed') return { state: 'committed', paperId };
+  if (run.status === 'committed') {
+    if (!check) return { state: 'committed', paperId };
+    await openReview(run.id, null, recovery, { committed: true });
+    return { state: 'reviewing' };
+  }
 
   if (run.status === 'failed' || run.status === 'rejected') {
     return { state: 'stopped', reason: run.status_reason ?? null };
   }
   if (!['needs_review', 'explaining', 'ready'].includes(run.status)) return { state: 'processing' };
+
+  if (!check) {
+    const failed = S.saveFailures.get(run.id);
+    if (failed) return { state: 'save_failed', paperId, reason: failed };
+    void autoSave(run, paperId, epoch);
+    return { state: 'saving', paperId };
+  }
 
   const regions = await regionsForRun(run.id);
   if (epoch !== S.epoch || recovery !== S.reviewRecovery) return { state: 'gone' };
@@ -976,18 +998,17 @@ function paintReview() {
     noTotal: S.review.noTotal,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
-    readableCount: S.review.readableUnconfirmed?.length ?? 0,
     saving: S.saving,
-    saveLabel: !S.review.outstanding
-      ? 'Save to Library'
-      : canConfirmAndSave()
-        ? `Confirm all ${S.review.outstanding} and save`
-        : `${S.review.outstanding} left to check`,
+    committed: savedPaper(),
+    // Nothing waits for the flagged parts: unchecked ones save as unsure (AXO-216).
+    saveLabel: savedPaper() ? 'Done' : 'Save to Library',
     questions: S.review.questions.map((q) => ({
       id: q.id,
       label: q.label,
       tier: q.tier,
       confirmed: q.confirmed,
+      flagged: q.flagged,
+      reason: q.reason,
       marksAwarded: q.marksAwarded,
       marksAvailable: q.marksAvailable,
       answer: q.answer,
@@ -1012,24 +1033,23 @@ function paintReview() {
     onMark: async (id, value) => {
       try {
         if (!S.review?.questions.some(q => q.id === id)) throw new Error('This review has changed. Open the current question again.');
-        await correctMark(id, value);
+        if (savedPaper()) await fixSavedPart(id, { marksAwarded: value });
+        else await correctMark(id, value);
         await refreshReview();
       } catch (e) { toast(e.message, 'warn'); }
     },
     onAction: (id, action) => handleReviewAction(id, action),
     onRelabel: async (id, label) => {
-      await relabelRegion(id, label);
+      const question = S.review?.questions.find((q) => q.id === id);
+      if (savedPaper() && question?.attemptId) await relabelAttempt(question.attemptId, label);
+      else await relabelRegion(id, label);
       await refreshReview();
     },
+    // Only parts nobody flagged (see loadReview's cleanUnconfirmed).
     onConfirmClean: async () => {
       try {
-        await confirmQuestions(S.review.cleanUnconfirmed);
-        await refreshReview();
-      } catch (e) { toast(e.message, 'warn'); }
-    },
-    onConfirmAll: async () => {
-      try {
-        await confirmQuestions(S.review.readableUnconfirmed ?? []);
+        if (savedPaper()) await Promise.all(S.review.cleanUnconfirmed.map((id) => fixSavedPart(id)));
+        else await confirmQuestions(S.review.cleanUnconfirmed, S.runId);
         await refreshReview();
       } catch (e) { toast(e.message, 'warn'); }
     },
@@ -1037,12 +1057,18 @@ function paintReview() {
   });
 }
 
+/** The open review is "Check the reading" on a paper that is already saved. */
+function savedPaper() {
+  return !!S.review?.committed || S.reviewCommitted;
+}
+
 function handleReviewAction(id, action) {
   const question = S.review?.questions.find((q) => q.id === id);
   if (!question) return;
 
   if (action === 'confirm') {
-    confirmQuestion(id).then(refreshReview).catch((e) => toast(e.message, 'warn'));
+    const confirm = savedPaper() ? fixSavedPart(id) : confirmQuestions([id], S.runId);
+    confirm.then(refreshReview).catch((e) => toast(e.message, 'warn'));
     return;
   }
   if (action === 'cause') {
@@ -1060,12 +1086,15 @@ function handleReviewAction(id, action) {
       input: { label: "Your answer", id: 'fixText', placeholder: question.answer ?? 'What you wrote' },
       primary: 'Use this',
       onConfirm: async (value) => {
-        await correctAnswer(id, value ?? ''); await refreshReview();
+        if (savedPaper()) await fixSavedPart(id, { answer: value ?? '' });
+        else await correctAnswer(id, value ?? '');
+        await refreshReview();
       },
     });
     return;
   }
   if (action === 'rescan') {
+    if (savedPaper()) { toast('This paper is saved. Scan it again to read it from new photos.', 'warn'); return; }
     if (!Number.isInteger(question.pageNumber) || question.pageNumber < 1) { toast('This reading has no source page to retake.', 'warn'); return; }
     if (!S.reviewDraft || S.reviewDraft.paper_id !== S.review?.paper?.id) { toast('The original pages are not on this device. Open this review on the device used to scan them.', 'warn'); return; }
     host.openSheet({
@@ -1090,36 +1119,25 @@ function handleReviewAction(id, action) {
   }
 }
 
-/** Every outstanding reading has something on screen to vouch for. */
-function canConfirmAndSave() {
-  const left = S.review?.questions.filter((q) => !q.confirmed) ?? [];
-  return left.length > 0 && left.every((q) => q.tier !== 'unreadable');
-}
-
 /**
  * Save closes review at once (owner, 6 Oct 2026: instant feedback). What is
- * left — explanations, then committing the confirmed marks — runs in the
- * background and does not need this screen. If it cannot finish, the paper
- * stays in the Library ready to save again, and the student is told.
+ * left — explanations, then committing the marks — runs in the background and
+ * does not need this screen. Nothing is confirmed on the student's behalf:
+ * a flagged part they did not check saves as unsure, out of analytics
+ * (AXO-216; the one-tap confirm of every reading is gone). If the save is
+ * refused, the student is told why.
  */
 async function save() {
   if (!S.runId || S.saving) return;
-  if (S.review?.outstanding) {
-    if (!canConfirmAndSave()) {
-      const left = S.review.questions.filter((q) => !q.confirmed && q.tier === 'unreadable').length;
-      toast(`${left} part${left === 1 ? '' : 's'} could not be read. Fix ${left === 1 ? 'it' : 'them'} or confirm ${left === 1 ? 'it' : 'them'} first. They are at the top.`);
-      return;
-    }
-    S.saving = true;
-    paintReview();
-    try {
-      await confirmQuestions(S.review.readableUnconfirmed ?? []);
-    } catch (error) {
-      S.saving = false;
-      paintReview();
-      toast(error?.message || 'That could not be confirmed. Try again with a connection.', 'warn');
-      return;
-    }
+  if (savedPaper()) {
+    // "Check the reading" on a saved paper: every fix is already saved.
+    const paperId = S.review?.paper?.id;
+    host.closeReview(paperId);
+    releaseCrops();
+    S.runId = null; S.regions = null; S.review = null; S.reviewCommitted = false;
+    ++S.reviewRecovery;
+    if (paperId) void host.refreshLibrary();
+    return;
   }
 
   S.saving = true;
@@ -1144,15 +1162,68 @@ async function save() {
   ++S.reviewRecovery;
   S.reviewDraft = null;
 
-  void finishSave({ runId, paperId, regions, started, savedDraft, epoch });
+  S.saveFailures.delete(runId);
+  void saveOnce(runId, () => finishSave({ runId, paperId, regions, started, savedDraft, epoch }));
+}
+
+/** One save per run, however many screens or tabs ask for it on this device. */
+function saveOnce(runId, work) {
+  if (S.saves.has(runId)) return S.saves.get(runId);
+  const flight = Promise.resolve().then(work).finally(() => {
+    if (S.saves.get(runId) === flight) S.saves.delete(runId);
+  });
+  S.saves.set(runId, flight);
+  return flight;
+}
+
+/**
+ * A read paper saves on its own (AXO-216, council D1): confident parts with no
+ * prompt, flagged parts the student has not checked as unsure. Called when the
+ * paper is opened and, in the background, when the Library sees it is read.
+ */
+export function autoSave(run, paperId, epoch = S.epoch) {
+  if (!run?.id || S.saveFailures.has(run.id)) return S.saves.get(run?.id) ?? Promise.resolve();
+  return saveOnce(run.id, async () => {
+    const regions = await regionsForRun(run.id).catch(() => []);
+    const started = ['explaining', 'ready'].includes(run.status);
+    let savedDraft = null;
+    try { savedDraft = (await sendQueue()).draftForPaper?.(paperId) ?? null; } catch { /* backups finish later */ }
+    await finishSave({ runId: run.id, paperId, regions, started, savedDraft, epoch });
+  });
+}
+
+/**
+ * Save a paper the Library shows as read, without the student opening it. Uses
+ * the same server truth as the Library; does nothing for any other state.
+ */
+export async function autoSavePaper(paperId) {
+  const epoch = S.epoch;
+  if (!S.ctx?.student?.id) return;
+  const run = await currentRunForPaper(paperId);
+  if (epoch !== S.epoch || !run || !['needs_review', 'explaining', 'ready'].includes(run.status)) return;
+  await autoSave(run, paperId, epoch);
+}
+
+/** Why the save of this paper's run was refused, if it was. */
+export function saveFailureFor(runId) {
+  return S.saveFailures.get(runId) ?? null;
 }
 
 const COMMIT_RETRY_MS = [3000, 10000, 30000];
 
 async function finishSave({ runId, regions, started, savedDraft, epoch }) {
+  // The label each part is shown under, so the duplicate check compares what the
+  // student saw ("3(c)", "5(c)") rather than two bare "(c)".
+  try { await storePlacedLabels(runId); } catch (error) { console.error('placed labels', error); }
   try {
-    if (!started) await startExplanations(runId);
-    await watchExplanations({ runId, regions });
+    let explaining = started;
+    if (!started) {
+      // Refused while the backend still gates on flagged parts; the marks save
+      // anyway and nothing waits for explanations that never start.
+      try { await startExplanations(runId); explaining = true; }
+      catch (error) { console.warn('explanations did not start', error); }
+    }
+    if (explaining) await watchExplanations({ runId, regions });
   } catch (error) {
     // Explanations sit on top of the marks; they never hold the marks back.
     console.error('explanations', error);
@@ -1166,14 +1237,20 @@ async function finishSave({ runId, regions, started, savedDraft, epoch }) {
       await commitRun(runId);
       committed = true;
     } catch (error) {
-      if (attempt >= COMMIT_RETRY_MS.length) {
-        if (epoch === S.epoch) toast('Your paper did not finish saving. Open it from the Library to save it again.', 'warn');
+      // A refusal is the same on every try. Say why, and keep it, so opening the
+      // paper shows the reason and "Check the reading" rather than a spinner.
+      if (isSaveRefusal(error) || attempt >= COMMIT_RETRY_MS.length) {
+        const message = saveFailureMessage(error);
+        if (isSaveRefusal(error)) S.saveFailures.set(runId, message);
+        if (epoch === S.epoch) toast(message, 'warn');
         console.error('commit', error);
+        if (epoch === S.epoch) void host.refreshLibrary();
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, COMMIT_RETRY_MS[attempt]));
     }
   }
+  S.saveFailures.delete(runId);
   if (savedDraft) {
     try { await finishDraftReview(savedDraft); } catch { /* the backup job finishes it later */ }
     if (epoch === S.epoch) refreshDrafts();

@@ -22,6 +22,10 @@ vi.mock("../../src/ui/data/modules", () => ({
   deletePaper: vi.fn(),
   paperTypeLabel: () => "Class test",
   providerKeyForStudent: (s?: { provider_key?: string | null }) => s?.provider_key ?? null,
+  paperTypesFor: () => [{ value: "unit_test", label: "Class test" }],
+  setPaperType: vi.fn(),
+  fixSavedPart: vi.fn(),
+  deferPart: vi.fn(),
 }));
 vi.mock("../../src/cache.js", () => ({ getCached: fixture.getCached }));
 

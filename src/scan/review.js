@@ -1,17 +1,20 @@
 // Stage 9 · review: the data behind the screen.
 //
-// Required in v1, not skippable and not defaulted to accept. `commit_extraction_run`
-// refuses while anything still needs the student's eyes, so this is not a
-// convention the UI could quietly drop — the database holds the line.
+// Opt-in since AXO-216 (council D1, 7 Oct 2026). A paper saves on its own once it
+// is read; a part the pipeline flagged (needs_review) and the student has not
+// checked is saved as unsure, out of analytics, and asks on the paper with one
+// card. This screen is "Check the reading": the whole reading, part by part, for
+// a student who wants it, or the way to fix a paper whose save was refused.
 //
-// Two things shape the model built here. Unsure and unreadable questions come
-// first, because they are the reason the screen exists. And a correction is
+// Two things shape the model built here. Flagged and unreadable parts come
+// first. And a correction is
 // accepted instantly, without verification and without review: on what their own
 // paper says, the student is the authority and we are the ones who might have
 // misread it.
 
 import { sb } from '../supabase.js';
-import { projectQuestionRegions, questionDisplayPath } from '../questionCount.js';
+import { placeRegions, projectQuestionRegions, questionDisplayPath } from '../questionCount.js';
+import { flagReason } from './flags.js';
 import { reviewLeadFor } from './reviewSummary.js';
 import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
 import { assessmentRulesFor, providerKeyForBoard } from '../curriculum.js';
@@ -64,7 +67,7 @@ export async function loadReview(runId) {
       sb.from('paper').select('id, type, tier, subject, date_taken, reported_total, total_awarded, total_available')
         .eq('id', run.paper_id).single(),
       sb.from('question_region')
-        .select('id, order_index, question_label, question_text, student_answer, answer_block, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, student_confirmed_at, student_corrected, page_spans')
+        .select('id, order_index, question_label, question_text, student_answer, answer_block, teacher_remark, region_type, marks_awarded, marks_available, confidence_tier, confidence_signals, needs_review, student_confirmed_at, student_corrected, page_spans, committed_attempt_id')
         .eq('run_id', runId).order('order_index'),
       sb.from('paper_page').select('page_number, r2_key, quality_verdict, layer_fallback, status')
         .eq('paper_id', run.paper_id).order('page_number'),
@@ -103,6 +106,12 @@ export async function loadReview(runId) {
       identityNote: identities.get(r.id)?.inherited ? `Parent linked by source order. Printed label: ${r.question_label}` : null,
       tier: r.confidence_tier,
       confirmed: !!r.student_confirmed_at,
+      // The pipeline asked about this part, for a measured reason (AXO-216).
+      flagged: !!r.needs_review,
+      reason: r.needs_review && !r.student_confirmed_at
+        ? flagReason(r, { unplaced: !!identities.get(r.id) && identities.get(r.id).question == null })
+        : null,
+      attemptId: r.committed_attempt_id ?? null,
       corrected: !!r.student_corrected,
       marksAwarded: r.marks_awarded === null ? null : Number(r.marks_awarded),
       marksAvailable: r.marks_available === null ? null : Number(r.marks_available),
@@ -137,9 +146,11 @@ export async function loadReview(runId) {
     };
   }));
 
-  // Unreadable first, then unsure, then the rest — and within each, paper order.
+  // Flagged and unchecked first, then unreadable, then unsure, then the rest — and
+  // within each, paper order.
   const rank = { unreadable: 0, unsure: 1, confident: 2 };
-  questions.sort((a, b) => (Number(a.confirmed) - Number(b.confirmed)) || (rank[a.tier] - rank[b.tier]) || (a.order - b.order));
+  const asks = (q) => q.flagged && !q.confirmed;
+  questions.sort((a, b) => (Number(asks(b)) - Number(asks(a))) || (Number(a.confirmed) - Number(b.confirmed)) || (rank[a.tier] - rank[b.tier]) || (a.order - b.order));
   const counts = projection.counts;
 
   return {
@@ -152,25 +163,77 @@ export async function loadReview(runId) {
     noTotal: noTotalFor(run),
     // Every headline shows its sample size; this is that screen's version of it.
     lead: reviewLeadFor(questions, pages ?? [], counts),
-    // Every unconfirmed region, not just the doubtful ones. commit_extraction_run
-    // refuses while *anything* still has needs_review and no confirmation, and
-    // finalize sets needs_review on all of them — review is mandatory in v1 and
-    // that is the whole point. Counting only the doubtful ones put "Save to
-    // Library" on a button the server then refused, every time a paper had a
-    // cleanly-read question on it, which is every paper.
-    outstanding: questions.filter((q) => !q.confirmed).length,
-    // The cleanly-read ones, which the student can accept as a group. Not a
-    // default and not a skip: they are on screen, with their crops, and this is
-    // a deliberate tap. Making someone press the same button fourteen times to
-    // say "yes, that is what my paper says" is how a required step becomes a
-    // step people learn to rush.
-    cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.confirmed).map((q) => q.id),
-    // Every reading the student can vouch for in one go once they have looked:
-    // anything with a reading on screen. An unreadable region has nothing to
-    // vouch for and stays out (owner, 5 Oct 2026: nineteen taps on a paper the
-    // reader got right).
-    readableUnconfirmed: questions.filter((q) => q.tier !== 'unreadable' && !q.confirmed).map((q) => q.id),
+    // The saved paper's run: corrections then go through fix_saved_part.
+    committed: run.status === 'committed',
+    // Flagged parts not yet checked. Informational only: nothing waits for them
+    // (AXO-216). They save as unsure and stay out of analytics.
+    outstanding: questions.filter(asks).length,
+    // Only cleanly read parts nobody flagged can be accepted together. A flagged
+    // part is never confirmed in bulk: one tap that confirmed 44 unsure parts
+    // into analytics is what ADDENDUM-01A item 5 found.
+    cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.flagged && !q.confirmed).map((q) => q.id),
   };
+}
+
+/** The label each part is shown under, from the shared placement walk. */
+export function placedLabels(regions) {
+  const placed = placeRegions((regions ?? []).map((r) => ({
+    id: r.id, label: r.question_label, order_index: r.order_index,
+    page: r.page_spans?.[0]?.page ?? null, y: r.page_spans?.[0]?.box?.y ?? null,
+    evidence: r.marks_awarded != null || r.marks_available != null || !!r.student_answer || !!r.question_text,
+  })));
+  const out = new Map();
+  for (const entry of placed) {
+    const suffix = entry.part ? (entry.part.startsWith('(') ? entry.part : `(${entry.part[0]})${entry.part.slice(1)}`) : '';
+    out.set(entry.region.id, entry.q == null ? null : `${entry.q}${suffix}`);
+  }
+  return out;
+}
+
+/**
+ * Store the label each part of a run is shown under (question_region.placed_label),
+ * so the save checks for duplicates on what the student saw: "3(c)" and "5(c)",
+ * not two bare "(c)" (AXO-216). Only rows whose label changed are written.
+ */
+export async function storePlacedLabels(runId) {
+  const { data: regions, error } = await sb.from('question_region')
+    .select('id, order_index, question_label, placed_label, page_spans, marks_awarded, marks_available, student_answer, question_text')
+    .eq('run_id', runId);
+  if (error) throw error;
+  const labels = placedLabels(regions);
+  const changed = (regions ?? []).filter((r) => (labels.get(r.id) ?? null) !== (r.placed_label ?? null));
+  const results = await Promise.all(changed.map((r) => sb.from('question_region')
+    .update({ placed_label: labels.get(r.id) ?? null })
+    .eq('id', r.id)));
+  const failed = results.find((result) => result.error);
+  if (failed) throw failed.error;
+  return labels;
+}
+
+/**
+ * Why a save did not finish, in words the student can act on. The database's
+ * refusals are written for the student (a duplicate label names the parts); a
+ * lost connection is said as one, and anything else as itself.
+ */
+export function saveFailureMessage(error) {
+  const message = String(error?.message ?? '').trim();
+  if (!message || /failed to fetch|network|load failed|timed? ?out/i.test(message)) {
+    return 'Your paper did not finish saving because the connection dropped. It saves when you open it again with a connection.';
+  }
+  if (/active student scope required/i.test(message)) {
+    return 'Your paper did not finish saving because this profile is not open. Open it from its own profile to save it.';
+  }
+  return `Your paper did not finish saving. ${message}`;
+}
+
+/** A refusal that a retry cannot change. */
+export function isSaveRefusal(error) {
+  return error?.code === '42501' || error?.code === 'P0002';
+}
+
+/** The run was saved already, by this tab or another. */
+export function isAlreadySaved(error) {
+  return error?.code === '23505' && /already committed/i.test(String(error?.message ?? ''));
 }
 
 
@@ -209,14 +272,20 @@ export async function confirmQuestion(regionId) {
   return confirmQuestions([regionId]);
 }
 
-/** The same, for the group of questions that were read cleanly. */
-export async function confirmQuestions(regionIds) {
+/**
+ * The same, for the group of questions that were read cleanly. The label each
+ * part was shown under is stored with the confirmation (AXO-216).
+ */
+export async function confirmQuestions(regionIds, runId = null) {
   if (!regionIds.length) return;
   const now = new Date().toISOString();
-  const { error } = await sb.from('question_region')
+  const { data, error } = await sb.from('question_region')
     .update({ student_confirmed_at: now, updated_at: now })
-    .in('id', regionIds);
+    .in('id', regionIds)
+    .select('run_id');
   if (error) throw error;
+  const run = runId ?? data?.[0]?.run_id ?? null;
+  if (run) await storePlacedLabels(run);
 }
 
 /**
@@ -298,7 +367,7 @@ export async function relabelRegion(regionId, label) {
   const clean = String(label ?? '').replace(/\s+/g, '').slice(0, 24);
   if (!/^\d{1,3}(\([a-z]\))?(\([ivx]{1,4}\))?$/.test(clean)) throw new Error('Choose the question number, and the part if it has one.');
   const { error } = await sb.from('question_region')
-    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .update({ question_label: clean, placed_label: clean, updated_at: new Date().toISOString() })
     .eq('id', regionId);
   if (error) {
     if (error.code === '23505') throw new Error(`Another part of this paper is already ${clean}. Change that one first.`);
@@ -344,9 +413,16 @@ async function countCorrection(regionId) {
     .update({ corrections_count: (run.corrections_count ?? 0) + 1 }).eq('id', region.run_id);
 }
 
-/** Stage 10. Refused server-side while anything still needs review. */
+/**
+ * Stage 10. Flagged parts no longer hold the paper (AXO-216); a genuine
+ * duplicate label still does, and the refusal says which. A run another tab
+ * already saved counts as saved.
+ */
 export async function commitRun(runId) {
   const { data, error } = await sb.rpc('commit_extraction_run', { p_run_id: runId });
-  if (error) throw error;
+  if (error) {
+    if (isAlreadySaved(error)) return { run_id: runId, already: true };
+    throw error;
+  }
   return data;
 }

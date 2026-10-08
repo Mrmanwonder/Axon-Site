@@ -42,8 +42,11 @@ import { useScan } from "../scan/ScanProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
 import {
-  sb, parsePaperLink, paperTypesFor,
+  sb, parsePaperLink,
 } from "./modules";
+
+/** What a paper is until a printed paper code or the student says otherwise (D7). */
+const DEFAULT_PAPER_TYPE = "unit_test";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 
 type IngestionValue = {
@@ -84,15 +87,6 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     toast(`${result.accepted.length} page(s) added.${result.rejected.length ? ` ${result.rejected.length} file(s) could not be used.` : " Check the order, then read the paper."}`);
   }, [app, ensureScan, toast, navigate]);
 
-  const askPaperType = useCallback((then: (v: string) => void) => {
-    openSheet({
-      title: "What kind of paper is this?",
-      body: "This decides whether we can match it to an official marking scheme.",
-      choices: paperTypesFor(app.student?.provider_key).map((t) => ({ label: t.label, value: t.value })),
-      onChoice: (value) => then(value),
-    });
-  }, [app.student?.provider_key, openSheet]);
-
   const ingestLink = useCallback(async (url: string) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
     const requestId = crypto.randomUUID();
@@ -112,9 +106,11 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
         toast((e as Error).message || "That link could not be added.", "warn");
       } finally { linkFlight.current = false; }
     };
-    const t = app.takePendingPaperType();
-    if (t) void run(t); else askPaperType(run);
-  }, [app, askPaperType, toast]);
+    // No "What kind of paper is this?" (council D7): a link starts as a school
+    // test, and triage makes it a past paper only on a printed paper code read
+    // with high confidence. The type can be changed on the paper.
+    void run(app.takePendingPaperType() ?? DEFAULT_PAPER_TYPE);
+  }, [app, toast]);
 
   const addPaper = useCallback(() => {
     hapticTick();
@@ -130,8 +126,8 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
       primary: "Add this link",
       onConfirm: async (raw) => {
         if (!raw.trim()) return toast("Paste a link first.", "warn");
-        // Validated before the type is asked: the type question creates the
-        // paper row, so a bad link would otherwise orphan one.
+        // Validated before the paper row is created, so a bad link never
+        // orphans one.
         let url: string;
         try { url = parsePaperLink(raw); }
         catch (e) { return toast((e as Error).message, "warn"); }

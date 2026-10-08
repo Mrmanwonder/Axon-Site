@@ -14,7 +14,7 @@
 
 import { sb } from './supabase.js';
 import { readThrough, clearCache } from './cache.js';
-import { pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
+import { explainRetry, pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 import { CAPTURE } from './scan/contract.js';
 import { MASTERY_API_URL } from './config.js';
 import { paperLabelsFor } from './curriculum.js';
@@ -23,6 +23,9 @@ import { paperLabelsFor } from './curriculum.js';
 export function tierForType(type) {
   return type === 'pyq' || type === 'sample_paper' ? 'tier_2' : 'tier_1';
 }
+
+/** What a paper is until the student or a printed paper code says otherwise (D7). */
+export const DEFAULT_PAPER_TYPE = 'unit_test';
 
 const BASE_PAPER_TYPES = [
   { value: 'unit_test', label: 'Class test' },
@@ -57,16 +60,24 @@ function requireOnline(action) {
   }
 }
 
-/** Create the paper row. Tier follows the type, and the DB re-checks it. */
+/**
+ * Create the paper row. Tier follows the type, and the DB re-checks it.
+ *
+ * No type means nobody chose one (D7, 7 Oct 2026): the paper starts as a school
+ * test and the database makes it a past paper only when triage reads a printed
+ * paper code with high confidence. A type passed here is the student's choice.
+ */
 export async function createPaper({ studentId, type, dateTaken, requestId = null }) {
   requireOnline('Adding a paper');
+  const chosen = type ?? DEFAULT_PAPER_TYPE;
   const { data, error } = await sb
   .from('paper')
   .insert({
     ...(requestId ? { id: requestId } : {}),
     student_id: studentId,
-    type,
-    tier: tierForType(type),
+    type: chosen,
+    tier: tierForType(chosen),
+    ...(type ? { type_source: 'student' } : {}),
     date_taken: dateTaken,
   })
   .select()
@@ -391,7 +402,7 @@ export async function readPaper(studentId, paperId) {
     const { data, error } = await sb
     .from('paper')
     .select(
-      `id,type,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
+      `id,type,type_source,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
       student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,answer_block,marks_awarded,max_marks,marks_source,
@@ -400,7 +411,8 @@ export async function readPaper(studentId, paperId) {
       command_word,command_word_note,model_answer,loss_reasons,
       grounding_status,model_answer_source,depends_on_parts,unresolved_parts,
       confidence,student_confirmed_at,student_rejected_at)),
-      question_region(id,run_id,order_index,question_label,question_text,student_answer,marks_awarded,marks_available,committed_attempt_id,page_spans,crop_key,confidence_signals,explain_status)`,
+      question_region(id,run_id,order_index,question_label,placed_label,question_text,student_answer,marks_awarded,marks_available,committed_attempt_id,page_spans,crop_key,confidence_signals,confidence_tier,needs_review,student_confirmed_at,review_deferred_at,explain_status),
+      extraction_run(id,status,committed_at)`,
       )
     .eq('student_id', studentId)
     .eq('id', paperId)
@@ -512,6 +524,54 @@ export async function setPaperSubject(paperId, subjectOfferingId) {
 }
 
 /**
+ * The student changes what kind of paper this is (D7). Row-level security decides
+ * whose paper it is; the database moves the saved parts to the new tier with it.
+ */
+export async function setPaperType(paperId, type) {
+  requireOnline('Changing the paper type');
+  const { error } = await sb.rpc('set_paper_type', { p_paper_id: paperId, p_type: type });
+  if (error) throw error;
+  await clearCache();
+}
+
+/**
+ * "Fix this" or "That's right" on a part of a saved paper (AXO-216). The student
+ * is the authority on what their paper says: the reading is accepted at once and
+ * the part counts as checked, so it can reach Insights. A field left undefined is
+ * unchanged. When the part's explanation was held for this check, it is started.
+ */
+export async function fixSavedPart(regionId, { marksAwarded, marksAvailable, answer } = {}) {
+  requireOnline('Saving this fix');
+  const { data, error } = await sb.rpc('fix_saved_part', {
+    p_region_id: regionId,
+    p_marks_awarded: marksAwarded ?? null,
+    p_marks_available: marksAvailable ?? null,
+    p_answer: answer ?? null,
+    p_set_answer: answer !== undefined,
+  });
+  if (error) throw error;
+  await clearCache();
+  if (data?.explain && data.run_id) {
+    // The explanation follows; the fix is already saved.
+    try { await explainRetry(data.run_id); } catch { /* the question screen offers it again */ }
+  }
+  return data;
+}
+
+/**
+ * "Not now" on a flagged part. It stays unsure, out of Insights and off shared
+ * pages, and its card stops asking. Fix this stays on the part.
+ */
+export async function deferPart(regionId) {
+  requireOnline('Saving this');
+  const { error } = await sb.from('question_region')
+    .update({ review_deferred_at: new Date().toISOString() })
+    .eq('id', regionId);
+  if (error) throw error;
+  await clearCache();
+}
+
+/**
  * The student places a part under a question by giving it its real label
  * ("a" on page 12 becomes "6(a)"). A label is transcription, so the student is
  * the authority (Axon.md section 8). Both the committed attempt and the region
@@ -526,7 +586,7 @@ export async function relabelAttempt(attemptId, label) {
   const { error } = await sb.from('student_attempt').update({ question_label: clean }).eq('id', attemptId);
   if (error) throw error;
   const { error: regionError } = await sb.from('question_region')
-    .update({ question_label: clean, updated_at: new Date().toISOString() })
+    .update({ question_label: clean, placed_label: /[0-9]/.test(clean) ? clean : null, updated_at: new Date().toISOString() })
     .eq('committed_attempt_id', attemptId);
   if (regionError) throw regionError;
   await clearCache();

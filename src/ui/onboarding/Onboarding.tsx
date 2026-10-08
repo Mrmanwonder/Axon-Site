@@ -67,7 +67,6 @@ import {
   signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
   NOTICE_LANGUAGES, noticeStrings, purposeLabel, noticeIsComplete,
-  paperTypesFor,
   startCheckout,
 } from "../data/modules";
 import type { Guardian, Student, NoticeLanguage } from "../data/modules";
@@ -83,7 +82,7 @@ import { useParentMode } from "../data/useParentMode";
 type Step =
   | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
   | "consent" | "plan" | "student"
-  | "firstRun" | "firstUpload";
+  | "firstRun";
 
 /* Back is offered only where returning cannot strand the flow or undo something
    already written. Nothing past consent has a way back: consent is recorded,
@@ -862,7 +861,14 @@ export default function Onboarding() {
         </div>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary"
-                    onClick={() => { hapticTick(); go("firstUpload"); }}>
+                    onClick={() => {
+                      // Straight to the scanner (council D7): no "What kind of
+                      // paper is this?". A printed paper code read with high
+                      // confidence makes it a past paper; the type is
+                      // editable on the paper.
+                      hapticFirm();
+                      void finishOnboarding({ guardian: guardian!, student: student!, destination: "scan" });
+                    }}>
             Upload my first paper
           </PressBox>
           <PressBox as="button" type="button" className="btn plain"
@@ -877,40 +883,7 @@ export default function Onboarding() {
     );
   }
 
-  // ── guided first upload ──────────────────────────────────────────────────
-  /* Grouped by tier rather than listed flat. Flat, the consequence of the choice
-     has to be repeated under all five rows, and five near-identical subtitles is
-     how a screen stops being read. Grouped, each tier states it once, which is
-     also the actual shape of the distinction. */
-  const isScheme = (t: { value: string }) => t.value === "pyq" || t.value === "sample_paper";
-  const choose = (value: string) => {
-    hapticFirm();
-    void finishOnboarding({ guardian: guardian!, student: student!, firstPaperType: value, destination: "scan" });
-  };
-  const paperTypes = paperTypesFor(student?.provider_key ?? curriculum.providerKey);
-
-  return (
-    <Shell {...shellProps} title="Your first paper">
-      <div className="obpanel">
-        <div className="line">What kind of paper is this?</div>
-        <div className="body">
-          This one matters, so it&rsquo;s worth getting right. We&rsquo;ll only ask the first time.
-        </div>
-      </div>
-      <div className="sectitle">School test</div>
-      <div className="list">
-        {paperTypes.filter((t) => !isScheme(t)).map((t) => (
-          <Method key={t.value} icon={ICONS.paper} t1={t.label} onClick={() => choose(t.value)} />
-        ))}
-      </div>
-      <div className="subnote">Explained from your teacher&rsquo;s marks and remarks.</div>
-      <div className="sectitle">Board paper</div>
-      <div className="list">
-        {paperTypes.filter(isScheme).map((t) => (
-          <Method key={t.value} icon={ICONS.stamp} t1={t.label} onClick={() => choose(t.value)} />
-        ))}
-      </div>
-      <div className="subnote">Matched to the official marking scheme where we have it.</div>
-    </Shell>
-  );
+  // The guided first upload asked "What kind of paper is this?". It is gone
+  // (council D7, 7 Oct 2026): the first paper goes straight to the scanner.
+  return null;
 }

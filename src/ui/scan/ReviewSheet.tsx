@@ -1,11 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   STAGE 9 · REVIEW
+   STAGE 9 · REVIEW ("Check the reading")
 
-   Required, not skippable, and not defaulted to accept. A confident-paper fast
-   path is earned once extraction accuracy is measured rather than assumed, and
-   until then every paper passes through here.
+   Opt-in since AXO-216 (council D1, 7 Oct 2026). A read paper saves on its own;
+   parts with a measured reason ask on the paper, one card each. This screen is
+   the whole reading for a student who wants to look, and the way to fix a
+   paper whose save was refused. Nothing here waits for every part.
 
-   Unsure and unreadable come first. **Every field is shown against its own
+   Flagged and unreadable come first. **Every field is shown against its own
    crop**, which is only possible because every extracted value carries the box
    on the page it was read from — `question_region` has a CHECK making a value
    without its box unstorable. That provenance is the defence against a vision
@@ -56,14 +57,16 @@ function Field({ k, v, steps, empty = "Not read" }: { k: string; v?: string | nu
 }
 
 function Question({
-  q, onAction, onMark, onPlace,
+  q, onAction, onMark, onPlace, saved = false,
 }: {
   q: ReviewQuestion;
   onAction: (id: string, action: string) => void;
   onMark: (id: string, value: number) => void;
   onPlace?: (q: ReviewQuestion) => void;
+  /** The paper is saved: a rescan would read it again from scratch, so it is not offered here. */
+  saved?: boolean;
 }) {
-  const attention = !q.confirmed && q.tier !== "confident";
+  const attention = !q.confirmed && (q.flagged || q.tier !== "confident");
 
   const conf = q.confirmed
     ? <span className="conf confirmed">You confirmed</span>
@@ -71,10 +74,14 @@ function Question({
     ? <span className="conf unsure">Couldn&rsquo;t read</span>
     : q.tier === "unsure"
       ? <span className="conf unsure">Unsure</span>
-      : <span className="conf likely">Read cleanly</span>;
+      : q.flagged
+        // Saved as unsure until checked (AXO-216), so never called clean.
+        ? <span className="conf unsure">Needs a look</span>
+        : <span className="conf likely">Read cleanly</span>;
 
   return (
     <div className="qcard" data-attention={attention ? "1" : undefined}>
+      {q.reason && !q.confirmed && <div className="qfield"><div className="v">{q.reason}</div></div>}
       <div className="qhead">
         {onPlace ? (
           <PressBox as="button" type="button" className="t1 qlabel" aria-label={`${/^(Question|Unassigned)/.test(q.label ?? "") ? q.label : `Question ${q.label || "not numbered"}`}. Change`}
@@ -136,10 +143,12 @@ function Question({
                   onClick={() => { hapticTick(); onAction(q.id, "type"); }}>
           Fix this
         </PressBox>
-        <PressBox as="button" type="button" className="qact"
-                  onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
-          Rescan this page
-        </PressBox>
+        {!saved && (
+          <PressBox as="button" type="button" className="qact"
+                    onClick={() => { hapticTick(); onAction(q.id, "rescan"); }}>
+            Rescan this page
+          </PressBox>
+        )}
       </div>
     </div>
   );
@@ -331,26 +340,15 @@ export default function ReviewSheet() {
           <Question key={q.id} q={q}
                     onAction={reviewHandlers.onAction}
                     onMark={reviewHandlers.onMark}
-                    onPlace={reviewHandlers.onRelabel ? setPlacing : undefined} />
+                    onPlace={reviewHandlers.onRelabel ? setPlacing : undefined}
+                    saved={!!review.committed} />
         ))}
 
-        {/* Every reading still has to be confirmed before the paper can be
-            saved (enforced in SQL), but nineteen identical taps on a paper the
-            reader got right is how a required step gets rushed. Once the
-            student has scrolled past them all, one tap vouches for every
-            reading they can see. Unreadable ones are not included. */}
-        {(review.readableCount ?? 0) > 0 && reviewHandlers.onConfirmAll ? (
-          <div className="bulkrow">
-            <div className="b">
-              <div className="t1">Checked them all?</div>
-              <div className="t2">Confirm the {review.readableCount} readings above in one go.</div>
-            </div>
-            <PressBox as="button" type="button" className="qact accent"
-                      onClick={() => { hapticFirm(); reviewHandlers.onConfirmAll?.(); }}>
-              All {review.readableCount} are right
-            </PressBox>
-          </div>
-        ) : review.cleanCount > 0 && (
+        {/* One tap accepts only parts that were read cleanly and that nobody
+            flagged. A flagged part is checked one at a time or left unsure:
+            the old "All are right" confirmed 44 unsure parts into analytics in
+            one tap (ADDENDUM-01A item 5, AXO-216). */}
+        {review.cleanCount > 0 && (
           <div className="bulkrow">
             <div className="b">
               <div className="t1">{review.cleanCount} read cleanly</div>
@@ -369,7 +367,7 @@ export default function ReviewSheet() {
 
         <div style={{ margin: "20px var(--gutter) 4px" }}>
           <PressBox as="button" type="button" className="btn primary"
-                    data-waiting={review.outstanding || review.saving ? "1" : undefined}
+                    data-waiting={review.saving ? "1" : undefined}
                     disabled={!!review.saving} aria-busy={review.saving || undefined}
                     onClick={() => { hapticFirm(); reviewHandlers.onSave(); }}>
             {review.saveLabel}
