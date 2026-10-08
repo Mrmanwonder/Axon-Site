@@ -1,0 +1,18 @@
+/* AXO-190: quiet optional prompt; no blocking overlay, no badges or grades. */
+.pd-prompt { padding: 20px; margin: 8px 0 22px; background: var(--surface); border: 1px solid var(--hairline); border-radius: 24px; }
+.pd-caption { color: var(--label-2); font-size: 11px; font-weight: 650; letter-spacing: .09em; }
+.pd-prompt h2 { margin: 9px 0 5px; font-size: clamp(19px, 5vw, 23px); line-height: 1.2; letter-spacing: -.03em; font-weight: 650; }
+.pd-prompt p { color: var(--label-2); margin: 0 0 18px; font-size: 13px; line-height: 1.5; }
+.pd-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-option { display: inline-flex; gap: 7px; align-items: center; justify-content: center; padding: 10px 12px; min-height: 44px; border-radius: 14px; border: 1px solid var(--hairline); color: var(--label); background: var(--surface-sunk); font: inherit; font-size: 12.5px; cursor: pointer; transition: transform 120ms, border-color 200ms, background 200ms; }
+.pd-option:hover { border-color: var(--accent); }
+.pd-option:active { transform: scale(.97); }
+.pd-option:focus-visible,.pd-skip:focus-visible,.pd-inline-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pd-option.chosen { border-color: var(--accent); background: var(--surface); }
+.pd-dot { width: 7px; height: 7px; border-radius: 100%; background: var(--accent); flex: 0 0 auto; }
+.pd-skip,.pd-inline-action { border: 0; background: transparent; color: var(--label-2); min-height: 44px; cursor: pointer; font: inherit; font-size: 12.5px; }
+.pd-skip { margin-top: 6px; padding: 5px 0; }
+.pd-inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 18px; color: var(--label-2); font-size: 12.5px; }
+.pd-inline strong { color: var(--label); }
+.pd-inline-action { color: var(--accent); font-weight: 600; }
+@media(prefers-reduced-motion: reduce) { .pd-option { transition: none; } }
