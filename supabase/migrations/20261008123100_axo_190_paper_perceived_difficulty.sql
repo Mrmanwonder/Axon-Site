@@ -43,7 +43,7 @@ create policy paper_perceived_difficulty_update
     and exists (select 1 from public.paper p
       where p.id = paper_id and p.student_id = paper_perceived_difficulty.student_id)
   );
-revoke all on public.paper_perceived_difficulty from anon;
+revoke all on public.paper_perceived_difficulty from anon, authenticated;
 grant select, insert, update on public.paper_perceived_difficulty to authenticated;
 
 -- Insights reads the secure analytics boundary, not raw student work.
