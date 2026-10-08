@@ -30,6 +30,8 @@ insert into axo_191_assertion values
   ), null),
   ('structural 1 mark estimates very easy', private.structural_question_band(1, 'State the law')=1, null),
   ('higher-mark reasoning is never very easy', private.structural_question_band(9, 'Evaluate evidence')>=4, null),
+  ('evaluate command is recognized even when maximum mark is small', private.structural_question_band(2, 'Evaluate the result')=4, null),
+  ('state command is not promoted to evaluative', private.structural_question_band(2, 'State the result')=2, null),
   ('snapshot trigger is present', exists(
     select 1 from pg_trigger where tgrelid='public.student_attempt'::regclass
       and tgname='axo_191_snapshot_attempt_difficulty' and not tgisinternal
