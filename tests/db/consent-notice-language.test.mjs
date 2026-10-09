@@ -30,7 +30,7 @@ test('consent_event.notice_language defaults to en, accepts hi, refuses anything
     `);
 
     const migration = await readFile(
-      new URL('../../supabase/migrations/20261007090000_consent_notice_language.sql', import.meta.url), 'utf8');
+      new URL('../../supabase/migrations/20261006184923_consent_notice_language.sql', import.meta.url), 'utf8');
     await db.exec(migration);
     // Idempotent: a second apply is a no-op rather than an error.
     await db.exec(migration);
