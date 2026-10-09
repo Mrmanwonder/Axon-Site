@@ -1,0 +1,19 @@
+.subjectchips a.subjectchip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--label-2);
+  text-decoration: none;
+}
+.subjectchips a.subjectchip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+.home-library .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.home-library .textaction {
+  min-height: 44px;
+}
