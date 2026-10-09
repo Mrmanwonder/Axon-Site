@@ -305,3 +305,15 @@ export const saveExamPapers = async (_student: string, code: string, papers: num
 export const deleteQuestion = deletePaper;
 export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});
+
+
+// Stateful synthetic difficulty responses, scoped exactly like the product API.
+type Feedback = { rating: number | null; skipped: boolean };
+const feedbackKey = (student: string, paper: string) => "test.difficulty:" + student + ":" + paper;
+export const paperDifficultyFeedback = async (student: string, paper: string): Promise<Feedback | null> => {
+  const value = sessionStorage.getItem(feedbackKey(student, paper));
+  return value ? JSON.parse(value) : null;
+};
+export const savePaperDifficultyFeedback = async (input: { studentId: string; paperId: string; rating: number | null; skipped: boolean }) => {
+  sessionStorage.setItem(feedbackKey(input.studentId, input.paperId), JSON.stringify({ rating: input.rating, skipped: input.skipped }));
+};
