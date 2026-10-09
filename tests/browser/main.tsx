@@ -63,7 +63,7 @@ function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Routes><Route path="/" element={<Home />} /><Route path="/library" element={<Library />} /></Routes> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
     ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
     : <Library />}</>;
 }
