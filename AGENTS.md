@@ -107,7 +107,7 @@ a stale historical copy and are not the production runtime.
   own.** Do not move authority into the browser, and do not bypass the ownership
   checks/RPC contracts when adding a Worker path.
 - **The stage modules are pure and must stay that way.** `geometry`, `quality`,
-  `layers`, `conditioning`, `raster` touch no DOM beyond an optional canvas, which
+  `layers`, `conditioning` touch no DOM beyond an optional canvas, which
   is what lets them run on the main thread, in the worker, and in the harness
   under Node. `src/scan/imagedata.js` exists solely so Node — where the metrics
   are actually measured — is not the one place they cannot load.
