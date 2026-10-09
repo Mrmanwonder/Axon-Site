@@ -46,3 +46,11 @@ test("unknown or inconsistent marks cannot enter topic conclusions", () => {
   const result=difficultyInsights({papers,attempts,losses:attempts.map(a=>mkLoss(a.id)),ratings,filters:ALL_FILTERS});
   expect(result.rows).toEqual([]);
 });
+
+test.each(["max_marks", "marks_awarded"] as const)("null %s is unknown, never a zero-mark difficulty pattern", field => {
+  const papers = [mkPaper("p1"), mkPaper("p2")];
+  const attempts = [mkAttempt("a", "p1"), mkAttempt("b", "p2"), mkAttempt("c", "p2")];
+  const ratings = attempts.map(a => ({ ...mkRating(a.id, a.paper_id), [field]: null }));
+  const result = difficultyInsights({ papers, attempts, losses: attempts.map(a => mkLoss(a.id)), ratings, filters: ALL_FILTERS });
+  expect(result.rows).toEqual([]);
+});

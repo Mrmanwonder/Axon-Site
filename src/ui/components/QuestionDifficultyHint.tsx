@@ -6,15 +6,22 @@ import { questionDifficultyLabel, SOURCE_LABEL } from "../data/questionDifficult
 /** A question label is evidence, never an official judgement without source. */
 export default function QuestionDifficultyHint({ attemptId }: { attemptId: string }) {
   const [value, setValue] = useState<DifficultyEvidence | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     let alive = true;
-    setValue(null);
+    setValue(null); setUnavailable(false);
     readQuestionDifficulty(attemptId)
       .then(result => { if (alive) setValue(result); })
-      .catch(() => { if (alive) setValue(null); });
+      .catch(() => { if (alive) setUnavailable(true); });
     return () => { alive = false; };
-  }, [attemptId]);
+  }, [attemptId, retry]);
 
+  if (unavailable) return <div className="qfield">
+    <div className="k">Question difficulty</div>
+    <div className="v empty" role="status">Question difficulty is unavailable right now.</div>
+    <button type="button" className="btn ghost" onClick={() => setRetry(value => value + 1)}>Try difficulty again</button>
+  </div>;
   if (!value) return null; // ungrounded or unavailable estimate is never manufactured
   const low = value.confidence < .6;
   return <div className="qfield">

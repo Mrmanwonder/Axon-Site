@@ -39,7 +39,7 @@ export function difficultyInsights(args: {
   // One rating per attempt. Loss events may mention multiple syllabus concepts.
   for (const r of valid) {
     const attempt=byId.get(r.attempt_id);
-    if (!attempt || attempt.paper_id !== r.paper_id || !Number.isFinite(Number(r.max_marks))
+    if (!attempt || attempt.paper_id !== r.paper_id || r.max_marks == null || r.marks_awarded == null || !Number.isFinite(Number(r.max_marks))
         || !Number.isFinite(Number(r.marks_awarded)) || Number(r.max_marks) <= 0
         || Number(r.marks_awarded) > Number(r.max_marks) || Number(r.marks_awarded) < 0) continue;
     const atLoss = args.losses.filter(l => l.attempt_id === r.attempt_id);
