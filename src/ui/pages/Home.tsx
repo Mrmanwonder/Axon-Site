@@ -43,6 +43,7 @@ import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
 import { paths } from "../app/paths";
 import { ExamCard } from "../components/ExamPlan";
 import "../styles/insights.css";
+import "../styles/home.css";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
