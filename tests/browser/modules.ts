@@ -305,3 +305,11 @@ export const saveExamPapers = async (_student: string, code: string, papers: num
 export const deleteQuestion = deletePaper;
 export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});
+
+
+let difficultyFailedOnce = false;
+export const readQuestionDifficulty = async () => {
+  if (!location.pathname.includes("difficulty")) return null;
+  if (!difficultyFailedOnce) { difficultyFailedOnce = true; throw new Error("Test read unavailable"); }
+  return { normalized_score: .6, band: "hard", confidence: .28, source: "structural", method_version: "test-v1" };
+};
