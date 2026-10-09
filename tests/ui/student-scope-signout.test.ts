@@ -20,6 +20,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
     rpc: fixture.rpc,
     auth: {
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       signOut: fixture.authSignOut,
     },
   }),

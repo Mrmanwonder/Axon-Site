@@ -1,5 +1,10 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
+const PASSWORD = scenario === "password";
+const RECOVERY = scenario === "password-recovery";
+let passwordSession: unknown = RECOVERY ? { user: { id: "guardian", email: "parent@example.test" } } : null;
+let passwordRecovery = RECOVERY;
+const authListeners = new Set<(session: unknown, event?: string) => void>();
 // `exams` / `exams-setup`: a Cambridge A Level student with real November 2026 zone 4 rows.
 const EXAMS = scenario === "exams" || scenario === "exams-setup";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
@@ -48,6 +53,7 @@ export const sb = {
 };
 export async function currentSession() {
   if (scenario === "auth-error") throw new Error("Auth unavailable");
+  if (PASSWORD || RECOVERY) return passwordSession;
   if (HOUSEHOLD && sessionStorage.getItem("axon.test.household.signed-out") === "1") return null;
   return {};
 }
@@ -70,7 +76,26 @@ export const clearStudentScope = async () => {
   return true;
 };
 export const takeProviderError = () => null;
-export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
+export const onAuthChange = (fn: (session: unknown, event?: string) => void) => {
+  if (PASSWORD || RECOVERY) {
+    authListeners.add(fn);
+    fn(passwordSession, passwordRecovery ? "PASSWORD_RECOVERY" : "INITIAL_SESSION");
+  }
+  return { data: { subscription: { unsubscribe() { authListeners.delete(fn); } } } };
+};
+export const clearPasswordRecovery = () => { passwordRecovery = false; };
+export const passwordSignIn = async (_email: string, password: string) => {
+  if (password === "wrong-password") throw new Error("We could not complete that request. Check your details or try again later.");
+  passwordSession = { user: { id: "guardian", email: "parent@example.test" } };
+  for (const fn of authListeners) fn(passwordSession, "SIGNED_IN");
+  return passwordSession;
+};
+export const passwordSignUp = async () => null;
+export const requestPasswordReset = async () => {};
+export const changePassword = async () => {};
+export const reauthenticateWithPassword = async () => {};
+export const unlockWithPassword = async () => ({ outcome: "unlocked" as const });
+
 export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();

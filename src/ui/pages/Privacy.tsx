@@ -47,7 +47,7 @@ export default function Privacy() {
         <h3>Parent or guardian account information</h3>
         <p>
           We may process the account holder's name, email address or phone number, authentication
-          provider, account identifiers, sign-in and one-time-code events, consent records, security
+          provider, account identifiers, sign-in (email/password, Google, email or phone one-time code) events, consent records, security
           state, subscription state and account preferences. If Google sign-in is selected,
           we receive the information made available by that provider according to the sign-in flow.
         </p>
