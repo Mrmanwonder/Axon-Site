@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { paperDifficultyFeedback, savePaperDifficultyFeedback } from "../data/modules";
 import { useToast } from "./ToastProvider";
 import "../styles/paper-difficulty.css";
@@ -24,31 +24,36 @@ export default function PaperDifficultyPrompt({ paperId, studentId, ready }: {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const generation = useRef(0);
+  const flight = useRef(false);
 
   useEffect(() => {
+    const version = ++generation.current;
+    flight.current = false; setBusy(false); setEditing(false); setAnswer(null); setLoad("loading");
     if (!ready) return;
     let cancelled = false;
-    setLoad("loading");
     paperDifficultyFeedback(studentId, paperId)
       .then((value) => {
-        if (cancelled) return;
+        if (cancelled || generation.current !== version) return;
         setAnswer(value);
         setLoad("ready");
       })
-      .catch(() => { if (!cancelled) setLoad("error"); });
-    return () => { cancelled = true; };
+      .catch(() => { if (!cancelled && generation.current === version) setLoad("error"); });
+    return () => { cancelled = true; generation.current++; };
   }, [ready, paperId, studentId]);
 
   if (!ready || load === "loading") return null;
   if (load === "error") return (
     <div className="pd-inline" role="status">
-      <span>Your paper is saved. Difficulty feedback isn't available offline.</span>
+      <span>Difficulty feedback is unavailable right now. Your paper is unchanged.</span>
       <button type="button" className="pd-inline-action" onClick={() => {
+        const version = generation.current;
         setLoad("loading");
         paperDifficultyFeedback(studentId, paperId).then((a) => {
+          if (generation.current !== version) return;
           setAnswer(a);
           setLoad("ready");
-        }).catch(() => setLoad("error"));
+        }).catch(() => { if (generation.current === version) setLoad("error"); });
       }}>Retry</button>
     </div>
   );
@@ -61,17 +66,19 @@ export default function PaperDifficultyPrompt({ paperId, studentId, ready }: {
   );
 
   async function choose(rating: number | null) {
-    if (busy) return;
+    if (flight.current) return;
+    const version = generation.current; flight.current = true;
     setBusy(true);
     try {
       await savePaperDifficultyFeedback({ paperId, studentId, rating, skipped: rating === null });
+      if (generation.current !== version) return;
       setAnswer({ rating, skipped: rating === null });
       setEditing(false);
       if (rating !== null) toast("How it felt is saved.");
     } catch {
-      toast("Couldn't save that response. Try again when you're connected.", "warn");
+      if (generation.current === version) toast("Couldn't save that response. Try again when you're connected.", "warn");
     } finally {
-      setBusy(false);
+      if (generation.current === version) { flight.current = false; setBusy(false); }
     }
   }
 

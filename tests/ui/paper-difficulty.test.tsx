@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ToastProvider } from "../../src/ui/components/ToastProvider";
 import PaperDifficultyPrompt from "../../src/ui/components/PaperDifficultyPrompt";
@@ -65,7 +65,7 @@ test("offline read does not pretend there is no response; retry is possible", as
   fixture.read.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(null);
   const user = userEvent.setup();
   mount();
-  expect(await screen.findByText(/feedback isn't available offline/)).toBeTruthy();
+  expect(await screen.findByText(/feedback is unavailable right now/)).toBeTruthy();
   expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Retry" }));
   expect(await screen.findByText("How difficult did this paper feel?")).toBeTruthy();
@@ -95,4 +95,37 @@ test("Insight comparison uses only rated, matching, complete teacher-marked pape
   expect(summarizePerceivedDifficulty(papers, felt, ALL_FILTERS)?.easyAndLost).toBe(1);
   expect(summarizePerceivedDifficulty(papers, felt, { ...ALL_FILTERS, subject: "Science" })?.hardAndHeld).toBe(0);
   expect(summarizePerceivedDifficulty(papers, [], ALL_FILTERS)).toBeNull();
+});
+
+test("repeated taps while a write is pending produce exactly one request", async () => {
+  let resolve!: () => void;
+  fixture.save.mockReturnValue(new Promise<void>(done => { resolve = done; }));
+  mount(); const choice = await screen.findByRole("button", { name: "Hard", exact: true });
+  for (let i = 0; i < 10; i++) fireEvent.click(choice);
+  expect(fixture.save).toHaveBeenCalledOnce();
+  await act(async () => resolve());
+});
+test("a previous paper's delayed save cannot replace the next paper's prompt", async () => {
+  let resolve!: () => void;
+  fixture.save.mockReturnValue(new Promise<void>(done => { resolve = done; }));
+  const view = mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Hard", exact: true }));
+  view.rerender(<ToastProvider><PaperDifficultyPrompt paperId="p2" studentId="s2" ready /></ToastProvider>);
+  await screen.findByRole("button", { name: "Hard", exact: true });
+  await act(async () => resolve());
+  expect(screen.getByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(screen.queryByText("How it felt is saved.")).toBeNull();
+  expect(screen.queryByText("How this paper felt:", { exact: false })).toBeNull();
+});
+test("an old retry cannot overwrite feedback in a different student scope", async () => {
+  let resolve!: (value: { rating: number; skipped: boolean }) => void;
+  fixture.read.mockRejectedValueOnce(new Error("outage"))
+    .mockReturnValueOnce(new Promise(done => { resolve = done; })).mockResolvedValueOnce(null);
+  const next = mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+  next.rerender(<ToastProvider><PaperDifficultyPrompt paperId="p2" studentId="s2" ready /></ToastProvider>);
+  await screen.findByText("How difficult did this paper feel?");
+  await act(async () => resolve({ rating: 5, skipped: false }));
+  expect(screen.getByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(screen.queryByText("How this paper felt:", { exact: false })).toBeNull();
 });
