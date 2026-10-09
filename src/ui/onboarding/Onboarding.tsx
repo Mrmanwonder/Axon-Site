@@ -167,6 +167,13 @@ export default function Onboarding() {
   );
   const [contact, setContact] = useState(s?.user?.email ?? s?.user?.phone ?? "");
   const [code, setCode] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const passwordFlight = useRef(false);
+  const providerFlight = useRef(false);
+  const passwordBusyChanged = useCallback((busy: boolean) => {
+    passwordFlight.current = busy;
+    setPasswordBusy(busy);
+  }, []);
   const [accountMethod, setAccountMethod] = useState<"code" | "password">("code");
   const provider = s?.user?.app_metadata?.provider ?? null;
 
@@ -344,10 +351,10 @@ export default function Onboarding() {
     } finally { sendFlight.current = false; setSendingCode(false); }
   };
 
-  const back = sendingCode || otpBusy ? undefined : BACK_TO[step];
+  const back = sendingCode || otpBusy || passwordBusy || busyProvider ? undefined : BACK_TO[step];
   const shellProps = {
     phase: STEP_PHASE[step],
-    onBack: back ? () => go(back) : undefined,
+    onBack: back ? () => { if (!passwordFlight.current && !providerFlight.current) go(back); } : undefined,
   };
 
   // ── landing ──────────────────────────────────────────────────────────────
@@ -415,12 +422,14 @@ export default function Onboarding() {
        across: the provider is about to supply both, and the name it gives is
        the one the parent will recognise. */
     const useProvider = async (p: string) => {
-      if (busyProvider) return;
+      if (providerFlight.current || passwordFlight.current || sendFlight.current) return;
+      providerFlight.current = true;
       hapticFirm();
       setBusyProvider(p);
       try {
         await signInWithProvider(p);
       } catch (e) {
+        providerFlight.current = false;
         setBusyProvider(null);
         setError(isProviderNotEnabled(e)
           ? `${PROVIDER_LABEL[p]} sign-in isn't switched on yet. Use your email or phone below.`
@@ -429,7 +438,7 @@ export default function Onboarding() {
     };
 
     const send = async () => {
-      if (sendFlight.current || busyProvider) return;
+      if (sendFlight.current || providerFlight.current || passwordFlight.current) return;
       if (!parentName.trim()) return setError("We need your name.");
       if (!contact.trim()) return setError("Enter an email address or phone number.");
       hapticFirm();
@@ -446,6 +455,7 @@ export default function Onboarding() {
         <div className="obalt">
           {OAUTH_PROVIDERS.map((p) => (
             <PressBox as="button" type="button" key={p} className="btn googleauth"
+                      disabled={passwordBusy || !!busyProvider || sendingCode}
                       aria-busy={busyProvider === p}
                       data-busy={busyProvider === p ? "" : undefined}
                       onClick={() => void useProvider(p)}>
@@ -460,10 +470,10 @@ export default function Onboarding() {
         </div>
         <div className="obor">or</div>
         <div className="obfoot">
-          <button type="button" className="btn plain" disabled={!!busyProvider} aria-pressed={accountMethod === "code"} onClick={() => setAccountMethod("code")}>Email or phone code</button>
-          <button type="button" className="btn plain" disabled={!!busyProvider} aria-pressed={accountMethod === "password"} onClick={() => setAccountMethod("password")}>Email and password</button>
+          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "code"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("code"); }}>Email or phone code</button>
+          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "password"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("password"); }}>Email and password</button>
         </div>
-        {accountMethod === "password" ? <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider}
+        {accountMethod === "password" ? <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider} onBusyChange={passwordBusyChanged}
           onAuthenticated={async () => {
             try {
               const sess = await currentSession() as SessionUser;

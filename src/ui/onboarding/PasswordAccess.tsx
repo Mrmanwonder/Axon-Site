@@ -5,8 +5,8 @@ import PasswordField from "../components/PasswordField";
 import { Err } from "./chrome";
 
 type Mode = "sign-in" | "create" | "forgot";
-export default function PasswordAccess({ email, onEmail, onAuthenticated, disabled = false }: {
-  email: string; onEmail: (value: string) => void; onAuthenticated: () => void | Promise<void>; disabled?: boolean;
+export default function PasswordAccess({ email, onEmail, onAuthenticated, onBusyChange, disabled = false }: {
+  email: string; onEmail: (value: string) => void; onAuthenticated: () => void | Promise<void>; disabled?: boolean; onBusyChange?: (busy: boolean) => void;
 }) {
   const [mode, setMode] = useState<Mode>("sign-in");
   const [password, setPassword] = useState("");
@@ -17,7 +17,7 @@ export default function PasswordAccess({ email, onEmail, onAuthenticated, disabl
   const changeMode = (next: Mode) => { setMode(next); setPassword(""); setError(null); setMessage(null); };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (flight.current || disabled) return;
-    flight.current = true; setBusy(true); setError(null); setMessage(null);
+    flight.current = true; onBusyChange?.(true); setBusy(true); setError(null); setMessage(null);
     try {
       if (mode === "forgot") {
         await requestPasswordReset(email);
@@ -30,7 +30,7 @@ export default function PasswordAccess({ email, onEmail, onAuthenticated, disabl
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "We could not complete that request. Try again later.");
-    } finally { flight.current = false; setBusy(false); }
+    } finally { flight.current = false; onBusyChange?.(false); setBusy(false); }
   };
   return <form className="password-access" onSubmit={event => void submit(event)}>
     <h2>{mode === "create" ? "Create an account" : mode === "forgot" ? "Reset your password" : "Sign in with a password"}</h2>
