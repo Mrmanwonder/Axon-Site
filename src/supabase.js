@@ -1,6 +1,6 @@
 // Supabase client and auth.
 //
-// Auth is passwordless: email or phone OTP, or Google. Only the
+// Auth supports email/password, email or phone OTP, and Google. Only the
 // guardian ever holds credentials; the student works inside the guardian's
 // session and is never an auth user.
 //
@@ -32,6 +32,14 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     detectSessionInUrl: true,
   },
 });
+
+// Subscribe before React boots: the recovery event can precede AppProvider.
+let passwordRecoveryPending = false;
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true;
+  if (event === 'SIGNED_OUT') passwordRecoveryPending = false;
+});
+export function clearPasswordRecovery() { passwordRecoveryPending = false; }
 
 /** True when the string looks like a phone number rather than an email. */
 export function isPhone(contact) {
@@ -340,7 +348,7 @@ export async function signOut() {
 }
 
 export function onAuthChange(fn) {
-  return sb.auth.onAuthStateChange((_event, session) => fn(session));
+  return sb.auth.onAuthStateChange((event, session) => fn(session, passwordRecoveryPending && session ? 'PASSWORD_RECOVERY' : event));
 }
 
 const GUARDIAN_IDENTITY_COLUMNS = 'id, auth_user_id, name, contact';

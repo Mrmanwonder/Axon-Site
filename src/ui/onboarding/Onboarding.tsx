@@ -71,6 +71,7 @@ import {
 } from "../data/modules";
 import type { Guardian, Student, NoticeLanguage } from "../data/modules";
 import GlideSegment from "../components/GlideSegment";
+import PasswordAccess from "./PasswordAccess";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
@@ -166,6 +167,7 @@ export default function Onboarding() {
   );
   const [contact, setContact] = useState(s?.user?.email ?? s?.user?.phone ?? "");
   const [code, setCode] = useState("");
+  const [accountMethod, setAccountMethod] = useState<"code" | "password">("code");
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
@@ -437,7 +439,7 @@ export default function Onboarding() {
     };
 
     return (
-      <Shell {...shellProps} title="Create your account">
+      <Shell {...shellProps} title="Your account">
         <Err message={error} />
         {/* "Continue with" rather than "Sign in with": a parent arriving here
             does not have an account yet, so this describes the action accurately. */}
@@ -457,6 +459,20 @@ export default function Onboarding() {
           ))}
         </div>
         <div className="obor">or</div>
+        <div className="obfoot">
+          <button type="button" className="btn plain" disabled={!!busyProvider} aria-pressed={accountMethod === "code"} onClick={() => setAccountMethod("code")}>Email or phone code</button>
+          <button type="button" className="btn plain" disabled={!!busyProvider} aria-pressed={accountMethod === "password"} onClick={() => setAccountMethod("password")}>Email and password</button>
+        </div>
+        {accountMethod === "password" ? <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider}
+          onAuthenticated={async () => {
+            try {
+              const sess = await currentSession() as SessionUser;
+              setContact(sess.user?.email ?? "");
+              const existing = await currentGuardian();
+              if (existing) { setGuardian(existing); await continueAsGuardian(existing); }
+              else go("nameOnly");
+            } catch { setError("We could not open your account. Try again later."); }
+          }} /> : <>
         <div className="obfields">
           <Field id="ob-name" label="Your name" value={parentName} onChange={setParentName}
                  placeholder="Full name" autoComplete="name"
@@ -464,7 +480,7 @@ export default function Onboarding() {
           <Field id="ob-contact" label="Email or phone" value={contact} onChange={setContact}
                  placeholder="you@example.com or +91…" autoComplete="email"
                  onEnter={() => void send()}
-                 hint="We'll send a one-time code — there's no password to remember." />
+                 hint="We'll send a one-time code to your email or phone." />
         </div>
         <div className="obpanel tint" style={{ marginTop: 16 }}>
           <div className="body" style={{ marginTop: 0 }}>
@@ -477,6 +493,7 @@ export default function Onboarding() {
             Send me a code
           </PressBox>
         </div>
+        </>}
       </Shell>
     );
   }

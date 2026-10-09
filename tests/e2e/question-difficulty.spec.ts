@@ -5,5 +5,6 @@ test("question difficulty distinguishes failed retrieval from a low confidence e
   await page.getByRole("button", { name: "Try difficulty again" }).click();
   await expect(page.getByText("Low confidence", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByText("Hard · estimated", { exact: false })).toBeVisible();
   await expect(page.getByText(/This describes the question, not your ability/)).toBeVisible();
 });

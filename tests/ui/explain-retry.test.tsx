@@ -150,3 +150,10 @@ test("a feedback call that fails offers another try", async () => {
   expect(await screen.findByText(/did not send/i)).toBeTruthy();
   expect(screen.getByRole("button", { name: "Helped" })).toBeTruthy();
 });
+
+test.each(["skipped", "done", "pending", null])("lost marks without an event are admitted for historical status %s", async status => {
+  fixture.readPaper.mockResolvedValue({ data: paperWith(status), stale: false, offline: false });
+  mount();
+  expect(await screen.findByText(/don.t have an explanation for this one yet/i)).toBeTruthy();
+  expect(screen.queryByText(/Full marks on this one/)).toBeNull();
+});

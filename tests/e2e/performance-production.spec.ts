@@ -56,6 +56,7 @@ function percentile(values: number[], fraction: number) {
 function summary(values: number[]) {
   return {
     p50: Math.round(percentile(values, 0.50)),
+    p75: Math.round(percentile(values, 0.75)),
     p95: Math.round(percentile(values, 0.95)),
     min: Math.round(Math.min(...values)),
     max: Math.round(Math.max(...values)),
@@ -366,26 +367,38 @@ test.describe("production startup performance @performance", () => {
     backend.dataDelayMs = 0;
     await page.goto(origin, { waitUntil: "domcontentloaded" });
     await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
-    const before = await page.evaluate(() => performance.now());
-    await page.getByRole("button", { name: /^Library/ }).click();
-    await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
-    const after = await page.evaluate(() => performance.now());
-    const routeMs = Math.round(after - before);
-    const routeResources = await page.evaluate((startedAt) =>
-      (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
-        .filter(entry => entry.startTime >= startedAt && new URL(entry.name, location.href).pathname.endsWith(".js"))
-        .map(entry => ({
-          path: new URL(entry.name, location.href).pathname,
-          start: Math.round(entry.startTime),
-          duration: Math.round(entry.duration),
-          transfer: entry.transferSize,
-        })), before);
+    const routeSamples: number[] = [];
+    let routeResources: Array<{ path: string; start: number; duration: number; transfer: number }> = [];
+    for (let i = 0; i < SAMPLES; i += 1) {
+      // Each trial begins on a ready, authorized Home. Measure the actual
+      // in-app route transition, not the time spent reloading the document.
+      if (i > 0) {
+        await page.goto(origin, { waitUntil: "domcontentloaded" });
+        await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
+      }
+      const before = await page.evaluate(() => performance.now());
+      await page.getByRole("button", { name: /^Library/ }).click();
+      await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+      const after = await page.evaluate(() => performance.now());
+      routeSamples.push(Math.round(after - before));
+      if (i === 0) {
+        routeResources = await page.evaluate((startedAt) =>
+          (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
+            .filter(entry => entry.startTime >= startedAt && new URL(entry.name, location.href).pathname.endsWith(".js"))
+            .map(entry => ({
+              path: new URL(entry.name, location.href).pathname,
+              start: Math.round(entry.startTime),
+              duration: Math.round(entry.duration),
+              transfer: entry.transferSize,
+            })), before);
+      }
+    }
 
     console.log("[AXO-66] warm-cache", JSON.stringify({
       liveDataDelayMs: WARM_DATA_DELAY_MS,
       home: { samples: homeSamples, wall: summary(homeSamples) },
       library: { samples: librarySamples, wall: summary(librarySamples) },
-      lazyLibraryRoute: { ms: routeMs, resources: routeResources },
+      lazyLibraryRoute: { samples: routeSamples, wall: summary(routeSamples), firstVisitResources: routeResources },
     }));
 
     // The per-sample pending-read assertions above prove cache-first paint.
@@ -393,7 +406,7 @@ test.describe("production startup performance @performance", () => {
     // so gate that user-visible latency independently from synthetic network RTT.
     expect(summary(homeSamples).p95).toBeLessThan(WARM_PAINT_BUDGET_MS);
     expect(summary(librarySamples).p95).toBeLessThan(WARM_PAINT_BUDGET_MS);
-    expect(routeMs).toBeLessThan(2000);
+    expect(summary(routeSamples).p95).toBeLessThan(2000);
     await context.close();
   });
 });

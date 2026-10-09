@@ -43,6 +43,7 @@ import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
 import { paths } from "../app/paths";
 import { ExamCard } from "../components/ExamPlan";
 import "../styles/insights.css";
+import "../styles/home.css";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -126,7 +127,21 @@ export default function Home() {
 
       {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
-        {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
+        {subjects.map((subject) => {
+          const selection = student?.subject_selections?.find(item => item.subject === subject);
+          const filter = selection?.offering_id ? `subject:${selection.offering_id}` : `name:${subject}`;
+          return <PressBox as={Link} to={`${paths.library}?subject=${encodeURIComponent(filter)}`}
+            className="subjectchip" key={subject} aria-label={`Open ${subject} papers`}>{subject}</PressBox>;
+        })}
+      </div>
+
+      <div className="card home-library">
+        <div className="eyebrow">Your papers</div>
+        <div className="line">{papers.length} paper{papers.length === 1 ? "" : "s"}</div>
+        <div className="actions">
+          <PressBox as={Link} to={paths.library} className="textaction">Open Library <Chevron /></PressBox>
+          <PressBox as="button" type="button" className="textaction" onClick={addPaper}>Add a paper <Chevron /></PressBox>
+        </div>
       </div>
 
       <div className="card nextstep">
