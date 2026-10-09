@@ -386,7 +386,7 @@ insert into public.question_region (
 
 -- D1 (AXO-216): saving must not wait for a flagged region. Its teacher's
 -- marks persist as *unsure*, outside confirmed analytics; no AI mark assignment.
-do $
+do $axo216$
 declare v_result jsonb; v_err text;
 begin
   v_result := public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
@@ -409,7 +409,7 @@ begin
     perform public._t('a committed run cannot be committed again',
       v_err = 'this run is already committed', v_err);
   end;
-end $;
+end $axo216$
 
 -- ── commit ─────────────────────────────────────────────────────────────────
 
