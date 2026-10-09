@@ -86,6 +86,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # AXO-219 disposable reproduction; this branch must never be merged.
+          ref: 1ae2d53e6b30133e0421d9e46437351823cdf439
 
       - uses: supabase/setup-cli@v1
         with:
