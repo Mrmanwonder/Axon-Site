@@ -409,7 +409,7 @@ begin
     perform public._t('a committed run cannot be committed again',
       v_err = 'this run is already committed', v_err);
   end;
-end $axo216$
+end $axo216$;
 
 -- ── commit ─────────────────────────────────────────────────────────────────
 
