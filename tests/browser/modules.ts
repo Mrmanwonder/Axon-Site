@@ -1,5 +1,10 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
+const PASSWORD = scenario === "password";
+const RECOVERY = scenario === "password-recovery";
+let passwordSession: unknown = RECOVERY ? { user: { id: "guardian", email: "parent@example.test" } } : null;
+let passwordRecovery = RECOVERY;
+const authListeners = new Set<(session: unknown, event?: string) => void>();
 // `exams` / `exams-setup`: a Cambridge A Level student with real November 2026 zone 4 rows.
 const EXAMS = scenario === "exams" || scenario === "exams-setup";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
@@ -48,6 +53,7 @@ export const sb = {
 };
 export async function currentSession() {
   if (scenario === "auth-error") throw new Error("Auth unavailable");
+  if (PASSWORD || RECOVERY) return passwordSession;
   if (HOUSEHOLD && sessionStorage.getItem("axon.test.household.signed-out") === "1") return null;
   return {};
 }
@@ -70,7 +76,26 @@ export const clearStudentScope = async () => {
   return true;
 };
 export const takeProviderError = () => null;
-export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
+export const onAuthChange = (fn: (session: unknown, event?: string) => void) => {
+  if (PASSWORD || RECOVERY) {
+    authListeners.add(fn);
+    fn(passwordSession, passwordRecovery ? "PASSWORD_RECOVERY" : "INITIAL_SESSION");
+  }
+  return { data: { subscription: { unsubscribe() { authListeners.delete(fn); } } } };
+};
+export const clearPasswordRecovery = () => { passwordRecovery = false; };
+export const passwordSignIn = async (_email: string, password: string) => {
+  if (password === "wrong-password") throw new Error("We could not complete that request. Check your details or try again later.");
+  passwordSession = { user: { id: "guardian", email: "parent@example.test" } };
+  for (const fn of authListeners) fn(passwordSession, "SIGNED_IN");
+  return passwordSession;
+};
+export const passwordSignUp = async () => null;
+export const requestPasswordReset = async () => {};
+export const changePassword = async () => {};
+export const reauthenticateWithPassword = async () => {};
+export const unlockWithPassword = async () => ({ outcome: "unlocked" as const });
+
 export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();
@@ -172,7 +197,7 @@ export const syllabusMapData = async () => {
   return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
 };
 export const setPaperSubject = async () => {};
-export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export async function listPapers() { await wait(); return { data: (scenario === "insights" || scenario === "cached") ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
 export const insightEvidence = async () => {
   if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
   const f = insightFixture();
@@ -316,4 +341,22 @@ export const paperDifficultyFeedback = async (student: string, paper: string): P
 };
 export const savePaperDifficultyFeedback = async (input: { studentId: string; paperId: string; rating: number | null; skipped: boolean }) => {
   sessionStorage.setItem(feedbackKey(input.studentId, input.paperId), JSON.stringify({ rating: input.rating, skipped: input.skipped }));
+};
+
+
+// AXO-216 saved-paper mutations. This adapter is test-only: record calls rather
+// than invoking a production API. Dedicated fixtures may supply changed data.
+export const savedPaperCalls: { action: string; id: string; value?: unknown }[] = [];
+export const setPaperType = async (paperId: string, type: string) => {
+  savedPaperCalls.push({ action: "setPaperType", id: paperId, value: type });
+};
+export const deferPart = async (regionId: string) => {
+  savedPaperCalls.push({ action: "deferPart", id: regionId });
+};
+export const fixSavedPart = async (
+  regionId: string,
+  fix: { marksAwarded?: number; marksAvailable?: number; answer?: string } = {},
+) => {
+  savedPaperCalls.push({ action: "fixSavedPart", id: regionId, value: fix });
+  return { region_id: regionId, attempt_id: null, run_id: "fixture-run", explain: false };
 };

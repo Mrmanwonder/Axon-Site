@@ -31,6 +31,7 @@ import { numMark } from "../data/causes";
 import { isPartialTotal } from "../data/paperTotals";
 import { subjectPresentation } from "../data/subjectPresentation";
 import { paperStructure } from "../data/paperStructure";
+import { EXPLANATION_GAP_LABEL } from "../data/explanationGap";
 import type { PaperPart, PaperStructure } from "../data/paperStructure";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
@@ -69,8 +70,9 @@ function PartRow({ paperId, part, label }: { paperId: string; part: PaperPart; l
         </div>
         {/* The list says only what needs the student. "Confirmed by you" and
             "Read clearly" live on the question itself, beside its confidence. */}
-        {(needsAttention(part) || part.placedByPosition) && (
+        {(needsAttention(part) || part.placedByPosition || part.explanationGap) && (
           <div className="t2">
+            {part.explanationGap && <span>{EXPLANATION_GAP_LABEL[part.explanationGap]}</span>}
             {needsAttention(part) && <span className={"conf " + part.confidence}>{stateText(part)}</span>}
             {part.placedByPosition && <span>Placed under this question by its position on the page</span>}
           </div>

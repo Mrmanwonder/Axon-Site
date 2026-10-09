@@ -59,6 +59,7 @@ export default function Terms() {
 
       <section><h2>4. Account security</h2>
         <p>
+          Supported sign-in methods are Google, email and password, and one-time codes sent to email or phone.
           The account holder is responsible for maintaining reasonable control of their authentication
           methods and devices and for promptly notifying Axon of suspected compromise. You are
           responsible for activity performed through your account to the extent permitted by law,

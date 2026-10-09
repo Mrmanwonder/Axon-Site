@@ -23,7 +23,7 @@ import { useCallback } from "react";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useApp } from "./AppProvider";
-import { parentModeState, sendParentCode, unlockWithCode } from "./modules";
+import { parentModeState, sendParentCode, unlockWithCode, unlockWithPassword } from "./modules";
 import { hapticFirm } from "../lib/haptics";
 
 export function useParentMode(contactOverride?: string | null) {
@@ -59,22 +59,33 @@ export function useParentMode(contactOverride?: string | null) {
         .catch((e) => toast((e as Error).message || "We couldn't send a code.", "warn"));
     };
 
+    const askForPassword = () => {
+      openSheet({
+        title: "Confirm your password",
+        body: "Use the password for the account signed in on this device.",
+        input: { label: "Password", id: "parent-mode-password", type: "password", autoComplete: "current-password" },
+        primary: "Continue",
+        onConfirm: async (value) => {
+          const result = await unlockWithPassword(value);
+          if (result.outcome !== "unlocked") throw new Error(result.outcome === "failed" ? result.message : "Enter your password.");
+          return run();
+        },
+      });
+    };
+
     const offerUnlock = () => {
-      /* One route, because passkeys were removed from the product: a code to
-         the contact on the account. Deliberately not a contact typed in here —
-         a parent proving they are present does not get to nominate where the
-         proof goes, or the check is one text field away from proving nothing. */
+      // Both methods prove the existing account; neither accepts another contact.
       openSheet({
         title: "This one's for a parent",
         body:
           "Scanning, reviewing and insights are the student's. Consent, billing " +
           "and anything that removes data are the account holder's, so we check " +
           "you're the one here.",
-        choices: [{ label: `Send a code to ${contact}`, value: "code" }],
+        choices: [{ label: `Send a code to ${contact}`, value: "code" }, ...(contact.includes("@") ? [{ label: "Use my password", value: "password" }] : [])],
         onChoice: async (choice) => {
-          if (choice !== "code") return;
           hapticFirm();
-          await askForCode();
+          if (choice === "password") askForPassword();
+          else if (choice === "code") await askForCode();
         },
       });
     };

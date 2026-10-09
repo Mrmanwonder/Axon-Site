@@ -57,10 +57,13 @@ export default function Dialog({ title, description, busy = false, onClose, chil
     // the sheet stranded mid-screen once it landed.
     const field = dialog.querySelector<HTMLElement>("input:not([type=hidden]), textarea");
     (field ?? dialog.querySelector<HTMLElement>(".sheet"))?.focus({ preventScroll: true });
+    // showModal runs native focus steps before our explicit focus. Clear any
+    // scroll they caused while the entrance animation was below the viewport.
+    dialog.scrollTop = 0;
     return () => {
       if (typeof dialog.close === "function") dialog.close();
       else dialog.removeAttribute("open");
-      if (trigger?.isConnected) trigger.focus();
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
   }, []);
   return <dialog ref={ref} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}
@@ -71,11 +74,11 @@ export default function Dialog({ title, description, busy = false, onClose, chil
       if (!controls.length) { event.preventDefault(); return; }
       const index = controls.indexOf(document.activeElement as HTMLElement);
       event.preventDefault();
-      controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
+      controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length].focus({ preventScroll: true });
     }}
     aria-busy={busy || undefined} onCancel={event => { event.preventDefault(); if (!busy) dismiss(); }}
     onClick={event => { if (event.target === event.currentTarget && !busy) dismiss(); }}
-    style={{ padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", overflow: "hidden", background: "transparent", border: 0, color: "inherit" }}>
+    style={{ position: "fixed", inset: 0, padding: 0, margin: 0, width: "100vw", height: "100dvh", maxWidth: "none", maxHeight: "none", overflow: "clip", background: "transparent", border: 0, color: "inherit" }}>
     <DismissCtx.Provider value={dismiss}>
       <div className={`sheet ${className}`.trim()} style={{ transform: "none" }} tabIndex={-1}>
         <h4 id={titleId}>{title}</h4>

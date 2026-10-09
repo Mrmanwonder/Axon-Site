@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, providerKeyForStudent, retryFailedPaper, searchLibrary } from "../data/modules";
 import { isPartialTotal } from "../data/paperTotals";
@@ -132,7 +132,14 @@ export default function Library() {
   };
 
   const [query, setQuery] = useState("");
-  const [subject, setSubject] = useState("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const subject = searchParams.get("subject") ?? "all";
+  const setSubject = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === "all") next.delete("subject");
+    else next.set("subject", value);
+    setSearchParams(next, { replace: true });
+  };
   const [dateFilter, setDateFilter] = useState<DateFilter>("any");
   const [type, setType] = useState("all");
   const [tier, setTier] = useState("any");

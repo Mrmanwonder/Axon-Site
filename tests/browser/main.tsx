@@ -18,6 +18,8 @@ import PaperOverview from "../../src/ui/pages/PaperOverview";
 import { Route, Routes } from "react-router-dom";
 import Scan from "../../src/ui/pages/Scan";
 import { ExamSettings } from "../../src/ui/components/ExamPlan";
+import PasswordAccess from "../../src/ui/onboarding/PasswordAccess";
+import PasswordRecovery from "../../src/ui/onboarding/PasswordRecovery";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
 if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
@@ -59,11 +61,19 @@ function StudentScopeHouseholdDemo() {
   </section>;
 }
 
+function PasswordDemo() {
+  const { passwordRecovery, session } = useApp();
+  const [email, setEmail] = React.useState("parent@example.test");
+  const [opened, setOpened] = React.useState(false);
+  if (passwordRecovery) return <PasswordRecovery />;
+  if (opened || (params.get("scenario") === "password-recovery" && session)) return <h1>Account opened</h1>;
+  return <><h1>Account access</h1><PasswordAccess email={email} onEmail={setEmail} onAuthenticated={() => setOpened(true)} /></>;
+}
 function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Home /> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Routes><Route path="/" element={<Home />} /><Route path="/library" element={<Library />} /></Routes> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
     ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
     : <Library />}</>;
 }
@@ -92,5 +102,5 @@ if (params.get("view") === "scan-screen") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "password" ? <PasswordDemo /> : params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }

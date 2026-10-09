@@ -153,8 +153,11 @@ export const takeProviderError = supabaseMod.takeProviderError as () => Provider
 /** Returns Supabase's `{ data: { subscription } }`, not an unsubscribe function —
     the shape an effect cleanup needs is `.data.subscription.unsubscribe()`. */
 export const onAuthChange = supabaseMod.onAuthChange as (
-  fn: (session: unknown) => void,
+  fn: (session: unknown, event?: string) => void,
 ) => { data: { subscription: { unsubscribe: () => void } } };
+
+export const clearPasswordRecovery = supabaseMod.clearPasswordRecovery as () => void;
+export { passwordSignIn, passwordSignUp, requestPasswordReset, changePassword, reauthenticateWithPassword } from "../../lib/auth/password.js";
 
 // ── auth ───────────────────────────────────────────────────────────────────
 export const sendOtp = supabaseMod.sendOtp as (
@@ -194,7 +197,7 @@ export const claimVerification = verificationMod.claimVerification as () => Prom
 /* P0-002. The boundary itself is in the database; these are the parts a person
    touches. See src/lib/auth/parentMode.ts. */
 export {
-  parentModeState, sendParentCode, unlockWithCode, isParentModeRequired,
+  parentModeState, sendParentCode, unlockWithCode, unlockWithPassword, isParentModeRequired,
 } from "../../lib/auth/parentMode";
 export type { ParentModeState, UnlockOutcome } from "../../lib/auth/parentMode";
 

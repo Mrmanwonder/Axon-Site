@@ -30,6 +30,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({
     rpc: vi.fn(async () => ({ data: true, error: null })),
     auth: {
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       getSession: async () => ({ data: { session: f.session }, error: null }),
       signOut: async () => ({ error: null }),
     },
