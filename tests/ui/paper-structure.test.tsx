@@ -218,3 +218,23 @@ test("an unassigned part can be placed under a question by hand", async () => {
   const loose = (await screen.findByRole("heading", { level: 2, name: "Unassigned parts" })).closest("section")!;
   expect(within(loose).getAllByRole("button", { name: "Place under a question" })).toHaveLength(3);
 });
+
+test("paper rows expose missing, failed and in-flight explanations without inventing causes", async () => {
+  const details = {
+    ...base,
+    student_attempt: [attempt("gap", "1"), attempt("failed", "2"), attempt("writing", "3"), attempt("full", "4", { marks_awarded: 2 })],
+    question_region: [
+      { ...region("gap", 1, 10), explain_status: "skipped" },
+      { ...region("failed", 1, 20), explain_status: "failed" },
+      { ...region("writing", 1, 30), explain_status: "running" },
+      { ...region("full", 1, 40), explain_status: "skipped" },
+    ],
+  };
+  fixture.readPaper.mockResolvedValue({ data: details, stale: false, offline: false });
+  mount();
+  expect(await screen.findByText("Not explained yet")).toBeTruthy();
+  expect(screen.getByText("Explanation could not be written")).toBeTruthy();
+  expect(screen.getByText("Explanation being written")).toBeTruthy();
+  const rows = screen.getAllByRole("link").filter(node => node.classList.contains("po-part"));
+  expect(rows.find(node => node.getAttribute("href")?.endsWith("/full"))?.textContent).not.toContain("explained");
+});
