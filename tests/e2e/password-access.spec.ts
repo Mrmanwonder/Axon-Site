@@ -14,7 +14,7 @@ test("password sign-in and signup keep accessible controls and generic confirmat
   await expect(password).toHaveAttribute("autocomplete", "new-password");
   await password.fill("secret123");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("confirmation link if one is needed");
+  await expect(page.locator(".password-access").getByRole("status")).toContainText("confirmation link if one is needed");
   await expect(page.getByRole("heading", { name: "Account opened" })).toHaveCount(0);
   const result = await new AxeBuilder({ page }).analyze();
   expect(result.violations).toEqual([]);
@@ -34,7 +34,7 @@ test("forgot password and PASSWORD_RECOVERY route keep reset separate from ordin
   await page.goto(base + "&scenario=password");
   await page.getByRole("button", { name: "Forgot password" }).click();
   await page.getByRole("button", { name: "Send reset link" }).click();
-  await expect(page.getByRole("status")).toContainText("If this email can receive a reset link");
+  await expect(page.locator(".password-access").getByRole("status")).toContainText("If this email can receive a reset link");
   await page.goto(base + "&scenario=password-recovery");
   await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
   await page.getByLabel("New password", { exact: true }).fill("secret123");
