@@ -26,7 +26,7 @@
 
    ── The proof ────────────────────────────────────────────────────────────
 
-   Re-authenticating — a code to the parent's own email or phone — updates the
+   Re-authenticating with the account's password or a code updates the
    session's `amr` claim, and the database reads the timestamp out of that.
    Nothing is minted, stored or expired on our side: the window closes on its
    own because the claim ages. A page reload cannot reopen it, because the
@@ -35,10 +35,11 @@
    A passkey used to be the preferred route here, and would be again: on a
    shared family phone the parent's face is the one factor the student beside
    them cannot supply. Passkeys were removed from the product before they were
-   ever enabled in the Supabase project, so the only route today is a code.
+   ever enabled in the Supabase project. Password and code proof remain.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { sb } from '../../supabase.js';
+import { reauthenticateWithPassword } from './password.js';
 
 /** What the server says about the current session's freshness. Advisory: every
     guarded action re-checks server-side, so a client that lies about this
@@ -128,4 +129,11 @@ export async function unlockWithCode(contact: string, code: string): Promise<Unl
   const { error } = await sb.auth.verifyOtp(payload);
   if (error) return { outcome: 'failed', message: 'That code was not right.' };
   return { outcome: 'unlocked' };
+}
+
+/** Password proof is tied to the current Supabase principal, never a contact
+    typed into a sheet or a mutable guardian profile field. */
+export async function unlockWithPassword(password: string): Promise<UnlockOutcome> {
+  try { await reauthenticateWithPassword(password); return { outcome: 'unlocked' }; }
+  catch { return { outcome: 'failed', message: 'We could not confirm this password. Try again or use a code.' }; }
 }

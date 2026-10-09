@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import Dialog, { useDialogDismiss } from "./Dialog";
+import PasswordField from "./PasswordField";
 
 export type SheetChoice = {
   label: string;
@@ -24,7 +25,7 @@ export type SheetConfig = {
   /** [lead, rest] — the lead is emphasised, the rest explains it. */
   items?: [string, string][];
   choices?: SheetChoice[];
-  input?: { id: string; label: string; placeholder?: string };
+  input?: { id: string; label: string; placeholder?: string; type?: "text" | "password"; autoComplete?: string };
   primary?: string;
   /** An informational sheet: one button with this label that only closes it. */
   acknowledge?: string;
@@ -92,6 +93,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const closeSheet = useCallback(() => {
     if (flight.current) return;
     try { entry?.cfg.onCancel?.(); } catch { /* cancellation must still dismiss */ }
+    setInputValue(""); setError(null);
     navigate(-1);
   }, [entry, navigate]);
   useEffect(() => {
@@ -127,6 +129,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     try {
       if (choice === undefined) await entry.cfg.onConfirm?.(inputValue);
       else await entry.cfg.onChoice?.(choice);
+      setInputValue("");
       // Router navigation is a transition. Commit dismissal at the same
       // priority so it cannot race ahead and replace the destination.
       startTransition(() => setCompleted(token));
@@ -139,7 +142,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     {children}
     {cfg && <Dialog key={token} title={cfg.title} description={cfg.body} busy={busy} onClose={closeSheet} restoreFocus={entry.trigger}>
       {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
-      {cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
+      {cfg.input?.type === "password" ? <PasswordField key={token} id={cfg.input.id} label={cfg.input.label} value={inputValue} onChange={setInputValue} disabled={busy} /> : cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} autoComplete={cfg.input.autoComplete} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
       {error && <p role="alert">{error}</p>}
       {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)} aria-busy={busy}>{busy ? "Working…" : choice.label}</button>)}</div>}
       <div className="acts">

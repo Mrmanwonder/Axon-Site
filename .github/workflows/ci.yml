@@ -100,6 +100,9 @@ jobs:
           supabase start
           supabase db reset --local
 
+      - name: Verify password auth against the local GoTrue stack
+        run: node scripts/test-password-auth-local.mjs
+
       # Each file in supabase/tests/ is a self-contained, rolled-back suite
       # that ends with `select count(*) ... as failed from public._r`. Execute
       # each suite exactly once, stream that output, and fail the job if its
