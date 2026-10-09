@@ -189,6 +189,9 @@ function syllabusFixture() {
 }
 // `insights-early`: the same student after three papers, below the pattern threshold.
 const EARLY = scenario === "insights-early";
+// Real paper rows are needed to render a stale-analysis notice; an empty
+// library correctly renders its empty state instead.
+const ANALYSIS_CACHED = scenario === "analysis-cached";
 const earlyIds = new Set(["ip1", "ip2", "ip3"]);
 const earlyOnly = <T extends { paper_id?: unknown; id?: unknown }>(rows: T[], key: "paper_id" | "id") => (EARLY ? rows.filter((r) => earlyIds.has(String(r[key]))) : rows);
 export const syllabusMapData = async () => {
@@ -197,20 +200,20 @@ export const syllabusMapData = async () => {
   return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
 };
 export const setPaperSubject = async () => {};
-export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export async function listPapers() { await wait(); return { data: scenario === "insights" || ANALYSIS_CACHED ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: ANALYSIS_CACHED }; }
 export const insightEvidence = async () => {
-  if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
+  if (scenario !== "insights" && !EARLY && !ANALYSIS_CACHED) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
   const f = insightFixture();
   const attempts = earlyOnly(f.attempts as { paper_id?: unknown }[], "paper_id");
   const ids = new Set(attempts.map((a) => (a as { id: string }).id));
-  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: false };
+  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: ANALYSIS_CACHED };
 };
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
 // `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
 export const analyticsReadiness = async () => scenario === "patterns"
   ? { data: { papers_counted: 4, questions_counted: 25, has_enough_data: true }, stale: false }
-  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" };
+  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" || ANALYSIS_CACHED };
 export const lossByCause = async () => ({ data: scenario === "patterns" ? { incomplete: 6, misread_question: 2, procedural_slip: 1 } : {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
