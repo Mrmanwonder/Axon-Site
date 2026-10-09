@@ -264,6 +264,19 @@ function link(gl, vertexSource, fragmentSource) {
  *
  * @param {ImageBitmap|HTMLCanvasElement|OffscreenCanvas|ImageData} source
  */
+/**
+ * The 64x64 parity check uses typed ImageData upload. It does NOT certify the
+ * separate texImage2D(ImageBitmap) driver path used by native camera stills.
+ * Owner Android samples show displaced strips after that high-resolution GPU
+ * path. Until full-size bitmap-source parity can be proven on real devices,
+ * admit only the exact typed-pixel path the self-test actually covers.
+ * A bitmap still goes through the CPU warp in the capture worker; no evidence
+ * or original pixels are thrown away (AXO-218).
+ */
+export function gpuWarpEligibleSource(source) {
+  return !!source && source.data instanceof Uint8ClampedArray;
+}
+
 export function warpOnGPU(source, quad, width, height) {
   const state = gpuWarper();
   if (!state) return null;

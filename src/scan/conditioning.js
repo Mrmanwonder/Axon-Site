@@ -18,7 +18,7 @@
 
 import { CONDITIONING, ENHANCE } from './contract.js';
 import { warpPerspective, quadSize, expandQuad } from './geometry.js';
-import { gpuWarpAvailable, warpOnGPU } from './gpu.js';
+import { gpuWarpAvailable, gpuWarpEligibleSource, warpOnGPU } from './gpu.js';
 import { separateLayers } from './layers.js';
 import { assessRescue, enhancePage, flattenPage } from './enhance.js';
 import { reconcileWithInk, scorePage } from './quality.js';
@@ -243,7 +243,11 @@ export async function conditionPage(source, { quad: detectedQuad = null, pageNum
   // phone that is not only time, it is the largest single allocation the scan
   // makes. `pixels()` is what everything below calls when it turns out to
   // need them anyway — a rescue assessment, or a warp that fell back.
-  const useGPU = !!quad && gpuWarpAvailable();
+  // Native ImageBitmap texImage2D uploads can silently corrupt large Android
+  // stills even after the 64x64 ImageData parity test passes. Until that
+  // distinct upload path has real-device parity evidence, fall back to the
+  // exact CPU warp in this worker instead of trusting a visually broken page.
+  const useGPU = !!quad && gpuWarpEligibleSource(source) && gpuWarpAvailable();
   let sourcePixels = (quad && !useGPU) ? imageDataFrom(source, sw, sh) : null;
   const pixels = () => (sourcePixels ??= imageDataFrom(source, sw, sh));
   const rescue = naturalLong >= CONDITIONING.MIN_LONG_EDGE
