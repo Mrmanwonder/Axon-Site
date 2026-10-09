@@ -25,6 +25,7 @@ import { reconcileWithInk, scorePage } from './quality.js';
 import { imageDataForContext } from './imagedata.js';
 import { scanError } from './errors.js';
 import { perceptualPageHash } from './similarity.js';
+import { proposeDeviceStructure } from './device-structure.js';
 
 /**
  * Pixels on the long edge a page of this size represents.
@@ -333,6 +334,20 @@ export async function conditionPage(source, { quad: detectedQuad = null, pageNum
   // would be the pipeline lying to its own telemetry.
   const rawQuality = scorePage(img, { longEdge: Math.min(naturalLong, CONDITIONING.PAGE_LONG_EDGE) });
   const layers = separateLayers(img);
+  // Page geometry and the teacher mask are already in memory. Detect only
+  // advisory full-width ink bands now, off the main thread where possible.
+  // A detector failure is NOT a scan failure; the full image remains canonical.
+  const structureStarted = Date.now();
+  let deviceStructure;
+  try {
+    deviceStructure = proposeDeviceStructure(img, layers.mask);
+  } catch (cause) {
+    console.warn('[scan:device-structure] proposal failed, keeping full page', String(cause));
+    deviceStructure = { version: 1, coordinate_space: 'conditioned_page_pixels',
+      width: img.width, height: img.height, status: 'fallback',
+      reason: 'detector_error', bands: [] };
+  }
+  const deviceStructureMs = Date.now() - structureStarted;
   // See quality.js's `reconcileWithInk` for why: a glare-only fail is checked
   // against whether the red-ink layer actually survived on this same image,
   // rather than trusted on page-coverage share alone.
@@ -368,6 +383,11 @@ export async function conditionPage(source, { quad: detectedQuad = null, pageNum
       width: img.width,
       height: img.height,
       source_size: { width: sw, height: sh },
+      // Geometry-only local proposals. They are not question identities and
+      // must never be used for AI cropping until server-side evidence gates
+      // validate them and a full-page fallback is available (AXO-231).
+      device_structure: deviceStructure,
+      device_structure_ms: deviceStructureMs,
       // The corners the homography was built from, in the source image's own
       // pixels. Kept so the warp can be reproduced — or undone — server-side
       // from the original, which is the only thing that makes "never discard
