@@ -15,6 +15,7 @@
 // that joins them, and the still.
 
 import { CAPTURE } from './contract.js';
+import { encodeStill } from './still-encoder.js';
 import { withDeadline } from './deadline.js';
 import {
   CAMERA_CONTROL_TIMEOUT_MS, FALLBACK_CAPTURE_HEIGHT, FALLBACK_CAPTURE_WIDTH,
@@ -239,6 +240,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let lostSince = 0;
   let lockedSince = 0;
   let shootInFlight = false;
+  let captureError = null;
   let nextTransactionId = 1;
 
   let imageCapture = null;
@@ -433,6 +435,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     nativeTimeouts = 0;
     processingHold = false;
     shootInFlight = false;
+    captureError = null;
     autoRetryAfter = 0;
     lostSince = lockedSince = 0;
     state = blankState();
@@ -506,6 +509,9 @@ export function createCapture({ video, overlay, onState, onShot }) {
         await sleep(200);
         continue;
       }
+      // Give the still's evidence pass priority over live detection. The video
+      // and paint loop stay alive; another live search cannot improve this shot.
+      if (shootInFlight) { await sleep(50); continue; }
       try {
         await searchOnce(generation);
       } catch (error) {
@@ -695,7 +701,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (shouldAutoCapture({
       auto: autoCapture, armed, processing: processingHold || shootInFlight,
       scaled: viewportScaled(), phase: snapshot.phase, stableMs: snapshot.stableMs,
-      lockedForMs: lockedSince ? now - lockedSince : 0, reason: guidance.reason,
+      lockedForMs: lockedSince ? now - lockedSince : 0, reason: state.reason,
     }) && now >= autoRetryAfter) {
       armed = false;
       void shoot(true);
@@ -704,10 +710,15 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
   function publish() {
     // Engine/torch can change between detections, so refresh those before comparing.
-    state = { ...state, engine, torch };
+    state = { ...state, engine, torch, capturing: shootInFlight };
+    if (captureError && performance.now() < captureError.until) {
+      state = { ...state, hint: captureError.message, blocking: 'capture', tone: 'attention', reason: 'capture', action: null };
+    } else {
+      captureError = null;
+    }
     const key = [state.phase, state.hint, state.blocking, state.tone, state.action,
       engine.status, engine.source, torch.supported, torch.mode, torch.on, torch.error,
-      state.steady, debug ? Math.round(performance.now() / 500) : 0].join('|');
+      state.steady, state.capturing, debug ? Math.round(performance.now() / 500) : 0].join('|');
     if (key === lastPublishKey) return;
     lastPublishKey = key;
     recordHintState(state);
@@ -895,22 +906,10 @@ export function createCapture({ video, overlay, onState, onShot }) {
 
     const bitmap = await createImageBitmap(video);
     if (!running || generation !== activation) { bitmap.close?.(); return null; }
-    const canvas = document.createElement('canvas');
-    try {
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
-      canvas.getContext('2d').drawImage(bitmap, 0, 0);
-    } catch (error) {
-      canvas.width = 1;
-      canvas.height = 1;
-      bitmap.close?.();
-      throw error;
-    }
-    // The JPEG of a full-resolution frame takes seconds to encode on the main
-    // thread. Nothing about finding the page on the still needs it, so it runs
-    // alongside that search instead of in front of it; `shoot` awaits it.
-    const original = new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95))
-      .finally(() => { canvas.width = 1; canvas.height = 1; });
+    const original = encodeStill(bitmap);
+    // Observe early rejection while geometry is in flight; shoot still awaits
+    // this same promise and surfaces an encoding failure rather than saving it.
+    void original.catch(() => {});
     return { bitmap, path: 'canvas-grab', original };
   }
 
@@ -976,6 +975,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!running || !video.videoWidth || shootInFlight) return null;
     if (auto && (processingHold || performance.now() < autoRetryAfter)) return null;
     shootInFlight = true;
+    captureError = null;
+    publish(); // Acknowledge before still acquisition, detection or encoding.
     const transactionId = nextTransactionId++;
     const mediaTime = video.currentTime;
     const quadConfidenceAtShutter = shutterQuadConfidence({
@@ -1080,11 +1081,16 @@ export function createCapture({ video, overlay, onState, onShot }) {
       return null;
     } finally {
       ownedBitmap?.close?.();
-      if (shotActivation === activation) shootInFlight = false;
+      if (shotActivation === activation) {
+        shootInFlight = false;
+        publish();
+      }
     }
   }
 
   function publishError(message) {
+    // A live search must not replace the failure before it can be read.
+    captureError = { message, until: performance.now() + 3000 };
     state = { ...state, hint: message, blocking: 'capture', tone: 'attention', reason: 'capture' };
     lastPublishKey = '';
     recordHintState(state);

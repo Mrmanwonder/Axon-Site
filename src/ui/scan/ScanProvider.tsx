@@ -49,6 +49,8 @@ export type TorchMode = "auto" | "on" | "off";
 
 /** What the live camera is reporting, one measured reason at a time. */
 export type LiveState = {
+  /** Still acquisition/evidence is in flight; it has not been saved yet. */
+  capturing?: boolean;
   hint: string;
   blocking?: string | null;
   tone?: "neutral" | "locked" | "attention";
