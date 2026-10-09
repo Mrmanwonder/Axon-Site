@@ -20,7 +20,7 @@ beforeEach(() => {
     width: number; height: number;
     constructor(width: number, height: number) { this.width = width; this.height = height; canvases.push(this); }
     getContext = vi.fn(() => context);
-    convertToBlob = vi.fn(async () => new Blob(['original']));
+    async convertToBlob() { return new Blob(['original']); }
   });
   vi.stubGlobal('Worker', class {
     onmessage: any; onerror: any; onmessageerror: any;
@@ -34,7 +34,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 test('worker encoding transfers only a clone and never draws the original on the UI thread', async () => {
   const { encodeStill } = await import('../../src/scan/still-encoder.js');
   const encoded = encodeStill(source);
-  await Promise.resolve();
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
   expect(sent).toHaveLength(1);
   expect(sent[0].message.bitmap).toBe(cloned);
   expect(sent[0].transfer).toEqual([cloned]);
@@ -49,7 +49,7 @@ test('an encoder crash settles pending work and preserves the source for canvas 
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   const { encodeStill } = await import('../../src/scan/still-encoder.js');
   const encoded = encodeStill(source);
-  await Promise.resolve();
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
   w.onerror({ message: 'encoder failed' });
   expect((await encoded as Blob).size).toBeGreaterThan(0);
   expect(w.terminate).toHaveBeenCalledOnce();

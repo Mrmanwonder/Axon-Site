@@ -240,6 +240,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
   let lostSince = 0;
   let lockedSince = 0;
   let shootInFlight = false;
+  let captureError = null;
   let nextTransactionId = 1;
 
   let imageCapture = null;
@@ -434,6 +435,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     nativeTimeouts = 0;
     processingHold = false;
     shootInFlight = false;
+    captureError = null;
     autoRetryAfter = 0;
     lostSince = lockedSince = 0;
     state = blankState();
@@ -699,7 +701,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (shouldAutoCapture({
       auto: autoCapture, armed, processing: processingHold || shootInFlight,
       scaled: viewportScaled(), phase: snapshot.phase, stableMs: snapshot.stableMs,
-      lockedForMs: lockedSince ? now - lockedSince : 0, reason: guidance.reason,
+      lockedForMs: lockedSince ? now - lockedSince : 0, reason: state.reason,
     }) && now >= autoRetryAfter) {
       armed = false;
       void shoot(true);
@@ -709,6 +711,11 @@ export function createCapture({ video, overlay, onState, onShot }) {
   function publish() {
     // Engine/torch can change between detections, so refresh those before comparing.
     state = { ...state, engine, torch, capturing: shootInFlight };
+    if (captureError && performance.now() < captureError.until) {
+      state = { ...state, hint: captureError.message, blocking: 'capture', tone: 'attention', reason: 'capture', action: null };
+    } else {
+      captureError = null;
+    }
     const key = [state.phase, state.hint, state.blocking, state.tone, state.action,
       engine.status, engine.source, torch.supported, torch.mode, torch.on, torch.error,
       state.steady, state.capturing, debug ? Math.round(performance.now() / 500) : 0].join('|');
@@ -968,6 +975,7 @@ export function createCapture({ video, overlay, onState, onShot }) {
     if (!running || !video.videoWidth || shootInFlight) return null;
     if (auto && (processingHold || performance.now() < autoRetryAfter)) return null;
     shootInFlight = true;
+    captureError = null;
     publish(); // Acknowledge before still acquisition, detection or encoding.
     const transactionId = nextTransactionId++;
     const mediaTime = video.currentTime;
@@ -1081,6 +1089,8 @@ export function createCapture({ video, overlay, onState, onShot }) {
   }
 
   function publishError(message) {
+    // A live search must not replace the failure before it can be read.
+    captureError = { message, until: performance.now() + 3000 };
     state = { ...state, hint: message, blocking: 'capture', tone: 'attention', reason: 'capture' };
     lastPublishKey = '';
     recordHintState(state);
