@@ -197,7 +197,7 @@ export const syllabusMapData = async () => {
   return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
 };
 export const setPaperSubject = async () => {};
-export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export async function listPapers() { await wait(); return { data: (scenario === "insights" || scenario === "cached") ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
 export const insightEvidence = async () => {
   if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
   const f = insightFixture();

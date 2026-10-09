@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
-test("cached analysis notices keep the shared phone gutter in both themes", async ({ page }) => {
-  for (const theme of ["dark", "light"]) {
-    for (const view of ["home", "insights"]) {
+for (const theme of ["dark", "light"]) {
+  for (const view of ["home", "insights"]) {
+    test(`cached ${view} notice keeps phone gutters in ${theme}`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto("/tests/browser/index.html?scenario=cached&styled=1&theme=" + theme + "&view=" + view);
       const notice = page.getByText(/^Last available analysis\./);
@@ -15,6 +15,6 @@ test("cached analysis notices keep the shared phone gutter in both themes", asyn
       expect(geometry.left).toBeGreaterThanOrEqual(20);
       expect(geometry.right).toBeLessThanOrEqual(geometry.width - 20);
       expect(geometry.right).toBeGreaterThan(geometry.left);
-    }
+    });
   }
-});
+}
