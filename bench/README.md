@@ -24,8 +24,11 @@ PLAYWRIGHT_HOME=/path/with/node_modules node bench/viewfinder.mjs
 node --test bench/capture.test.mjs
 ```
 
-Playwright is not vendored — there is no `package.json` and `AGENTS.md` keeps it
-that way. Point `PLAYWRIGHT_HOME` at an install you already have.
+The repository is a Vite/React project with `package.json` and a Playwright
+installation declared in dev dependencies. Run `npm ci` first; browser tests
+are `npm run test:e2e`, and scanner-specific regression coverage lives in
+`tests/e2e/` and `bench/*.test.mjs`. Real-phone acceptance still requires
+physical-device evidence, not only synthetic browser trials.
 
 ## flatten-report.mjs
 
