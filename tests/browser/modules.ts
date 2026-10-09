@@ -305,3 +305,21 @@ export const saveExamPapers = async (_student: string, code: string, papers: num
 export const deleteQuestion = deletePaper;
 export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});
+
+
+// AXO-216 saved-paper mutations. This adapter is test-only: record calls rather
+// than invoking a production API. Dedicated fixtures may supply changed data.
+export const savedPaperCalls: { action: string; id: string; value?: unknown }[] = [];
+export const setPaperType = async (paperId: string, type: string) => {
+  savedPaperCalls.push({ action: "setPaperType", id: paperId, value: type });
+};
+export const deferPart = async (regionId: string) => {
+  savedPaperCalls.push({ action: "deferPart", id: regionId });
+};
+export const fixSavedPart = async (
+  regionId: string,
+  fix: { marksAwarded?: number; marksAvailable?: number; answer?: string } = {},
+) => {
+  savedPaperCalls.push({ action: "fixSavedPart", id: regionId, value: fix });
+  return { region_id: regionId, attempt_id: null, run_id: "fixture-run", explain: false };
+};
