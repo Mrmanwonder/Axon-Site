@@ -400,9 +400,11 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
     }
     if (page.layer_fallback === 'non_red_marking') {
-      toast('This page looks marked in something other than red — we will read it more carefully.');
+      toast('The marking may use a different ink colour. Check the teacher marks during review.');
     }
-    if (page.meta?.enhance?.applied) toast('Page sharpened for readability — check its marks during review.');
+    // An enhancement pass is not proof that blurred handwriting became legible.
+    // The measured quality/geometry gates own the actionable retake guidance;
+    // never replace their warning with an optimistic "sharpened" toast.
     return true;
   } catch (error) {
     if (epoch !== S.epoch) return false;
