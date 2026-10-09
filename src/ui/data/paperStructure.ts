@@ -13,6 +13,8 @@
 
 import { countQuestions, placeRegions } from "../../questionCount.js";
 import type { PaperDetail, StudentAttempt } from "./modules";
+import { explanationGap } from "./explanationGap";
+import type { ExplanationGap } from "./explanationGap";
 
 export type PartMarks =
   | { kind: "marked"; awarded: number; max: number }
@@ -31,6 +33,7 @@ export type PaperPart = {
   confirmed: boolean;
   /** True when the parent came from reading order rather than the part's own label. */
   placedByPosition: boolean;
+  explanationGap?: ExplanationGap;
 };
 
 export type PaperQuestion = {
@@ -123,6 +126,7 @@ export function paperStructure(paper: Pick<PaperDetail, "student_attempt" | "que
       confidence: attempt.extraction_confidence,
       confirmed: !!attempt.student_confirmed_at,
       placedByPosition: e.inferred,
+      explanationGap: explanationGap(attempt, regionFor.get(attempt.id)?.explain_status),
     };
     if (e.counted) {
       if (marked) markedParts += 1;
