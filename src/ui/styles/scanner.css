@@ -817,3 +817,9 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 .sheet li.sc-draft + li.sc-draft { border-top: .5px solid var(--hairline); }
 .sc-draft-open, .sc-draft-open:hover { -webkit-appearance: none; appearance: none; box-shadow: none; outline-offset: 2px; }
 
+
+/* Immediate shutter acknowledgement; no overlay or animation over live video. */
+.sc-shutter[data-capturing="true"] > span {
+  transform: scale(.72);
+  background: var(--sc-accent);
+}

@@ -283,7 +283,7 @@ export async function conditionPage(source, { quad: detectedQuad = null, pageNum
     const target = targetSize(sw, sh, targetLongEdge, rescue.possible);
     img = (target.width === sw && target.height === sh)
       ? pixels()
-      : imageDataFrom(await resample(source, target), target.width, target.height);
+      : await resampledImageData(source, target);
   }
 
   // ── the lighting, on every page ──────────────────────────────────────────
@@ -474,4 +474,14 @@ async function resample(source, target) {
     } catch { /* fall through to the canvas path */ }
   }
   return source;
+}
+
+/** Read back once, then release only the temporary resize bitmap we own. */
+export async function resampledImageData(source, target) {
+  const resized = await resample(source, target);
+  try {
+    return imageDataFrom(resized, target.width, target.height);
+  } finally {
+    if (resized !== source) resized.close?.();
+  }
 }
