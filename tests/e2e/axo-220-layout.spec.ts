@@ -36,7 +36,8 @@ for (const width of [360, 390, 768, 1024]) {
 }
 
 test("animated sheet remains docked through Tab and repeated opening", async ({ page }) => {
-  await page.goto("/tests/browser/index.html?view=scan-screen&theme=dark");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/browser/index.html?view=scan-screen&state=dark&theme=dark");
   for (let pass = 0; pass < 2; pass++) {
     await page.getByRole("button", { name: "More", exact: true }).click();
     const dialog = page.getByRole("dialog");
