@@ -6,6 +6,8 @@ import { MemoryRouter } from "react-router-dom";
 const fixture = vi.hoisted(() => ({
   session: { user: { id: "guardian", email: "parent@example.test" } } as { user: { id: string; email: string } } | null,
   sendOtp: vi.fn(),
+  passwordSignIn: vi.fn(),
+  provider: vi.fn(),
   verifyOtp: vi.fn(),
   rpc: vi.fn(),
   from: vi.fn(),
@@ -50,8 +52,9 @@ vi.mock("../../src/ui/data/modules", async () => {
     sb: { rpc: fixture.rpc, from: fixture.from },
     sendOtp: fixture.sendOtp, verifyOtp: fixture.verifyOtp, currentSession: fixture.currentSession,
     currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
-    signInWithProvider: vi.fn(), isProviderNotEnabled: () => false,
-    OAUTH_PROVIDERS: [], PROVIDER_LABEL: {},
+    passwordSignIn: fixture.passwordSignIn, passwordSignUp: vi.fn(), requestPasswordReset: vi.fn(),
+    signInWithProvider: fixture.provider, isProviderNotEnabled: () => false,
+    OAUTH_PROVIDERS: ["google"], PROVIDER_LABEL: { google: "Google" },
     listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
     NOTICE_LANGUAGES: notice.LANGUAGES, noticeStrings: notice.noticeStrings,
     purposeLabel: notice.purposeLabel, purposeNote: notice.purposeNote, noticeIsComplete: notice.noticeIsComplete,
@@ -358,4 +361,47 @@ test("Hindi is not offered when a purpose on the notice has no Hindi text", asyn
   await waitFor(() => expect(fixture.recordConsent).toHaveBeenCalledWith(
     expect.objectContaining({ noticeLanguage: "en" }),
   ));
+});
+
+test("password flight locks Google, code switching and Back, then releases after failure", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  const proof = deferred<unknown>();
+  fixture.passwordSignIn.mockReturnValue(proof.promise);
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Email and password" }));
+  await userEvent.type(screen.getByLabelText("Email", { exact: true }), "parent@example.test");
+  await userEvent.type(screen.getByLabelText("Password", { exact: true }), "secret123");
+  const google = screen.getByRole("button", { name: "Continue with Google" });
+  const code = screen.getByRole("button", { name: "Email or phone code" });
+  const form = screen.getByRole("button", { name: "Sign in", exact: true }).closest("form")!;
+  for (let n = 0; n < 5; n++) fireEvent.submit(form);
+  fireEvent.click(google);
+  fireEvent.click(code);
+  expect(fixture.passwordSignIn).toHaveBeenCalledOnce();
+  expect(fixture.provider).not.toHaveBeenCalled();
+  expect((google as HTMLButtonElement).disabled).toBe(true);
+  expect((code as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
+  expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
+  // Missing confirmed session is a recoverable sign-in response.
+  await act(async () => proof.resolve(null));
+  expect((google as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(code);
+  expect(screen.getByLabelText("Email or phone")).toBeTruthy();
+});
+test("Google is single-flight and keeps Back and password entry disabled during handoff", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  const handoff = deferred<void>();
+  fixture.provider.mockReturnValue(handoff.promise);
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  const google = screen.getByRole("button", { name: "Continue with Google" });
+  for (let n = 0; n < 5; n++) fireEvent.click(google);
+  expect(fixture.provider).toHaveBeenCalledOnce();
+  expect((screen.getByRole("button", { name: "Email and password" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
+  await act(async () => handoff.resolve());
 });
