@@ -5,8 +5,8 @@ const all = new Set([...blocklist.common_passwords, ...blocklist.axon_predictabl
 
 describe("Axon source-controlled password denylist", () => {
   test("has source metadata, internally consistent counts, and no duplicates", () => {
-    expect(blocklist.schema_version).toBe("1.0.0");
-    expect(blocklist.enforcement_status).toMatch(/not currently wired/i);
+    expect(blocklist.schema_version).toBe("1.1.0");
+    expect(blocklist.enforcement_status).toMatch(/client-side signup/i);
     expect(blocklist.counts.source_entries).toBe(blocklist.common_passwords.length);
     expect(blocklist.counts.axon_added_entries).toBe(blocklist.axon_predictable_variants.length);
     expect(blocklist.counts.exact_entries).toBe(all.size);
@@ -25,8 +25,11 @@ describe("Axon source-controlled password denylist", () => {
   });
 
   test("declares the correct server-side and HIBP invariants", () => {
-    expect(blocklist.security_policy.single_factor_min_length).toBe(15);
-    expect(blocklist.security_policy.composition_rules_required).toBe(false);
+    expect(blocklist.security_policy.min_length).toBe(8);
+    expect(blocklist.security_policy.require_uppercase_ascii).toBe(true);
+    expect(blocklist.security_policy.require_lowercase_ascii).toBe(true);
+    expect(blocklist.security_policy.require_digit_ascii).toBe(true);
+    expect(blocklist.security_policy.require_symbols).toBe(false);
     expect(blocklist.security_policy.do_not_modify_password_before_auth).toBe(true);
     expect(blocklist.hibp_policy.prefix_length).toBe(5);
     expect(blocklist.hibp_policy.require_full_hash_suffix_match).toBe(true);
