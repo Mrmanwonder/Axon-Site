@@ -82,7 +82,7 @@ export type Paper = {
   type: string;
   /** 'tier_1' (teacher's marks) or 'tier_2' (matched to an official scheme). */
   tier: string | null;
-  date_taken: string;
+  date_taken: string; exam_date?: string | null;
   /** Legacy/unverified display subject; never present as verified fact. */
   subject?: string | null;
   subject_offering_id?: string | null;
@@ -591,7 +591,7 @@ export type PaperDetail = {
   id: string;
   type: string;
   tier: string | null;
-  date_taken: string;
+  date_taken: string; exam_date?: string | null;
   /** Existing date_taken is an added-on date, not evidence of an exam date. */
   created_at?: string;
   subject_identity_confidence?: string | null;
@@ -638,6 +638,8 @@ export const deleteQuestion = papersMod.deleteQuestion as unknown as (
   attemptId: string,
 ) => Promise<{ deleted: boolean; attempt_id: string; paper_id: string }>;
 export const relabelAttempt = papersMod.relabelAttempt as unknown as (attemptId: string, label: string) => Promise<void>;
+export const setPaperExamDate = papersMod.setPaperExamDate as unknown as (paperId: string, examDate: string | null) => Promise<void>;
+
 export const setPaperType = papersMod.setPaperType as unknown as (paperId: string, type: string) => Promise<void>;
 export const fixSavedPart = papersMod.fixSavedPart as unknown as (
   regionId: string,
@@ -684,7 +686,7 @@ export type SharedAcademicSnapshot =
       kind: "paper";
       expires_at: string;
       paper: {
-        type: string; tier: string | null; date_taken: string; subject: string | null;
+        type: string; tier: string | null; date_taken: string; exam_date?: string | null; subject: string | null;
         total_awarded: number | null; total_available: number | null; reconciled: boolean | null;
       };
       questions: SharedQuestionSnapshot[];
@@ -695,7 +697,7 @@ export type SharedAcademicSnapshot =
       found: true;
       kind: "question";
       expires_at: string;
-      paper: { type: string; tier: string | null; date_taken: string; subject: string | null };
+      paper: { type: string; tier: string | null; date_taken: string; exam_date?: string | null; subject: string | null };
       question: SharedQuestionSnapshot;
       withheld?: false;
     }
@@ -703,7 +705,7 @@ export type SharedAcademicSnapshot =
       found: true;
       kind: "question";
       expires_at: string;
-      paper: { type: string; tier: string | null; date_taken: string; subject: string | null };
+      paper: { type: string; tier: string | null; date_taken: string; exam_date?: string | null; subject: string | null };
       /** An unchecked reading is not shared (AXO-216). */
       withheld: true;
     }

@@ -276,8 +276,16 @@ const overviewPaper = async () => ({
   },
 });
 // Source fixtures exercise actual reading components; no external mutations occur.
+const paperExamDates = new Map<string, string | null>();
+export const setPaperExamDate = async (paperId: string, examDate: string | null) => {
+  paperExamDates.set(paperId, examDate);
+  savedPaperCalls.push({ action: "setPaperExamDate", id: paperId, value: examDate });
+};
 export const readPaper = async () => {
-  if (!location.pathname.includes("paper-reading")) return overviewPaper();
+  if (!location.pathname.includes("paper-reading")) {
+    const result = overviewPaper();
+    return { ...result, data: { ...result.data, exam_date: paperExamDates.get(result.data.id) ?? null } };
+  }
   if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
   const { readingFixture } = await import("./reading-fixture");
   return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };

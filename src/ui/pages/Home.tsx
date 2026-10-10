@@ -1,3 +1,4 @@
+import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    HOME — the snapshot
 
@@ -217,9 +218,7 @@ export default function Home() {
                   {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
                 </span>
                 <span>
-                  {new Date(p.date_taken).toLocaleDateString("en-IN", {
-                    day: "numeric", month: "short",
-                  })}
+                  {paperDateLabel(p, { short: true })}
                 </span>
               </div>
             </div>
