@@ -50,6 +50,15 @@ export const Chev = () => (
 
 /** Google keeps its four brand colours rather than recolouring the mark. */
 export const BRAND = {
+  // Generic shield/key symbol, not a WorkOS trademark. Used only in the staging auth pilot.
+  'custom:workos': (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2.5 20 6v5.5c0 5-3.2 8-8 10-4.8-2-8-5-8-10V6l8-3.5Z" />
+      <circle cx="12" cy="11" r="2.1" />
+      <path d="M12 13.2v3" />
+    </svg>
+  ),
   google: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" />
