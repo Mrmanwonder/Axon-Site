@@ -13,6 +13,6 @@ export default function PasswordField({ id, label = "Password", value, onChange,
       <button type="button" className="btn plain" aria-label={shown ? "Hide password" : "Show password"}
         aria-controls={id} aria-pressed={shown} disabled={disabled} onClick={() => setShown(v => !v)}>{shown ? "Hide" : "Show"}</button>
     </div>
-    {creating && <p className="subnote">Use at least 8 characters.</p>}
+    {creating && <p className="subnote">Use 8 or more characters with an uppercase letter, a lowercase letter and a number. We also check for exposed passwords.</p>}
   </div>;
 }
