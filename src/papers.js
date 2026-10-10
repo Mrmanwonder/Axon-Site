@@ -530,7 +530,9 @@ export async function setPaperExamDate(paperId, examDate) {
   if (examDate !== null && !isCalendarDate(examDate)) throw new Error('Choose a valid exam date.');
   const { error } = await sb.rpc('set_paper_exam_date', { p_paper_id: paperId, p_exam_date: examDate });
   if (error) throw error;
-  await clearCache();
+  // The server has saved the correction. A local storage failure must not turn
+  // that success into a misleading failed-save message or encourage a retry.
+  await clearCache().catch(() => {});
 }
 
 /**

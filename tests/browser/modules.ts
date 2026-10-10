@@ -283,7 +283,7 @@ export const setPaperExamDate = async (paperId: string, examDate: string | null)
 };
 export const readPaper = async () => {
   if (!location.pathname.includes("paper-reading")) {
-    const result = overviewPaper();
+    const result = await overviewPaper();
     return { ...result, data: { ...result.data, exam_date: paperExamDates.get(result.data.id) ?? null } };
   }
   if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");

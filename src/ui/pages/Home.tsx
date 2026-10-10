@@ -137,7 +137,6 @@ export default function Home() {
       </div>
 
       <div className="card home-library">
-        <div className="eyebrow">Your papers</div>
         <div className="line">{papers.length} paper{papers.length === 1 ? "" : "s"}</div>
         <div className="actions">
           <PressBox as={Link} to={paths.library} className="textaction">Open Library <Chevron /></PressBox>
