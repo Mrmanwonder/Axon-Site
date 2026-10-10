@@ -114,7 +114,15 @@ const font64 = fs.readFileSync(FONT).toString("base64");
 const html = (svg) => `<!doctype html><meta charset=utf-8><style>@font-face{font-family:Onest;font-weight:100 900;src:url(data:font/woff2;base64,${font64}) format("woff2")}html,body{margin:0;background:#888}svg{display:block}</style>${svg}`;
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ["--no-sandbox"] });
 const results = [];
-for (const [dir, set] of [["templates", templates], ["examples", examples]]) {
+// Launch-trilogy sources are hand-authored editable SVGs and must never be
+// overwritten by the generic example generator. Render and QA them using the
+// same local Onest font, phone viewport, and contrast protocol as the templates.
+const trilogy = Object.fromEntries(
+  fs.readdirSync(path.join(ROOT, "launch-trilogy"))
+    .filter(name => name.endsWith(".svg"))
+    .map(name => [name.slice(0, -4), fs.readFileSync(path.join(ROOT, "launch-trilogy", name), "utf8")]),
+);
+for (const [dir, set] of [["templates", templates], ["examples", examples], ["launch-trilogy", trilogy]]) {
   for (const [name, svg] of Object.entries(set)) {
     fs.writeFileSync(path.join(ROOT, dir, name + ".svg"), svg);
     const [W, H] = svg.match(/viewBox="0 0 (\d+) (\d+)"/).slice(1).map(Number);
