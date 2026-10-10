@@ -136,21 +136,7 @@ export default function Home() {
         })}
       </div>
 
-      <div className="card home-library">
-        <div className="line">{papers.length} paper{papers.length === 1 ? "" : "s"}</div>
-        <div className="actions">
-          <PressBox as={Link} to={paths.library} className="textaction">Open Library <Chevron /></PressBox>
-          <PressBox as="button" type="button" className="textaction" onClick={addPaper}>Add a paper <Chevron /></PressBox>
-        </div>
-      </div>
 
-      <div className="card nextstep">
-        <div className="eyebrow">Next step</div>
-        <div className="line">{attention.copy}</div>
-        {attention.destination && (
-          <PressBox as={Link} to={attention.destination} className="textaction">{attention.actionLabel} <Chevron /></PressBox>
-        )}
-      </div>
 
 
       {/* Shown only when there is something to check. The count and the paper
@@ -182,8 +168,8 @@ export default function Home() {
       )}
 
       {focus && (
-        <div className="card focuscard">
-          <div className="eyebrow">Before your next paper</div>
+        <div className="card nextstep focuscard">
+          <div className="eyebrow">Next step</div>
           <div className="line">{focus.fix.text}</div>
           <div className="why">
             <span className="sw2" style={{ background: CAUSE_HUE[focus.pattern.cause] }} aria-hidden="true" />

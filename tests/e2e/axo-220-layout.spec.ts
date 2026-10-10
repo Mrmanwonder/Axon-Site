@@ -2,10 +2,11 @@ import { expect, test } from "@playwright/test";
 
 test("Home subject pills open real filtered papers", async ({ page }) => {
   await page.goto("/tests/browser/index.html?view=home&scenario=insights&styled=1");
-  await expect(page.getByText("6 papers", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Library", exact: false })).toBeVisible();
   const chip = page.getByRole("link", { name: "Open physics papers", exact: true });
   await expect(chip).toBeVisible();
+  // The owner removed the summary card; subject navigation remains available.
+  await expect(page.locator(".home-library")).toHaveCount(0);
+  await expect(page.getByText("6 papers", { exact: true })).toHaveCount(0);
   expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await chip.click();
   await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
