@@ -13,6 +13,9 @@ insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_co
 insert into public.guardian(id,auth_user_id,name,contact) values
 ('a1540000-0000-4000-8000-000000000001','a1540000-1111-4111-8111-111111111111','Date A','a154@test.invalid'),
 ('b1540000-0000-4000-8000-000000000001','b1540000-2222-4222-8222-222222222222','Date B','b154@test.invalid');
+-- Only this rolled-back guardian fixture needs Pro to exercise sibling isolation.
+update public.guardian set subscription_status='pro', subscription_renews_at=now()+interval '20 days'
+where id='a1540000-0000-4000-8000-000000000001';
 insert into public.consent_event(guardian_id,student_id,purpose,granted,notice_version,method)
 select g.id,null,cp.purpose,true,'v1.0','in_app_itemised'
 from public.guardian g cross join public.consent_purpose cp
