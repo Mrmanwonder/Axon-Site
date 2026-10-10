@@ -135,14 +135,6 @@ export default function Home() {
         })}
       </div>
 
-      <div className="card home-library">
-        <div className="line">{papers.length} paper{papers.length === 1 ? "" : "s"}</div>
-        <div className="actions">
-          <PressBox as={Link} to={paths.library} className="textaction">Open Library <Chevron /></PressBox>
-          <PressBox as="button" type="button" className="textaction" onClick={addPaper}>Add a paper <Chevron /></PressBox>
-        </div>
-      </div>
-
       <div className="card nextstep">
         <div className="eyebrow">Next step</div>
         <div className="line">{attention.copy}</div>
