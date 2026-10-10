@@ -1,3 +1,4 @@
+import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    LIBRARY — the archive
 
@@ -429,7 +430,7 @@ export default function Library() {
           } : base;
           const status = { label: presentation.statusLabel, tone: presentation.tone };
           const lost = marksLost(p as Record<string, unknown>);
-          const date = new Date(p.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+          const date = paperDateLabel(p, { short: true });
 
           const subjectInfo = subjectPresentation(
             p,

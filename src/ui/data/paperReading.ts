@@ -1,16 +1,15 @@
 import { parseQuestionLabel, projectQuestionRegions, questionDisplayPath } from "../../questionCount.js";
+import { paperDateLabel, isCalendarDate } from "../../paperDate.js";
 import type { PaperDetail, StudentAttempt } from "./modules";
 
 export function paperIdentity(paper: PaperDetail, kind: string) {
   const verified = !!paper.subject_verified_at && !!paper.subject_offering_id && !!paper.subject_display_snapshot;
   const suggested = paper.subject_display_snapshot || paper.subject;
-  const added = paper.created_at || paper.date_taken;
-  const date = added && Number.isFinite(Date.parse(added)) ? new Date(added).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : null;
   return {
     title: verified ? `${paper.subject_display_snapshot} · ${kind}` : kind,
     subject: verified ? `Subject confirmed: ${paper.subject_display_snapshot}${paper.subject_external_code_snapshot ? ` · ${paper.subject_external_code_snapshot}` : ""}` : suggested ? `Subject suggested: ${suggested}` : "Subject not confirmed",
-    added: date ? `Added ${date}` : "Added date not recorded",
-    examDate: "Test date not recorded",
+    added: paperDateLabel({ date_taken: paper.date_taken }),
+    examDate: isCalendarDate(paper.exam_date) ? paperDateLabel(paper) : "Test date not recorded",
   };
 }
 
