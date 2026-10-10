@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sb } from '../../supabase.js';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '../../config.js';
 import { fetchWithTimeout } from '../request.js';
+import { assertSafeNewPassword } from './passwordPolicy.js';
 
 const ACCESS_ERROR = 'We could not complete that request. Check your details or try again later.';
 const emailValue = value => String(value ?? '').trim().toLowerCase();
@@ -11,10 +12,8 @@ function requireEmail(value) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Enter an email address.');
   return email;
 }
-function requirePassword(password, creating = false) {
-  if (typeof password !== 'string' || !password || (creating && password.length < 8)) {
-    throw new Error(creating ? 'Use at least 8 characters for your password.' : 'Enter your password.');
-  }
+function requirePassword(password) {
+  if (typeof password !== 'string' || !password) throw new Error('Enter your password.');
 }
 function probeClient() {
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
@@ -41,7 +40,9 @@ export async function passwordSignIn(emailInput, password) {
   } catch { throw new Error(ACCESS_ERROR); }
 }
 export async function passwordSignUp(emailInput, password) {
-  const email = requireEmail(emailInput); requirePassword(password, true);
+  const email = requireEmail(emailInput); requirePassword(password);
+  // Show safe password-policy errors, but never expose account existence or Auth details.
+  await assertSafeNewPassword(password);
   try {
     const { data, error } = await probeClient().auth.signUp({
       email, password, options: { emailRedirectTo: location.origin + location.pathname },
@@ -62,12 +63,20 @@ export async function requestPasswordReset(emailInput) {
   } catch { throw new Error(ACCESS_ERROR); }
 }
 export async function changePassword(password) {
-  requirePassword(password, true);
+  requirePassword(password);
+  let expectedId;
   try {
     const { data: current, error: readError } = await sb.auth.getSession();
     if (readError || !current?.session?.user?.id) throw new Error(ACCESS_ERROR);
+    expectedId = current.session.user.id;
+  } catch { throw new Error(ACCESS_ERROR); }
+  await assertSafeNewPassword(password);
+  try {
+    // A recovery session could have changed while HIBP was responding.
+    const { data: latest, error: latestError } = await sb.auth.getSession();
+    if (latestError || latest?.session?.user?.id !== expectedId) throw new Error(ACCESS_ERROR);
     const { data, error } = await sb.auth.updateUser({ password });
-    if (error || data?.user?.id !== current.session.user.id) throw new Error(ACCESS_ERROR);
+    if (error || data?.user?.id !== expectedId) throw new Error(ACCESS_ERROR);
   } catch { throw new Error(ACCESS_ERROR); }
 }
 export async function reauthenticateWithPassword(password) {
