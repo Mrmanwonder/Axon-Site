@@ -19,6 +19,8 @@ import { clearLocalData, putCached, readThrough } from './cache.js';
 // type-checkable and tree-shakeable where a global is neither.
 import { createClient } from '@supabase/supabase-js';
 import { fetchWithTimeout } from './lib/request.js';
+import { OAUTH_PROVIDERS, PROVIDER_LABEL } from './lib/auth/providers.js';
+export { OAUTH_PROVIDERS, PROVIDER_LABEL };
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: { fetch: fetchWithTimeout },
@@ -89,13 +91,8 @@ export async function sendOtp(contact) {
   return { channel: isPhone(value) ? 'sms' : 'email', sentTo: value };
 }
 
-/** Providers offered on the account step, in the order they are shown. */
-export const OAUTH_PROVIDERS = ['google'];
-
-export const PROVIDER_LABEL = { google: 'Google' };
-
 /**
- * Hand off to Google.
+ * Hand off to the enabled OAuth/OIDC provider (Google or staging WorkOS).
  *
  * This navigates away, so nothing after it runs on success — a resolved promise
  * only means the redirect was accepted. The session comes back in the URL on
