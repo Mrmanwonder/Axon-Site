@@ -17,6 +17,8 @@ import PressBox from "../components/PressBox";
 import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
+import PaperDateEditor from "../components/PaperDateEditor";
+import { paperDateLabel } from "../../paperDate.js";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, paperTypesFor, providerKeyForStudent, setPaperSubject, setPaperType } from "../data/modules";
 import { openFlags } from "../data/flaggedParts";
@@ -127,7 +129,7 @@ export default function PaperOverview() {
     title: "Shared paper from Axon",
   });
 
-  const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const { paper, stale, error, reload, updateData } = usePaperResource(student?.id, paperId);
   const schemeCheck = useSchemeCheck(paperId);
   const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
@@ -224,7 +226,6 @@ export default function PaperOverview() {
     <FlaggedCard key={`flag-${flag.region.id}`} label={label} reason={flag.reason} region={flag.region}
                  paperId={paper.id} onChanged={async () => { await reload(); void refreshLibrary(); }} />
   );
-  const dated = new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
   const requestDelete = () => { if (paperId) deletePaperSheet(paperId); };
 
@@ -258,9 +259,7 @@ export default function PaperOverview() {
           <h1>{subjectLabel || typeLabel}</h1>
           <div className="sub po-meta">
             {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
-            {/* No exam date is recorded for a paper yet; date_taken is the day it
-                was added, so it is labelled that way (Axon.md §4, Dates on a paper). */}
-            <span>Added {dated}</span>
+            <span>{paperDateLabel(paper)}</span>
             {stale && <span>offline copy</span>}
           </div>
         </div>
@@ -283,6 +282,12 @@ export default function PaperOverview() {
         {paper.type_source === "triage" && <span className="hint">Set from the paper code printed on it. Change it if it&rsquo;s wrong.</span>}
         {paper.type_source === "default" && <span className="hint">Treated as a school test. Change it if this is a past paper.</span>}
       </div>
+
+      <PaperDateEditor key={`${student?.id}:${paper.id}`} paperId={paper.id} examDate={paper.exam_date}
+        onSaved={exam_date => {
+          updateData(current => ({ ...current, exam_date }));
+          void refreshLibrary().catch(() => {});
+        }} />
 
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">

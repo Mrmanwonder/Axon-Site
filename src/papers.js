@@ -14,6 +14,7 @@
 
 import { sb } from './supabase.js';
 import { readThrough, clearCache } from './cache.js';
+import { isCalendarDate } from './paperDate.js';
 import { explainRetry, pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
 import { CAPTURE } from './scan/contract.js';
 import { MASTERY_API_URL } from './config.js';
@@ -335,7 +336,7 @@ export async function listPapers(studentId) {
     // not guess between them: an unqualified embed returns 300 PGRST201 and no
     // rows at all, so this whole read fails and the Library renders "No papers
     // yet" over a library that is not empty. Ownership is the one we mean.
-    .select('id,type,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,paper_page(count),' +
+    .select('id,type,tier,date_taken,exam_date,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,paper_page(count),' +
             'student_attempt!student_attempt_paper_id_student_id_fkey(count)')
     .eq('student_id', studentId)
     .order('date_taken', { ascending: false });
@@ -402,7 +403,7 @@ export async function readPaper(studentId, paperId) {
     const { data, error } = await sb
     .from('paper')
     .select(
-      `id,type,type_source,tier,date_taken,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
+      `id,type,type_source,tier,date_taken,exam_date,created_at,subject,subject_offering_id,subject_display_snapshot,subject_external_code_snapshot,subject_identity_source,subject_identity_confidence,subject_verified_at,reported_total,stated_maximum,total_awarded,total_available,total_basis,total_partial,reconciled,
       paper_page(page_number,source_kind,status,storage_path,source_url,r2_bucket,r2_key,mask_key),
       page_unreadable(page_number,reason,storage_path),
       student_attempt!student_attempt_paper_id_student_id_fkey(id,question_label,question_text,student_answer,answer_block,marks_awarded,max_marks,marks_source,
@@ -521,6 +522,17 @@ export async function setPaperSubject(paperId, subjectOfferingId) {
   const { error } = await sb.rpc('set_paper_subject', { p_paper_id: paperId, p_subject_offering_id: subjectOfferingId || null });
   if (error) throw error;
   await clearCache();
+}
+
+/** Save only the student-supplied exam date; upload history remains unchanged. */
+export async function setPaperExamDate(paperId, examDate) {
+  requireOnline('Changing the exam date');
+  if (examDate !== null && !isCalendarDate(examDate)) throw new Error('Choose a valid exam date.');
+  const { error } = await sb.rpc('set_paper_exam_date', { p_paper_id: paperId, p_exam_date: examDate });
+  if (error) throw error;
+  // The server has saved the correction. A local storage failure must not turn
+  // that success into a misleading failed-save message or encourage a retry.
+  await clearCache().catch(() => {});
 }
 
 /**
@@ -761,3 +773,4 @@ export function watchLibrary(studentId, onChange) {
 
   return () => { void sb.removeChannel(channel); };
 }
+

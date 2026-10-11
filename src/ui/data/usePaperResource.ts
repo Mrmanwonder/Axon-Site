@@ -16,7 +16,7 @@ export function usePaperResource(
   paperId: string | null | undefined,
 ) {
   const cacheKey = studentId && paperId ? `paper:${studentId}:${paperId}` : null;
-  const { resource, reload } = useResource<PaperDetail>(
+  const { resource, reload, updateData } = useResource<PaperDetail>(
     cacheKey,
     () => readPaper(studentId!, paperId!),
     () => getCached(cacheKey!),
@@ -25,6 +25,7 @@ export function usePaperResource(
   return {
     resource,
     reload,
+    updateData,
     paper: resource.data,
     stale: isStale(resource),
     error: resource.state === "failed" ? resource.error : null,
