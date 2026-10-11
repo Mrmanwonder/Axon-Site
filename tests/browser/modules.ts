@@ -1,3 +1,4 @@
+import * as notice from "../../src/notice.js";
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
 const PASSWORD = scenario === "password";
@@ -372,4 +373,8 @@ export const startCheckout = async () => { throw new Error("Billing is not avail
 export const parentModeState = async () => ({ fresh: false, amrPresent: false });
 export const sendParentCode = async () => { throw new Error("Parent verification is not available in this fixture."); };
 export const unlockWithCode = async () => ({ outcome: "failed", message: "Fixture only." });
-export { LANGUAGES as NOTICE_LANGUAGES, noticeStrings, purposeLabel, purposeNote, noticeIsComplete } from "../../src/notice.js";
+export const NOTICE_LANGUAGES = notice.LANGUAGES;
+export const noticeStrings = notice.noticeStrings;
+export const purposeLabel = notice.purposeLabel;
+export const purposeNote = notice.purposeNote;
+export const noticeIsComplete = notice.noticeIsComplete;
