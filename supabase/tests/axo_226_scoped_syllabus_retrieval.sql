@@ -67,6 +67,7 @@ begin
   insert into public.syllabus_topic(document_id,code,title,kind,objective_text,sort_order,depth,source_page,qualification_scope)
   values(doc,'1.2','Synthetic motion','objective','Advanced orbital motion.',3,1,2,'A'),
     (doc,'1.3','Synthetic motion','objective','Missing page orbital motion.',4,1,null,null),
+    (doc,'1.4','Synthetic motion','objective','Invalid page orbital motion.',5,1,0,null),
     (other_doc,'1.1','Cross-version motion','objective','Cross-version orbital motion.',1,1,1,null);
   insert into public.syllabus_topic(document_id,code,title,kind,sort_order,depth,source_page)
   values(other_doc,'1','Wrong parent','unit',2,0,1) returning id into wrong_parent;
@@ -91,6 +92,15 @@ begin
   perform public._t('top-k cannot be unbounded',public.search_syllabus_topics(p,doc,repeat('a',64),'motion',21)->>'reason'='invalid_query');
   perform public._t('null/blank query rejected',public.search_syllabus_topics(p,doc,repeat('a',64),null)->>'reason'='invalid_query'
     and public.search_syllabus_topics(p,doc,repeat('a',64),'   ')->>'reason'='invalid_query');
+  insert into public.syllabus_topic(document_id,code,title,kind,objective_text,sort_order,depth,source_page)
+  select doc,'bounded.' || i,'Bounded fixture','objective','bounded ' || repeat('synthetic ',250),10+i,1,1
+  from generate_series(1,25) as i;
+  update private.syllabus_retrieval_approval set revoked_at=null where document_id=doc;
+  result := public.search_syllabus_topics(p,doc,repeat('a',64),'bounded',20);
+  perform public._t('valid top-k is enforced over a larger corpus',jsonb_array_length(result->'candidates')=20);
+  perform public._t('long objective is bounded and explicitly marked',
+    (result->'candidates'->0->>'text_truncated')::boolean
+    and length(result->'candidates'->0->>'objective_text')=2000);
   update public.syllabus_topic set parent_id=wrong_parent where id=objective;
   perform public._t('parsed corpus mutation revokes approval',public.resolve_syllabus_retrieval_scope(p)->>'reason'='unlicensed');
   update private.syllabus_retrieval_approval set revoked_at=null where document_id=doc;

@@ -36,6 +36,8 @@ alter table private.syllabus_retrieval_approval enable row level security;
 revoke all on private.syllabus_retrieval_approval from public, anon, authenticated, service_role;
 -- Only a database operator can approve a source; the runtime can read, not approve it.
 grant select on private.syllabus_retrieval_approval to service_role;
+create policy syllabus_retrieval_approval_service_read on private.syllabus_retrieval_approval
+  for select to service_role using (true);
 
 -- A changed parsed corpus or source needs fresh approval, even if later restored.
 create function private.revoke_syllabus_retrieval_approval() returns trigger
@@ -183,7 +185,7 @@ begin
     select t.*, ts_rank_cd(to_tsvector('simple'::regconfig,
       coalesce(t.code,'') || ' ' || t.title || ' ' || coalesce(t.objective_text,'')),query) as rank
     from public.syllabus_topic t where t.document_id=p_document_id and t.kind='objective'
-      and t.source_page is not null and nullif(btrim(t.objective_text),'') is not null
+      and t.source_page > 0 and nullif(btrim(t.objective_text),'') is not null
       and coalesce(t.qualification_scope,'') in (select jsonb_array_elements_text(scope->'qualification_scopes'))
       and (t.code=btrim(p_query) or to_tsvector('simple'::regconfig,
         coalesce(t.code,'') || ' ' || t.title || ' ' || coalesce(t.objective_text,'')) @@ query)
