@@ -98,6 +98,7 @@ export function Shell({
             <div
               className="segs"
               role="progressbar"
+              aria-label="Account setup progress"
               aria-valuemin={1}
               aria-valuemax={PHASES.length}
               aria-valuenow={phase + 1}
