@@ -359,3 +359,17 @@ export const fixSavedPart = async (
   savedPaperCalls.push({ action: "fixSavedPart", id: regionId, value: fix });
   return { region_id: regionId, attempt_id: null, run_id: "fixture-run", explain: false };
 };
+
+// Account-layout fixture only: no network auth, mail, consent or billing writes.
+export const OAUTH_PROVIDERS = ["google"];
+export const PROVIDER_LABEL = { google: "Google" };
+export const isProviderNotEnabled = () => false;
+export const signInWithProvider = async () => { throw new Error("Provider handoff is not available in this fixture."); };
+export const sendOtp = async () => ({ channel: "email", sentTo: "parent@example.test" });
+export const verifyOtp = async () => { throw new Error("Code verification is not available in this fixture."); };
+export const listPurposes = async () => [];
+export const startCheckout = async () => { throw new Error("Billing is not available in this fixture."); };
+export const parentModeState = async () => ({ fresh: false, amrPresent: false });
+export const sendParentCode = async () => { throw new Error("Parent verification is not available in this fixture."); };
+export const unlockWithCode = async () => ({ outcome: "failed", message: "Fixture only." });
+export { LANGUAGES as NOTICE_LANGUAGES, noticeStrings, purposeLabel, purposeNote, noticeIsComplete } from "../../src/notice.js";

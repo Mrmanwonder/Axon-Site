@@ -1,0 +1,23 @@
+/* Onboarding content uses the same measured gutters as the account controls. */
+#obroot .obback { width: 44px; height: 44px; border-radius: 50%; }
+#obroot .obprog .ph { color: var(--label-2); }
+#obroot .btn.plain { color: var(--label-2); }
+#obroot .obfield .k, #obroot .obfield .hint { color: var(--label-2); }
+.obwelcome .obwordmark { margin-bottom: 24px; }
+.obwelcome h1 { max-width: 15ch; line-height: 1.12; }
+.obwelcome .sub { max-width: 34ch; }
+.obsteps { list-style: none; margin: 24px var(--text-gutter); padding: 0; display: grid; gap: 18px; }
+.obsteps li { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.obsteps li > span { flex: 0 0 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; background: var(--surface); border: 1px solid var(--hairline); color: var(--label-2); font-size: 13px; font-weight: 600; }
+.obsteps strong { display: block; color: var(--label); font-size: 15px; line-height: 1.4; font-weight: 600; }
+.obsteps p { margin: 3px 0 0; color: var(--label-2); font-size: 13px; line-height: 1.5; }
+.obsetup-note { margin: 0 var(--text-gutter); max-width: 42ch; color: var(--label-2); font-size: 13px; line-height: 1.5; }
+.obauth-methods { margin: 16px var(--gutter) 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--hairline); border-radius: 16px; background: var(--surface-sunk); }
+.obauth-methods button { min-width: 0; min-height: 48px; padding: 8px; border: 1px solid transparent; border-radius: 12px; font: inherit; font-size: 13px; font-weight: 500; line-height: 1.35; white-space: normal; color: var(--label-2); cursor: pointer; }
+.obauth-methods button[aria-pressed="true"] { background: var(--surface); color: var(--label); border-color: var(--blue); }
+.obauth-methods button:disabled { opacity: .55; cursor: default; }
+@media (max-height: 650px) {
+  .obwelcome { padding-top: 12px; }
+  .obwelcome .obwordmark { margin-bottom: 16px; }
+  .obsteps { margin-block: 20px; gap: 12px; }
+}

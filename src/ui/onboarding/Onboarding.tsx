@@ -72,6 +72,7 @@ import {
 import type { Guardian, Student, NoticeLanguage } from "../data/modules";
 import GlideSegment from "../components/GlideSegment";
 import PasswordAccess from "./PasswordAccess";
+import "./Onboarding.css";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
@@ -101,18 +102,6 @@ const STEP_PHASE: Partial<Record<Step, number>> = {
   plan: 2,
   student: 3,
 };
-
-/* The seven causes, as a named palette on the landing screen. Categorical and
-   equal-weight, so there is nothing here to read as a ranking. */
-const CAUSES: [string, string][] = [
-  ["var(--cause-conceptual-gap)", "Conceptual gap"],
-  ["var(--cause-procedural-slip)", "Procedural slip"],
-  ["var(--cause-misread-question)", "Misread question"],
-  ["var(--cause-incomplete)", "Incomplete"],
-  ["var(--cause-presentation)", "Presentation"],
-  ["var(--cause-keyword-miss)", "Keyword miss"],
-  ["var(--cause-timed-out)", "Timed out"],
-];
 
 /* Icon and a specific one-liner per purpose. The generic alternative —
    repeating "Required" down four rows — turns the most consequential screen in
@@ -361,29 +350,23 @@ export default function Onboarding() {
   if (step === "landing") {
     return (
       <Shell {...shellProps}>
-        <div className="obhero">
+        <div className="obhero obwelcome">
           <div className="obwordmark">
             <span className="g"><Icon d={ICONS.trend} /></span>
             <span className="n">Axon</span>
           </div>
-          <h1>See exactly where the <em>marks went</em>.</h1>
+          <h1>Understand your <em>marked paper</em>.</h1>
           <div className="sub">
-            Upload a graded paper. We read the questions, the answers and the
-            teacher&rsquo;s marks, then explain what to do differently next time.
+            Check the reading, understand the feedback, and choose what to
+            practise next.
           </div>
         </div>
-        <div className="sectitle">Every lost mark gets a reason</div>
-        <div className="obspec">
-          {CAUSES.map(([c, n]) => (
-            <span key={n} style={{ "--c": c } as React.CSSProperties}>{n}</span>
-          ))}
-        </div>
-        <div className="obpanel tint" style={{ marginTop: 22 }}>
-          <div className="body" style={{ marginTop: 0 }}>
-            A parent sets this up. Indian law requires a parent&rsquo;s verified
-            consent before we can process anything belonging to a student under 18.
-          </div>
-        </div>
+        <ol className="obsteps" aria-label="How Axon works">
+          <li><span aria-hidden="true">1</span><div><strong>Add a paper</strong><p>Scan or import a graded paper.</p></div></li>
+          <li><span aria-hidden="true">2</span><div><strong>Check the details</strong><p>Confirm the questions and your teacher&rsquo;s marks.</p></div></li>
+          <li><span aria-hidden="true">3</span><div><strong>Choose your next step</strong><p>Use feedback to plan what to practise.</p></div></li>
+        </ol>
+        <p className="obsetup-note">A parent or guardian sets up the account and chooses what to consent to before student work is processed.</p>
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary"
                     onClick={() => { hapticTick(); go("account"); }}>
@@ -448,7 +431,7 @@ export default function Onboarding() {
     };
 
     return (
-      <Shell {...shellProps} title="Your account">
+      <Shell {...shellProps} title="Your account" sub="Sign in or create an account to continue.">
         <Err message={error} />
         {/* "Continue with" rather than "Sign in with": a parent arriving here
             does not have an account yet, so this describes the action accurately. */}
@@ -469,9 +452,9 @@ export default function Onboarding() {
           ))}
         </div>
         <div className="obor">or</div>
-        <div className="obfoot">
-          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "code"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("code"); }}>Email or phone code</button>
-          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "password"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("password"); }}>Email and password</button>
+        <div className="obauth-methods" role="group" aria-label="Account sign-in method">
+          <button type="button" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "code"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("code"); }}>Email or phone code</button>
+          <button type="button" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "password"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("password"); }}>Email and password</button>
         </div>
         {accountMethod === "password" ? <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider} onBusyChange={passwordBusyChanged}
           onAuthenticated={async () => {

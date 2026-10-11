@@ -20,6 +20,7 @@ import Scan from "../../src/ui/pages/Scan";
 import { ExamSettings } from "../../src/ui/components/ExamPlan";
 import PasswordAccess from "../../src/ui/onboarding/PasswordAccess";
 import PasswordRecovery from "../../src/ui/onboarding/PasswordRecovery";
+import Onboarding from "../../src/ui/onboarding/Onboarding";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
 if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
@@ -102,5 +103,5 @@ if (params.get("view") === "scan-screen") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "password" ? <PasswordDemo /> : params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "onboarding" ? <Onboarding /> : params.get("view") === "password" ? <PasswordDemo /> : params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }
