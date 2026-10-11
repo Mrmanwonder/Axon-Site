@@ -82,6 +82,7 @@ declare
   d public.syllabus_document%rowtype;
   approval private.syllabus_retrieval_approval%rowtype;
   provider text;
+  programme text;
   exam_year integer;
   v_level text := '';
   n integer;
@@ -98,7 +99,7 @@ begin
   if not found or o.external_code is null then
     return jsonb_build_object('status','unavailable','reason','subject_unresolved');
   end if;
-  select cp.key into provider from public.curriculum_programme pr
+  select cp.key,pr.key into provider,programme from public.curriculum_programme pr
     join public.curriculum_provider cp on cp.id=pr.provider_id where pr.id=o.programme_id;
   exam_year := extract(year from p.exam_date)::integer;
   if p.assessment_identity_id is not null then
@@ -115,6 +116,11 @@ begin
   end if;
   if exam_year is null then
     return jsonb_build_object('status','unavailable','reason','exam_year_unresolved');
+  end if;
+  -- The current assessment identity only represents SL/HL. An IGCSE offering
+  -- does not distinguish Core from Extended; approval must not guess a tier.
+  if programme='cambridge_igcse' then
+    return jsonb_build_object('status','unavailable','reason','qualification_unresolved');
   end if;
   if cardinality(o.levels_supported)>0 and not (v_level=any(o.levels_supported)) then
     return jsonb_build_object('status','unavailable','reason','qualification_unresolved');

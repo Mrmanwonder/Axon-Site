@@ -27,7 +27,10 @@ document and a licensed/authorized use are separate decisions.
 The resolver requires a verified paper subject and known exam year. It uses
 `exam_date` or the bound assessment identity's `exam_year`, never `date_taken`.
 Conflicting years, unknown levels and overlapping verified document versions
-abstain. Assessment document versions describe assessments, so they are not
+abstain. IGCSE retrieval currently returns `qualification_unresolved`: the existing
+assessment schema cannot bind Core/Extended, and a subject offering alone is not
+that evidence. That paper-level provenance is required before IGCSE rollout.
+Assessment document versions describe assessments, so they are not
 silently reused as syllabus versions. The approval binds offering, programme,
 stage, code, assessment level, qualification scopes, source URL, hash, version
 and validity. Each search rechecks this binding.

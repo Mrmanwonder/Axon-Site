@@ -29,6 +29,7 @@ declare
   parent uuid;
   wrong_parent uuid;
   identity_id uuid;
+  igcse_offering uuid;
   result jsonb;
 begin
   insert into public.subject_offering(programme_id,stage_id,subject_id,display_name,external_code,
@@ -130,6 +131,18 @@ begin
   perform public._t('unknown qualification level abstains',public.resolve_syllabus_retrieval_scope(p)->>'reason'='qualification_unresolved');
   update public.subject_offering set levels_supported='{}',external_code='CHANGED' where id=o;
   perform public._t('changed offering code cannot inherit approval',public.resolve_syllabus_retrieval_scope(p)->>'reason'='missing');
+  insert into public.subject_offering(programme_id,stage_id,subject_id,display_name,external_code,
+    external_code_kind,source_url,source_checked_at,variant)
+  select so.programme_id,so.stage_id,so.subject_id,'Synthetic IGCSE','AXO226IG',
+    'syllabus_code','https://example.invalid/axo226',now(),'axo226-igcse'
+  from public.subject_offering so join public.curriculum_programme pr on pr.id=so.programme_id
+  where pr.key='cambridge_igcse' and so.stage_id is not null limit 1 returning id into igcse_offering;
+  insert into public.assessment_identity(programme_id,subject_offering_id,exam_year,title)
+  select programme_id,id,2026,'Synthetic IGCSE assessment' from public.subject_offering where id=igcse_offering
+  returning id into identity_id;
+  update public.paper set assessment_identity_id=identity_id where id=p;
+  perform public._t('unknown IGCSE Core/Extended tier never guessed',
+    public.resolve_syllabus_retrieval_scope(p)->>'reason'='qualification_unresolved');
 end;
 $$;
 
