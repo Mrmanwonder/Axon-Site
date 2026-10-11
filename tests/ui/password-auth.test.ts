@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
 const fake = vi.hoisted(() => ({
   createClient: vi.fn(), signIn: vi.fn(), signUp: vi.fn(), setSession: vi.fn(),
-  getSession: vi.fn(), reset: vi.fn(), update: vi.fn(),
+  getSession: vi.fn(), reset: vi.fn(), update: vi.fn(), policy: vi.fn(),
 }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: fake.createClient }));
 vi.mock("../../src/supabase.js", () => ({ sb: { auth: {
@@ -9,10 +9,12 @@ vi.mock("../../src/supabase.js", () => ({ sb: { auth: {
 } } }));
 vi.mock("../../src/config.js", () => ({ SUPABASE_URL: "http://localhost:54321", SUPABASE_PUBLISHABLE_KEY: "local-test" }));
 vi.mock("../../src/lib/request.js", () => ({ fetchWithTimeout: vi.fn() }));
+vi.mock("../../src/lib/auth/passwordPolicy.js", () => ({ assertSafeNewPassword: fake.policy }));
 import { passwordSignIn, passwordSignUp, requestPasswordReset, changePassword, reauthenticateWithPassword } from "../../src/lib/auth/password.js";
 const session = (id = "guardian", email = "parent@example.test") => ({ user: { id, email }, access_token: "local-access", refresh_token: "local-refresh" });
 beforeEach(() => {
   vi.resetAllMocks();
+  fake.policy.mockResolvedValue(undefined);
   fake.createClient.mockReturnValue({ auth: { signInWithPassword: fake.signIn, signUp: fake.signUp } });
   fake.getSession.mockResolvedValue({ data: { session: session() }, error: null });
   fake.setSession.mockResolvedValue({ data: { session: session() }, error: null });
@@ -36,33 +38,33 @@ test.each(["Invalid login credentials", "User already registered", "Email not fo
   fake.signIn.mockResolvedValue({ error: { message } });
   fake.signUp.mockResolvedValue({ error: { message } });
   fake.reset.mockResolvedValue({ error: { message } });
-  for (const action of [() => passwordSignIn("parent@example.test", "secret"), () => passwordSignUp("parent@example.test", "secret123"), () => requestPasswordReset("parent@example.test")]) {
+  for (const action of [() => passwordSignIn("parent@example.test", "secret"), () => passwordSignUp("parent@example.test", "ValidPass9"), () => requestPasswordReset("parent@example.test")]) {
     await expect(action()).rejects.toThrow("We could not complete that request. Check your details or try again later.");
   }
 });
 test("unconfirmed and obfuscated existing signup responses share one result and never install a session", async () => {
-  await expect(passwordSignUp("parent@example.test", "secret123")).resolves.toBeNull();
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toBeNull();
   fake.signUp.mockResolvedValue({ data: { session: null, user: { id: "new", identities: [{ provider: "email" }] } } });
-  await expect(passwordSignUp("parent@example.test", "secret123")).resolves.toBeNull();
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toBeNull();
   expect(fake.setSession).not.toHaveBeenCalled();
 });
 test("signup with an immediate matching session installs it", async () => {
   fake.signUp.mockResolvedValue({ data: { session: session() } });
-  await expect(passwordSignUp("parent@example.test", "secret123")).resolves.toEqual(session());
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toEqual(session());
 });
 test("reset uses this application origin and route", async () => {
   await requestPasswordReset("parent@example.test");
   expect(fake.reset).toHaveBeenCalledWith("parent@example.test", { redirectTo: location.origin + location.pathname });
 });
 test("password update stays on the current auth user", async () => {
-  await changePassword("secret123");
-  expect(fake.update).toHaveBeenCalledWith({ password: "secret123" });
+  await changePassword("ValidPass9");
+  expect(fake.update).toHaveBeenCalledWith({ password: "ValidPass9" });
   fake.update.mockResolvedValue({ data: { user: { id: "other" } } });
-  await expect(changePassword("secret123")).rejects.toThrow("could not complete");
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
 });
 test("a recovery update cannot run without an authenticated session", async () => {
   fake.getSession.mockResolvedValue({ data: { session: null } });
-  await expect(changePassword("secret123")).rejects.toThrow("could not complete");
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
   expect(fake.update).not.toHaveBeenCalled();
 });
 test("Parent Mode reads the session email and requires exactly the same user id", async () => {
@@ -80,6 +82,24 @@ test.each([null, session("other"), session("guardian", "changed@example.test")])
 });
 test("invalid email and new short passwords fail before any auth request", async () => {
   await expect(passwordSignUp("not-an-email", "secret123")).rejects.toThrow("Enter an email");
+  fake.policy.mockRejectedValueOnce(new Error("Use at least 8 characters for your password."));
   await expect(passwordSignUp("parent@example.test", "short")).rejects.toThrow("at least 8");
   expect(fake.createClient).not.toHaveBeenCalled();
+});
+
+test("signup blocks policy rejection before sending credentials to Supabase", async () => {
+  fake.policy.mockRejectedValueOnce(new Error("This password has appeared in a data breach. Choose another password."));
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).rejects.toThrow("data breach");
+  expect(fake.signUp).not.toHaveBeenCalled();
+});
+test("password update blocks a compromised choice without changing account credentials", async () => {
+  fake.policy.mockRejectedValueOnce(new Error("This password has appeared in a data breach. Choose another password."));
+  await expect(changePassword("ValidPass9")).rejects.toThrow("data breach");
+  expect(fake.update).not.toHaveBeenCalled();
+});
+test("change password verifies the principal did not switch during the breach check", async () => {
+  fake.getSession.mockResolvedValueOnce({ data: { session: session("guardian") } })
+    .mockResolvedValueOnce({ data: { session: session("other") } });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.update).not.toHaveBeenCalled();
 });
