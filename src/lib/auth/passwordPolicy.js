@@ -55,14 +55,24 @@ export async function isPasswordPwned(password, options = {}) {
     );
     if (!response.ok) throw new Error(HIBP_UNAVAILABLE);
     const data = await response.text();
-    for (const line of data.split(/\r?\n/)) {
-      const index = line.indexOf(':');
-      if (index < 0) continue;
-      const candidate = line.slice(0, index);
-      const count = line.slice(index + 1).trim();
-      if (candidate.toUpperCase() === suffix && /^\d+$/.test(count) && Number(count) > 0) return true;
+    // Add-Padding promises at least 800 records. Empty/HTML/partial successful
+    // responses are an unavailable check, never evidence of a safe password.
+    // See https://haveibeenpwned.com/API/v3#PwnedPasswordsPadding
+    if (data.length > 1024 * 1024) throw new Error(HIBP_UNAVAILABLE);
+    const lines = data.trim().split(/\r?\n/);
+    if (lines.length < 800) throw new Error(HIBP_UNAVAILABLE);
+    const seen = new Set();
+    let breached = false;
+    for (const line of lines) {
+      const entry = /^([0-9a-f]{35}):([0-9]+)$/i.exec(line);
+      if (!entry) throw new Error(HIBP_UNAVAILABLE);
+      const candidate = entry[1].toUpperCase();
+      if (seen.has(candidate)) throw new Error(HIBP_UNAVAILABLE);
+      seen.add(candidate);
+      // String comparison avoids numeric overflow without accepting junk.
+      if (candidate === suffix && /[1-9]/.test(entry[2])) breached = true;
     }
-    return false;
+    return breached;
   } catch {
     throw new Error(HIBP_UNAVAILABLE);
   } finally {
