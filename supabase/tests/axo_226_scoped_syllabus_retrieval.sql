@@ -38,7 +38,11 @@ begin
   from public.subject_offering so join public.curriculum_programme pr on pr.id=so.programme_id
   where pr.key='cbse_senior_secondary' and so.stage_id is not null limit 1 returning id into o;
   perform public._t('unverified subject unavailable',public.resolve_syllabus_retrieval_scope(p)->>'reason'='subject_unresolved');
-  update public.paper set subject_offering_id=o,subject_verified_at=now() where id=p;
+  -- Use the real server-authored identity path; the production trigger refuses
+  -- direct writes to the verified subject snapshot, including fixture writes.
+  insert into public.assessment_identity(programme_id,subject_offering_id,title)
+  select programme_id,id,'Synthetic assessment' from public.subject_offering where id=o returning id into identity_id;
+  update public.paper set assessment_identity_id=identity_id where id=p;
   perform public._t('upload year never substitutes for unknown exam year',public.resolve_syllabus_retrieval_scope(p)->>'reason'='exam_year_unresolved');
   update public.paper set exam_date='2026-06-01' where id=p;
   perform public._t('missing corpus is explicit',public.resolve_syllabus_retrieval_scope(p)->>'reason'='missing');
@@ -115,9 +119,7 @@ begin
   perform public._t('unknown validity is not unlimited',public.resolve_syllabus_retrieval_scope(p)->>'reason'='outside_validity');
   update public.syllabus_document set valid_from_year=2025 where id=doc;
   update private.syllabus_retrieval_approval set revoked_at=null where document_id=doc;
-  insert into public.assessment_identity(programme_id,subject_offering_id,exam_year,title)
-  select programme_id,id,2025,'Synthetic assessment' from public.subject_offering where id=o returning id into identity_id;
-  update public.paper set assessment_identity_id=identity_id where id=p;
+  update public.assessment_identity set exam_year=2025 where id=identity_id;
   perform public._t('conflicting exam years abstain',public.resolve_syllabus_retrieval_scope(p)->>'reason'='exam_year_ambiguous');
   update public.paper set exam_date=null where id=p;
   perform public._t('assessment exam year can resolve without upload date',public.resolve_syllabus_retrieval_scope(p)->>'exam_year'='2025');
