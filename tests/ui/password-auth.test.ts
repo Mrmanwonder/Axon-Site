@@ -128,16 +128,16 @@ test.each([null, session("other")])("a switch during token verification prevents
 });
 test("a late switch cannot redirect the password update to the new account", async () => {
   const other = { ...session("other"), access_token: "other-access" };
-  fake.request.mockImplementationOnce(async (_url, init) => {
+  fake.request.mockImplementationOnce(async () => {
     // Simulate another tab switching the shared session after the last check.
     fake.getSession.mockResolvedValue({ data: { session: other } });
-    expect(init.headers.Authorization).toBe("Bearer local-access");
     return { ok: true, json: async () => ({ id: "guardian" }) };
   });
   await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
   expect(fake.request).toHaveBeenCalledOnce();
   expect(fake.update).not.toHaveBeenCalled();
   expect(fake.setSession).not.toHaveBeenCalled();
+  expect(fake.request.mock.calls[0][1].headers.Authorization).toBe("Bearer local-access");
   expect((await fake.getSession()).data.session).toEqual(other);
 });
 test.each([
