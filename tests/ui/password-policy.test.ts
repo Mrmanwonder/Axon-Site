@@ -7,6 +7,11 @@ import {
 
 const hash = (password: string) => createHash("sha1").update(password, "utf8").digest("hex").toUpperCase();
 const permitted = "LongPurpleStar9";
+// Distinct synthetic zero-count padding; no production passwords or requests.
+const padded = (...rows: string[]) => [
+  ...rows,
+  ...Array.from({ length: 800 - rows.length }, (_, i) => i.toString(16).padStart(35, "0") + ":0"),
+].join("\r\n") + "\r\n";
 
 beforeEach(() => { vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -28,7 +33,7 @@ test("special characters are optional and passwords are not normalized for authe
 test("HIBP sends only five SHA-1 hex characters, never a password or full hash", async () => {
   const digest = hash(permitted);
   const fetcher = vi.fn().mockResolvedValue({ ok: true, text: async () =>
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:25\r\n" + digest.slice(5) + ":0\r\n" });
+    padded("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:25", digest.slice(5) + ":0") });
   await expect(isPasswordPwned(permitted, { fetcher })).resolves.toBe(false);
   expect(fetcher).toHaveBeenCalledOnce();
   const [url, init] = fetcher.mock.calls[0];
@@ -42,10 +47,10 @@ test("HIBP sends only five SHA-1 hex characters, never a password or full hash",
 test("HIBP suffix matching rejects exposed passwords and ignores zero-count padding", async () => {
   const digest = hash(permitted);
   const suffix = digest.slice(5);
-  const hit = vi.fn().mockResolvedValue({ ok: true, text: async () => suffix + ":17\r\n" });
+  const hit = vi.fn().mockResolvedValue({ ok: true, text: async () => padded(suffix + ":17") });
   await expect(isPasswordPwned(permitted, { fetcher: hit })).resolves.toBe(true);
-  const padded = vi.fn().mockResolvedValue({ ok: true, text: async () => suffix + ":0\r\n" });
-  await expect(isPasswordPwned(permitted, { fetcher: padded })).resolves.toBe(false);
+  const paddingOnly = vi.fn().mockResolvedValue({ ok: true, text: async () => padded(suffix + ":0") });
+  await expect(isPasswordPwned(permitted, { fetcher: paddingOnly })).resolves.toBe(false);
 });
 test("rejects a whole-password exact match or predictable default before making HIBP requests", async () => {
   const fetcher = vi.fn();
@@ -57,7 +62,7 @@ test("rejects a whole-password exact match or predictable default before making 
 test("checks HIBP after the local denylist, without checking during typing", async () => {
   const digest = hash(permitted);
   const fetcher = vi.fn().mockResolvedValue({
-    ok: true, text: async () => digest.slice(5) + ":19\r\n",
+    ok: true, text: async () => padded(digest.slice(5) + ":19"),
   });
   vi.stubGlobal("fetch", fetcher);
   await expect(assertSafeNewPassword(permitted)).rejects.toThrow(HIBP_COMPROMISED);
@@ -68,4 +73,28 @@ test("HIBP request errors fail closed for new passwords without leaking input", 
   await expect(assertSafeNewPassword(permitted)).rejects.toThrow(HIBP_UNAVAILABLE);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
   await expect(assertSafeNewPassword(permitted)).rejects.toThrow(HIBP_UNAVAILABLE);
+});
+
+test.each([
+  ["empty", ""],
+  ["HTML error page", "<html>Service unavailable</html>"],
+  ["truncated padded range", "A".repeat(35) + ":0\r\n"],
+  ["invalid suffix", padded("not-a-sha1-suffix:0")],
+  ["invalid count", padded("A".repeat(35) + ":NaN")],
+  ["duplicate records", padded("A".repeat(35) + ":0", "A".repeat(35) + ":0")],
+  ["oversized body", "A".repeat(1024 * 1024 + 1)],
+])("HTTP 200 with %s fails closed", async (_label, body) => {
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, text: async () => body });
+  await expect(isPasswordPwned(permitted, { fetcher })).rejects.toThrow(HIBP_UNAVAILABLE);
+});
+test("a valid padded non-match permits the check without requiring a symbol", async () => {
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, text: async () => padded() });
+  vi.stubGlobal("fetch", fetcher);
+  await expect(assertSafeNewPassword(permitted)).resolves.toBeUndefined();
+});
+test("body-read failures expose only the safe retry message", async () => {
+  const fetcher = vi.fn().mockResolvedValue({
+    ok: true, text: async () => { throw new Error("sensitive transport detail"); },
+  });
+  await expect(isPasswordPwned(permitted, { fetcher })).rejects.toThrow(HIBP_UNAVAILABLE);
 });
