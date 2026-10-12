@@ -19,7 +19,7 @@
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
   text-decoration: none;
-  white-space: nowrap;
+  white-space: normal;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -46,9 +46,10 @@
 
 /* Direction is semantic. Only Link/to creates this arrow; it is never
  * present in Save, Confirm or another imperative action. */
-.essential-button__label { min-width: 0; }
+.essential-button__label { min-width: 0; overflow-wrap: anywhere; padding-block: 10px; }
+.essential-button[aria-busy="true"] .essential-button__label { opacity: 0; }
 .essential-button__arrow { color: var(--button-nav-ink); transform: rotate(180deg); flex: 0 0 auto; }
-.essential-button__spinner { flex: 0 0 17px; width: 17px; height: 17px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: essential-turn .8s linear infinite; }
+.essential-button__spinner { position: absolute; inset: 0; margin: auto; width: 17px; height: 17px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: essential-turn .8s linear infinite; }
 .essential-button__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes essential-turn { to { transform: rotate(360deg); } }
 

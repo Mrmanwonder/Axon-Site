@@ -87,3 +87,32 @@ test("B5 Essential uses graphite on light, near-white on dark, and arrows only f
   await expect(action).toBeDisabled();
   await expect(action).not.toHaveAttribute("aria-busy", "true");
 });
+
+for (const theme of ["Light", "Dark"]) {
+  test("B5 loading geometry and long labels in " + theme, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(url);
+    await page.getByRole("button", { name: theme, exact: true }).click();
+    const action = page.getByRole("button", { name: /Save changes/ });
+    const states = page.getByRole("group", { name: "Essential button state" });
+    for (const size of ["44px", "52px", "56px"]) {
+      await page.getByRole("group", { name: "Essential button size" }).getByRole("button", { name: size }).click();
+      await states.getByRole("button", { name: "live", exact: true }).click();
+      const before = await action.boundingBox();
+      await states.getByRole("button", { name: "loading", exact: true }).click();
+      const after = await action.boundingBox();
+      expect(after!.width).toBeCloseTo(before!.width, 1);
+      expect(after!.height).toBeCloseTo(before!.height, 1);
+      await expect(action).toBeDisabled();
+      await expect(action).toHaveAccessibleName(/Save changes/);
+    }
+    await states.getByRole("button", { name: "live", exact: true }).click();
+    // Simulates a longer translated label without changing the component styles.
+    await action.locator(".essential-button__label").evaluate(node => {
+      node.textContent = "Save changes and continue reviewing this paper";
+    });
+    const long = page.getByRole("button", { name: "Save changes and continue reviewing this paper" });
+    expect(await long.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  });
+}
