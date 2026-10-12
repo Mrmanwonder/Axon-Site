@@ -8,7 +8,7 @@ import "../styles/onboarding-intro.css";
  */
 export default function Intro({ onContinue }: { onContinue: () => void }) {
   return (
-    <div className="ob-intro">
+    <div className="ob-intro" role="region" aria-label="Axon introduction">
       <header className="ob-intro-brand" aria-label="Axon">
         {/* Exact mark paths from public/axon-logo.svg, without its opaque white rect. */}
         <svg className="ob-intro-brandmark" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
