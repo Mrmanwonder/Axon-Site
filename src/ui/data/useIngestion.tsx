@@ -72,6 +72,11 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
   const { ensureScan } = useScan();
   const linkFlight = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const importScope = useRef({ student: app.student?.id, guardian: app.guardian?.id });
+  if (importScope.current.student !== app.student?.id || importScope.current.guardian !== app.guardian?.id) {
+    importScope.current = { student: app.student?.id, guardian: app.guardian?.id };
+  }
+  useEffect(() => () => { importScope.current = { ...importScope.current }; }, []);
 
   const ingestFiles = useCallback(async (files: File[]) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
@@ -79,12 +84,19 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     // Uploads join the pipeline rather than bypassing it. An unconditioned page
     // would skip deskew, illumination flattening and red-layer separation, and
     // reach the structure pass in materially worse shape than a captured one.
-    const scan = await ensureScan();
-    const t = app.takePendingPaperType();
-    if (t) scan.setPendingPaperType(t);
-    const result = await scan.acceptUploads(files);
-    if (result.accepted.length) navigate("/scan");
-    toast(`${result.accepted.length} page(s) added.${result.rejected.length ? ` ${result.rejected.length} file(s) could not be used.` : " Check the order, then read the paper."}`);
+    const scope = importScope.current;
+    try {
+      const scan = await ensureScan();
+      if (importScope.current !== scope) return;
+      const t = app.takePendingPaperType();
+      if (t) scan.setPendingPaperType(t);
+      const result = await scan.acceptUploads(files);
+      if (importScope.current !== scope) return;
+      if (result.accepted.length) navigate("/scan");
+      toast(`${result.accepted.length} page(s) added.${result.rejected.length ? ` ${result.rejected.length} file(s) could not be used.` : " Check the order, then read the paper."}`);
+    } catch {
+      if (importScope.current === scope) toast("These files could not be added. Try selecting them again.", "warn");
+    }
   }, [app, ensureScan, toast, navigate]);
 
   const ingestLink = useCallback(async (url: string) => {
