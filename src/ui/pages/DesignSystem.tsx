@@ -112,7 +112,7 @@ function AvatarDisc({ presetKey, label }: { presetKey: string; label?: string })
   const render = avatarRenderFor({ avatar_seed: presetKey });
   return <span className="ds-avatar-disc" data-kind={render.kind} style={{ background: render.background, color: render.color }} aria-hidden="true">
     {render.kind === "dot-face" && render.glyph
-      ? <svg viewBox={"0 0 " + render.glyph.size + " " + render.glyph.size} focusable="false">{render.glyph.points.map((point, i) =>
+      ? <svg viewBox={"0 0 " + render.glyph.size + " " + render.glyph.size} focusable="false">{render.glyph.points.map((point: { x: number; y: number; tone: number }, i: number) =>
           <circle key={i} cx={point.x + .5} cy={point.y + .5} r=".26" fill="currentColor" opacity={point.tone === 0 ? .42 : point.tone === 1 ? .8 : .96}/>
         )}</svg>
       : <span>{initialFor(label)}</span>}
