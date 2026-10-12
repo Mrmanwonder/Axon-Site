@@ -328,7 +328,7 @@
   border: 1px solid rgba(147,185,255,.34);
   border-radius: 15px;
   padding: 15px 44px;
-  background: var(--blue);
+  background: color-mix(in srgb, var(--blue) 80%, #000 20%);
   color: #fff;
   box-shadow: 0 6px 19px rgba(28,86,186,.24), inset 0 1px 0 rgba(255,255,255,.15);
   font-size: 15px;
@@ -357,7 +357,7 @@
 }
 @media (hover: hover) and (pointer: fine) {
   #obroot .ob-intro-continue:hover {
-    background: color-mix(in srgb, var(--blue) 86%, #fff 14%);
+    background: color-mix(in srgb, var(--blue) 85%, #000 15%);
     box-shadow: 0 8px 25px rgba(28,86,186,.3);
   }
 }
