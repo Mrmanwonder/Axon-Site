@@ -1000,6 +1000,7 @@ function paintReview() {
     noTotal: S.review.noTotal,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
+    unsureCount: (S.review.unsureUnconfirmed ?? []).length,
     saving: S.saving,
     committed: savedPaper(),
     // Nothing waits for the flagged parts: unchecked ones save as unsure (AXO-216).
@@ -1052,6 +1053,16 @@ function paintReview() {
       try {
         if (savedPaper()) await Promise.all(S.review.cleanUnconfirmed.map((id) => fixSavedPart(id)));
         else await confirmQuestions(S.review.cleanUnconfirmed, S.runId);
+        await refreshReview();
+      } catch (e) { toast(e.message, 'warn'); }
+    },
+    // Every part with a reading to accept, the unsure ones included (owner,
+    // 8 Oct 2026). The sheet says that accepted parts count in Insights.
+    onConfirmAll: async () => {
+      try {
+        const ids = [...S.review.cleanUnconfirmed, ...(S.review.unsureUnconfirmed ?? [])];
+        if (savedPaper()) await Promise.all(ids.map((id) => fixSavedPart(id)));
+        else await confirmQuestions(ids, S.runId);
         await refreshReview();
       } catch (e) { toast(e.message, 'warn'); }
     },

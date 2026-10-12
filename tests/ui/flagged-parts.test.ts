@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { flagReason } from "../../src/scan/flags.js";
-import { openFlags, savedRunId } from "../../src/ui/data/flaggedParts";
+import { acceptableAsRead, flagReason } from "../../src/scan/flags.js";
+import { acceptableFlag, openFlags, savedRunId } from "../../src/ui/data/flaggedParts";
 import { placedLabels, saveFailureMessage } from "../../src/scan/review.js";
 import type { PaperDetail } from "../../src/ui/data/modules";
 
@@ -58,4 +58,23 @@ test("a failed save says why, not a generic message", () => {
   expect(saveFailureMessage(new Error("Two parts of this paper are both read as 3(c), so Axon cannot tell which mark belongs to which.")))
     .toMatch(/both read as 3\(c\)/);
   expect(saveFailureMessage(new TypeError("Failed to fetch"))).toMatch(/connection dropped/);
+});
+
+// Owner, 8 Oct 2026: "Accept all" takes only parts with a reading to accept.
+test("only a part with a readable, consistent mark can be accepted in one tap", () => {
+  expect(acceptableAsRead({ tier: "unsure", marksAwarded: 1, marksAvailable: 2 })).toBe(true);
+  expect(acceptableAsRead({ tier: "confident", marksAwarded: 2, marksAvailable: 2 })).toBe(true);
+  expect(acceptableAsRead({ tier: "unreadable", marksAwarded: 1, marksAvailable: 2 })).toBe(false);
+  expect(acceptableAsRead({ tier: "unsure", marksAwarded: null, marksAvailable: 2 })).toBe(false);
+  expect(acceptableAsRead({ tier: "unsure", marksAwarded: 1, marksAvailable: null })).toBe(false);
+  expect(acceptableAsRead({ tier: "unsure", marksAwarded: 3, marksAvailable: 2 })).toBe(false);
+});
+
+test("the paper's Accept all skips unsaved parts and parts missing a mark", () => {
+  const flag = (over: Record<string, unknown>, attemptId: string | null = "a1") =>
+    ({ region: region({ id: "r", needs_review: true, confidence_tier: "unsure", ...over }), attemptId, reason: null }) as never;
+  expect(acceptableFlag(flag({}))).toBe(true);
+  expect(acceptableFlag(flag({}, null))).toBe(false);
+  expect(acceptableFlag(flag({ marks_awarded: null }))).toBe(false);
+  expect(acceptableFlag(flag({ confidence_tier: "unreadable" }))).toBe(false);
 });

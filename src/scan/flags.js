@@ -33,3 +33,20 @@ export function flagReason(region, opts = {}) {
   if (opts.unplaced) return 'Axon could not tell which question this part belongs to.';
   return null;
 }
+
+/**
+ * Whether a flagged or unsure part may be accepted as read in one tap (owner,
+ * 8 Oct 2026). Only when there is a reading to accept: not unreadable, and the
+ * teacher's mark and what the part is worth were both read and are consistent.
+ * A part missing its mark still needs "Fix this", because accepting it would
+ * put a part with no mark into Insights.
+ *
+ * @param {{ tier?: string | null, marksAwarded?: number | string | null, marksAvailable?: number | string | null }} part
+ * @returns {boolean}
+ */
+export function acceptableAsRead(part) {
+  if (part.tier === 'unreadable') return false;
+  const awarded = num(part.marksAwarded);
+  const available = num(part.marksAvailable);
+  return awarded !== null && available !== null && awarded <= available;
+}
