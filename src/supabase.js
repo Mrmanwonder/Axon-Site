@@ -136,6 +136,37 @@ export function isProviderNotEnabled(error) {
     .test(error?.message ?? error?.description ?? '');
 }
 
+const LINK_ERROR_KEY = 'axon.link-error';
+function emailLinkMessage(code, description) {
+  if (/otp_expired|expired/i.test(`${code} ${description}`) || !code) {
+    return 'That link has expired or was already used. Email links work once, and some mail apps open them before you do. Request a new one and open it on this device.';
+  }
+  return 'That link did not work. Request a new one and open it on this device.';
+}
+
+/**
+ * Reset links arrive as ?token_hash=…&type=recovery and are exchanged here, by
+ * the page, rather than by Supabase's own /verify endpoint. A mail scanner or
+ * link preview fetches a URL without running scripts, so it can no longer spend
+ * the one-use token before the person taps it.
+ */
+let linkExchange = null;
+function startLinkExchange() {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  const hash = url.searchParams.get('token_hash');
+  if (!hash || url.searchParams.get('type') !== 'recovery') return;
+  for (const k of ['token_hash', 'type']) url.searchParams.delete(k);
+  try { window.history.replaceState(null, '', url.pathname + url.search + url.hash); } catch { /* ignore */ }
+  linkExchange = sb.auth.verifyOtp({ token_hash: hash, type: 'recovery' }).then(({ error }) => {
+    if (!error) return;
+    try { sessionStorage.setItem(LINK_ERROR_KEY, emailLinkMessage('otp_expired', error.message || '')); } catch { /* private mode */ }
+  }).catch(() => {
+    try { sessionStorage.setItem(LINK_ERROR_KEY, emailLinkMessage('', '')); } catch { /* private mode */ }
+  });
+}
+startLinkExchange();
+
 /**
  * Read a failed provider round trip out of the URL we were returned to.
  *
@@ -154,7 +185,11 @@ export function takeProviderError() {
   const url = new URL(window.location.href);
   const frag = new URLSearchParams(url.hash.replace(/^#/, ''));
   const code = url.searchParams.get('error') || frag.get('error');
-  if (!code) return null;
+  if (!code) {
+    let stored = null;
+    try { stored = sessionStorage.getItem(LINK_ERROR_KEY); sessionStorage.removeItem(LINK_ERROR_KEY); } catch { /* private mode */ }
+    return stored ? { provider: null, code: 'link', description: '', message: stored, cleanedPath: '' } : null;
+  }
 
   const description =
     url.searchParams.get('error_description') || frag.get('error_description') || '';
@@ -173,8 +208,15 @@ export function takeProviderError() {
 
 
   const name = PROVIDER_LABEL[provider] ?? 'That provider';
+  const errorCode = url.searchParams.get('error_code') || frag.get('error_code') || '';
   let message;
-  if (/access_denied/i.test(code)) {
+  if (!provider || /otp_expired|expired|invalid/i.test(`${errorCode} ${description}`)) {
+    // An emailed link (reset or sign-in) that failed, not a provider round trip.
+    // Supabase reports these as access_denied too, which used to be read as the
+    // parent backing out of Google. They are one-use links: expired, already
+    // opened, or opened early by a mail app that previews links.
+    message = emailLinkMessage(errorCode, description);
+  } else if (/access_denied/i.test(code)) {
     // Backing out is a decision, not a fault. Say what happened and stop.
     message = `${name} sign-in was cancelled.`;
   } else if (isProviderNotEnabled({ message: `${code} ${description}` })) {
@@ -300,6 +342,7 @@ export async function verifyOtp(contact, input) {
 }
 
 export async function currentSession() {
+  if (linkExchange) await linkExchange;
   const { data, error } = await sb.auth.getSession();
   if (error) throw error;
   return data.session ?? null;
