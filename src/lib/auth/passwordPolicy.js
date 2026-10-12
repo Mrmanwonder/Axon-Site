@@ -6,6 +6,15 @@ export const PASSWORD_POLICY = Object.freeze({
   requireLowercase: true,
   requireNumber: true,
 });
+/** The same rules validateNewPassword enforces, as data, so the screen can show
+    each one being met while the password is typed. */
+export const PASSWORD_RULES = Object.freeze([
+  { id: 'length', label: '8 or more characters', test: p => [...p].length >= PASSWORD_POLICY.minLength },
+  { id: 'upper', label: 'An uppercase letter', test: p => /[A-Z]/.test(p) },
+  { id: 'lower', label: 'A lowercase letter', test: p => /[a-z]/.test(p) },
+  { id: 'number', label: 'A number', test: p => /[0-9]/.test(p) },
+]);
+
 export const HIBP_UNAVAILABLE = 'We could not check this password against known breaches right now. Try again.';
 export const HIBP_COMPROMISED = 'This password has appeared in a data breach. Choose another password.';
 export const COMMON_PASSWORD = 'This password is too common or predictable. Choose another password.';

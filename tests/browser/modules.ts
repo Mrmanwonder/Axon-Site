@@ -92,6 +92,20 @@ export const passwordSignIn = async (_email: string, password: string) => {
   return passwordSession;
 };
 export const passwordSignUp = async () => null;
+// The account step's email check. The local part picks the answer so a spec can
+// reach every state: new…, code…, unknown…, anything else has a password.
+import { PASSWORD_RULES as policyRules, validateNewPassword as validatePolicy } from "../../src/lib/auth/passwordPolicy.js";
+import { normalisedEmail as normalise, EMAIL_SHAPE as emailShape } from "../../src/lib/auth/accountLookup.js";
+export const PASSWORD_RULES = policyRules;
+export const normalisedEmail = normalise;
+export const EMAIL_SHAPE = emailShape;
+export const assertSafeNewPassword = async (password: string) => validatePolicy(password);
+export const lookupAccount = async (email: string) => {
+  const local = email.trim().toLowerCase().split("@")[0];
+  return local.startsWith("new") ? "new" : local.startsWith("code") ? "code" : local.startsWith("unknown") ? "unknown" : "password";
+};
+export const cachedAccount = () => null;
+export const forgetAccount = () => {};
 export const requestPasswordReset = async () => {};
 export const changePassword = async () => {};
 export const reauthenticateWithPassword = async () => {};

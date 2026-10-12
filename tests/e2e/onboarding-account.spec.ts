@@ -17,41 +17,54 @@ for (const theme of ["dark", "light"]) {
       await page.screenshot({ path: testInfo.outputPath(`onboarding-welcome-${theme}-${width}.png`) });
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await page.getByRole("button", { name: "Continue", exact: true }).click();
-      await page.getByRole("button", { name: "Continue with email or phone" }).click();
-      await expect(page.getByRole("heading", { name: "Continue with a code" })).toBeVisible();
-      await page.getByRole("button", { name: "Sign in with a password instead" }).click();
-      await expect(page.getByRole("heading", { name: "Sign in with a password" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Welcome to Axon" })).toBeVisible();
+      await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+      await page.screenshot({ path: testInfo.outputPath(`onboarding-account-${theme}-${width}.png`) });
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-      const bounds = await page.locator(".password-access").boundingBox();
       const g = await gutter(page);
-      expect(bounds!.x).toBeGreaterThanOrEqual(g);
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - g);
+      const fits = async (selector: string) => {
+        const box = await page.locator(selector).first().boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(g);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width - g);
+      };
+      const noOverflow = async () => expect(await page.locator(".obview").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+
+      // An existing account: welcome back and one password box.
       await page.getByLabel("Email", { exact: true }).fill("parent@example.test");
+      await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+      await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+      await fits(".obpassword");
+      await noOverflow();
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await page.getByLabel("Password", { exact: true }).fill("wrong-password");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
-      await expect(page.getByRole("alert")).toContainText("could not complete");
-      await page.screenshot({ path: testInfo.outputPath(`onboarding-password-${theme}-${width}.png`) });
-      await page.getByRole("button", { name: "Forgot password", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
-      await page.getByRole("button", { name: "Send reset link" }).click();
-      await expect(page.locator(".password-access").getByRole("status")).toContainText("If this email");
-      expect(await page.locator(".obview").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
-      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-      await page.screenshot({ path: testInfo.outputPath(`onboarding-reset-${theme}-${width}.png`) });
-      await page.getByRole("button", { name: "Create an account", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("didn't work");
+      await page.screenshot({ path: testInfo.outputPath(`onboarding-existing-${theme}-${width}.png`) });
+      await page.getByRole("button", { name: "Forgot password?", exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: "reset link" })).toBeVisible();
+      await noOverflow();
+
+      // A new account: requirements tick off live, the code waits for a valid password.
+      await page.getByLabel("Email", { exact: true }).fill("new.parent@example.test");
+      await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+      const send = page.getByRole("button", { name: "Email me a code" });
+      await expect(send).toBeDisabled();
+      await page.getByLabel("Password", { exact: true }).fill("abcdefgh");
+      await expect(page.getByText("Your password needs")).toBeVisible();
+      await expect(page.locator(".obrules li[data-met]")).toHaveCount(2);
+      await expect(send).toBeDisabled();
+      await fits(".obrules");
       await page.getByLabel("Password", { exact: true }).fill("CorrectPassword9");
-      await page.getByRole("button", { name: "Create account", exact: true }).click();
-      const confirmation = page.locator(".password-access").getByRole("status");
-      await expect(confirmation).toContainText("Check your email for a confirmation link");
-      await confirmation.scrollIntoViewIfNeeded();
-      const confirmationBounds = await confirmation.boundingBox();
-      expect(confirmationBounds!.x).toBeGreaterThanOrEqual(g);
-      expect(confirmationBounds!.x + confirmationBounds!.width).toBeLessThanOrEqual(width - g);
-      expect(await page.locator(".obview").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath(`onboarding-signup-${theme}-${width}.png`) });
-      await page.getByRole("button", { name: "Use a sign-in code instead" }).click();
-      await expect(page.getByLabel("Your name")).toBeVisible();
-      await expect(page.getByLabel("Email or phone", { exact: true })).toBeVisible();
+      await expect(page.locator(".obrules li[data-met]")).toHaveCount(4);
+      await expect(send).toBeEnabled();
+      await noOverflow();
+      await page.screenshot({ path: testInfo.outputPath(`onboarding-new-${theme}-${width}.png`) });
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      for (const button of await page.getByRole("button").all()) {
+        if (!(await button.isVisible())) continue;
+        expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(43.5);
+      }
     });
   }
 }
