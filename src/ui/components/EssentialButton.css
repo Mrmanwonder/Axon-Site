@@ -100,6 +100,7 @@
   color: var(--essential-primary-ink);
   box-shadow: none;
 }
+.btn.primary[data-waiting] { background: var(--surface-sunk); color: var(--label-2); box-shadow: none; }
 .btn.ghost { background: var(--essential-secondary-bg); color: var(--essential-secondary-ink); border: 1px solid var(--essential-secondary-rim); }
 .btn.plain { color: var(--essential-quiet-ink); background: transparent; border: 1px solid transparent; font-weight: 500; }
 .btn:is(.primary,.ghost,.plain):not(:disabled):not([aria-disabled="true"]):hover { opacity: .84; filter: none; }
