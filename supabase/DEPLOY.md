@@ -99,8 +99,8 @@ Paste each into Dashboard → Authentication → Email Templates and set the sub
 
 | Template | File | Subject |
 | --- | --- | --- |
-| Magic link (sign-in code) | `magic_link.html` | `{{ .Token }} is your Axon code` |
-| Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon code` |
+| Magic link (sign-in code) | `magic_link.html` | `{{ .Token }} is your Axon verification code` |
+| Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon verification code` |
 | Reset password | `recovery.html` | `Reset your Axon password` |
 
 The code is in the subject and preheader so Gmail and phone lock screens can offer
