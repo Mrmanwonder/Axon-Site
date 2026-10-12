@@ -14,7 +14,9 @@
 import { SUPABASE_URL } from '../../config.js';
 import { fetchWithTimeout } from '../request.js';
 
-export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Stricter than "something@something.xx": the auth server rejects what this lets
+// through (a leading, trailing or doubled dot, a label that starts with a hyphen).
+export const EMAIL_SHAPE = /^(?!\.)(?!.*\.\.)[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+(?<!\.)@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
 const ANSWERS = new Set(['new', 'password', 'code']);
 const ENDPOINT = SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/account-lookup';
 const STORE = 'axon.acct.v1';

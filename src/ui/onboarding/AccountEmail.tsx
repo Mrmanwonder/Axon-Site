@@ -34,7 +34,7 @@ export type AccountKind = "idle" | "checking" | "new" | "password" | "code" | "u
 const LOOKUP_DELAY_MS = 90;
 const SIGN_IN_FAILED = "That password didn't work. Check it and try again, or have us email you a code.";
 
-function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
+export function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
   id: string; label: string; value: string; onChange: (v: string) => void;
   creating: boolean; disabled: boolean; onFocusChange?: (focused: boolean) => void;
 }) {
@@ -58,7 +58,7 @@ function PasswordInput({ id, label, value, onChange, creating, disabled, onFocus
   );
 }
 
-function Requirements({ password }: { password: string }) {
+export function Requirements({ password }: { password: string }) {
   const results = PASSWORD_RULES.map((rule: { id: string; label: string; test: (p: string) => boolean }) => (
     { id: rule.id, label: rule.label, met: rule.test(password) }));
   const metCount = results.filter((r: { met: boolean }) => r.met).length;
@@ -105,6 +105,8 @@ export default function AccountEmail({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "signin" | "create" | "reset">(null);
+  const [resetAt, setResetAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const flight = useRef(false);
   const seq = useRef(0);
   const resolvedFor = useRef<string | null>(initial !== "idle" ? normalisedEmail(email) : null);
@@ -170,6 +172,16 @@ export default function AccountEmail({
       { duration: 360, easing: "cubic-bezier(.32,.72,0,1)" });
   }, [kind, passwordActive, password === ""]);
 
+  /* A new reset request cancels the one before it. Mail can take a minute, and
+     asking again while waiting is what made the first email's link say expired. */
+  const RESET_COOLDOWN_S = 60;
+  const resetWait = resetAt === null ? 0 : Math.max(0, RESET_COOLDOWN_S - Math.floor((now - resetAt) / 1000));
+  useEffect(() => {
+    if (resetWait <= 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [resetWait > 0]);
+
   const valid = EMAIL_SHAPE.test(normalisedEmail(email));
   const rulesMet = PASSWORD_RULES.every((r: { test: (p: string) => boolean }) => r.test(password));
   const disabled = locked || busy !== null;
@@ -206,7 +218,8 @@ export default function AccountEmail({
   const reset = () => run("reset", async () => {
     try {
       await requestPasswordReset(email);
-      setNotice("If this email has an account, a reset link is on its way. Open it on this device to choose a new password.");
+      setNow(Date.now()); setResetAt(Date.now());
+      setNotice("If this email has an account, a reset link is on its way. It can take a minute. Open only the newest email, on this device. Asking again cancels the earlier one.");
     } catch (e) { setError((e as Error).message); }
   });
 
@@ -269,8 +282,8 @@ export default function AccountEmail({
           </div>
           <div className="obreveal obemail-links" style={{ ["--i" as string]: 2 }}>
             <button type="button" disabled={disabled} onClick={switchToCode}>Email me a code instead</button>
-            <button type="button" disabled={disabled} onClick={() => void reset()}>
-              {busy === "reset" ? "Sending…" : "Forgot password?"}
+            <button type="button" disabled={disabled || resetWait > 0} onClick={() => void reset()}>
+              {busy === "reset" ? "Sending…" : resetWait > 0 ? `Resend in ${resetWait}s` : resetAt !== null ? "Send the link again" : "Forgot password?"}
             </button>
           </div>
           {kind === "unknown" && (

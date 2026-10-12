@@ -385,7 +385,13 @@ export default function Onboarding() {
       setOtpSentAt(now); setCooldownNow(now);
     } catch (e) {
       setCodeDeliveryFailed(true); setOtpSentAt(null);
-      fail(e, "That code could not be sent. Please try again.");
+      const detail = e instanceof Error ? e.message : "";
+      if (/invalid format|unable to validate email/i.test(detail)) {
+        fail(e, "That email address doesn't look right. Go back and check it.");
+      } else if (/only request this after|rate limit|too many/i.test(detail)) {
+        const wait = detail.match(/after (\d+) second/)?.[1];
+        fail(e, wait ? `Please wait ${wait} seconds, then try again.` : "Too many requests. Please wait a minute, then try again.");
+      } else fail(e, "That code could not be sent. Please try again.");
     } finally { sendFlight.current = false; setSendingCode(false); }
   };
 
