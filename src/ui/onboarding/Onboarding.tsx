@@ -74,6 +74,7 @@ import {
 import type { Guardian, Student, NoticeLanguage } from "../data/modules";
 import GlideSegment from "../components/GlideSegment";
 import PasswordAccess from "./PasswordAccess";
+import "./Onboarding.css";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";

@@ -1,0 +1,6 @@
+/* Onboarding content uses the same measured gutters as the account controls. */
+#obroot .obback { width: 44px; height: 44px; border-radius: 50%; }
+#obroot .greet .sub, #obroot .obor { color: var(--label-2); }
+#obroot .obprog .ph { color: var(--label-2); }
+#obroot .btn.plain { color: var(--label-2); }
+#obroot .obfield .k, #obroot .obfield .hint { color: var(--label-2); }
