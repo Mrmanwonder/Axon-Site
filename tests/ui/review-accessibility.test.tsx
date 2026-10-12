@@ -12,6 +12,7 @@ const review = {
   title: "Review paper",
   outstanding: 1,
   cleanCount: 0,
+  unsureCount: 0,
   saveLabel: "1 left to check",
   questions: [{
     id: "question", label: "Question 1", tier: "unsure", confirmed: false,
@@ -22,7 +23,7 @@ const review = {
 beforeEach(() => {
   fixture.state = {
     review, reviewOpen: true, closeReview: vi.fn(),
-    reviewHandlers: { onMark: vi.fn(), onAction: vi.fn(), onConfirmClean: vi.fn(), onSave: vi.fn() },
+    reviewHandlers: { onMark: vi.fn(), onAction: vi.fn(), onConfirmClean: vi.fn(), onConfirmAll: vi.fn(), onSave: vi.fn() },
   };
 });
 
@@ -82,4 +83,23 @@ test("a label shown as 'Question 3(b)' opens the place sheet on question 3, part
   expect(within(screen.getByRole("radiogroup", { name: "Question number" })).getByRole("radio", { name: "3" }).getAttribute("aria-checked")).toBe("true");
   expect(within(screen.getByRole("radiogroup", { name: "Part" })).getByRole("radio", { name: "(b)" }).getAttribute("aria-checked")).toBe("true");
   expect(screen.getByRole("button", { name: "This is 3(b)" })).toBeTruthy();
+});
+
+// Owner, 8 Oct 2026: two explicit choices, and the second says what it does.
+test("review offers the clear parts and, separately, every part with a reading", async () => {
+  fixture.state = { ...fixture.state, review: { ...review, cleanCount: 3, unsureCount: 2 } };
+  render(<ReviewSheet />);
+  expect(screen.getByText(/Accepted parts count in your Insights/)).toBeTruthy();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Accept the 3 clear" }));
+  expect(fixture.state.reviewHandlers.onConfirmClean).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole("button", { name: "Accept all 5" }));
+  expect(fixture.state.reviewHandlers.onConfirmAll).toHaveBeenCalledTimes(1);
+});
+
+test("with only clear parts there is one button, as before", () => {
+  fixture.state = { ...fixture.state, review: { ...review, cleanCount: 3, unsureCount: 0 } };
+  render(<ReviewSheet />);
+  expect(screen.getByRole("button", { name: "These look right" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Accept all/ })).toBeNull();
 });

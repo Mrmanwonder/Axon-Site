@@ -1000,6 +1000,7 @@ function paintReview() {
     noTotal: S.review.noTotal,
     outstanding: S.review.outstanding,
     cleanCount: S.review.cleanUnconfirmed.length,
+    unsureCount: (S.review.unsureUnconfirmed ?? []).length,
     saving: S.saving,
     committed: savedPaper(),
     // Nothing waits for the flagged parts: unchecked ones save as unsure (AXO-216).
@@ -1052,6 +1053,16 @@ function paintReview() {
       try {
         if (savedPaper()) await Promise.all(S.review.cleanUnconfirmed.map((id) => fixSavedPart(id)));
         else await confirmQuestions(S.review.cleanUnconfirmed, S.runId);
+        await refreshReview();
+      } catch (e) { toast(e.message, 'warn'); }
+    },
+    // Every part with a reading to accept, the unsure ones included (owner,
+    // 8 Oct 2026). The sheet says that accepted parts count in Insights.
+    onConfirmAll: async () => {
+      try {
+        const ids = [...S.review.cleanUnconfirmed, ...(S.review.unsureUnconfirmed ?? [])];
+        if (savedPaper()) await Promise.all(ids.map((id) => fixSavedPart(id)));
+        else await confirmQuestions(ids, S.runId);
         await refreshReview();
       } catch (e) { toast(e.message, 'warn'); }
     },
@@ -1263,13 +1274,27 @@ async function finishSave({ runId, regions, started, savedDraft, epoch }) {
 /** Uploaded photos enter the same transaction path as camera captures. */
 export async function acceptUploads(files) {
   const result = { accepted: [], rejected: [] };
+  const epoch = S.epoch;
+  const studentId = S.ctx?.student?.id;
+  const current = () => epoch === S.epoch && studentId === S.ctx?.student?.id;
   for (const file of files) {
+    if (!current()) {
+      result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
+      continue;
+    }
     if (!S.ctx?.student || S.submitting || !/^image\//.test(file.type)) {
-      result.rejected.push({ name: file.name, reason: S.submitting ? 'A paper is being submitted.' : 'Only images can be added.' });
+      result.rejected.push({ name: file.name, reason: !S.ctx?.student ? 'Choose a student profile before adding files.' : S.submitting ? 'A paper is being submitted.' : 'Only images can be added.' });
       continue;
     }
     try {
       const bitmap = await createImageBitmap(file);
+      // Decode can outlive a profile switch or reset, including away and back.
+      // takePage would otherwise bind this old selection to the new epoch.
+      if (!current()) {
+        bitmap.close?.();
+        result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
+        continue;
+      }
       const accepted = await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file, transactionId: `upload:${crypto.randomUUID()}` }, S.retaking);
       if (accepted) result.accepted.push({ name: file.name });
       else result.rejected.push({ name: file.name, reason: 'This page could not be prepared.' });

@@ -88,13 +88,39 @@ vi.mock("../../src/ui/data/modules", async () => {
 
 import Onboarding from "../../src/ui/onboarding/Onboarding";
 
+test("welcome has a single continuation and account methods reveal progressively", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+
+  expect(screen.getByRole("heading", { name: /See where the marks went/ })).toBeTruthy();
+  expect(screen.getAllByRole("button").map(button => button.textContent?.trim())).toEqual(["Continue"]);
+  expect(screen.getByText(/parent or guardian sets up the account/i)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  expect(screen.getByRole("heading", { name: "Set up your account" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Continue with email or phone" })).toBeTruthy();
+  expect(screen.queryByLabelText("Email or phone")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+  expect(screen.getByLabelText("Email or phone")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByRole("button", { name: "Continue", exact: true })).toBeTruthy();
+});
+
 test("code entry opens before a slow send completes, with honest pending state and no duplicate requests", async () => {
   fixture.session = null;
   window.history.replaceState({}, "", "/");
   const sent = deferred<void>();
   fixture.sendOtp.mockReturnValue(sent.promise);
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
   await userEvent.type(screen.getByLabelText("Your name"), "Parent");
   await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
   const send = screen.getByRole("button", { name: "Send me a code" });
@@ -115,7 +141,8 @@ test("failed code delivery is visible and a retry is single-flight", async () =>
   window.history.replaceState({}, "", "/");
   fixture.sendOtp.mockRejectedValueOnce(new Error("delivery unavailable"));
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
   await userEvent.type(screen.getByLabelText("Your name"), "Parent");
   await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
   await userEvent.click(screen.getByRole("button", { name: "Send me a code" }));
@@ -363,31 +390,30 @@ test("Hindi is not offered when a purpose on the notice has no Hindi text", asyn
   ));
 });
 
-test("password flight locks Google, code switching and Back, then releases after failure", async () => {
+test("password flight locks method switching and Back, then releases after failure", async () => {
   fixture.session = null;
   window.history.replaceState({}, "", "/");
   const proof = deferred<unknown>();
   fixture.passwordSignIn.mockReturnValue(proof.promise);
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
-  await userEvent.click(screen.getByRole("button", { name: "Email and password" }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+  await userEvent.click(screen.getByRole("button", { name: "Sign in with a password instead" }));
   await userEvent.type(screen.getByLabelText("Email", { exact: true }), "parent@example.test");
   await userEvent.type(screen.getByLabelText("Password", { exact: true }), "secret123");
-  const google = screen.getByRole("button", { name: "Continue with Google" });
-  const code = screen.getByRole("button", { name: "Email or phone code" });
+  const code = screen.getByRole("button", { name: "Use a sign-in code instead" });
+  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
   const form = screen.getByRole("button", { name: "Sign in", exact: true }).closest("form")!;
   for (let n = 0; n < 5; n++) fireEvent.submit(form);
-  fireEvent.click(google);
   fireEvent.click(code);
   expect(fixture.passwordSignIn).toHaveBeenCalledOnce();
   expect(fixture.provider).not.toHaveBeenCalled();
-  expect((google as HTMLButtonElement).disabled).toBe(true);
   expect((code as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
   // Missing confirmed session is a recoverable sign-in response.
   await act(async () => proof.resolve(null));
-  expect((google as HTMLButtonElement).disabled).toBe(false);
+  expect((code as HTMLButtonElement).disabled).toBe(false);
   await userEvent.click(code);
   expect(screen.getByLabelText("Email or phone")).toBeTruthy();
 });
@@ -397,11 +423,11 @@ test("Google is single-flight and keeps Back and password entry disabled during 
   const handoff = deferred<void>();
   fixture.provider.mockReturnValue(handoff.promise);
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
   const google = screen.getByRole("button", { name: "Continue with Google" });
   for (let n = 0; n < 5; n++) fireEvent.click(google);
   expect(fixture.provider).toHaveBeenCalledOnce();
-  expect((screen.getByRole("button", { name: "Email and password" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Continue with email or phone" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   await act(async () => handoff.resolve());
 });
