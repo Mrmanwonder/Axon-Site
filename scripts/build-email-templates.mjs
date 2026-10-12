@@ -56,19 +56,16 @@ const button = (label, href = '{{ .ConfirmationURL }}') => `      <table role="p
         </td>
       </tr></table>`;
 
+// The code sits in the same blue block as the reset button, so the three emails
+// read as one family. Plain digits (no spaced-out styling) and a plain sentence
+// naming the code give Gmail's own detector the best chance of offering its
+// "Copy code" chip; nothing in an email can force it.
 const code = `      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-        <td align="center" style="background:#151D33;border:1px solid #26314F;border-radius:16px;padding:22px 12px;">
-          <span style="display:inline-block;font-family:${MONO};font-size:38px;line-height:1.1;font-weight:700;letter-spacing:0.28em;padding-left:0.28em;color:#FFFFFF;-webkit-user-select:all;user-select:all;">{{ .Token }}</span>
+        <td align="center" style="background:#3A86FF;border-radius:14px;padding:18px 12px;">
+          <span style="display:block;font-family:${MONO};font-size:32px;line-height:1.1;font-weight:700;letter-spacing:0.06em;color:#ffffff;-webkit-user-select:all;user-select:all;">{{ .Token }}</span>
         </td>
       </tr></table>
-      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Double-tap the code to select it, then copy.</p>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:26px 0 18px 0;"><tr>
-        <td style="border-top:1px solid #1D2640;font-size:0;line-height:0;" height="1">&nbsp;</td>
-        <td width="56" align="center" style="font-family:${FONT};font-size:12px;font-weight:600;letter-spacing:0.06em;color:#6C7691;">OR</td>
-        <td style="border-top:1px solid #1D2640;font-size:0;line-height:0;" height="1">&nbsp;</td>
-      </tr></table>
-${button('Sign in to Axon')}
-      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Opens Axon and signs you in. No code to type.</p>`;
+      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Double-tap the code to select it, then copy.</p>`;
 
 const safety = "Did not ask for this? You can ignore this email, and nobody can sign in without it. Axon will never ask you for this code by phone, message or email.";
 const footer = "Axon turns a marked paper into feedback a student can act on.<br>You are receiving this because someone entered this email address at Axon.";
@@ -77,13 +74,13 @@ const templates = {
   'magic_link.html': shell({
     preheader: 'Your Axon sign-in code is {{ .Token }}. It works once and expires soon.',
     heading: 'Your sign-in code',
-    lead: 'Enter this code in Axon to sign in. It works once and expires soon.',
+    lead: 'Your Axon verification code is {{ .Token }}. Enter it in Axon to sign in. It works once and expires soon.',
     body: code, note: safety, footer,
   }),
   'confirmation.html': shell({
     preheader: 'Your Axon code is {{ .Token }}. Enter it to confirm this email address.',
     heading: 'Confirm your email',
-    lead: 'Welcome to Axon. Enter this code to confirm this email address and finish creating your account.',
+    lead: 'Your Axon verification code is {{ .Token }}. Enter it to confirm this email address and finish creating your account.',
     body: code, note: safety, footer,
   }),
   'recovery.html': shell({

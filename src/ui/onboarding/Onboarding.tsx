@@ -131,6 +131,8 @@ type SessionUser = {
   };
 };
 
+const OTP_LENGTH = 8;
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { session, providerError, finishOnboarding } = useApp();
@@ -341,14 +343,18 @@ export default function Onboarding() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contact, parentName, continueAsGuardian, codeDeliveryFailed, go]);
 
-  /* Auto-submit the instant a 6-digit numeric code is complete — typed,
+  /* Supabase Auth issues 8-digit email codes for this project (Authentication →
+     Providers → Email → OTP length). Auto-submitting at six digits sent a wrong,
+     truncated code. Change OTP_LENGTH together with that setting.
+
+     Auto-submit the instant a numeric code is complete — typed,
      pasted, or autofilled from the iOS QuickType bar — rather than making the
      student make a separate tap once autofill has already done the work. A
      pasted magic link is much longer than 6 characters and is handled by the
      "Continue" button instead, via verifyOtp's own link-parsing. */
   useEffect(() => {
     if (step !== "otp" || otpBusy) return;
-    if (/^\d{6}$/.test(code.trim())) void verifyOtpCode(code);
+    if (new RegExp(`^\\d{${OTP_LENGTH}}$`).test(code.trim())) void verifyOtpCode(code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, step, sendingCode]);
 
@@ -514,7 +520,7 @@ export default function Onboarding() {
               maxLength, because a pasted magic link is longer than 6 chars
               and still has to fit here — see the subnote below. */}
           <Field id="ob-code" label="Your code" className="obcode" value={code} onChange={setCode}
-                 placeholder="6 digits, or paste the link" autoComplete="one-time-code"
+                 placeholder={`${OTP_LENGTH} digits, or paste the link`} autoComplete="one-time-code"
                  inputMode="numeric" onEnter={() => void verifyOtpCode(code)} />
         </div>
         <div className="subnote">
@@ -529,7 +535,7 @@ export default function Onboarding() {
                       onClick={async () => {
                         try {
                           const text = await navigator.clipboard.readText();
-                          const six = text.match(/\b\d{6}\b/)?.[0];
+                          const six = text.match(new RegExp(`\\b\\d{${OTP_LENGTH}}\\b`))?.[0];
                           if (six) setCode(six); else if (text.trim()) setCode(text.trim());
                         } catch { /* clipboard permission refused: the field still takes a paste */ }
                       }}>

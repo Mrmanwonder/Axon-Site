@@ -198,7 +198,7 @@ test("the password chosen for a new account is saved after the code is confirmed
     await typeEmail();
     await userEvent.type(await screen.findByLabelText("Password", { exact: true }), "Abcdefg1");
     await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
-    await userEvent.type(await screen.findByLabelText("Your code"), "123456");
+    await userEvent.type(await screen.findByLabelText("Your code"), "12345678");
     expect((await screen.findByRole("alert")).textContent).toContain("couldn't save your password");
     expect(fixture.verifyOtp).toHaveBeenCalledTimes(1);
     expect(fixture.changePassword).toHaveBeenCalledWith("Abcdefg1");
