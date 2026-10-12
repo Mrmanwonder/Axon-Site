@@ -24,6 +24,11 @@ test("slow OTP delivery opens code entry immediately, recovers from failure, and
     headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "content-type": "application/json" },
     body: route.request().method() === "OPTIONS" ? "" : JSON.stringify({ result: "code" }),
   }));
+  await page.route("**/rest/v1/rpc/account_lookup_public", route => route.fulfill({
+    status: route.request().method() === "OPTIONS" ? 204 : 200,
+    headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "content-type": "application/json" },
+    body: route.request().method() === "OPTIONS" ? "" : JSON.stringify("code"),
+  }));
   await page.goto("http://127.0.0.1:5175/");
   await page.getByRole("button", { name: /reject|essential only|necessary only/i }).click();
   // One Continue on the intro; the account step recognises the address and offers the code.

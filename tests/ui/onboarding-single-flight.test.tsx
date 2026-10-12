@@ -141,8 +141,9 @@ test("an existing password account is recognised as the email is typed and asks 
   expect(fixture.lookup).not.toHaveBeenCalled();
   await typeEmail("nt@example.test");
   expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeTruthy();
-  expect(fixture.lookup).toHaveBeenCalledTimes(1);
-  expect(fixture.lookup).toHaveBeenCalledWith(EMAIL, expect.objectContaining({ signal: expect.anything() }));
+  // No debounce: the check starts the moment the address is valid in shape, and
+  // a stale one is cancelled. The last one is for the complete address.
+  expect(fixture.lookup).toHaveBeenLastCalledWith(EMAIL, expect.objectContaining({ signal: expect.anything() }));
   const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
   expect(password.autocomplete).toBe("current-password");
   expect(screen.queryByText("Your password needs")).toBeNull();

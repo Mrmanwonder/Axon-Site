@@ -118,3 +118,14 @@ axonstudy.online so mail lands in the inbox, not spam). Sending through an HTTPS
 Send Email, an Edge Function) would be faster still but is a larger change and the owner's call.
 Supabase also refuses a second request for the same address within about a minute, and each new
 reset email cancels the one before it, so the app now waits 60 s before offering a resend.
+
+## Account lookup (one hop)
+
+The email step asks `public.account_lookup_public(p_email)` through the REST API
+(`/rest/v1/rpc/account_lookup_public`), about 0.2 s, instead of the
+`account-lookup` Edge Function (1 to 2 s, 8 s cold). Apply
+`supabase/migrations/20261012160000_account_lookup_direct.sql` BEFORE the build
+that calls it ships; until it is applied the browser falls back to the Edge
+Function, so nothing breaks, it is just slower. Re-run the Supabase advisors
+afterwards: expect the intended "anon can execute a SECURITY DEFINER function"
+notice for this one function.
