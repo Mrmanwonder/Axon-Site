@@ -45,7 +45,7 @@
 .ds-mark img { display:block; width:96px; height:51px; object-fit:contain; }
 .ds-system-name { font-size: 14px; font-weight: 650; letter-spacing: -.03em; }
 .ds-system-name span { color: var(--label-3); font-weight: 450; }
-.ds-search-box { display: flex; align-items: center; gap: 9px; height: 42px; padding: 0 10px; border-radius: 11px; background: var(--field); color: var(--label-3); margin-bottom: 25px; border: 1px solid var(--hairline); }
+.ds-search-box { display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 10px; border-radius: 11px; background: var(--field); color: var(--label-3); margin-bottom: 25px; border: 1px solid var(--hairline); }
 .ds-search-box svg { flex: 0 0 auto; width: 16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; }
 .ds-search-box input { color: var(--label); background: transparent; border: 0; outline: none; width: 100%; min-width: 0; font-size: 12.5px; }
 .ds-search-box input:focus-visible { outline: none; }
@@ -53,7 +53,7 @@
 .ds-search-key { border: 1px solid var(--hairline); width: 18px; height: 20px; display: grid; place-items: center; border-radius: 4px; font-size: 11px; }
 .ds-nav { flex: 1; }
 .ds-nav-group { color: var(--label-3); font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin: 16px 10px 8px; }
-.ds-nav-item { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; border-radius: 10px; padding: 10px 10px 10px 13px; color: var(--label-2); background: transparent; text-align: left; font-size: 13px; letter-spacing: -.01em; min-height: 42px; transition: background var(--d-state), color var(--d-state); }
+.ds-nav-item { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; border-radius: 10px; padding: 10px 10px 10px 13px; color: var(--label-2); background: transparent; text-align: left; font-size: 13px; letter-spacing: -.01em; min-height: 44px; transition: background var(--d-state), color var(--d-state); }
 .ds-nav-item:hover { background: var(--field); color: var(--label); }
 .ds-nav-item.is-active { background: var(--accent-wash); color: var(--accent); font-weight: 650; }
 .ds-nav-arrow { font-size: 13px; opacity: 0; }
@@ -72,7 +72,7 @@
 .ds-breadcrumb strong { color: var(--label-2); font-weight: 600; }
 .ds-top-actions { display: flex; align-items: center; gap: 22px; flex-shrink: 0; }
 .ds-theme-switch { border: 1px solid var(--hairline); background: var(--surface); border-radius: 12px; padding: 3px; display: flex; gap: 2px; }
-.ds-theme-switch button { background: none; color: var(--label-3); border: 0; font-size: 11px; font-weight: 600; border-radius: 9px; min-height: 32px; padding: 0 13px; transition: background var(--d-state),color var(--d-state); }
+.ds-theme-switch button { background: none; color: var(--label-3); border: 0; font-size: 11px; font-weight: 600; border-radius: 9px; min-height: 44px; padding: 0 13px; transition: background var(--d-state),color var(--d-state); }
 .ds-theme-switch button.is-on { background: var(--field); color: var(--label); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
 .ds-app-link { font-size: 12px; font-weight: 650; white-space:nowrap; }
 .ds-app-link span { color: var(--accent); margin-left: 5px; }
@@ -156,7 +156,7 @@
 .ds-swatch-body > small { display:block; color:var(--label-3); font-size:11px; line-height:1.5; margin-top:9px; min-height:32px; }
 .ds-swatch-meta { display:flex; align-items:center; justify-content:space-between; gap:5px; margin-top:16px; padding-top:11px; border-top:1px solid var(--hairline); color:var(--label-2); min-width:0; }
 .ds-swatch-meta > span { min-width:0; overflow-wrap:anywhere; font-size:10px; }
-.ds-copy { display:flex; flex-shrink:0; align-items:center; gap:4px; color:var(--label-3); background:transparent; padding:5px; border:0; border-radius:6px; font-size:10px !important; }
+.ds-copy { display:flex; flex-shrink:0; align-items:center; gap:4px; color:var(--label-3); background:transparent; min-height:44px; min-width:44px; justify-content:center; padding:5px; border:0; border-radius:6px; font-size:10px !important; }
 .ds-copy:hover { color:var(--accent); background:var(--accent-wash); }
 .ds-copy svg { width:13px;height:13px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .ds-color-note { margin-top:30px; display:flex; align-items:flex-start; gap:13px; color:var(--attention); background:var(--attention-wash-soft); border:1px solid var(--attention-rim); border-radius:15px; padding:19px 20px; }
@@ -243,7 +243,7 @@
 .ds-demo-choice { display:flex; justify-content:space-between; align-items:center; max-width:390px; margin-top:14px; padding:12px 15px; border:1px solid var(--hairline); border-radius:12px; font-size:11px; color:var(--label-3); }
 .ds-demo-choice b { color:var(--label);font-size:12px; }
 .ds-chip-row { display:flex; flex-wrap:wrap; gap:8px; }
-.ds-chip { font-size:12px !important; font-weight:600 !important; color:var(--label-2); background:var(--surface-sunk); border:1px solid var(--hairline); min-height:40px; padding:0 13px; border-radius:14px; }
+.ds-chip { font-size:12px !important; font-weight:600 !important; color:var(--label-2); background:var(--surface-sunk); border:1px solid var(--hairline); min-height:44px; padding:0 13px; border-radius:14px; }
 .ds-chip.is-on { background:var(--accent); color:#fff; border-color:var(--accent); }
 .ds-toggle-row { display:flex; align-items:center; justify-content:space-between; gap:22px; min-height:74px; max-width:390px; }
 .ds-toggle-row strong { display:block; font-weight:650; font-size:13px; }
@@ -343,7 +343,7 @@
   .ds-mark { height:38px; width:79px; }
   .ds-mark img { width:79px;height:42px; }
   .ds-system-name { display:none; }
-  .ds-search-box { flex:1; margin:0; min-width:0; max-width:290px; height:38px; }
+  .ds-search-box { flex:1; margin:0; min-width:0; max-width:290px; height:44px; }
   .ds-nav,.ds-sidebar-bottom { display:none; }
   .ds-nav.ds-mobile-open { display:block; order:3; flex:0 0 100%; max-height:200px; overflow-y:auto; padding-bottom:7px; border-top:1px solid var(--hairline); }
   .ds-main { height:auto; flex:1; }
