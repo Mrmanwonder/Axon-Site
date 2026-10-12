@@ -28,7 +28,10 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "font-src 'self'",
-  "connect-src 'self' https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
+  // api.pwnedpasswords.com: the new-password breach check (k-anonymity range
+  // query, 5 hex characters of a SHA-1). Without it every check fails closed
+  // and no one can create or reset a password (AXO-235).
+  "connect-src 'self' https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com https://api.pwnedpasswords.com",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
 ].join('; ')
