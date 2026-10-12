@@ -19,8 +19,8 @@ import { clearLocalData, putCached, readThrough } from './cache.js';
 // type-checkable and tree-shakeable where a global is neither.
 import { createClient } from '@supabase/supabase-js';
 import { fetchWithTimeout } from './lib/request.js';
-import { OAUTH_PROVIDERS, PROVIDER_LABEL } from './lib/auth/providers.js';
-export { OAUTH_PROVIDERS, PROVIDER_LABEL };
+import { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD } from './lib/auth/providers.js';
+export { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD };
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: { fetch: fetchWithTimeout },
@@ -100,7 +100,7 @@ export async function sendOtp(contact) {
  * emailed link already uses.
  */
 export async function signInWithProvider(provider) {
-  if (!OAUTH_PROVIDERS.includes(provider)) {
+  if (!SIGN_IN_PROVIDERS.includes(provider)) {
     throw new Error(`Unknown sign-in provider: ${provider}`);
   }
   // Which provider we left with, so the message on the way back can name it.
@@ -116,6 +116,9 @@ export async function signInWithProvider(provider) {
       // A shared family device is the normal case here, so never silently
       // resume whichever Google account the browser saw last.
       ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}),
+      // WorkOS needs `email` for Supabase to link the verified address to an
+      // existing guardian rather than create a second account.
+      ...(provider === 'custom:workos' ? { scopes: 'openid email profile' } : {}),
     },
   });
   if (error) throw error;

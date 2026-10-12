@@ -168,7 +168,9 @@ export const sendOtp = supabaseMod.sendOtp as (
 export const verifyOtp = supabaseMod.verifyOtp as (contact: string, input: string) => Promise<unknown>;
 export const signInWithProvider = supabaseMod.signInWithProvider as (p: string) => Promise<void>;
 export const isProviderNotEnabled = supabaseMod.isProviderNotEnabled as (e: unknown) => boolean;
-export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as readonly ("google" | "custom:workos")[];
+export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as readonly "google"[];
+/** Password sign-in goes through WorkOS (staging flag, AXO-234). */
+export const WORKOS_PASSWORD = supabaseMod.WORKOS_PASSWORD as boolean;
 export const PROVIDER_LABEL = supabaseMod.PROVIDER_LABEL as Record<string, string>;
 
 // ── guardian verification ──────────────────────────────────────────────────

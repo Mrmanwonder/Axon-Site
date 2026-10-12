@@ -1,27 +1,48 @@
-# WorkOS AuthKit → Supabase Custom OIDC: staging-only wiring
+# WorkOS AuthKit → Supabase custom OIDC (AXO-234)
 
-This change **does not replace Supabase Auth credentials**. It adds one optional provider, `custom:workos`, to Axon's existing `signInWithOAuth` flow, gated behind `VITE_WORKOS_OIDC_STAGING=true`. Default `false` leaves Google, email/phone OTP, and Supabase email/password flows unchanged. Do **not** enable it on the production deployment.
+WorkOS holds guardian passwords so that its password policy and its breached-password check (Have I Been Pwned) apply on the server. Supabase stays the session issuer, so `auth.uid()`, RLS, Google sign-in and email/phone codes are unchanged.
 
-## Prerequisites
+## What the app does
 
-1. Create a **separate Supabase staging project** (or equivalent isolated environment) for auth testing. **The existing `src/config.js` still targets the production Supabase project**; changing only `VITE_WORKOS_OIDC_STAGING` does **not** isolate anything! Do not flip the flag until staging backend configuration is explicitly implemented and verified.
-2. Create the WorkOS AuthKit staging application and a **WorkOS Connect first-party OAuth/OIDC application** whose client credentials are used by the Supabase custom provider.
-3. Configure the Supabase staging project's **Custom OAuth Providers → OIDC → Auto-discovery** with WorkOS' exact OIDC issuer string (no trailing slash if the discovery document has none), client ID/secret and identifier **`custom:workos`**. These private credentials belong in Supabase/WorkOS settings, not browser `VITE_` variables.
-4. Copy the callback/redirect URL **shown by the Supabase custom OIDC provider** into the WorkOS Connect OAuth app's allowed redirect URIs. This URL is Supabase Auth's callback, **not** Axon's home URL. Allowlist the staging Axon website return URL in **Supabase Auth URL configuration**.
-5. Use an isolated, synthetic guardian account without real student data. Test both first-time and returning sign-in, returned `email_verified`, account linking and unchanged `auth.uid()` on the same user. Never test provider linking by risking a real production guardian.
-6. Set `VITE_WORKOS_OIDC_STAGING=true` **only** for isolated staging, rebuild, and use `Continue with WorkOS`.
+- `VITE_WORKOS_OIDC_STAGING` unset or anything other than exactly `true`: no change. Password sign-in uses Supabase as before.
+- `VITE_WORKOS_OIDC_STAGING=true`: the account step's "Sign in with a password" choice hands off to WorkOS through the Supabase provider `custom:workos` (`signInWithOAuth`, scopes `openid email profile`). Sign-in, sign-up and password reset all happen on the WorkOS page. WorkOS never appears as a separate button or by name.
+- With the flag on, Parent Mode offers only the emailed code. A WorkOS-held password cannot be checked by Supabase.
 
-## Why it is not production-ready
+Code: `src/lib/auth/providers.js`, `src/supabase.js` (`signInWithProvider`), `src/ui/onboarding/Onboarding.tsx`, `src/ui/data/useParentMode.tsx`. Tests: `tests/ui/workos-oidc-provider.test.ts`, `tests/ui/onboarding-single-flight.test.tsx`, `tests/ui/parent-mode-workos.test.tsx`.
 
-- Supabase Auth still directly accepts **email/password**; an OIDC provider does **not** automatically enforce WorkOS HIBP policy on those password endpoints. Native provider disabling, or another provably authoritative enforcement approach, must be settled by adversarial tests before a production migration.
-- A WorkOS staging issuer configured inside a **production Supabase project is not a staging Supabase environment**. Do not link the live guardian namespace against a staging provider without a safe rollout plan.
-- An external OIDC provider may create a new Supabase user rather than link it. Confirm identical guardian UUID and existing student-consent/RLS ownership before accepting migration.
-- Parent Mode currently reauthenticates via Supabase password and would require separate work; reset/OTP/Gmail remain unchanged by this PR.
-- Password creation in WorkOS is controlled by WorkOS's own policy; configure >=8 characters, uppercase, lowercase, digit, no mandatory symbol, HIBP rejection and verify it with provider-side tests.
+## Live configuration as read on 12 Oct 2026
 
-**Scope of this PR:** only make the optional OIDC method reachable inside the existing Axon OAuth UI when explicitly enabled. No live config, schema, signups, passwords, provider secrets or production login are changed.
+| Item | Value | State |
+|---|---|---|
+| WorkOS environment | Staging (sandbox), `environment_01M4JH5SBPTPXXQVHK0PCHGXX1` | in use |
+| WorkOS Production | `canUseProduction: false` (no billing on the workspace) | not usable yet |
+| OIDC issuer | `https://free-cove-65-staging.authkit.app` (discovery document valid: RS256, `openid email profile`, `client_secret_basic`/`post`) | OK |
+| Connect app | "Axon", `app_01M4JH8TV1BVTB7QSN2F4JQDZE`, client `client_01M4JH8TV0P3WY54FX9N3VE0SH`, confidential | **no client secret exists; app-level redirect URIs empty** |
+| Redirect URI | `https://dlgcqieyevoebefhcggi.supabase.co/auth/v1/callback`, set on the environment, not the Connect app | check |
+| Password policy | min length 10, strength 3, no uppercase/lowercase/number rule, breached check **off** | **does not match the owner rule** |
+| Other AuthKit methods | Apple, GitHub, Microsoft and Google sign-in on; Magic Auth off; email verification required | see step 1 |
+| Supabase | Only project is production `dlgcqieyevoebefhcggi` (org on Free). Public `/auth/v1/settings` does not list custom providers, so `custom:workos` cannot be confirmed from outside. | owner reports configured |
 
-References:
-- https://supabase.com/docs/guides/auth/custom-oauth-providers
-- https://workos.com/docs/authkit/connect/oauth
-- https://linear.app/axon-26/issue/AXO-234
+## Owner steps, in order
+
+These change WorkOS or Supabase account settings, so an agent session may not make them.
+
+1. **WorkOS → Staging → Authentication → Methods → Password policy.** Minimum length 8. Require uppercase, lowercase and a number. Do not require a symbol. Turn on "Reject breached passwords". Set minimum strength to the lowest setting, so the composition rule above is the whole rule. Turn off Apple, GitHub, Microsoft and Google sign-in on the AuthKit page: Google already goes through Supabase directly, and a second Google route creates a second guardian account.
+2. **WorkOS → Staging → Applications → Axon (Connect).** Create a client secret. Add `https://dlgcqieyevoebefhcggi.supabase.co/auth/v1/callback` to the app's own redirect URIs.
+3. **Supabase → Authentication → Sign In / Providers → Custom → `custom:workos`.** Issuer `https://free-cove-65-staging.authkit.app`, client ID `client_01M4JH8TV0P3WY54FX9N3VE0SH`, the secret from step 2, scopes `openid email profile`.
+4. **Decide isolation.** The only Supabase project is production. Either create a free second project in the Axon_Site org for staging (Free allows two), or accept testing against production with one synthetic guardian account that is deleted afterwards.
+5. Deploy a preview with `VITE_WORKOS_OIDC_STAGING=true` and run the checks below.
+
+## Checks before any production use
+
+Record each result on AXO-234.
+
+- [ ] New password rejected below 8 characters, without an uppercase, lowercase or digit; accepted with no symbol.
+- [ ] A known breached password (for example `Password123`) rejected by WorkOS.
+- [ ] Reset and first-time sign-up both complete and return to Axon signed in.
+- [ ] An existing guardian with the same verified email keeps the same `auth.uid()`; no second guardian row; consent and student profiles intact.
+- [ ] Unverified email never links to an existing account.
+- [ ] Google sign-in and email/phone codes still work.
+- [ ] **Bypass matrix (blocking).** Hosted Supabase cannot switch off email+password while keeping email codes. Direct calls to `/auth/v1/signup`, `/auth/v1/token?grant_type=password`, `/auth/v1/user` (password change) and `/auth/v1/recover` still accept a Supabase password that never went through WorkOS. Until these are closed, WorkOS screening covers the Axon interface only and is not authoritative. Options: move email codes to WorkOS Magic Auth and switch off the Supabase email provider, or reject non-WorkOS password sessions in a custom access token hook (a compensating control only).
+- [ ] Parent Mode unlock by code works for a WorkOS-only guardian.
+- [ ] Production WorkOS needs billing details on the workspace (AuthKit is free to 1M MAU). No billing change without the owner.

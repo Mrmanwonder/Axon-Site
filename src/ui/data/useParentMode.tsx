@@ -23,7 +23,7 @@ import { useCallback } from "react";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { useApp } from "./AppProvider";
-import { parentModeState, sendParentCode, unlockWithCode, unlockWithPassword } from "./modules";
+import { parentModeState, sendParentCode, unlockWithCode, unlockWithPassword, WORKOS_PASSWORD } from "./modules";
 import { hapticFirm } from "../lib/haptics";
 
 export function useParentMode(contactOverride?: string | null) {
@@ -81,7 +81,8 @@ export function useParentMode(contactOverride?: string | null) {
           "Scanning, reviewing and insights are the student's. Consent, billing " +
           "and anything that removes data are the account holder's, so we check " +
           "you're the one here.",
-        choices: [{ label: `Send a code to ${contact}`, value: "code" }, ...(contact.includes("@") ? [{ label: "Use my password", value: "password" }] : [])],
+        choices: [{ label: `Send a code to ${contact}`, value: "code" }, // A WorkOS-held password cannot be checked here (AXO-234), so only the code.
+                  ...(contact.includes("@") && !WORKOS_PASSWORD ? [{ label: "Use my password", value: "password" }] : [])],
         onChoice: async (choice) => {
           hapticFirm();
           if (choice === "password") askForPassword();

@@ -66,7 +66,7 @@ import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
-  signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
+  signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL, WORKOS_PASSWORD,
   listPurposes, recordConsent,
   NOTICE_LANGUAGES, noticeStrings, purposeLabel, purposeNote, noticeIsComplete,
   startCheckout,
@@ -394,7 +394,9 @@ export default function Onboarding() {
         providerFlight.current = false;
         setBusyProvider(null);
         setError(isProviderNotEnabled(e)
-          ? `${PROVIDER_LABEL[p]} sign-in isn't switched on yet. Use your email or phone below.`
+          ? (p === "custom:workos"
+            ? "Password sign-in isn't switched on yet. Use a sign-in code instead."
+            : `${PROVIDER_LABEL[p]} sign-in isn't switched on yet. Use your email or phone below.`)
           : (e as Error).message || `${PROVIDER_LABEL[p]} sign-in didn't open.`);
       }
     };
@@ -446,6 +448,28 @@ export default function Onboarding() {
                         onClick={() => { hapticTick(); setAccountMethod("code"); setError(null); }}>
                 Continue with email or phone
               </PressBox>
+            </div>
+          </>
+        ) : accountMethod === "password" && WORKOS_PASSWORD ? (
+          <>
+            {/* AXO-234: the password is held and checked by WorkOS, which applies
+                the password rules and rejects passwords found in known breaches.
+                Signing in, creating a password and resetting it all happen there. */}
+            <h2 className="obaccount-method-title">Sign in with a password</h2>
+            <p className="obaccount-method-sub">You'll set or enter your password on a secure page, then come straight back here.</p>
+            <div className="obfoot">
+              <PressBox as="button" type="button" className="btn primary"
+                        disabled={!!busyProvider || sendingCode}
+                        aria-busy={busyProvider === "custom:workos"}
+                        onClick={() => void useProvider("custom:workos")}>
+                {busyProvider === "custom:workos" ? "Opening…" : "Continue"}
+              </PressBox>
+            </div>
+            <div className="obaccount-switch">
+              <button type="button" disabled={!!busyProvider || sendingCode}
+                      onClick={() => { hapticTick(); setError(null); setAccountMethod("code"); }}>
+                Use a sign-in code instead
+              </button>
             </div>
           </>
         ) : accountMethod === "password" ? (

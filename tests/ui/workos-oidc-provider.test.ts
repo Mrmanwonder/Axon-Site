@@ -2,25 +2,32 @@ import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
-test("production/default only exposes Google, never staging WorkOS", async () => {
-  vi.stubEnv("VITE_WORKOS_OIDC_STAGING", "");
+const load = async (flag: string) => {
+  vi.stubEnv("VITE_WORKOS_OIDC_STAGING", flag);
   vi.resetModules();
-  const { OAUTH_PROVIDERS } = await import("../../src/lib/auth/providers.js");
-  expect(OAUTH_PROVIDERS).toEqual(["google"]);
-  expect(OAUTH_PROVIDERS).not.toContain("custom:workos");
+  return import("../../src/lib/auth/providers.js");
+};
+
+test("default: Google only, and password sign-in stays on Supabase", async () => {
+  const p = await load("");
+  expect(p.OAUTH_PROVIDERS).toEqual(["google"]);
+  expect(p.SIGN_IN_PROVIDERS).toEqual(["google"]);
+  expect(p.WORKOS_PASSWORD).toBe(false);
 });
 
-test("staging opt-in adds WorkOS custom OIDC without removing Google", async () => {
-  vi.stubEnv("VITE_WORKOS_OIDC_STAGING", "true");
-  vi.resetModules();
-  const { OAUTH_PROVIDERS, PROVIDER_LABEL } = await import("../../src/lib/auth/providers.js");
-  expect(OAUTH_PROVIDERS).toEqual(["google", "custom:workos"]);
-  expect(PROVIDER_LABEL["custom:workos"]).toBe("WorkOS");
+test("flag on: WorkOS backs the password choice and never appears as its own button", async () => {
+  const p = await load("true");
+  expect(p.WORKOS_PASSWORD).toBe(true);
+  expect(p.OAUTH_PROVIDERS).toEqual(["google"]);
+  expect(p.SIGN_IN_PROVIDERS).toEqual(["google", "custom:workos"]);
+  // Parents read this; no vendor name.
+  expect(p.PROVIDER_LABEL["custom:workos"]).not.toMatch(/workos/i);
 });
 
-test("incorrect flag values fail closed", async () => {
-  vi.stubEnv("VITE_WORKOS_OIDC_STAGING", "True");
-  vi.resetModules();
-  const { OAUTH_PROVIDERS } = await import("../../src/lib/auth/providers.js");
-  expect(OAUTH_PROVIDERS).toEqual(["google"]);
+test("any other flag value fails closed", async () => {
+  for (const v of ["True", "1", "yes", "false"]) {
+    const p = await load(v);
+    expect(p.WORKOS_PASSWORD).toBe(false);
+    expect(p.SIGN_IN_PROVIDERS).toEqual(["google"]);
+  }
 });
