@@ -344,20 +344,41 @@ export default function ReviewSheet() {
                     saved={!!review.committed} />
         ))}
 
-        {/* One tap accepts only parts that were read cleanly and that nobody
-            flagged. A flagged part is checked one at a time or left unsure:
-            the old "All are right" confirmed 44 unsure parts into analytics in
-            one tap (ADDENDUM-01A item 5, AXO-216). */}
-        {review.cleanCount > 0 && (
-          <div className="bulkrow">
+        {/* Two explicit choices (owner, 8 Oct 2026). The first accepts only the
+            parts read cleanly. The second also accepts the parts Axon was unsure
+            of, and says that whatever is accepted counts in Insights. Anything
+            not accepted stays unsure and out of Insights (AXO-216). Unreadable
+            parts and parts missing a mark are never in either: they need a fix. */}
+        {(review.cleanCount > 0 || review.unsureCount > 0) && (
+          <div className="bulkrow" data-two={review.cleanCount > 0 && review.unsureCount > 0 ? "1" : undefined}>
             <div className="b">
-              <div className="t1">{review.cleanCount} read cleanly</div>
-              <div className="t2">Accept them together, or check them one at a time.</div>
+              <div className="t1">
+                {review.cleanCount > 0 && <>{review.cleanCount} read clearly</>}
+                {review.cleanCount > 0 && review.unsureCount > 0 && " · "}
+                {review.unsureCount > 0 && <>{review.unsureCount} Axon was unsure of</>}
+              </div>
+              <div className="t2">
+                {review.unsureCount > 0
+                  ? "Compared them with your paper? Accept them here. Accepted parts count in your Insights."
+                  : "Accept them together, or check them one at a time."}
+              </div>
             </div>
-            <PressBox as="button" type="button" className="qact accent"
-                      onClick={() => { hapticFirm(); reviewHandlers.onConfirmClean(); }}>
-              These look right
-            </PressBox>
+            <div className="bulkacts">
+              {review.cleanCount > 0 && (
+                <PressBox as="button" type="button" className={review.unsureCount > 0 ? "qact" : "qact accent"}
+                          onClick={() => { hapticFirm(); reviewHandlers.onConfirmClean(); }}>
+                  {review.unsureCount > 0 ? `Accept the ${review.cleanCount} clear` : "These look right"}
+                </PressBox>
+              )}
+              {review.unsureCount > 0 && (
+                <PressBox as="button" type="button" className="qact accent"
+                          onClick={() => { hapticFirm(); reviewHandlers.onConfirmAll(); }}>
+                  {review.cleanCount > 0
+                    ? `Accept all ${review.cleanCount + review.unsureCount}`
+                    : review.unsureCount === 1 ? "Accept it as read" : `Accept all ${review.unsureCount}`}
+                </PressBox>
+              )}
+            </div>
           </div>
         )}
 

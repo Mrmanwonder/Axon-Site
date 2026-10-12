@@ -168,7 +168,9 @@ export const sendOtp = supabaseMod.sendOtp as (
 export const verifyOtp = supabaseMod.verifyOtp as (contact: string, input: string) => Promise<unknown>;
 export const signInWithProvider = supabaseMod.signInWithProvider as (p: string) => Promise<void>;
 export const isProviderNotEnabled = supabaseMod.isProviderNotEnabled as (e: unknown) => boolean;
-export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as "google"[];
+export const OAUTH_PROVIDERS = supabaseMod.OAUTH_PROVIDERS as readonly "google"[];
+/** Password sign-in goes through WorkOS (staging flag, AXO-234). */
+export const WORKOS_PASSWORD = supabaseMod.WORKOS_PASSWORD as boolean;
 export const PROVIDER_LABEL = supabaseMod.PROVIDER_LABEL as Record<string, string>;
 
 // ── guardian verification ──────────────────────────────────────────────────
@@ -797,6 +799,17 @@ export const unreadablePages = papersMod.unreadablePages as unknown as (
   studentId: string,
 ) => Promise<Cached<{ id: string; paper_id: string; page_number: number; reason: string }[]>>;
 
+export const paperDifficultyFeedback = papersMod.paperDifficultyFeedback as unknown as (
+  studentId: string, paperId: string,
+) => Promise<{ rating: number | null; skipped: boolean } | null>;
+
+export const savePaperDifficultyFeedback = papersMod.savePaperDifficultyFeedback as unknown as (
+  args: { paperId: string; studentId: string; rating: number | null; skipped: boolean },
+) => Promise<void>;
+export const readQuestionDifficulty = papersMod.readQuestionDifficulty as unknown as (
+  attemptId: string,
+) => Promise<import("./questionDifficulty").DifficultyEvidence | null>;
+
 /** Every eligible attempt and loss event Insights reasons over, from the
     analytics views only (hard rule 3). */
 export const insightEvidence = papersMod.insightEvidence as unknown as (
@@ -804,6 +817,8 @@ export const insightEvidence = papersMod.insightEvidence as unknown as (
 ) => Promise<Cached<{
   attempts: import("./insights").InsightAttempt[];
   losses: import("./insights").InsightLoss[];
+  felt: import("./perceivedDifficulty").FeltEvidence[];
+  difficulty: import("./questionDifficulty").DifficultyEvidence[];
 }>>;
 
 /** The student sets or clears a paper's subject (one of their own subjects). */

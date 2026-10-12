@@ -29,8 +29,10 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
         title: box(".ob-intro-story h1"),
         copy: box(".ob-intro-story p"),
         scene: box(".ob-intro-scene"),
-        paper: box(".ob-intro-paper"),
-        insight: box(".ob-intro-insight"),
+        sheets: [...document.querySelectorAll<HTMLElement>(".ob-loop-sheet")].map((el) => {
+          const r = el.getBoundingClientRect(); return { left: r.left, right: r.right };
+        }),
+        read: box(".ob-loop-read"),
         action: box(".ob-intro-continue"),
         note: box(".ob-intro-footnote"),
         logoHasOpaqueAsset: document.querySelector(".ob-intro-brand img") !== null,
@@ -53,8 +55,12 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
     expect(g.action.height, `CTA tap size at ${where}`).toBeGreaterThanOrEqual(44);
     expect(g.action.left, `CTA outside viewport at ${where}`).toBeGreaterThanOrEqual(0);
     expect(g.action.right, `CTA outside viewport at ${where}`).toBeLessThanOrEqual(width + 1);
-    expect(g.paper.left, `illustration clipped at ${where}`).toBeGreaterThanOrEqual(0);
-    expect(g.insight.right, `insight clipped at ${where}`).toBeLessThanOrEqual(width + 1);
+    expect(g.sheets.length, `paper stack at ${where}`).toBe(5);
+    for (const sheet of g.sheets) {
+      expect(sheet.left, `paper clipped at ${where}`).toBeGreaterThanOrEqual(0);
+      expect(sheet.right, `paper clipped at ${where}`).toBeLessThanOrEqual(width + 1);
+    }
+    expect(g.read.bottom, `read mark overlaps action at ${where}`).toBeLessThan(g.action.top);
     if (width <= 430) {
       expect(g.scene.height, `oversized visual at ${where}`).toBeLessThanOrEqual(315);
       expect(g.scene.top - g.copy.bottom, `excessive whitespace at ${where}`).toBeLessThanOrEqual(120);
@@ -86,12 +92,44 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
   await expect(page.getByRole("heading", { name: "Set up your account" })).toBeVisible();
 });
 
+test("the paper stack loops with transform and opacity only", async ({ page }) => {
+  await page.goto(url);
+  const sheets = page.locator(".ob-loop-sheet");
+  await expect(sheets).toHaveCount(5);
+  // Every sheet and the read mark run the shared loop, on one infinite cycle.
+  const running = await page.evaluate(() => [...document.querySelectorAll(".ob-loop-sheet, .ob-loop-read")]
+    .map((el) => { const cs = getComputedStyle(el); return [cs.animationName, cs.animationIterationCount, cs.animationDuration].join(" "); }));
+  expect(new Set(running.map((r) => r.split(" ").slice(1).join(" ")))).toEqual(new Set(["infinite 7s"]));
+  // Only compositor properties are keyframed (no layout, no filters).
+  const animated = await page.evaluate(() => {
+    const props = new Set<string>();
+    for (const el of document.querySelectorAll(".ob-loop-sheet, .ob-loop-read")) {
+      for (const a of el.getAnimations()) for (const k of (a.effect as KeyframeEffect).getKeyframes()) {
+        for (const p of Object.keys(k)) if (!["offset", "computedOffset", "easing", "composite"].includes(p)) props.add(p);
+      }
+    }
+    return [...props].sort();
+  });
+  expect(animated).toEqual(["opacity", "transform"]);
+  // The stack changes over the cycle: it is not a still image.
+  const at = async () => sheets.first().evaluate((el) => getComputedStyle(el).opacity);
+  const first = await at();
+  await page.waitForTimeout(3600);
+  expect(await at()).not.toBe(first);
+});
+
 test("motion stays optional under reduced-motion preference @a11y", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(url);
-  const names = await Promise.all([
-    ".ob-intro-paper", ".ob-intro-insight", "#obroot.obroot-intro .obview > .ob-intro",
-  ].map(selector => page.locator(selector).evaluate(node => getComputedStyle(node).animationName)));
-  expect(names).toEqual(["none", "none", "none"]);
+  await expect(page.locator(".ob-loop-sheet")).toHaveCount(5);
+  const names = await page.evaluate(() => [...document.querySelectorAll(
+    ".ob-loop-sheet, .ob-loop-read, #obroot.obroot-intro .obview > .ob-intro",
+  )].map((node) => getComputedStyle(node).animationName));
+  expect(names).toHaveLength(7);
+  expect(new Set(names)).toEqual(new Set(["none"]));
+  // The still frame is the settled stack, fully visible, with the read mark.
+  const opacities = await page.locator(".ob-loop-sheet, .ob-loop-read")
+    .evaluateAll((els) => els.map((el) => getComputedStyle(el).opacity));
+  expect(new Set(opacities)).toEqual(new Set(["1"]));
   await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
 });

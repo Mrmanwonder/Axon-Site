@@ -371,7 +371,11 @@
   .bulkrow .b{flex:1;min-width:0;}
   .bulkrow .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
   .bulkrow .t2{font-size:12.5px;color:var(--label-3);margin-top:3px;line-height:1.4;}
-  .bulkrow .qact{flex-shrink:0;}
+  .bulkrow .qact{flex-shrink:0;min-height:44px;}
+  .bulkrow .bulkacts{display:flex;flex-wrap:wrap;gap:8px;}
+  /* Two choices sit under the text so both labels fit at 360px. */
+  .bulkrow[data-two]{flex-wrap:wrap;}
+  .bulkrow[data-two] .bulkacts{flex-basis:100%;}
   /* Still waiting on the student, so it does not wear the colour of a finished
      action. It stays live: tapping it says what is left. */
   .btn.primary[data-waiting]{background:var(--surface-sunk);color:var(--label-2);box-shadow:none;}

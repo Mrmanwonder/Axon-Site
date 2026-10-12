@@ -1,10 +1,11 @@
 import PressBox from "../components/PressBox";
 import { hapticTick } from "../lib/haptics";
+import PaperLoop from "./PaperLoop";
 import "../styles/onboarding-intro.css";
 
 /**
- * Public, signed-out introduction. The illustration is schematic: it contains
- * no example student answers, guessed marks or simulated analysis.
+ * Public, signed-out introduction. The scene is a looping stack of marked
+ * papers (PaperLoop): schematic, with no student answers, marks or results.
  */
 export default function Intro({ onContinue }: { onContinue: () => void }) {
   return (
@@ -29,50 +30,7 @@ export default function Intro({ onContinue }: { onContinue: () => void }) {
       </section>
 
       <div className="ob-intro-scene" aria-hidden="true">
-        <div className="ob-intro-ambient" />
-        <div className="ob-intro-scene-grid" />
-        <div className="ob-intro-paper-shadow" />
-        <div className="ob-intro-paper">
-          <div className="ob-intro-paper-head">
-            <span className="ob-intro-paper-icon">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 3.5h7l4 4V20.5H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z M14 3.5v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>MARKED PAPER</span>
-            <span className="ob-intro-paper-dots"><i /><i /><i /></span>
-          </div>
-          <div className="ob-intro-paper-rule" />
-          <div className="ob-intro-paper-question">
-            <span className="ob-intro-paper-index">01</span>
-            <div className="ob-intro-paper-lines">
-              <i /><i /><i />
-            </div>
-          </div>
-          <div className="ob-intro-paper-answer">
-            <i /><i /><i /><i />
-          </div>
-          <div className="ob-intro-paper-focus">
-            <span className="ob-intro-paper-focus-line" />
-            <div><i /><i /></div>
-            <span className="ob-intro-paper-focus-dot" />
-          </div>
-          <div className="ob-intro-paper-footer"><i /><i /></div>
-        </div>
-
-        <div className="ob-intro-connection"><span /></div>
-        <div className="ob-intro-insight">
-          <span className="ob-intro-insight-icon">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="m5 15 5-5 3.3 3.3L19 7.5 M14.5 7.5H19V12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <span className="ob-intro-insight-copy">
-            <small>AXON EXPLAINS</small>
-            <strong>What to do differently</strong>
-          </span>
-          <span className="ob-intro-insight-arrow" aria-hidden="true">↗</span>
-        </div>
+        <PaperLoop />
       </div>
 
       <div className="ob-intro-actions">
