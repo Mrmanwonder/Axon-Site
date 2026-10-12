@@ -30,6 +30,9 @@ test("intro remains readable and its only action stays in bounds from phones to 
     expect(g.button.height).toBeGreaterThanOrEqual(44);
     expect(g.title.left).toBeGreaterThanOrEqual(0);
     expect(g.title.right).toBeLessThanOrEqual(g.viewport + 1);
+    if (width === 390 || width === 1024) {
+      await page.screenshot({ path: `test-results/onboarding-intro-${width}.png`, fullPage: true });
+    }
   }
 
   const audit = await new AxeBuilder({ page }).analyze();
