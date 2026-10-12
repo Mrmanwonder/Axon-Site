@@ -57,6 +57,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useNavigate } from "react-router-dom";
+import { flushSync } from "react-dom";
+import Intro from "./Intro";
 import { loadProfiles, selectedProfile } from "../data/profiles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -101,18 +103,6 @@ const STEP_PHASE: Partial<Record<Step, number>> = {
   student: 3,
 };
 
-/* The seven causes, as a named palette on the landing screen. Categorical and
-   equal-weight, so there is nothing here to read as a ranking. */
-const CAUSES: [string, string][] = [
-  ["var(--cause-conceptual-gap)", "Conceptual gap"],
-  ["var(--cause-procedural-slip)", "Procedural slip"],
-  ["var(--cause-misread-question)", "Misread question"],
-  ["var(--cause-incomplete)", "Incomplete"],
-  ["var(--cause-presentation)", "Presentation"],
-  ["var(--cause-keyword-miss)", "Keyword miss"],
-  ["var(--cause-timed-out)", "Timed out"],
-];
-
 /* Icon and a specific one-liner per purpose. The generic alternative —
    repeating "Required" down four rows — turns the most consequential screen in
    the flow into a wall of identical switches, which is how blanket consent gets
@@ -151,6 +141,7 @@ export default function Onboarding() {
   const [step, setStep] = useState<Step>(
     s ? "nameOnly" : providerError ? "account" : "landing",
   );
+  const [flowDirection, setFlowDirection] = useState<"forward" | "back">("forward");
   /* Analytics audience follows the step: guardian-only steps are a parent
      surface, the landing (which a student may be reading) is unknown, and the
      student's first-run screens are a student session. See lib/analytics.ts. */
@@ -226,7 +217,22 @@ export default function Onboarding() {
   const [profileBusy, setProfileBusy] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
 
-  const go = useCallback((next: Step) => { setError(null); setStep(next); }, []);
+  const go = useCallback((next: Step, direction: "forward" | "back" = "forward") => {
+    const update = () => { setError(null); setFlowDirection(direction); setStep(next); };
+    /* Native view transitions supply the outgoing frame as well as the incoming
+       frame. A CSS-only directional entrance remains for older mobile browsers. */
+    const doc = document as Document & {
+      startViewTransition?: (callback: () => void) => { finished: Promise<void> };
+    };
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.dataset.motion === "reduce";
+    if (doc.startViewTransition && !reduced) {
+      document.documentElement.dataset.axonFlowDirection = direction;
+      doc.startViewTransition(() => { flushSync(update); });
+    } else {
+      update();
+    }
+  }, []);
   // Backend/database messages are developer diagnostics, not interface copy.
   // Every caller supplies a user-facing fallback specific to the action that
   // failed, so never surface raw Postgres/PostgREST internals here.
@@ -353,44 +359,16 @@ export default function Onboarding() {
   const back = sendingCode || otpBusy || passwordBusy || busyProvider ? undefined : BACK_TO[step];
   const shellProps = {
     phase: STEP_PHASE[step],
-    onBack: back ? () => { if (!passwordFlight.current && !providerFlight.current) go(back); } : undefined,
+    onBack: back ? () => { if (!passwordFlight.current && !providerFlight.current) go(back, "back"); } : undefined,
+    stepKey: step,
+    direction: flowDirection,
   };
 
-  // ── landing ──────────────────────────────────────────────────────────────
+  // ── landing: one action, one product idea ───────────────────────────────
   if (step === "landing") {
-    return (
-      <Shell {...shellProps}>
-        <div className="obhero">
-          <div className="obwordmark">
-            <span className="g"><Icon d={ICONS.trend} /></span>
-            <span className="n">Axon</span>
-          </div>
-          <h1>See exactly where the <em>marks went</em>.</h1>
-          <div className="sub">
-            Upload a graded paper. We read the questions, the answers and the
-            teacher&rsquo;s marks, then explain what to do differently next time.
-          </div>
-        </div>
-        <div className="sectitle">Every lost mark gets a reason</div>
-        <div className="obspec">
-          {CAUSES.map(([c, n]) => (
-            <span key={n} style={{ "--c": c } as React.CSSProperties}>{n}</span>
-          ))}
-        </div>
-        <div className="obpanel tint" style={{ marginTop: 22 }}>
-          <div className="body" style={{ marginTop: 0 }}>
-            A parent sets this up. Indian law requires a parent&rsquo;s verified
-            consent before we can process anything belonging to a student under 18.
-          </div>
-        </div>
-        <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary"
-                    onClick={() => { hapticTick(); go("account"); }}>
-            Continue
-          </PressBox>
-        </div>
-      </Shell>
-    );
+    return <Shell {...shellProps} variant="intro">
+      <Intro onContinue={() => go("account")} />
+    </Shell>;
   }
 
   // ── parent account ───────────────────────────────────────────────────────
@@ -437,6 +415,7 @@ export default function Onboarding() {
           <Icon d={ICONS.shield} />
           <span>Parent or guardian account</span>
         </div>
+        <div className="obaccount-stage" key={accountMethod}>
         {accountMethod === "choices" ? (
           <>
         <div className="obalt">
@@ -511,6 +490,7 @@ export default function Onboarding() {
             </div>
           </>
         )}
+        </div>
         <div className="obaccount-assurance">
           <Icon d={ICONS.shield} />
           <span>Student papers aren't processed until the parent or guardian has given consent.</span>
