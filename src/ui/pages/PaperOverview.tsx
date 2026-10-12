@@ -38,6 +38,7 @@ import { EXPLANATION_GAP_LABEL } from "../data/explanationGap";
 import type { PaperPart, PaperStructure } from "../data/paperStructure";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
+import PaperDifficultyPrompt from "../components/PaperDifficultyPrompt";
 import { tutorEntryVisible } from "../data/tutor";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
@@ -306,6 +307,9 @@ export default function PaperOverview() {
         </div>
         <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
+
+      {student?.id && <PaperDifficultyPrompt key={paper.id} paperId={paper.id} studentId={student.id}
+        ready={paper.student_attempt.length > 0} />}
 
       {paper.subject_identity_source !== "assessment_identity" && (student?.subject_selections?.length ?? 0) > 0 && (
         <div className="po-subject">

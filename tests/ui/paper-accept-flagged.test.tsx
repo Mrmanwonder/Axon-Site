@@ -23,6 +23,8 @@ vi.mock("../../src/ui/data/modules", () => ({
   setPaperType: vi.fn(),
   fixSavedPart: fixture.fixSavedPart,
   deferPart: vi.fn(),
+  paperDifficultyFeedback: vi.fn().mockResolvedValue({ rating: null, skipped: true }),
+  savePaperDifficultyFeedback: vi.fn(),
 }));
 vi.mock("../../src/cache.js", () => ({ getCached: fixture.getCached }));
 
