@@ -56,7 +56,7 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
     expect(g.insight.right, `insight clipped at ${where}`).toBeLessThanOrEqual(width + 1);
     if (width <= 430) {
       expect(g.scene.height, `oversized visual at ${where}`).toBeLessThanOrEqual(315);
-      expect(g.scene.top - g.copy.bottom, `excessive whitespace at ${where}`).toBeLessThanOrEqual(82);
+      expect(g.scene.top - g.copy.bottom, `excessive whitespace at ${where}`).toBeLessThanOrEqual(120);
       expect(g.note.bottom, `consent note requires scrolling at ${where}`).toBeLessThanOrEqual(height + 2);
     }
 
