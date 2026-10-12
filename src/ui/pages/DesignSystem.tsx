@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AVATAR_PRESETS } from "../data/modules";
-import { AvatarDisc } from "../components/AvatarPicker";
+import { PRESETS as AVATAR_PRESETS, avatarRenderFor, initialFor } from "../../avatar.js";
 import { MaterialSymbol, type MaterialSymbolName } from "../components/MaterialSymbols";
 import "./DesignSystem.css";
 
@@ -107,6 +106,17 @@ function Swatch({ name, token, note, theme }: { name: string; token: string; not
       <div className="ds-swatch-meta"><span className="ds-mono">{value || "Live token"}</span><CopyButton value={value || "var(" + token + ")"} title={token}/></div>
     </div>
   </div>;
+}
+/* Use the real asset generator without bootstrapping auth, data or the student shell. */
+function AvatarDisc({ presetKey, label }: { presetKey: string; label?: string }) {
+  const render = avatarRenderFor({ avatar_seed: presetKey });
+  return <span className="ds-avatar-disc" data-kind={render.kind} style={{ background: render.background, color: render.color }} aria-hidden="true">
+    {render.kind === "dot-face" && render.glyph
+      ? <svg viewBox={"0 0 " + render.glyph.size + " " + render.glyph.size} focusable="false">{render.glyph.points.map((point, i) =>
+          <circle key={i} cx={point.x + .5} cy={point.y + .5} r=".26" fill="currentColor" opacity={point.tone === 0 ? .42 : point.tone === 1 ? .8 : .96}/>
+        )}</svg>
+      : <span>{initialFor(label)}</span>}
+  </span>;
 }
 function Meta({ children }: { children: ReactNode }) { return <div className="ds-label">{children}</div>; }
 function DividerLabel({ children }: { children: React.ReactNode }) { return <div className="ds-subtitle">{children}</div>; }
