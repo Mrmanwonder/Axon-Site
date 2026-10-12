@@ -5,7 +5,7 @@ WorkOS holds guardian passwords so that its password policy and its breached-pas
 ## What the app does
 
 - `VITE_WORKOS_OIDC_STAGING` unset or anything other than exactly `true`: no change. Password sign-in uses Supabase as before.
-- `VITE_WORKOS_OIDC_STAGING=true`: the account step's "Sign in with a password" choice hands off to WorkOS through the Supabase provider `custom:workos` (`signInWithOAuth`, scopes `openid email profile`). Sign-in, sign-up and password reset all happen on the WorkOS page. WorkOS never appears as a separate button or by name.
+- `VITE_WORKOS_OIDC_STAGING=true`: once a valid email is typed on the account step, "Continue with a password" hands off to WorkOS (no Axon account check is made in this mode) through the Supabase provider `custom:workos` (`signInWithOAuth`, scopes `openid email profile`). Sign-in, sign-up and password reset all happen on the WorkOS page. WorkOS never appears as a separate button or by name.
 - With the flag on, Parent Mode offers only the emailed code. A WorkOS-held password cannot be checked by Supabase.
 
 Code: `src/lib/auth/providers.js`, `src/supabase.js` (`signInWithProvider`), `src/ui/onboarding/Onboarding.tsx`, `src/ui/data/useParentMode.tsx`. Tests: `tests/ui/workos-oidc-provider.test.ts`, `tests/ui/onboarding-single-flight.test.tsx`, `tests/ui/parent-mode-workos.test.tsx`.
