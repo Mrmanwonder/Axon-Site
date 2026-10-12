@@ -85,7 +85,9 @@ export function Shell({
      tint the background wash. Without this wrapper the flow renders, and the
      row icons silently lose their colour — which is exactly how it was found. */
   return (
-    <div id="obroot" className={variant === "intro" ? "obroot-intro" : undefined} aria-label="Set up your account">
+    // The page's main landmark. An aria-label on a plain div names nothing and
+    // left the whole flow outside any landmark (axe "region").
+    <main id="obroot" className={variant === "intro" ? "obroot-intro" : undefined} aria-label="Set up your account">
       <div className="obwrap">
         <div className="obhead">
         {onBack && (
@@ -126,7 +128,7 @@ export function Shell({
           {children}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
