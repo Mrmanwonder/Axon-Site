@@ -41,8 +41,13 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
     expect(g.scrollWidth, `horizontal overflow at ${where}`).toBeLessThanOrEqual(width + 1);
     expect(g.brand.bottom, `headline overlaps brand at ${where}`).toBeLessThan(g.title.top);
     expect(g.title.bottom, `copy overlaps headline at ${where}`).toBeLessThan(g.copy.top);
-    expect(g.copy.bottom, `visual overlaps copy at ${where}`).toBeLessThanOrEqual(g.scene.top + 2);
-    expect(g.scene.bottom, `visual overlaps action at ${where}`).toBeLessThan(g.action.top);
+    if (width < 800) {
+      expect(g.copy.bottom, `visual overlaps copy at ${where}`).toBeLessThanOrEqual(g.scene.top + 2);
+      expect(g.scene.bottom, `visual overlaps action at ${where}`).toBeLessThan(g.action.top);
+    } else {
+      expect(g.copy.right, `desktop visual overlaps text at ${where}`).toBeLessThan(g.scene.left + 4);
+      expect(g.action.right, `desktop CTA overlaps visual at ${where}`).toBeLessThan(g.scene.left + 4);
+    }
     expect(g.action.bottom, `consent note overlaps button at ${where}`).toBeLessThan(g.note.top);
     expect(g.action.height, `CTA tap size at ${where}`).toBeGreaterThanOrEqual(44);
     expect(g.action.left, `CTA outside viewport at ${where}`).toBeGreaterThanOrEqual(0);
