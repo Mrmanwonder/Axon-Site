@@ -1,0 +1,152 @@
+/*
+ * Welcome-screen paper loop (see src/ui/onboarding/PaperLoop.tsx).
+ *
+ * One 7 s cycle shared by every sheet; each sheet's delay offsets it inside
+ * that cycle, and because the durations are equal the offsets hold on every
+ * later loop. Transform and opacity only. Positions are set once with
+ * left/top and never animated. The base (un-animated) style is the settled
+ * stack: that is what reduced motion and screenshots show.
+ */
+.ob-loop {
+  --loop: 7s;
+  --sheet-w: clamp(86px, 31%, 128px);
+  position: absolute;
+  /* Taller than the scene so whole sheets and the read mark's glow fit, with
+     a soft fade at the top where exiting sheets leave (never a hard edge). */
+  inset: -18% -6% -8%;
+  contain: layout;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 11%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 11%);
+}
+.ob-loop-glow {
+  position: absolute;
+  inset: 14% 12% 8%;
+  background: radial-gradient(ellipse 50% 52% at 50% 48%,
+    rgba(58,134,255,.16), rgba(58,134,255,.04) 60%, transparent 82%);
+}
+
+.ob-loop-sheet {
+  position: absolute;
+  left: calc(50% + var(--x));
+  top: calc(53% + var(--y) * .8);
+  width: var(--sheet-w);
+  aspect-ratio: 0.74;
+  margin: calc(var(--sheet-w) * -0.676) 0 0 calc(var(--sheet-w) * -0.5);
+  padding: 9% 9% 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5.5%;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #fbf9f4, #f2eee5);
+  box-shadow: 0 1px 0 rgba(255,255,255,.7) inset,
+    0 14px 26px rgba(0,0,0,.42), 0 2px 5px rgba(0,0,0,.28);
+  transform: rotate(var(--r));
+  z-index: calc(1 + var(--i));
+  will-change: transform, opacity;
+  animation: ob-loop-sheet var(--loop) linear calc(var(--i) * 0.19s) infinite both;
+}
+.ob-loop-head {
+  display: block;
+  width: 46%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(32,36,46,.34);
+  margin-bottom: 2%;
+}
+.ob-loop-line {
+  display: block;
+  height: 2.5px;
+  border-radius: 2px;
+  background: rgba(32,36,46,.15);
+}
+.ob-loop-line-short { width: 52%; margin-top: auto; margin-bottom: 11%; }
+.ob-loop-work { display: block; width: 100%; height: auto; aspect-ratio: 100 / 46; overflow: visible; }
+.ob-loop-hand {
+  stroke: #4a5160;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.ob-loop-ink {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Axon has read the stack: the accent mark under it. */
+.ob-loop-read {
+  position: absolute;
+  left: 50%;
+  bottom: 7%;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--blue, #2c74e8);
+  box-shadow: 0 6px 18px rgba(44,116,232,.42);
+  z-index: 10;
+  will-change: transform, opacity;
+  animation: ob-loop-read var(--loop) linear infinite both;
+}
+.ob-loop-read svg { width: 19px; height: 19px; }
+
+/*
+ *  0 – 9 %   drop in from above on the sheet curve (no overshoot)
+ *  9 – 61 %  rest in the stack
+ * 61 – 70 %  streak up and away: lift, stretch along the motion, fade
+ * 70 – 100%  gone until the next cycle
+ */
+@keyframes ob-loop-sheet {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -46px, 0) rotate(calc(var(--r) - 5deg)) scale(.95);
+    animation-timing-function: cubic-bezier(.32, .72, 0, 1);
+  }
+  9% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(var(--r)) scale(1);
+  }
+  61% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(var(--r)) scale(1);
+    animation-timing-function: cubic-bezier(.55, 0, .85, .25);
+  }
+  70% {
+    opacity: 0;
+    transform: translate3d(var(--exit), -150px, 0) rotate(var(--r)) scale(1.03, 1.22);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--exit), -150px, 0) rotate(var(--r)) scale(1.03, 1.22);
+  }
+}
+@keyframes ob-loop-read {
+  0%, 30% { opacity: 0; transform: scale(.82); }
+  36% {
+    opacity: 1; transform: scale(1);
+    animation-timing-function: ease-in;
+  }
+  60% { opacity: 1; transform: scale(1); }
+  66%, 100% { opacity: 0; transform: scale(.9); }
+}
+
+@media (max-height: 700px) and (max-width: 799px) {
+  .ob-loop { --sheet-w: clamp(76px, 27%, 104px); }
+}
+@media (min-width: 800px) {
+  .ob-loop { --sheet-w: clamp(118px, 30%, 164px); }
+  .ob-loop-read { width: 40px; height: 40px; margin-left: -20px; }
+}
+
+/* Reduced motion: the settled stack and the read mark, still. */
+@media (prefers-reduced-motion: reduce) {
+  .ob-loop-sheet, .ob-loop-read { animation: none !important; }
+}
+[data-motion="reduce"] .ob-loop-sheet,
+[data-motion="reduce"] .ob-loop-read { animation: none !important; }
