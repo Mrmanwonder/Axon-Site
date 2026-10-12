@@ -90,7 +90,7 @@ function Screen() {
 const root = createRoot(document.getElementById("root")!);
 if (params.get("view") === "onboarding-intro") {
   document.documentElement.dataset.theme = "dark";
-  root.render(<MemoryRouter><IntroDemo /></MemoryRouter>);
+  root.render(<MemoryRouter><main aria-label="Onboarding preview"><IntroDemo /></main></MemoryRouter>);
 } else if (params.get("view") === "scan-screen") {
   await Promise.all([import("../../src/ui/styles/tokens.css"), import("../../src/ui/styles/scanner.css")]);
   document.documentElement.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
