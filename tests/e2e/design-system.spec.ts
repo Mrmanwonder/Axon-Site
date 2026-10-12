@@ -17,7 +17,7 @@ test("design-system route shows production identity and live tokens", async ({ p
   await page.getByRole("button", { name: "Light", exact: true }).click();
   await expect(root).toHaveAttribute("data-theme", "light");
   const accent = await page.locator(".ds-swatch").first().locator(".ds-swatch-meta .ds-mono").textContent();
-  expect(accent?.trim()).toBe("#2C74E8");
+  expect(accent?.trim().toLowerCase()).toBe("#2c74e8");
   await page.getByRole("button", { name: "Dark", exact: true }).click();
   await expect(root).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "CBSE", exact: true }).click();
@@ -59,7 +59,7 @@ test("design-system previews match app switch and restrained semantic states", a
   await chip.click();
   await expect(chip).toHaveAttribute("aria-pressed", "true");
   const chipFill = await chip.evaluate(el => getComputedStyle(el).backgroundColor);
-  const primaryFill = await page.locator(".ds-demo-primary").evaluate(el => getComputedStyle(el).backgroundColor);
+  const primaryFill = await page.getByRole("button", { name: "Save changes", exact: true }).evaluate(el => getComputedStyle(el).backgroundColor);
   expect(chipFill).not.toBe(primaryFill);
 });
 
