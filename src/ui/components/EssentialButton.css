@@ -1,0 +1,116 @@
+/* B5 Essential — semantic button family.
+ * The production palette owns colors; the component owns sizes and states.
+ * Specialized scanner, glide, Google auth and navigation controls are not
+ * redefined as buttons by this stylesheet.
+ */
+:root,
+[data-theme="dark"] {
+  --essential-primary-bg: var(--p-mist-100);
+  --essential-primary-ink: var(--p-ink-950);
+  --essential-secondary-bg: var(--surface);
+  --essential-secondary-ink: var(--label);
+  --essential-secondary-rim: var(--hairline);
+  --essential-quiet-ink: var(--label-2);
+  --essential-nav-ink: var(--p-blue-l);
+}
+
+[data-theme="light"] {
+  --essential-primary-bg: var(--p-ink-800);
+  --essential-primary-ink: var(--p-white);
+  --essential-secondary-bg: var(--surface);
+  --essential-secondary-ink: var(--label);
+  --essential-secondary-rim: var(--hairline);
+  --essential-quiet-ink: var(--label-2);
+  --essential-nav-ink: var(--accent);
+}
+
+.essential-button,
+.ds-site .essential-button {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: max-content;
+  max-width: 100%;
+  min-height: 52px;
+  padding: 0 21px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: var(--essential-primary-ink);
+  background: var(--essential-primary-bg);
+  text-decoration: none;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -.018em;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms var(--spring), opacity 120ms ease;
+}
+
+.essential-button--compact,
+.ds-site .essential-button--compact { min-height: 44px; padding: 0 17px; border-radius: 13px; font-size: 13px; gap: 9px; }
+.essential-button--large,
+.ds-site .essential-button--large { min-height: 56px; padding: 0 24px; border-radius: 18px; font-size: 15px; }
+.essential-button--full,
+.ds-site .essential-button--full { width: 100%; }
+.essential-button--secondary,
+.ds-site .essential-button--secondary { color: var(--essential-secondary-ink); background: var(--essential-secondary-bg); border-color: var(--essential-secondary-rim); }
+.essential-button--quiet,
+.ds-site .essential-button--quiet { color: var(--essential-quiet-ink); background: transparent; border-color: transparent; font-weight: 500; }
+
+/* Direction is semantic. Only Link/to creates this arrow; it is never
+ * present in Save, Confirm or another imperative action. */
+.essential-button__label { min-width: 0; }
+.essential-button__arrow { color: var(--essential-nav-ink); transform: rotate(180deg); flex: 0 0 auto; }
+.essential-button__spinner { flex: 0 0 17px; width: 17px; height: 17px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: essential-turn .8s linear infinite; }
+.essential-button__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes essential-turn { to { transform: rotate(360deg); } }
+
+.essential-button:not(:disabled):hover,
+.ds-site .essential-button:not(:disabled):hover { opacity: .84; color: var(--essential-primary-ink); }
+.essential-button--secondary:not(:disabled):hover,
+.ds-site .essential-button--secondary:not(:disabled):hover { color: var(--essential-secondary-ink); }
+.essential-button--quiet:not(:disabled):hover,
+.ds-site .essential-button--quiet:not(:disabled):hover { color: var(--essential-quiet-ink); }
+.essential-button:not(:disabled):active { transform: scale(.963); opacity: .93; }
+.essential-button:focus-visible,
+.ds-site .essential-button:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
+.essential-button:disabled { opacity: .38; cursor: default; }
+.essential-button[aria-busy="true"]:disabled { opacity: .72; cursor: progress; }
+
+/* Existing production .btn users adopt the same B5 hierarchy without
+ * changing their DOM semantics or the architecture of legacy screens.
+ * Intro, brand-specific and scanner controls retain their own rules. */
+.btn:is(.primary, .ghost, .plain):not(.ob-intro-continue) {
+  min-height: 52px;
+  border-radius: 16px;
+  font-size: 15px;
+  letter-spacing: -.018em;
+  transition: transform var(--d-state) var(--spring), opacity var(--d-state) ease;
+}
+.btn.primary:not(.ob-intro-continue) {
+  background: var(--essential-primary-bg);
+  color: var(--essential-primary-ink);
+  box-shadow: none;
+}
+.btn.ghost { background: var(--essential-secondary-bg); color: var(--essential-secondary-ink); border: 1px solid var(--essential-secondary-rim); }
+.btn.plain { color: var(--essential-quiet-ink); background: transparent; border: 1px solid transparent; font-weight: 500; }
+.btn:is(.primary,.ghost,.plain):not(:disabled):not([aria-disabled="true"]):hover { opacity: .84; filter: none; }
+.btn:is(.primary,.ghost,.plain):not(:disabled):not([aria-disabled="true"]):active { opacity: .93; }
+/* Actions in the onboarding footer share the tall size; selectors do not
+ * change the intentionally illustrated intro's unique CTA. */
+#obroot .obfoot .btn.primary:not(.ob-intro-continue) { background: var(--essential-primary-bg); color: var(--essential-primary-ink); box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .essential-button, .essential-button__spinner, .btn:is(.primary,.ghost,.plain) { transition: none !important; animation: none !important; }
+}
+[data-motion="reduce"] .essential-button,
+[data-motion="reduce"] .essential-button__spinner,
+[data-motion="reduce"] .btn:is(.primary,.ghost,.plain) { transition: none !important; animation: none !important; }
