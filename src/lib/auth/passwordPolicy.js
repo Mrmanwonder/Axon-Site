@@ -54,16 +54,30 @@ export async function isPasswordPwned(password, options = {}) {
   }
   const prefix = hash.slice(0, 5);
   const suffix = hash.slice(5);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const doFetch = options.fetcher ?? globalThis.fetch;
+  // Direct first; if the browser cannot reach HIBP, retry through our own origin.
+  const sources = ['https://api.pwnedpasswords.com/range/' + prefix];
+  if (!options.fetcher) sources.push('/api/pwned/range/' + prefix);
+  let data;
+  for (const source of sources) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await doFetch(source, {
+        method: 'GET', headers: { 'Add-Padding': 'true' }, credentials: 'omit',
+        cache: 'no-store', signal: controller.signal,
+      });
+      if (!response.ok) continue;
+      data = await response.text();
+      break;
+    } catch {
+      continue;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  if (typeof data !== 'string') throw new Error(HIBP_UNAVAILABLE);
   try {
-    const response = await (options.fetcher ?? globalThis.fetch)(
-      'https://api.pwnedpasswords.com/range/' + prefix,
-      { method: 'GET', headers: { 'Add-Padding': 'true' }, credentials: 'omit',
-        cache: 'no-store', signal: controller.signal },
-    );
-    if (!response.ok) throw new Error(HIBP_UNAVAILABLE);
-    const data = await response.text();
     // Add-Padding promises at least 800 records. Empty/HTML/partial successful
     // responses are an unavailable check, never evidence of a safe password.
     // See https://haveibeenpwned.com/API/v3#PwnedPasswordsPadding
@@ -84,8 +98,6 @@ export async function isPasswordPwned(password, options = {}) {
     return breached;
   } catch {
     throw new Error(HIBP_UNAVAILABLE);
-  } finally {
-    clearTimeout(timeout);
   }
 }
 

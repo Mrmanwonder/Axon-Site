@@ -45,6 +45,26 @@ export default {
       return Response.redirect(url, 301)
     }
 
+    // Same-origin relay for the new-password breach check (k-anonymity: only the
+    // 5-hex-character SHA-1 prefix is ever sent). Used when the browser cannot
+    // reach api.pwnedpasswords.com directly (content blockers, network filters).
+    const pwned = /^\/api\/pwned\/range\/([0-9A-Fa-f]{5})$/.exec(url.pathname)
+    if (pwned && request.method === 'GET') {
+      try {
+        const upstream = await fetch('https://api.pwnedpasswords.com/range/' + pwned[1].toUpperCase(), {
+          headers: { 'Add-Padding': 'true' },
+          cf: { cacheTtl: 3600, cacheEverything: true },
+        } as RequestInit)
+        if (!upstream.ok) return new Response('unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } })
+        return new Response(upstream.body, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        })
+      } catch {
+        return new Response('unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } })
+      }
+    }
+
     // Serve distinct source documents for the public routes. The default SPA
     // shell has the root canonical until React runs, which crawlers and social
     // previews may never do. The build generates these four static documents.
