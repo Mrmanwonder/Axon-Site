@@ -160,7 +160,7 @@ export const clearPasswordRecovery = supabaseMod.clearPasswordRecovery as () => 
 export { passwordSignIn, passwordSignUp, requestPasswordReset, changePassword, reauthenticateWithPassword } from "../../lib/auth/password.js";
 
 export { assertSafeNewPassword, PASSWORD_RULES } from "../../lib/auth/passwordPolicy.js";
-export { lookupAccount, cachedAccount, forgetAccount, normalisedEmail, EMAIL_SHAPE } from "../../lib/auth/accountLookup.js";
+export { lookupAccount, cachedAccount, warmAccountLookup, forgetAccount, normalisedEmail, EMAIL_SHAPE } from "../../lib/auth/accountLookup.js";
 
 // ── auth ───────────────────────────────────────────────────────────────────
 export const sendOtp = supabaseMod.sendOtp as (

@@ -22,14 +22,16 @@ import PressBox from "../components/PressBox";
 import { hapticTick } from "../lib/haptics";
 import {
   passwordSignIn, requestPasswordReset, assertSafeNewPassword, PASSWORD_RULES,
-  lookupAccount, cachedAccount, normalisedEmail, EMAIL_SHAPE, WORKOS_PASSWORD,
+  lookupAccount, cachedAccount, warmAccountLookup, normalisedEmail, EMAIL_SHAPE, WORKOS_PASSWORD,
 } from "../data/modules";
 import { Err, Icon, ICONS } from "./chrome";
 import "./AccountEmail.css";
 
 export type AccountKind = "idle" | "checking" | "new" | "password" | "code" | "unknown" | "workos";
 
-const LOOKUP_DELAY_MS = 500;
+/* Short enough to feel instant, long enough that a paste or a fast typist asks
+   once. The check starts the moment the address is complete in shape. */
+const LOOKUP_DELAY_MS = 90;
 const SIGN_IN_FAILED = "That password didn't work. Check it and try again, or have us email you a code.";
 
 function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
@@ -109,6 +111,8 @@ export default function AccountEmail({
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordWrap = useRef<HTMLDivElement>(null);
 
+  useEffect(() => { warmAccountLookup(); }, []);
+
   const setKindAndTell = (next: AccountKind) => { setKind(next); onKind(next); };
   useEffect(() => { onKind(initial); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
@@ -126,14 +130,25 @@ export default function AccountEmail({
     resolvedFor.current = null; setPassword(""); setError(null); setNotice(null);
     if (WORKOS_PASSWORD) { resolvedFor.current = e; setKindAndTell("workos"); return; }
     const mine = ++seq.current;
-    setKindAndTell("checking");
-    const timer = setTimeout(async () => {
-      const result = await lookupAccount(e);
+    const controller = new AbortController();
+    const apply = (result: string) => {
       if (mine !== seq.current) return;
       resolvedFor.current = result === "unknown" ? null : e;
       setKindAndTell(result as AccountKind);
-    }, cachedAccount(e) ? 0 : LOOKUP_DELAY_MS);
-    return () => clearTimeout(timer);
+    };
+    // Seen on this device before: show it now, with no wait and no network, then
+    // quietly confirm it and correct the screen only if the answer has changed.
+    const saved = cachedAccount(e) as AccountKind | null;
+    if (saved) {
+      apply(saved);
+      void lookupAccount(e, { fresh: true, signal: controller.signal }).then((result) => {
+        if (result !== "unknown" && result !== saved) { setPassword(""); apply(result); }
+      });
+      return () => controller.abort();
+    }
+    setKindAndTell("checking");
+    const timer = setTimeout(() => { void lookupAccount(e, { signal: controller.signal }).then(apply); }, LOOKUP_DELAY_MS);
+    return () => { clearTimeout(timer); controller.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email]);
 
