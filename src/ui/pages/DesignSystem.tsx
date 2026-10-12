@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PRESETS as AVATAR_PRESETS, avatarRenderFor, initialFor } from "../../avatar.js";
 import { MaterialSymbol, type MaterialSymbolName } from "../components/MaterialSymbols";
 import Switch from "../components/Switch";
+import EssentialButton, { type EssentialSize } from "../components/EssentialButton";
 import "./DesignSystem.css";
 
 /*
@@ -131,6 +132,9 @@ export default function DesignSystem() {
   const [switchOn, setSwitchOn] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [exampleTab, setExampleTab] = useState("Library");
+  const [buttonSize, setButtonSize] = useState<EssentialSize>("medium");
+  const [buttonState, setButtonState] = useState<"live" | "hover" | "pressed" | "focus" | "loading" | "disabled">("live");
+  const [buttonNotice, setButtonNotice] = useState("Try an action. Examples do not change student data.");
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
@@ -278,9 +282,14 @@ export default function DesignSystem() {
           <SectionHeading index="06" id="Components" title="Every interaction belongs." description="Representative live previews of Axon’s controls and their semantic roles. These are examples—not real student records."/>
           <div className="ds-component-grid">
             <div className="ds-component-card">
-              <Meta>BUTTONS / PRIMARY, SECONDARY, QUIET</Meta>
-              <div className="ds-button-stack"><button className="ds-demo-primary" type="button">Continue <span>↗</span></button><button className="ds-demo-secondary" type="button">Review paper</button><button className="ds-demo-text" type="button">Not now</button></div>
-              <p>A single primary path. Quiet alternatives stay quiet.</p>
+              <Meta>B5 ESSENTIAL / PRODUCTION COMPONENTS</Meta>
+              <div className="ds-button-stack ds-essential-showcase">
+                <EssentialButton to="/design-system#ds-layout" size="medium">Explore layout</EssentialButton>
+                <EssentialButton variant="secondary" size="medium" onClick={() => setButtonNotice("Review paper is a preview action.")}>Review paper</EssentialButton>
+                <EssentialButton variant="quiet" size="medium" onClick={() => setButtonNotice("Not now is a preview action.")}>Not now</EssentialButton>
+              </div>
+              <p>Graphite in light mode, near-white in dark. Directional arrows are reserved for links. Save and Confirm are text-only actions.</p>
+              <div className="ds-demo-response" role="status">{buttonNotice}</div>
             </div>
             <div className="ds-component-card">
               <Meta>SEGMENTED / MUTUALLY EXCLUSIVE</Meta>
@@ -297,6 +306,34 @@ export default function DesignSystem() {
               <Meta>CONTROL / TOGGLE</Meta>
               <div className="ds-toggle-row"><div><strong>Paper notifications</strong><small>When a paper is ready to read</small></div><Switch on={switchOn} onChange={setSwitchOn} label="Paper notifications" /></div>
               <p>Functional example. The switch changes this preview only.</p>
+            </div>
+            <div className="ds-component-card ds-component-wide">
+              <Meta>B5 ESSENTIAL / SIZES & STATES</Meta>
+              <div className="ds-button-controls">
+                <div role="group" aria-label="Essential button size" className="ds-demo-segment">
+                  {([["compact","44px"],["medium","52px"],["large","56px"]] as const).map(([value,label]) =>
+                    <button type="button" key={value} className={buttonSize === value ? "is-on" : ""}
+                      aria-pressed={buttonSize === value} onClick={() => setButtonSize(value)}>{label}</button>
+                  )}
+                </div>
+                <div role="group" aria-label="Essential button state" className="ds-essential-state-controls">
+                  {(["live","hover","pressed","focus","loading","disabled"] as const).map(value =>
+                    <button type="button" key={value} aria-pressed={buttonState === value}
+                      className={buttonState === value ? "is-on" : ""} onClick={() => setButtonState(value)}>{value}</button>
+                  )}
+                </div>
+              </div>
+              <div className={"ds-essential-states ds-essential-state-" + buttonState}>
+                <EssentialButton size={buttonSize} loading={buttonState === "loading"} disabled={buttonState === "disabled"}
+                  onClick={() => setButtonNotice("Primary action preview only.")}>Save changes</EssentialButton>
+                <EssentialButton variant="secondary" size={buttonSize}
+                  loading={buttonState === "loading"} disabled={buttonState === "disabled"}
+                  onClick={() => setButtonNotice("Secondary action preview only.")}>Review paper</EssentialButton>
+                <EssentialButton variant="quiet" size={buttonSize}
+                  loading={buttonState === "loading"} disabled={buttonState === "disabled"}
+                  onClick={() => setButtonNotice("Quiet action preview only.")}>Not now</EssentialButton>
+              </div>
+              <p>Compact 44px · Default 52px · Large 56px. Focus remains keyboard-visible; loading preserves button size and cannot double-submit.</p>
             </div>
             <div className="ds-component-card ds-component-wide">
               <Meta>ICONOGRAPHY / MATERIAL SYMBOLS</Meta>
