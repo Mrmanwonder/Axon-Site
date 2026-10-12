@@ -32,8 +32,10 @@ export default function PasswordRecovery() {
     <form className="password-access" onSubmit={event => void submit(event)}>
       <Err message={error} />
       <PasswordInput id="reset-password" label="New password" value={password} onChange={setPassword} creating disabled={busy} />
-      <PasswordInput id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} placeholder="Type it again" />
-      <div style={{ marginTop: 16 }}><Requirements password={password} /></div>
+      <div style={{ marginTop: 12 }}>
+        <PasswordInput id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} placeholder="Type it again" />
+      </div>
+      {password !== "" && <div style={{ marginTop: 16 }}><Requirements password={password} /></div>}
       {confirmation !== "" && (
         <p className="obrules-title" role="status" style={{ marginTop: 10 }}>
           {matches ? "The passwords match." : "The passwords don't match yet."}
