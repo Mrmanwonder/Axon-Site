@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { normalizeAcademicText } from "../data/academicContent";
@@ -66,6 +66,24 @@ export function SafeLatex({
   fallback?: string | null;
 }) {
   const html = useMemo(() => renderSafeLatex(latex, display), [latex, display]);
+  const element = useRef<HTMLSpanElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const node = element.current;
+    if (!node || !html) { setOverflows(false); return; }
+    let active = true;
+    const measure = () => {
+      if (active) setOverflows(node.scrollWidth > node.clientWidth + 1);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+    const formula = node.querySelector(".katex");
+    if (formula) observer?.observe(formula);
+    void document.fonts?.ready.then(measure);
+    return () => { active = false; observer?.disconnect(); };
+  }, [html]);
+
   if (!html) {
     return (
       <span
@@ -79,6 +97,10 @@ export function SafeLatex({
   return (
     <span
       className={["math-rendered", display ? "math-display" : "", className].filter(Boolean).join(" ")}
+      ref={element}
+      tabIndex={overflows ? 0 : undefined}
+      role={overflows ? "region" : undefined}
+      aria-label={overflows ? "Scrollable mathematical expression" : undefined}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
