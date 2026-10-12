@@ -122,6 +122,7 @@ function Meta({ children }: { children: ReactNode }) { return <div className="ds
 function DividerLabel({ children }: { children: React.ReactNode }) { return <div className="ds-subtitle">{children}</div>; }
 
 export default function DesignSystem() {
+  const searchRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState<Theme>("dark");
   const [search, setSearch] = useState("");
   const [active, setActive] = useState("overview");
@@ -129,6 +130,22 @@ export default function DesignSystem() {
   const [switchOn, setSwitchOn] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [exampleTab, setExampleTab] = useState("Library");
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const editing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
+      if (event.key === "/" && !editing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+      if (event.key === "Escape" && document.activeElement === searchRef.current) {
+        setSearch("");
+        searchRef.current?.blur();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const visibleSections = sections.filter(s => (s.name + " " + s.group).toLowerCase().includes(search.toLowerCase()));
   const navigate = (id: string) => {
     setActive(id);
@@ -146,7 +163,7 @@ export default function DesignSystem() {
       <label className="ds-search-box">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
         <span className="ds-visually-hidden">Filter navigation</span>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a section" />
+        <input ref={searchRef} aria-label="Filter navigation" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a section" />
         <span className="ds-search-key">/</span>
       </label>
       <nav className={search ? "ds-nav ds-mobile-open" : "ds-nav"}>
