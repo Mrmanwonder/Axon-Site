@@ -121,7 +121,7 @@ export function Shell({
         </div>
         <div key={stepKey} className="view on obview" lang={lang} data-nav={direction}>
           {title && (
-            <div className="greet">
+            <div className="greet" key={title}>
               <h1>{title}</h1>
               {sub && <div className="sub">{sub}</div>}
             </div>

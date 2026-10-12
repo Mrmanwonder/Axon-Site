@@ -18,6 +18,10 @@ const fixture = vi.hoisted(() => ({
   recordConsent: vi.fn(),
   parentGuard: vi.fn((action: () => void | Promise<void>) => action()),
   workos: false,
+  lookup: vi.fn(),
+  changePassword: vi.fn(),
+  assertSafe: vi.fn(),
+  guardian: { id: "guardian", name: "Parent", contact: "parent@example.test" } as { id: string; name: string; contact: string } | null,
 }));
 vi.mock("../../src/ui/data/AppProvider", () => ({
   useApp: () => ({
@@ -35,6 +39,8 @@ vi.mock("../../src/ui/data/useParentMode", () => ({
 }));
 vi.mock("../../src/ui/data/modules", async () => {
   const notice = await vi.importActual<typeof import("../../src/notice.js")>("../../src/notice.js");
+  const policy = await vi.importActual<typeof import("../../src/lib/auth/passwordPolicy.js")>("../../src/lib/auth/passwordPolicy.js");
+  const lookupLib = await vi.importActual<typeof import("../../src/lib/auth/accountLookup.js")>("../../src/lib/auth/accountLookup.js");
   const offering = {
     id: "00000000-0000-0000-0000-000000009702",
     programme_id: "programme-as",
@@ -52,7 +58,11 @@ vi.mock("../../src/ui/data/modules", async () => {
   return {
     sb: { rpc: fixture.rpc, from: fixture.from },
     sendOtp: fixture.sendOtp, verifyOtp: fixture.verifyOtp, currentSession: fixture.currentSession,
-    currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
+    currentGuardian: async () => fixture.guardian,
+    lookupAccount: fixture.lookup, cachedAccount: () => null, forgetAccount: vi.fn(),
+    normalisedEmail: lookupLib.normalisedEmail, EMAIL_SHAPE: lookupLib.EMAIL_SHAPE,
+    PASSWORD_RULES: policy.PASSWORD_RULES, assertSafeNewPassword: fixture.assertSafe,
+    changePassword: fixture.changePassword,
     passwordSignIn: fixture.passwordSignIn, passwordSignUp: vi.fn(), requestPasswordReset: vi.fn(),
     signInWithProvider: fixture.provider, isProviderNotEnabled: () => false,
     OAUTH_PROVIDERS: ["google"], PROVIDER_LABEL: { google: "Google", "custom:workos": "your email and password" },
@@ -90,7 +100,18 @@ vi.mock("../../src/ui/data/modules", async () => {
 
 import Onboarding from "../../src/ui/onboarding/Onboarding";
 
-test("welcome has a single continuation and account methods reveal progressively", async () => {
+const EMAIL = "parent@example.test";
+async function openAccountStep() {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+}
+async function typeEmail(value = EMAIL) {
+  await userEvent.type(screen.getByLabelText("Email", { exact: true }), value);
+}
+
+test("welcome has a single continuation and the account step starts with one email field", async () => {
   fixture.session = null;
   window.history.replaceState({}, "", "/");
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
@@ -100,19 +121,113 @@ test("welcome has a single continuation and account methods reveal progressively
   expect(screen.getByText(/parent or guardian sets up the account/i)).toBeTruthy();
 
   await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
-  expect(screen.getByRole("heading", { name: "Set up your account" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Welcome to Axon" })).toBeTruthy();
+  expect(screen.queryByText("Set up your account", { selector: "h1" })).toBeNull();
   expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Continue with email or phone" })).toBeTruthy();
-  expect(screen.queryByLabelText("Email or phone")).toBeNull();
+  expect(screen.getByLabelText("Email", { exact: true })).toBeTruthy();
+  expect(screen.queryByLabelText(/phone/i)).toBeNull();
+  expect(screen.queryByLabelText("Your name")).toBeNull();
+  expect(screen.queryByLabelText("Password", { exact: true })).toBeNull();
 
-  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
-  expect(screen.getByLabelText("Email or phone")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
-
-  await userEvent.click(screen.getByRole("button", { name: "Back" }));
-  expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Back" }));
   expect(screen.getByRole("button", { name: "Continue", exact: true })).toBeTruthy();
+});
+
+test("an existing password account is recognised as the email is typed and asks only for its password", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("password");
+  await openAccountStep();
+  await typeEmail("pare");
+  expect(fixture.lookup).not.toHaveBeenCalled();
+  await typeEmail("nt@example.test");
+  expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeTruthy();
+  expect(fixture.lookup).toHaveBeenCalledTimes(1);
+  expect(fixture.lookup).toHaveBeenCalledWith(EMAIL);
+  const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
+  expect(password.autocomplete).toBe("current-password");
+  expect(screen.queryByText("Your password needs")).toBeNull();
+  expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  // Editing the address drops back to the neutral heading; nothing stale stays.
+  await userEvent.type(screen.getByLabelText("Email", { exact: true }), "{backspace}{backspace}{backspace}{backspace}");
+  expect(screen.getByRole("heading", { name: "Welcome to Axon" })).toBeTruthy();
+  expect(screen.queryByLabelText("Password", { exact: true })).toBeNull();
+});
+
+test("a new email gets a password whose requirements tick off live, and the code is offered only once they are met", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("new");
+  fixture.assertSafe.mockReset().mockResolvedValue(undefined);
+  fixture.sendOtp.mockReset().mockResolvedValue(undefined);
+  await openAccountStep();
+  await typeEmail();
+  expect(await screen.findByRole("heading", { name: "Create your account" })).toBeTruthy();
+  const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
+  expect(password.autocomplete).toBe("new-password");
+  expect(screen.queryByText("Your password needs")).toBeNull();
+
+  const send = screen.getByRole("button", { name: "Email me a code" }) as HTMLButtonElement;
+  expect(send.disabled).toBe(true);
+  await userEvent.click(password);
+  const rules = () => within(screen.getByRole("list", { name: "Your password needs" })).getAllByRole("listitem");
+  expect(rules().map(li => li.hasAttribute("data-met"))).toEqual([false, false, false, false]);
+
+  await userEvent.type(password, "abcdefgh");
+  expect(rules().map(li => li.hasAttribute("data-met"))).toEqual([true, false, true, false]);
+  expect(send.disabled).toBe(true);
+  await userEvent.type(password, "A");
+  expect(rules().map(li => li.hasAttribute("data-met"))).toEqual([true, true, true, false]);
+  await userEvent.type(password, "1");
+  expect(rules().every(li => li.hasAttribute("data-met"))).toBe(true);
+  expect(send.disabled).toBe(false);
+
+  await userEvent.click(send);
+  expect(fixture.assertSafe).toHaveBeenCalledWith("abcdefghA1");
+  await waitFor(() => expect(fixture.sendOtp).toHaveBeenCalledWith(EMAIL));
+  expect(screen.getByRole("heading", { name: "Check your email" })).toBeTruthy();
+});
+
+test("the password chosen for a new account is saved after the code is confirmed, and a failed save is shown and retried", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("new");
+  fixture.assertSafe.mockReset().mockResolvedValue(undefined);
+  fixture.sendOtp.mockReset().mockResolvedValue(undefined);
+  fixture.verifyOtp.mockReset().mockResolvedValue({});
+  fixture.currentSession.mockReset().mockResolvedValue({ user: { id: "guardian", email: EMAIL } });
+  fixture.changePassword.mockReset().mockRejectedValueOnce(new Error("no")).mockResolvedValue(undefined);
+  fixture.guardian = null;
+  try {
+    await openAccountStep();
+    await typeEmail();
+    await userEvent.type(await screen.findByLabelText("Password", { exact: true }), "Abcdefg1");
+    await userEvent.click(screen.getByRole("button", { name: "Email me a code" }));
+    await userEvent.type(await screen.findByLabelText("Your code"), "123456");
+    expect((await screen.findByRole("alert")).textContent).toContain("couldn't save your password");
+    expect(fixture.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(fixture.changePassword).toHaveBeenCalledWith("Abcdefg1");
+    // Retrying does not spend the code again, and no guardian row is written
+    // without a name: the flow asks for it next.
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { name: "One detail" })).toBeTruthy();
+    expect(fixture.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(fixture.changePassword).toHaveBeenCalledTimes(2);
+  } finally { fixture.guardian = { id: "guardian", name: "Parent", contact: EMAIL }; }
+});
+
+test("an account that signs in with a code is offered the code and no password", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("code");
+  await openAccountStep();
+  await typeEmail();
+  expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeTruthy();
+  expect(screen.queryByLabelText("Password", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Email me a code" })).toBeTruthy();
+});
+
+test("when the check cannot be made, the form is neutral and offers to create an account instead", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("unknown");
+  await openAccountStep();
+  await typeEmail();
+  expect(await screen.findByRole("heading", { name: "Sign in" })).toBeTruthy();
+  expect(screen.getByLabelText("Password", { exact: true })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "New to Axon? Create an account" }));
+  expect(screen.getByRole("heading", { name: "Create your account" })).toBeTruthy();
+  expect((screen.getByLabelText("Password", { exact: true }) as HTMLInputElement).autocomplete).toBe("new-password");
 });
 
 test("code entry opens before a slow send completes, with honest pending state and no duplicate requests", async () => {
@@ -120,12 +235,11 @@ test("code entry opens before a slow send completes, with honest pending state a
   window.history.replaceState({}, "", "/");
   const sent = deferred<void>();
   fixture.sendOtp.mockReturnValue(sent.promise);
+  fixture.lookup.mockReset().mockResolvedValue("code");
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
   await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
-  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
-  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
-  await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
-  const send = screen.getByRole("button", { name: "Send me a code" });
+  await typeEmail();
+  const send = await screen.findByRole("button", { name: "Email me a code" });
   for (let i = 0; i < 10; i++) fireEvent.click(send);
   expect(screen.getByRole("heading", { name: "Check your email" })).toBeTruthy();
   expect(screen.getByRole("status").textContent).toContain("Sending a code");
@@ -142,12 +256,11 @@ test("failed code delivery is visible and a retry is single-flight", async () =>
   fixture.session = null;
   window.history.replaceState({}, "", "/");
   fixture.sendOtp.mockRejectedValueOnce(new Error("delivery unavailable"));
+  fixture.lookup.mockReset().mockResolvedValue("code");
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
   await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
-  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
-  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
-  await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
-  await userEvent.click(screen.getByRole("button", { name: "Send me a code" }));
+  await typeEmail();
+  await userEvent.click(await screen.findByRole("button", { name: "Email me a code" }));
   expect((await screen.findByRole("alert")).textContent).toContain("That code could not be sent");
   expect(screen.getByRole("status").textContent).toContain("has not been sent");
   const retry = screen.getByRole("button", { name: "Try sending again" });
@@ -392,32 +505,26 @@ test("Hindi is not offered when a purpose on the notice has no Hindi text", asyn
   ));
 });
 
-test("password flight locks method switching and Back, then releases after failure", async () => {
-  fixture.session = null;
-  window.history.replaceState({}, "", "/");
-  const proof = deferred<unknown>();
-  fixture.passwordSignIn.mockReturnValue(proof.promise);
-  render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
-  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
-  await userEvent.click(screen.getByRole("button", { name: "Sign in with a password instead" }));
-  await userEvent.type(screen.getByLabelText("Email", { exact: true }), "parent@example.test");
-  await userEvent.type(screen.getByLabelText("Password", { exact: true }), "secret123");
-  const code = screen.getByRole("button", { name: "Use a sign-in code instead" });
-  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+test("password flight locks the other routes and Back, then releases after a failed sign-in", async () => {
+  fixture.lookup.mockReset().mockResolvedValue("password");
+  let failSignIn!: (reason: Error) => void;
+  fixture.passwordSignIn.mockReset().mockReturnValue(new Promise((_, reject) => { failSignIn = reject; }));
+  await openAccountStep();
+  await typeEmail();
+  await userEvent.type(await screen.findByLabelText("Password", { exact: true }), "secret123");
+  const code = screen.getByRole("button", { name: "Email me a code instead" });
   const form = screen.getByRole("button", { name: "Sign in", exact: true }).closest("form")!;
   for (let n = 0; n < 5; n++) fireEvent.submit(form);
   fireEvent.click(code);
   expect(fixture.passwordSignIn).toHaveBeenCalledOnce();
   expect(fixture.provider).not.toHaveBeenCalled();
   expect((code as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Continue with Google" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
-  expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
-  // Missing confirmed session is a recoverable sign-in response.
-  await act(async () => proof.resolve(null));
+  await act(async () => failSignIn(new Error("bad")));
+  expect((await screen.findByRole("alert")).textContent).toContain("That password didn't work");
   expect((code as HTMLButtonElement).disabled).toBe(false);
-  await userEvent.click(code);
-  expect(screen.getByLabelText("Email or phone")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Back", exact: true })).toBeTruthy();
 });
 test("Google is single-flight and keeps Back and password entry disabled during handoff", async () => {
   fixture.session = null;
@@ -429,27 +536,27 @@ test("Google is single-flight and keeps Back and password entry disabled during 
   const google = screen.getByRole("button", { name: "Continue with Google" });
   for (let n = 0; n < 5; n++) fireEvent.click(google);
   expect(fixture.provider).toHaveBeenCalledOnce();
-  expect((screen.getByRole("button", { name: "Continue with email or phone" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   await act(async () => handoff.resolve());
 });
 
 // AXO-234: with the staging flag on, the password choice hands off to WorkOS,
 // which holds the password and applies the policy and breach check.
-test("with WorkOS on, the password choice hands off to WorkOS and shows no Supabase password form", async () => {
+test("with WorkOS on, a typed email offers the WorkOS password hand-off and no Supabase password form", async () => {
   fixture.session = null;
   fixture.workos = true;
   try {
     window.history.replaceState({}, "", "/");
+    fixture.lookup.mockReset();
     fixture.provider.mockReset().mockReturnValue(new Promise(() => {}));
     render(<MemoryRouter><Onboarding /></MemoryRouter>);
     await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
     expect(screen.queryByRole("button", { name: /WorkOS/i })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
-    await userEvent.click(screen.getByRole("button", { name: "Sign in with a password instead" }));
-    expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
+    await typeEmail();
+    expect(await screen.findByRole("heading", { name: "Continue to Axon" })).toBeTruthy();
     expect(screen.queryByLabelText(/^Password$/)).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+    expect(fixture.lookup).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Continue with a password" }));
     expect(fixture.provider).toHaveBeenCalledWith("custom:workos");
     expect(fixture.passwordSignIn).not.toHaveBeenCalled();
   } finally {

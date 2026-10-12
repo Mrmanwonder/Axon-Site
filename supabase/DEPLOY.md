@@ -48,7 +48,15 @@ older environments. New environments should use `AXON_SITE_URL`.
 ```bash
 supabase functions deploy --project-ref dlgcqieyevoebefhcggi \
   billing-checkout billing-portal stripe-webhook
+supabase functions deploy --project-ref dlgcqieyevoebefhcggi --no-verify-jwt \
+  account-lookup
 ```
+
+`account-lookup` is called by a signed-out browser that holds only the
+publishable key, which is not a JWT, so it is deployed with `--no-verify-jwt`.
+It answers `new`, `password` or `code` for an email and is rate limited per
+caller; apply `20261012090000_account_lookup.sql` first. Optional secret
+`ACCOUNT_LOOKUP_SALT` keys the caller hash (it falls back to the service key).
 
 Do **not** deploy scanner/pipeline workers from this repository. Names such as
 `w-triage`, `w-structure`, `w-content`, `w-adjudicate`, `w-explain`,

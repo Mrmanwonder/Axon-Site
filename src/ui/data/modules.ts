@@ -159,6 +159,9 @@ export const onAuthChange = supabaseMod.onAuthChange as (
 export const clearPasswordRecovery = supabaseMod.clearPasswordRecovery as () => void;
 export { passwordSignIn, passwordSignUp, requestPasswordReset, changePassword, reauthenticateWithPassword } from "../../lib/auth/password.js";
 
+export { assertSafeNewPassword, PASSWORD_RULES } from "../../lib/auth/passwordPolicy.js";
+export { lookupAccount, cachedAccount, forgetAccount, normalisedEmail, EMAIL_SHAPE } from "../../lib/auth/accountLookup.js";
+
 // ── auth ───────────────────────────────────────────────────────────────────
 export const sendOtp = supabaseMod.sendOtp as (
   contact: string,
