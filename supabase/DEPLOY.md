@@ -107,3 +107,14 @@ The code is in the subject and preheader so Gmail and phone lock screens can off
 their own "Copy code" action; an email cannot copy on click. The reset button points at
 `{{ .SiteURL }}/?token_hash=…&type=recovery`, so Authentication → URL Configuration → Site URL
 must be the production address and that address must be in the redirect allow-list.
+
+## Slow auth emails
+
+Measured from the project's auth logs (12 Oct 2026): `/recover` took 1.4–2.3 s and `/otp` about 1.9 s
+before answering, because Supabase sends over SMTP before it replies. Delivery after that is the
+sender's. To cut it, Authentication → SMTP Settings should point at a transactional provider close to
+the project's region (for example Resend over port 465 or 587, with SPF, DKIM and DMARC set for
+axonstudy.online so mail lands in the inbox, not spam). Sending through an HTTPS API instead (Auth Hook →
+Send Email, an Edge Function) would be faster still but is a larger change and the owner's call.
+Supabase also refuses a second request for the same address within about a minute, and each new
+reset email cancels the one before it, so the app now waits 60 s before offering a resend.
