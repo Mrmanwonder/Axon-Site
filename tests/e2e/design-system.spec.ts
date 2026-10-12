@@ -37,3 +37,28 @@ test("design-system reference remains usable on a narrow screen", async ({ page 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+
+test("design-system previews match app switch and restrained semantic states", async ({ page }) => {
+  await page.goto(url);
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+
+  const confirmed = page.locator(".ds-status-confirmed");
+  await expect(confirmed).toHaveCSS("color", "rgb(255, 255, 255)");
+
+  const sw = page.getByRole("switch", { name: "Paper notifications" });
+  await expect(sw).toHaveClass(/sw/);
+  await expect(sw).toHaveAttribute("aria-checked", "true");
+  const dimensions = await sw.boundingBox();
+  expect(dimensions?.width).toBe(58);
+  expect(dimensions?.height).toBe(26);
+  await sw.click();
+  await expect(sw).toHaveAttribute("aria-checked", "false");
+
+  const chip = page.getByRole("button", { name: "In progress", exact: true });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  const chipFill = await chip.evaluate(el => getComputedStyle(el).backgroundColor);
+  const primaryFill = await page.locator(".ds-demo-primary").evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(chipFill).not.toBe(primaryFill);
+});
