@@ -15,8 +15,10 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
 }
+/* Never fade the whole signed-out screen: WebKit can snapshot an entirely
+   blank first frame while the element is still at opacity 0. */
 #obroot.obroot-intro .obview > .ob-intro {
-  animation: ob-intro-appear .42s cubic-bezier(.22,.75,.26,1) both;
+  animation: none !important;
 }
 .ob-intro {
   position: relative;
@@ -360,10 +362,6 @@
     background: color-mix(in srgb, var(--blue) 85%, #000 15%);
     box-shadow: 0 8px 25px rgba(28,86,186,.3);
   }
-}
-@keyframes ob-intro-appear {
-  from { opacity: 0; transform: translate3d(0,8px,0); }
-  to { opacity: 1; transform: none; }
 }
 @keyframes ob-intro-paper-drift {
   0%,100% { transform: translate3d(0,0,0) rotate(-7deg); }
