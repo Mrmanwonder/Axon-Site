@@ -14,7 +14,7 @@
 
 import { sb } from '../supabase.js';
 import { placeRegions, projectQuestionRegions, questionDisplayPath } from '../questionCount.js';
-import { flagReason } from './flags.js';
+import { acceptableAsRead, flagReason } from './flags.js';
 import { reviewLeadFor } from './reviewSummary.js';
 import { markAlternatives, allocationIsUsable, markValueIsUsable } from './marks.js';
 import { assessmentRulesFor, providerKeyForBoard } from '../curriculum.js';
@@ -168,10 +168,15 @@ export async function loadReview(runId) {
     // Flagged parts not yet checked. Informational only: nothing waits for them
     // (AXO-216). They save as unsure and stay out of analytics.
     outstanding: questions.filter(asks).length,
-    // Only cleanly read parts nobody flagged can be accepted together. A flagged
-    // part is never confirmed in bulk: one tap that confirmed 44 unsure parts
-    // into analytics is what ADDENDUM-01A item 5 found.
+    // Two separate, explicit choices (owner, 8 Oct 2026). "Accept the clean
+    // ones" takes only cleanly read parts nobody flagged. A second button may
+    // also accept the unsure and flagged parts, and says that they then count
+    // in Insights; the old single "All are right" hid that (ADDENDUM-01A item 5).
     cleanUnconfirmed: questions.filter((q) => q.tier === 'confident' && !q.flagged && !q.confirmed).map((q) => q.id),
+    // Unsure or flagged, not yet accepted, and with a reading to accept.
+    unsureUnconfirmed: questions
+      .filter((q) => !q.confirmed && (q.tier !== 'confident' || q.flagged) && acceptableAsRead(q))
+      .map((q) => q.id),
   };
 }
 

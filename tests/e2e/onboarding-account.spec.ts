@@ -6,30 +6,18 @@ for (const theme of ["dark", "light"]) {
     test(`onboarding account controls fit in ${theme} mode at ${width}x${height} @a11y`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height });
       await page.goto(`/tests/browser/index.html?view=onboarding&scenario=password&styled=1&theme=${theme}`);
-      await expect(page.getByRole("heading", { name: "Understand your marked paper." })).toBeVisible();
-      await expect(page.getByRole("list", { name: "How Axon works" }).getByRole("listitem")).toHaveCount(3);
+      await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath(`onboarding-welcome-${theme}-${width}.png`) });
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-      await page.getByRole("button", { name: /a parent/ }).click();
-      const methods = page.getByRole("group", { name: "Account sign-in method" });
-      const code = methods.getByRole("button", { name: "Email or phone code" });
-      const password = methods.getByRole("button", { name: "Email and password" });
-      await expect(code).toHaveAttribute("aria-pressed", "true");
-      await password.click();
-      await expect(password).toHaveAttribute("aria-pressed", "true");
-      await expect(code).toHaveAttribute("aria-pressed", "false");
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByRole("button", { name: "Continue with email or phone" }).click();
+      await expect(page.getByRole("heading", { name: "Continue with a code" })).toBeVisible();
+      await page.getByRole("button", { name: "Sign in with a password instead" }).click();
+      await expect(page.getByRole("heading", { name: "Sign in with a password" })).toBeVisible();
       expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       const bounds = await page.locator(".password-access").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(16);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 16);
-      for (const control of await methods.getByRole("button").all()) {
-        const box = await control.boundingBox();
-        expect(box!.height).toBeGreaterThanOrEqual(44);
-        expect(box!.x).toBeGreaterThanOrEqual(16);
-        expect(box!.x + box!.width).toBeLessThanOrEqual(width - 16);
-      }
-      const colors = await methods.evaluate(node => [...node.querySelectorAll("button")].map(button => getComputedStyle(button).backgroundColor));
-      expect(colors[0]).not.toEqual(colors[1]);
       await page.getByLabel("Email", { exact: true }).fill("parent@example.test");
       await page.getByLabel("Password", { exact: true }).fill("wrong-password");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -53,7 +41,7 @@ for (const theme of ["dark", "light"]) {
       expect(confirmationBounds!.x + confirmationBounds!.width).toBeLessThanOrEqual(width - 16);
       expect(await page.locator(".obview").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`onboarding-signup-${theme}-${width}.png`) });
-      await code.click();
+      await page.getByRole("button", { name: "Use a sign-in code instead" }).click();
       await expect(page.getByLabel("Your name")).toBeVisible();
       await expect(page.getByLabel("Email or phone", { exact: true })).toBeVisible();
     });

@@ -69,8 +69,8 @@ test("a loaded review opens on the current review route even when its canonical 
   expect(screen.getByText("Review closed")).toBeTruthy();
 
   act(() => fixture.host.renderReview(
-    { title: "Review", questions: [], outstanding: 1, cleanCount: 0, saving: false, saveLabel: "1 left to check" },
-    { onMark: vi.fn(), onAction: vi.fn(), onConfirmClean: vi.fn(), onSave: vi.fn() },
+    { title: "Review", questions: [], outstanding: 1, cleanCount: 0, unsureCount: 0, saving: false, saveLabel: "1 left to check" },
+    { onMark: vi.fn(), onAction: vi.fn(), onConfirmClean: vi.fn(), onConfirmAll: vi.fn(), onSave: vi.fn() },
   ));
 
   expect(await screen.findByText("Review open")).toBeTruthy();

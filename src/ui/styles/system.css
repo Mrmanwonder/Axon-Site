@@ -371,7 +371,11 @@
   .bulkrow .b{flex:1;min-width:0;}
   .bulkrow .t1{font-size:14.5px;font-weight:600;letter-spacing:-.015em;}
   .bulkrow .t2{font-size:12.5px;color:var(--label-3);margin-top:3px;line-height:1.4;}
-  .bulkrow .qact{flex-shrink:0;}
+  .bulkrow .qact{flex-shrink:0;min-height:44px;}
+  .bulkrow .bulkacts{display:flex;flex-wrap:wrap;gap:8px;}
+  /* Two choices sit under the text so both labels fit at 360px. */
+  .bulkrow[data-two]{flex-wrap:wrap;}
+  .bulkrow[data-two] .bulkacts{flex-basis:100%;}
   /* Still waiting on the student, so it does not wear the colour of a finished
      action. It stays live: tapping it says what is left. */
   .btn.primary[data-waiting]{background:var(--surface-sunk);color:var(--label-2);box-shadow:none;}
@@ -1037,6 +1041,185 @@
      every time and the spacing stops coming from a per-screen inline margin. */
   .obfoot{margin:24px var(--gutter) 4px;display:flex;flex-direction:column;gap:2px;}
   .obfoot .btn.primary{padding:16px;border-radius:19px;}
+
+  /* Parent account entry: one method visible at a time. Google is the clean
+     default; alternate methods stay reachable as subordinate text actions. */
+  #obroot .obaccount-role {
+    margin: 0 var(--gutter);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 8px 11px;
+    background: var(--surface-sunk);
+    color: var(--label-2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: -.008em;
+  }
+  #obroot .obaccount-role svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: var(--blue);
+    stroke-width: 1.85;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+  #obroot .obaccount-stage {
+    margin-top: clamp(22px, 5.3vh, 40px);
+    animation: obaccount-reveal .22s cubic-bezier(.2,.75,.2,1) both;
+  }
+  #obroot .obaccount-stage .obalt { margin-bottom: 0; }
+  #obroot .obaccount-stage .obalt .btn { min-height: 56px; }
+  #obroot .obaccount-stage .obor { margin-top: 22px; margin-bottom: 5px; }
+  #obroot .obaccount-alternative { margin: 0 var(--gutter); }
+  #obroot .obaccount-secondary {
+    width: 100%;
+    min-height: 50px;
+    padding: 12px 14px;
+    background: transparent;
+    color: var(--label-2);
+    box-shadow: none;
+    border: 0;
+    border-radius: 15px;
+    font-size: 14px;
+    font-weight: 550;
+  }
+  #obroot .obaccount-secondary:hover { color: var(--label); }
+  #obroot .obaccount-method-title {
+    margin: 0 var(--text-gutter) 7px;
+    font-size: clamp(20px, 5.3vw, 26px);
+    font-weight: 650;
+    letter-spacing: -.034em;
+    line-height: 1.12;
+  }
+  #obroot .obaccount-method-sub {
+    margin: 0 var(--text-gutter) 21px;
+    font-size: 13.5px;
+    line-height: 1.48;
+    color: var(--label-3);
+  }
+  #obroot .obaccount-stage .obfoot { margin-top: 18px; }
+  #obroot .obaccount-switch {
+    margin: 4px var(--gutter) 0;
+    text-align: center;
+  }
+  #obroot .obaccount-switch button {
+    background: transparent;
+    border: 0;
+    color: var(--label-2);
+    padding: 12px;
+    min-height: 46px;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 550;
+    cursor: pointer;
+  }
+  #obroot .obaccount-switch button:hover { color: var(--label); }
+  #obroot .obaccount-switch button:disabled { opacity: .42; cursor: default; }
+  #obroot .obaccount-assurance {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: clamp(28px, 5vh, 43px) var(--gutter) 28px;
+    padding: 17px 4px 0;
+    border-top: .5px solid var(--hairline);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--label-3);
+  }
+  #obroot .obaccount-assurance svg {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    fill: none;
+    stroke: var(--blue);
+    stroke-width: 1.75;
+    stroke-linejoin: round;
+  }
+  #obroot .obaccount-stage .password-access {
+    margin: 0 var(--gutter);
+    padding: 0;
+  }
+  #obroot .obaccount-stage .password-access h2 {
+    margin: 0 0 22px;
+    font-size: clamp(20px, 5.3vw, 26px);
+    line-height: 1.14;
+    font-weight: 650;
+    letter-spacing: -.03em;
+  }
+  #obroot .obaccount-stage .password-access > label,
+  #obroot .obaccount-stage .password-field > label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--label-2);
+  }
+  #obroot .obaccount-stage .password-access input[type="email"],
+  #obroot .obaccount-stage .password-field-row input {
+    background: var(--surface);
+    border: .5px solid var(--hairline);
+    border-radius: 15px;
+    min-height: 51px;
+    padding: 12px 14px;
+  }
+  #obroot .obaccount-stage .password-access .obfoot { margin: 22px 0 0; }
+  #obroot .obaccount-stage .password-access .obfoot .btn.plain {
+    padding: 9px 12px;
+    font-size: 13px;
+    color: var(--label-2);
+  }
+  @keyframes obaccount-reveal {
+    from { opacity: 0; transform: translate3d(0,9px,0); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* Progressive step transitions. Browser-native view transitions animate both
+     outgoing and incoming panes. The keyed CSS entrance above is the fallback. */
+  #obroot .obview { view-transition-name: axon-onboarding-flow; }
+  @keyframes obflow-old-forward {
+    to { opacity: 0; transform: translate3d(-22px,0,0); }
+  }
+  @keyframes obflow-new-forward {
+    from { opacity: 0; transform: translate3d(22px,0,0); }
+  }
+  @keyframes obflow-old-back {
+    to { opacity: 0; transform: translate3d(22px,0,0); }
+  }
+  @keyframes obflow-new-back {
+    from { opacity: 0; transform: translate3d(-22px,0,0); }
+  }
+  ::view-transition-old(axon-onboarding-flow) {
+    animation: obflow-old-forward .21s cubic-bezier(.4,0,1,1) both;
+  }
+  ::view-transition-new(axon-onboarding-flow) {
+    animation: obflow-new-forward .29s cubic-bezier(.2,.75,.2,1) both;
+  }
+  :root[data-axon-flow-direction="back"]::view-transition-old(axon-onboarding-flow) {
+    animation-name: obflow-old-back;
+  }
+  :root[data-axon-flow-direction="back"]::view-transition-new(axon-onboarding-flow) {
+    animation-name: obflow-new-back;
+  }
+  :root[data-axon-flow-direction]::view-transition-old(root),
+  :root[data-axon-flow-direction]::view-transition-new(root) {
+    animation: none;
+  }
+  /* Do not fade the new DOM twice while it is being snapshotted. */
+  :root[data-axon-flow-direction] #obroot .obview > *:not(.obaccount-stage) { animation: none; }
+  #obroot .obview[data-nav="back"] > * { animation-name: obstep-back; }
+  @keyframes obstep-back {
+    from { opacity: 0; transform: translate3d(-10px,0,0); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #obroot .obaccount-stage { animation: none; }
+    ::view-transition-old(axon-onboarding-flow),
+    ::view-transition-new(axon-onboarding-flow) { animation-duration: .01ms !important; }
+  }
+  [data-motion="reduce"] #obroot .obaccount-stage { animation: none; }
 
   /* The only acknowledgment in the flow, and it lands after the work rather
      than during it — 320ms, the recompute budget, spent once. */

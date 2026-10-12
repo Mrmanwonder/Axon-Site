@@ -14,7 +14,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import type { PaperDetail, QuestionRegionRef } from "./modules";
-import { flagReason as flagReasonJs } from "../../scan/flags.js";
+import { acceptableAsRead as acceptableAsReadJs, flagReason as flagReasonJs } from "../../scan/flags.js";
 
 /** The run whose parts are on the saved paper. */
 export function savedRunId(paper: Pick<PaperDetail, "extraction_run" | "question_region">): string | null {
@@ -56,4 +56,16 @@ export function openFlags(paper: PaperDetail, unplacedAttemptIds: Set<string> = 
       attemptId: region.committed_attempt_id,
       reason: flagReason(region, { unplaced: !!region.committed_attempt_id && unplacedAttemptIds.has(region.committed_attempt_id) }),
     }));
+}
+
+/** A card the student may accept as read in one tap: a saved part with a reading
+    to accept (owner, 8 Oct 2026). A part missing its mark still needs "Fix this". */
+export function acceptableFlag(flag: OpenFlag): boolean {
+  return !!flag.attemptId && !!flag.region.id && (acceptableAsReadJs as (p: {
+    tier?: string | null; marksAwarded?: unknown; marksAvailable?: unknown;
+  }) => boolean)({
+    tier: flag.region.confidence_tier ?? null,
+    marksAwarded: flag.region.marks_awarded,
+    marksAvailable: flag.region.marks_available,
+  });
 }

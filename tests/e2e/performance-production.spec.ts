@@ -230,8 +230,8 @@ async function coldSignedOut(browser: Browser) {
   const page = await context.newPage();
   const started = Date.now();
   await page.goto(origin, { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: /Understand your marked paper/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "I’m a parent — set this up" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /See where the marks went/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeVisible();
   const snapshot = await resourceSnapshot(page);
   const wallMs = Date.now() - started;
   await context.close();
