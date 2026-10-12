@@ -20,7 +20,8 @@ test("slow OTP delivery opens code entry immediately, recovers from failure, and
   });
   await page.goto("http://127.0.0.1:5175/");
   await page.getByRole("button", { name: /reject|essential only|necessary only/i }).click();
-  await page.getByRole("button", { name: /a parent/ }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue with email or phone" }).click();
   await page.getByLabel("Your name", { exact: true }).fill("Test Parent");
   await page.getByLabel("Email or phone").fill("parent@example.test");
   await page.getByRole("button", { name: "Send me a code" }).click();
