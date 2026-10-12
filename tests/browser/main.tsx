@@ -87,6 +87,11 @@ function Screen() {
     ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
     : <Library />}</>;
 }
+// The app renders password recovery as the onboarding shell, which is itself the
+// page's main landmark (Root.tsx); wrapping it in a second main would not match it.
+function Landmark({ children }: { children: React.ReactNode }) {
+  return params.get("scenario") === "password-recovery" ? <>{children}</> : <main>{children}</main>;
+}
 const root = createRoot(document.getElementById("root")!);
 if (params.get("view") === "onboarding-intro") {
   document.documentElement.dataset.theme = "dark";
@@ -115,5 +120,5 @@ if (params.get("view") === "onboarding-intro") {
   }], { initialEntries: [params.get("route") ?? "/missing"] });
   root.render(<RouterProvider router={router} />);
 } else {
-  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><main>{params.get("view") === "password" ? <PasswordDemo /> : params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</main></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
+  root.render(<React.StrictMode><MemoryRouter initialEntries={[params.get("route") ?? "/"]}><ToastProvider><AppProvider><SheetProvider><Landmark>{params.get("view") === "password" ? <PasswordDemo /> : params.get("view") === "dialog" ? <DialogDemo /> : params.get("view") === "nav" ? <NavDemo /> : params.get("view") === "audit-motion" ? <AuditMotionDemo /> : params.get("view") === "answer" ? <AnswerDemo /> : params.get("view") === "paper" ? <Routes><Route path="/library/:paperId" element={<PaperOverview />} /></Routes> : params.get("view") === "review" ? <ReviewSheet /> : params.get("view") === "student-scope-household" ? <StudentScopeHouseholdDemo /> : <Screen />}</Landmark></SheetProvider></AppProvider></ToastProvider></MemoryRouter></React.StrictMode>);
 }
