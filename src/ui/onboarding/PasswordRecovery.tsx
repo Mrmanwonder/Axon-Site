@@ -28,13 +28,16 @@ export default function PasswordRecovery() {
     finally { flight.current = false; setBusy(false); }
   };
   return <Shell title="Choose a new password">
+    <div className="obaccount-stage">
     <form className="password-access" onSubmit={event => void submit(event)}>
       <Err message={error} />
       <PasswordInput id="reset-password" label="New password" value={password} onChange={setPassword} creating disabled={busy} />
-      {password !== "" && <Requirements password={password} />}
-      <PasswordInput id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} />
+      <div style={{ marginTop: 12 }}>
+        <PasswordInput id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} placeholder="Type it again" />
+      </div>
+      {password !== "" && <div style={{ marginTop: 16 }}><Requirements password={password} /></div>}
       {confirmation !== "" && (
-        <p className="obrules-title" role="status" style={{ marginTop: 8 }}>
+        <p className="obrules-title" role="status" style={{ marginTop: 10 }}>
           {matches ? "The passwords match." : "The passwords don't match yet."}
         </p>
       )}
@@ -43,5 +46,6 @@ export default function PasswordRecovery() {
         <button type="button" className="btn plain" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); finishPasswordRecovery(); }}>Cancel</button>
       </div>
     </form>
+    </div>
   </Shell>;
 }
