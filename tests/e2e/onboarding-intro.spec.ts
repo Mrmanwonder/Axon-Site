@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import sharp from "sharp";
 
 const url = "/tests/browser/index.html?view=onboarding-intro&styled=1";
 
@@ -61,7 +62,20 @@ test("onboarding intro keeps visual hierarchy, one CTA and readable content on r
     }
 
     if (width === 320 || width === 390 || width === 1024) {
-      await page.screenshot({ path: `test-results/onboarding-intro-${browserName}-${width}.png`, fullPage: true });
+      /* WebKit once captured an entirely blank intro at the first frame while
+         the DOM was visible. Assert real pixels, not just DOM geometry. */
+      await page.evaluate(() => new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }));
+      const pixels = await page.screenshot({
+        path: `test-results/onboarding-intro-${browserName}-${width}.png`,
+        fullPage: true, animations: "disabled",
+      });
+      const { channels } = await sharp(pixels).stats();
+      expect(
+        Math.max(...channels.slice(0, 3).map(channel => channel.stdev)),
+        `blank rendered screenshot at ${where} on ${browserName}`,
+      ).toBeGreaterThan(5);
     }
   }
 
