@@ -91,3 +91,19 @@ After deployment:
 
 The Stripe webhook is the only service-role function in this repository that
 updates entitlement state; it must fail loudly on database or signature errors.
+
+## Email templates (Supabase Dashboard, not deployable from the repo)
+
+Source: `node scripts/build-email-templates.mjs` writes `supabase/templates/*.html`.
+Paste each into Dashboard → Authentication → Email Templates and set the subject:
+
+| Template | File | Subject |
+| --- | --- | --- |
+| Magic link (sign-in code) | `magic_link.html` | `{{ .Token }} is your Axon code` |
+| Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon code` |
+| Reset password | `recovery.html` | `Reset your Axon password` |
+
+The code is in the subject and preheader so Gmail and phone lock screens can offer
+their own "Copy code" action; an email cannot copy on click. The reset button points at
+`{{ .SiteURL }}/?token_hash=…&type=recovery`, so Authentication → URL Configuration → Site URL
+must be the production address and that address must be in the redirect allow-list.

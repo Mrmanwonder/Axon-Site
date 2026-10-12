@@ -524,6 +524,18 @@ export default function Onboarding() {
           paste the whole link here.
         </div>
         <div className="obfoot">
+          {typeof navigator !== "undefined" && typeof navigator.clipboard?.readText === "function" && (
+            <PressBox as="button" type="button" className="btn plain" disabled={otpBusy}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          const six = text.match(/\b\d{6}\b/)?.[0];
+                          if (six) setCode(six); else if (text.trim()) setCode(text.trim());
+                        } catch { /* clipboard permission refused: the field still takes a paste */ }
+                      }}>
+              Paste code
+            </PressBox>
+          )}
           <PressBox as="button" type="button" className="btn primary" disabled={otpBusy || sendingCode || codeDeliveryFailed}
                     aria-busy={otpBusy}
                     onClick={() => void verifyOtpCode(code)}>

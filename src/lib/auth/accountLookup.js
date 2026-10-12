@@ -11,7 +11,7 @@
 // answered from its own memory with no network at all (and re-checked quietly
 // afterwards), the function is woken before the first address is typed, and a
 // superseded request is cancelled rather than waited for.
-import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '../../config.js';
+import { SUPABASE_URL } from '../../config.js';
 import { fetchWithTimeout } from '../request.js';
 
 export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -55,6 +55,11 @@ export function cachedAccount(emailInput) {
   return null;
 }
 
+/* text/plain with no custom header is a CORS "simple" request: the browser sends
+   it straight away instead of first asking permission with an OPTIONS round trip.
+   The function reads the body as JSON whatever the content type says. */
+const SIMPLE = { 'Content-Type': 'text/plain;charset=UTF-8' };
+
 let warmed = false;
 /** Wakes the function before the first real address is typed. Its answer is ignored. */
 export function warmAccountLookup() {
@@ -62,7 +67,7 @@ export function warmAccountLookup() {
   warmed = true;
   try {
     void fetchWithTimeout(ENDPOINT, {
-      method: 'POST', headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+      method: 'POST', headers: SIMPLE,
       body: '{}', credentials: 'omit', cache: 'no-store',
     }).catch(() => {});
   } catch { /* nothing to warm */ }
@@ -80,7 +85,7 @@ export async function lookupAccount(emailInput, { signal, fresh = false } = {}) 
   try {
     const response = await fetchWithTimeout(ENDPOINT, {
       method: 'POST',
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+      headers: SIMPLE,
       body: JSON.stringify({ email }),
       credentials: 'omit', cache: 'no-store', signal,
     });
