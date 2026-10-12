@@ -20,9 +20,11 @@ import Scan from "../../src/ui/pages/Scan";
 import { ExamSettings } from "../../src/ui/components/ExamPlan";
 import PasswordAccess from "../../src/ui/onboarding/PasswordAccess";
 import PasswordRecovery from "../../src/ui/onboarding/PasswordRecovery";
+import Intro from "../../src/ui/onboarding/Intro";
+import { Shell } from "../../src/ui/onboarding/chrome";
 const params = new URLSearchParams(location.search);
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
-if (params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
+if (params.get("view") === "onboarding-intro" || params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
   await Promise.all([
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
@@ -69,6 +71,14 @@ function PasswordDemo() {
   if (opened || (params.get("scenario") === "password-recovery" && session)) return <h1>Account opened</h1>;
   return <><h1>Account access</h1><PasswordAccess email={email} onEmail={setEmail} onAuthenticated={() => setOpened(true)} /></>;
 }
+/* Actual introductory component in a no-backend visual harness. The continuation
+   is intentionally a fixture; production guardian auth is exercised separately. */
+function IntroDemo() {
+  const [advanced, setAdvanced] = React.useState(false);
+  return advanced
+    ? <Shell title="Set up your account" sub="Parent or guardian setup"><p>Continue to guardian sign-in</p></Shell>
+    : <Shell variant="intro"><Intro onContinue={() => setAdvanced(true)} /></Shell>;
+}
 function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
@@ -78,7 +88,10 @@ function Screen() {
     : <Library />}</>;
 }
 const root = createRoot(document.getElementById("root")!);
-if (params.get("view") === "scan-screen") {
+if (params.get("view") === "onboarding-intro") {
+  document.documentElement.dataset.theme = "dark";
+  root.render(<MemoryRouter><IntroDemo /></MemoryRouter>);
+} else if (params.get("view") === "scan-screen") {
   await Promise.all([import("../../src/ui/styles/tokens.css"), import("../../src/ui/styles/scanner.css")]);
   document.documentElement.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
   const style = document.createElement("style");
