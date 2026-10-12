@@ -301,7 +301,7 @@ export default function AccountEmail({
             </PressBox>
           </div>
           <p className="obemail-fine obreveal" style={{ ["--i" as string]: 2 }}>
-            We'll send a 6-digit code to confirm this email. Your password is checked against known breaches first.
+            We'll send a code to confirm this email. Your password is checked against known breaches first.
           </p>
         </div>
       )}
