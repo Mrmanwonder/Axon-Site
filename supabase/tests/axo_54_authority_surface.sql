@@ -135,6 +135,55 @@ do $$ begin
   end if;
 end $$;
 
+-- A real ready run is needed: a nonexistent id tests only the existence guard.
+insert into public.extraction_run (id, paper_id, student_id, pipeline_version, status)
+values ('a5400000-0000-4000-8000-000000000030',
+        'a5400000-0000-4000-8000-000000000010',
+        'a5400000-0000-4000-8000-000000000002', '1.0.0', 'ready');
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","role":"authenticated","session_id":"axo54-b"}';
+
+-- SECURITY DEFINER changes current_user, but must not turn an authenticated
+-- caller into a trusted maintenance session through current_setting('role').
+select public._t('commit caller retains authenticated SET ROLE',
+ current_setting('role', true) = 'authenticated');
+do $$ begin
+  perform public.commit_extraction_run('a5400000-0000-4000-8000-000000000030');
+  perform public._t('B cannot commit A''s ready run', false, 'committed');
+exception when others then
+  perform public._t('B cannot commit A''s ready run', sqlstate = '42501', sqlstate);
+end $$;
+
+-- Missing JWT role must not activate the privileged none/postgres bypass.
+set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","session_id":"axo54-b"}';
+do $$ begin
+  perform public.commit_extraction_run('a5400000-0000-4000-8000-000000000030');
+  perform public._t('missing JWT role does not bypass commit scope', false, 'committed');
+exception when others then
+  perform public._t('missing JWT role does not bypass commit scope', sqlstate = '42501', sqlstate);
+end $$;
+
+-- Even the owning guardian needs the active student capability.
+set local "request.jwt.claims" = '{"sub":"a5400000-1111-4111-8111-111111111111","role":"authenticated","session_id":"axo54-a-without-scope"}';
+do $$ begin
+  perform public.commit_extraction_run('a5400000-0000-4000-8000-000000000030');
+  perform public._t('owner without active Student Mode cannot commit', false, 'committed');
+exception when others then
+  perform public._t('owner without active Student Mode cannot commit', sqlstate = '42501', sqlstate);
+end $$;
+reset role;
+select public._t('rejected commits left the ready run unchanged',
+ (select status = 'ready' and committed_at is null from public.extraction_run
+  where id = 'a5400000-0000-4000-8000-000000000030'));
+set local role anon;
+do $$ begin
+  perform public.commit_extraction_run('a5400000-0000-4000-8000-000000000030');
+  perform public._t('anon cannot call commit_extraction_run', false, 'committed');
+exception when others then
+  perform public._t('anon cannot call commit_extraction_run', sqlstate = '42501', sqlstate);
+end $$;
+reset role;
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","role":"authenticated","session_id":"axo54-b"}';
 

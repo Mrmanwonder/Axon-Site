@@ -1,5 +1,10 @@
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
+const PASSWORD = scenario === "password";
+const RECOVERY = scenario === "password-recovery";
+let passwordSession: unknown = RECOVERY ? { user: { id: "guardian", email: "parent@example.test" } } : null;
+let passwordRecovery = RECOVERY;
+const authListeners = new Set<(session: unknown, event?: string) => void>();
 // `exams` / `exams-setup`: a Cambridge A Level student with real November 2026 zone 4 rows.
 const EXAMS = scenario === "exams" || scenario === "exams-setup";
 const wait = () => new Promise(resolve => setTimeout(resolve, 2000));
@@ -48,6 +53,7 @@ export const sb = {
 };
 export async function currentSession() {
   if (scenario === "auth-error") throw new Error("Auth unavailable");
+  if (PASSWORD || RECOVERY) return passwordSession;
   if (HOUSEHOLD && sessionStorage.getItem("axon.test.household.signed-out") === "1") return null;
   return {};
 }
@@ -70,7 +76,26 @@ export const clearStudentScope = async () => {
   return true;
 };
 export const takeProviderError = () => null;
-export const onAuthChange = () => ({ data: { subscription: { unsubscribe() {} } } });
+export const onAuthChange = (fn: (session: unknown, event?: string) => void) => {
+  if (PASSWORD || RECOVERY) {
+    authListeners.add(fn);
+    fn(passwordSession, passwordRecovery ? "PASSWORD_RECOVERY" : "INITIAL_SESSION");
+  }
+  return { data: { subscription: { unsubscribe() { authListeners.delete(fn); } } } };
+};
+export const clearPasswordRecovery = () => { passwordRecovery = false; };
+export const passwordSignIn = async (_email: string, password: string) => {
+  if (password === "wrong-password") throw new Error("We could not complete that request. Check your details or try again later.");
+  passwordSession = { user: { id: "guardian", email: "parent@example.test" } };
+  for (const fn of authListeners) fn(passwordSession, "SIGNED_IN");
+  return passwordSession;
+};
+export const passwordSignUp = async () => null;
+export const requestPasswordReset = async () => {};
+export const changePassword = async () => {};
+export const reauthenticateWithPassword = async () => {};
+export const unlockWithPassword = async () => ({ outcome: "unlocked" as const });
+
 export const readLocal = () => ({ theme: new URLSearchParams(location.search).get("theme") ?? "dark", text_size: "m", reduce_motion: true });
 export const loadPrefs = async () => readLocal();
 export const savePrefs = async () => readLocal();
@@ -164,6 +189,9 @@ function syllabusFixture() {
 }
 // `insights-early`: the same student after three papers, below the pattern threshold.
 const EARLY = scenario === "insights-early";
+// Real paper rows are needed to render a stale-analysis notice; an empty
+// library correctly renders its empty state instead.
+const ANALYSIS_CACHED = scenario === "analysis-cached";
 const earlyIds = new Set(["ip1", "ip2", "ip3"]);
 const earlyOnly = <T extends { paper_id?: unknown; id?: unknown }>(rows: T[], key: "paper_id" | "id") => (EARLY ? rows.filter((r) => earlyIds.has(String(r[key]))) : rows);
 export const syllabusMapData = async () => {
@@ -172,20 +200,20 @@ export const syllabusMapData = async () => {
   return { data: { ...f, evidence: earlyOnly(f.evidence as { paper_id?: unknown }[], "paper_id") }, stale: false };
 };
 export const setPaperSubject = async () => {};
-export async function listPapers() { await wait(); return { data: scenario === "insights" ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: false }; }
+export async function listPapers() { await wait(); return { data: scenario === "insights" || ANALYSIS_CACHED ? INSIGHT_PAPERS : EARLY ? earlyOnly(INSIGHT_PAPERS, "id") : [], stale: ANALYSIS_CACHED }; }
 export const insightEvidence = async () => {
-  if (scenario !== "insights" && !EARLY) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
+  if (scenario !== "insights" && !EARLY && !ANALYSIS_CACHED) return { data: { attempts: [], losses: [] }, stale: scenario === "cached" };
   const f = insightFixture();
   const attempts = earlyOnly(f.attempts as { paper_id?: unknown }[], "paper_id");
   const ids = new Set(attempts.map((a) => (a as { id: string }).id));
-  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: false };
+  return { data: { attempts, losses: f.losses.filter((l) => ids.has(String((l as { attempt_id: string }).attempt_id))) }, stale: ANALYSIS_CACHED };
 };
 export const paperProgress = async () => new Map();
 export const watchLibrary = () => () => {};
 // `patterns`: the shape of a real account on 4 Oct 2026 (4 papers, 25 confirmed questions, 9 marks with a cause).
 export const analyticsReadiness = async () => scenario === "patterns"
   ? { data: { papers_counted: 4, questions_counted: 25, has_enough_data: true }, stale: false }
-  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" };
+  : { data: { papers_counted: 1, questions_counted: 2, has_enough_data: false }, stale: scenario === "cached" || ANALYSIS_CACHED };
 export const lossByCause = async () => ({ data: scenario === "patterns" ? { incomplete: 6, misread_question: 2, procedural_slip: 1 } : {} });
 export const needsCheck = async () => ({ data: { count: 0, papers: 0 } });
 export const unreadablePages = async () => ({ data: [] });
@@ -248,8 +276,16 @@ const overviewPaper = async () => ({
   },
 });
 // Source fixtures exercise actual reading components; no external mutations occur.
+const paperExamDates = new Map<string, string | null>();
+export const setPaperExamDate = async (paperId: string, examDate: string | null) => {
+  paperExamDates.set(paperId, examDate);
+  savedPaperCalls.push({ action: "setPaperExamDate", id: paperId, value: examDate });
+};
 export const readPaper = async () => {
-  if (!location.pathname.includes("paper-reading")) return overviewPaper();
+  if (!location.pathname.includes("paper-reading")) {
+    const result = await overviewPaper();
+    return { ...result, data: { ...result.data, exam_date: paperExamDates.get(result.data.id) ?? null } };
+  }
   if (new URLSearchParams(location.search).get("scenario") === "failed") throw new Error("The paper could not be read. Try opening it again.");
   const { readingFixture } = await import("./reading-fixture");
   return { data: readingFixture(), stale: new URLSearchParams(location.search).get("scenario") === "offline", offline: false };
@@ -305,3 +341,39 @@ export const saveExamPapers = async (_student: string, code: string, papers: num
 export const deleteQuestion = deletePaper;
 export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});
+
+
+// Stateful synthetic difficulty responses, scoped exactly like the product API.
+type Feedback = { rating: number | null; skipped: boolean };
+const feedbackKey = (student: string, paper: string) => "test.difficulty:" + student + ":" + paper;
+export const paperDifficultyFeedback = async (student: string, paper: string): Promise<Feedback | null> => {
+  const value = sessionStorage.getItem(feedbackKey(student, paper));
+  return value ? JSON.parse(value) : null;
+};
+export const savePaperDifficultyFeedback = async (input: { studentId: string; paperId: string; rating: number | null; skipped: boolean }) => {
+  sessionStorage.setItem(feedbackKey(input.studentId, input.paperId), JSON.stringify({ rating: input.rating, skipped: input.skipped }));
+};
+let difficultyFailedOnce = false;
+export const readQuestionDifficulty = async () => {
+  if (!location.pathname.includes("difficulty")) return null;
+  if (!difficultyFailedOnce) { difficultyFailedOnce = true; throw new Error("Test read unavailable"); }
+  return { attempt_id: "attempt", paper_id: "paper", normalized_score: .6, band: 4, confidence: .28, source: "structural_estimate", max_marks: 4, marks_awarded: 2, method_version: "test-v1" };
+};
+
+
+// AXO-216 saved-paper mutations. This adapter is test-only: record calls rather
+// than invoking a production API. Dedicated fixtures may supply changed data.
+export const savedPaperCalls: { action: string; id: string; value?: unknown }[] = [];
+export const setPaperType = async (paperId: string, type: string) => {
+  savedPaperCalls.push({ action: "setPaperType", id: paperId, value: type });
+};
+export const deferPart = async (regionId: string) => {
+  savedPaperCalls.push({ action: "deferPart", id: regionId });
+};
+export const fixSavedPart = async (
+  regionId: string,
+  fix: { marksAwarded?: number; marksAvailable?: number; answer?: string } = {},
+) => {
+  savedPaperCalls.push({ action: "fixSavedPart", id: regionId, value: fix });
+  return { region_id: regionId, attempt_id: null, run_id: "fixture-run", explain: false };
+};

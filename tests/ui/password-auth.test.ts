@@ -1,0 +1,182 @@
+import { beforeEach, expect, test, vi } from "vitest";
+const fake = vi.hoisted(() => ({
+  createClient: vi.fn(), signIn: vi.fn(), signUp: vi.fn(), setSession: vi.fn(),
+  getSession: vi.fn(), reset: vi.fn(), update: vi.fn(), policy: vi.fn(),
+  getUser: vi.fn(), request: vi.fn(),
+}));
+vi.mock("@supabase/supabase-js", () => ({ createClient: fake.createClient }));
+vi.mock("../../src/supabase.js", () => ({ sb: { auth: {
+  setSession: fake.setSession, getSession: fake.getSession, resetPasswordForEmail: fake.reset, updateUser: fake.update,
+} } }));
+vi.mock("../../src/config.js", () => ({ SUPABASE_URL: "http://localhost:54321", SUPABASE_PUBLISHABLE_KEY: "local-test" }));
+vi.mock("../../src/lib/request.js", () => ({ fetchWithTimeout: fake.request }));
+vi.mock("../../src/lib/auth/passwordPolicy.js", () => ({ assertSafeNewPassword: fake.policy }));
+import { passwordSignIn, passwordSignUp, requestPasswordReset, changePassword, reauthenticateWithPassword } from "../../src/lib/auth/password.js";
+const session = (id = "guardian", email = "parent@example.test") => ({ user: { id, email }, access_token: "local-access", refresh_token: "local-refresh" });
+beforeEach(() => {
+  vi.resetAllMocks();
+  fake.policy.mockResolvedValue(undefined);
+  fake.createClient.mockReturnValue({ auth: { signInWithPassword: fake.signIn, signUp: fake.signUp, getUser: fake.getUser } });
+  fake.getSession.mockResolvedValue({ data: { session: session() }, error: null });
+  fake.setSession.mockResolvedValue({ data: { session: session() }, error: null });
+  fake.signIn.mockResolvedValue({ data: { session: session() }, error: null });
+  fake.signUp.mockResolvedValue({ data: { session: null, user: { id: "obfuscated" } }, error: null });
+  fake.reset.mockResolvedValue({ error: null });
+  fake.getUser.mockResolvedValue({ data: { user: { id: "guardian" } }, error: null });
+  fake.request.mockResolvedValue({ ok: true, json: async () => ({ id: "guardian" }) });
+});
+test("password sign-in normalizes only email, keeps password exact, isolates proof and installs matching principal", async () => {
+  await expect(passwordSignIn(" Parent@Example.Test ", "  secret  ")).resolves.toEqual(session());
+  expect(fake.signIn).toHaveBeenCalledWith({ email: "parent@example.test", password: "  secret  " });
+  expect(fake.createClient.mock.calls[0][2].auth).toEqual({ persistSession: false, autoRefreshToken: false, detectSessionInUrl: false });
+  expect(fake.setSession).toHaveBeenCalledOnce();
+});
+test("a mismatched returned email is never installed", async () => {
+  fake.signIn.mockResolvedValue({ data: { session: session("other", "other@example.test") } });
+  await expect(passwordSignIn("parent@example.test", "secret")).rejects.toThrow("could not complete");
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test.each(["Invalid login credentials", "User already registered", "Email not found", "Signups not allowed"])("auth failures never expose account existence: %s", async message => {
+  fake.signIn.mockResolvedValue({ error: { message } });
+  fake.signUp.mockResolvedValue({ error: { message } });
+  fake.reset.mockResolvedValue({ error: { message } });
+  for (const action of [() => passwordSignIn("parent@example.test", "secret"), () => passwordSignUp("parent@example.test", "ValidPass9"), () => requestPasswordReset("parent@example.test")]) {
+    await expect(action()).rejects.toThrow("We could not complete that request. Check your details or try again later.");
+  }
+});
+test("unconfirmed and obfuscated existing signup responses share one result and never install a session", async () => {
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toBeNull();
+  fake.signUp.mockResolvedValue({ data: { session: null, user: { id: "new", identities: [{ provider: "email" }] } } });
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toBeNull();
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test("signup with an immediate matching session installs it", async () => {
+  fake.signUp.mockResolvedValue({ data: { session: session() } });
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).resolves.toEqual(session());
+});
+test("reset uses this application origin and route", async () => {
+  await requestPasswordReset("parent@example.test");
+  expect(fake.reset).toHaveBeenCalledWith("parent@example.test", { redirectTo: location.origin + location.pathname });
+});
+test("password update stays on the current auth user", async () => {
+  await changePassword("ValidPass9");
+  expect(fake.getUser).toHaveBeenCalledWith("local-access");
+  expect(fake.request).toHaveBeenCalledWith("http://localhost:54321/auth/v1/user", {
+    method: "PUT",
+    headers: { apikey: "local-test", Authorization: "Bearer local-access", "Content-Type": "application/json" },
+    body: JSON.stringify({ password: "ValidPass9" }),
+    credentials: "omit", cache: "no-store", redirect: "error",
+  });
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.setSession).not.toHaveBeenCalled();
+  fake.request.mockResolvedValue({ ok: true, json: async () => ({ id: "other" }) });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+});
+test("a recovery update cannot run without an authenticated session", async () => {
+  fake.getSession.mockResolvedValue({ data: { session: null } });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.request).not.toHaveBeenCalled();
+});
+test("Parent Mode reads the session email and requires exactly the same user id", async () => {
+  await reauthenticateWithPassword("secret");
+  expect(fake.signIn).toHaveBeenCalledWith({ email: "parent@example.test", password: "secret" });
+  fake.setSession.mockClear();
+  fake.signIn.mockResolvedValue({ data: { session: session("different-id") } });
+  await expect(reauthenticateWithPassword("secret")).rejects.toThrow("could not complete");
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test.each([null, session("other"), session("guardian", "changed@example.test")])("an account switch or sign-out during reauth is rejected", async switched => {
+  fake.getSession.mockResolvedValueOnce({ data: { session: session() } }).mockResolvedValueOnce({ data: { session: switched } });
+  await expect(reauthenticateWithPassword("secret")).rejects.toThrow("could not complete");
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test("invalid email and new short passwords fail before any auth request", async () => {
+  await expect(passwordSignUp("not-an-email", "secret123")).rejects.toThrow("Enter an email");
+  fake.policy.mockRejectedValueOnce(new Error("Use at least 8 characters for your password."));
+  await expect(passwordSignUp("parent@example.test", "short")).rejects.toThrow("at least 8");
+  expect(fake.createClient).not.toHaveBeenCalled();
+});
+
+test("signup blocks policy rejection before sending credentials to Supabase", async () => {
+  fake.policy.mockRejectedValueOnce(new Error("This password has appeared in a data breach. Choose another password."));
+  await expect(passwordSignUp("parent@example.test", "ValidPass9")).rejects.toThrow("data breach");
+  expect(fake.signUp).not.toHaveBeenCalled();
+});
+test("password update blocks a compromised choice without changing account credentials", async () => {
+  fake.policy.mockRejectedValueOnce(new Error("This password has appeared in a data breach. Choose another password."));
+  await expect(changePassword("ValidPass9")).rejects.toThrow("data breach");
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.request).not.toHaveBeenCalled();
+});
+test("change password verifies the principal did not switch during the breach check", async () => {
+  fake.getSession.mockResolvedValueOnce({ data: { session: session("guardian") } })
+    .mockResolvedValueOnce({ data: { session: session("other") } });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.request).not.toHaveBeenCalled();
+});
+
+test.each([null, session("other")])("a switch during token verification prevents the password mutation", async switched => {
+  fake.getUser.mockImplementationOnce(async () => {
+    fake.getSession.mockResolvedValue({ data: { session: switched } });
+    return { data: { user: { id: "guardian" } }, error: null };
+  });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.request).not.toHaveBeenCalled();
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test("a late switch cannot redirect the password update to the new account", async () => {
+  const other = { ...session("other"), access_token: "other-access" };
+  fake.request.mockImplementationOnce(async () => {
+    // Simulate another tab switching the shared session after the last check.
+    fake.getSession.mockResolvedValue({ data: { session: other } });
+    return { ok: true, json: async () => ({ id: "guardian" }) };
+  });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.request).toHaveBeenCalledOnce();
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.setSession).not.toHaveBeenCalled();
+  expect(fake.request.mock.calls[0][1].headers.Authorization).toBe("Bearer local-access");
+  expect((await fake.getSession()).data.session).toEqual(other);
+});
+test.each([
+  { data: { user: { id: "other" } }, error: null },
+  { data: { user: null }, error: null },
+  { data: null, error: { message: "sensitive auth detail" } },
+])("server token verification must match the original principal", async proof => {
+  fake.getUser.mockResolvedValueOnce(proof);
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.request).not.toHaveBeenCalled();
+});
+test("missing access tokens fail before a mutation", async () => {
+  fake.getSession.mockResolvedValue({ data: { session: { user: { id: "guardian" } } } });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.getUser).not.toHaveBeenCalled();
+  expect(fake.request).not.toHaveBeenCalled();
+});
+test.each([401, 422, 429, 500])("HTTP %s produces a generic error without retrying with another account", async status => {
+  fake.request.mockResolvedValueOnce({ ok: false, status });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("We could not complete that request. Check your details or try again later.");
+  expect(fake.request).toHaveBeenCalledOnce();
+  expect(fake.update).not.toHaveBeenCalled();
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test("transport and malformed-response failures do not expose credentials or replace auth state", async () => {
+  fake.request.mockRejectedValueOnce(new Error("sensitive transport detail"));
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  fake.request.mockResolvedValueOnce({ ok: true, json: async () => { throw new Error("sensitive body"); } });
+  await expect(changePassword("ValidPass9")).rejects.toThrow("could not complete");
+  expect(fake.setSession).not.toHaveBeenCalled();
+});
+test("a refresh of the same principal during verification cannot change the bound token", async () => {
+  fake.getUser.mockImplementationOnce(async () => {
+    fake.getSession.mockResolvedValue({ data: { session: { ...session(), access_token: "refreshed-access" } } });
+    return { data: { user: { id: "guardian" } }, error: null };
+  });
+  await expect(changePassword("  ValidPass9  ")).resolves.toBeUndefined();
+  const init = fake.request.mock.calls[0][1];
+  expect(init.headers.Authorization).toBe("Bearer local-access");
+  expect(JSON.parse(init.body)).toEqual({ password: "  ValidPass9  " });
+  expect(fake.setSession).not.toHaveBeenCalled();
+});

@@ -65,3 +65,48 @@
   opacity: .65;
   cursor: default;
 }
+
+/* Full action labels need their own space; they must not cover the title. */
+.greet.detailgreet {
+  flex-wrap: wrap;
+}
+.greet.detailgreet > .detailcopy {
+  flex: 1 1 18rem;
+}
+.greet.detailgreet h1 {
+  overflow-wrap: anywhere;
+}
+.rvhead.detailhead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.detailhead .rvtitle {
+  position: static;
+  transform: none;
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.detailhead .rvback {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+}
+@media (max-width: 600px) {
+  .greet.detailgreet > .detailcopy {
+    flex-basis: 100%;
+  }
+  .detailhead > .resourceactions {
+    flex-basis: 100%;
+  }
+  .question-reading .qhead {
+    flex-wrap: wrap;
+  }
+  .question-reading .qhead > h1.t1 {
+    flex-basis: 100%;
+  }
+}

@@ -335,3 +335,38 @@ test('a native still completing after restart cannot demote or capture from the 
   expect(f.capture.capturePath).toBe('image-capture');
   expect(f.onShot).not.toHaveBeenCalled();
 });
+
+test('shutter acknowledgement precedes a held native photo, blocks duplicate taps and keeps preview alive', async () => {
+  const photo = deferred();
+  const takePhoto = vi.fn(() => photo.promise);
+  vi.stubGlobal('ImageCapture', class { getPhotoCapabilities() { return Promise.resolve(caps); } takePhoto = takePhoto; });
+  const f = await fixture();
+  await f.capture.start(f.stream);
+  showFrame(f.video);
+  f.onState.mockClear();
+  const shot = f.capture.shoot();
+  expect(f.onState.mock.calls.at(-1)?.[0].capturing).toBe(true);
+  expect(f.onShot).not.toHaveBeenCalled();
+  expect(f.track.stop).not.toHaveBeenCalled();
+  expect(f.video.srcObject).toBe(f.stream);
+  expect(await f.capture.shoot()).toBeNull();
+  expect(takePhoto).toHaveBeenCalledOnce();
+  photo.resolve(new Blob(['native-photo']));
+  await shot;
+  expect(f.onShot).toHaveBeenCalledOnce();
+  expect(f.onState.mock.calls.at(-1)?.[0].capturing).toBe(false);
+  expect(f.track.stop).not.toHaveBeenCalled();
+});
+
+test('failed fallback encoding clears capture acknowledgement and reports failure without a page', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => callback(null));
+  const f = await fixture();
+  await f.capture.start(f.stream);
+  showFrame(f.video);
+  const shot = f.capture.shoot();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(await shot).toBeNull();
+  expect(f.onShot).not.toHaveBeenCalled();
+  expect(f.onState.mock.calls.at(-1)?.[0]).toMatchObject({ capturing: false, reason: 'capture' });
+});

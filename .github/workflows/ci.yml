@@ -57,6 +57,7 @@ jobs:
             test-results/**/question-source-*.png
             test-results/**/failed-save-*.png
             test-results/**/paper-overview-*.png
+            test-results/**/onboarding-intro-*.png
       - run: npm run test:a11y
 
       # INV-01: a production build must not be able to select a development
@@ -99,6 +100,9 @@ jobs:
         run: |
           supabase start
           supabase db reset --local
+
+      - name: Verify password auth against the local GoTrue stack
+        run: node scripts/test-password-auth-local.mjs
 
       # Each file in supabase/tests/ is a self-contained, rolled-back suite
       # that ends with `select count(*) ... as failed from public._r`. Execute

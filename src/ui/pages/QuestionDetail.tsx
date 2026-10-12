@@ -47,6 +47,7 @@ import { useSchemeCheck } from "../data/schemeCheck";
 import { SchemeCheckQuestion } from "../components/SchemeCheck";
 import { awaitingCheck } from "../data/flaggedParts";
 import { FixPartSheet } from "../components/FlaggedPart";
+import QuestionDifficultyHint from "../components/QuestionDifficultyHint";
 
 function Field({ k, v, steps }: { k: string; v?: string | null; steps?: boolean }) {
   return (
@@ -270,6 +271,7 @@ export default function QuestionDetail() {
         </div>
 
         <div className="qfield"><div className="k">Question</div><div className="v">{attempt.question_text ? <AcademicText text={attempt.question_text} /> : "Not read. Inspect the saved page."}</div></div>
+        <QuestionDifficultyHint attemptId={attempt.id} />
         {sharedStem && sharedStem !== attempt.question_text && <Field k="Shared question context" v={sharedStem} steps />}
         {readingPart?.inherited && <p className="subnote">Parent linked by source order; the printed label has no parent number.</p>}
         <SourceEvidence inspectOnly paperId={paperId} pageNumber={span?.page} box={span?.box} pageNumbers={region?.page_spans?.map(s => s.page)} />

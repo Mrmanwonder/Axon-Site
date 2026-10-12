@@ -1,6 +1,6 @@
 // Supabase client and auth.
 //
-// Auth is passwordless: email or phone OTP, or Google. Only the
+// Auth supports email/password, email or phone OTP, and Google. Only the
 // guardian ever holds credentials; the student works inside the guardian's
 // session and is never an auth user.
 //
@@ -19,6 +19,8 @@ import { clearLocalData, putCached, readThrough } from './cache.js';
 // type-checkable and tree-shakeable where a global is neither.
 import { createClient } from '@supabase/supabase-js';
 import { fetchWithTimeout } from './lib/request.js';
+import { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD } from './lib/auth/providers.js';
+export { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD };
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: { fetch: fetchWithTimeout },
@@ -32,6 +34,14 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     detectSessionInUrl: true,
   },
 });
+
+// Subscribe before React boots: the recovery event can precede AppProvider.
+let passwordRecoveryPending = false;
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') passwordRecoveryPending = true;
+  if (event === 'SIGNED_OUT') passwordRecoveryPending = false;
+});
+export function clearPasswordRecovery() { passwordRecoveryPending = false; }
 
 /** True when the string looks like a phone number rather than an email. */
 export function isPhone(contact) {
@@ -81,13 +91,8 @@ export async function sendOtp(contact) {
   return { channel: isPhone(value) ? 'sms' : 'email', sentTo: value };
 }
 
-/** Providers offered on the account step, in the order they are shown. */
-export const OAUTH_PROVIDERS = ['google'];
-
-export const PROVIDER_LABEL = { google: 'Google' };
-
 /**
- * Hand off to Google.
+ * Hand off to the enabled OAuth/OIDC provider (Google or staging WorkOS).
  *
  * This navigates away, so nothing after it runs on success — a resolved promise
  * only means the redirect was accepted. The session comes back in the URL on
@@ -95,7 +100,7 @@ export const PROVIDER_LABEL = { google: 'Google' };
  * emailed link already uses.
  */
 export async function signInWithProvider(provider) {
-  if (!OAUTH_PROVIDERS.includes(provider)) {
+  if (!SIGN_IN_PROVIDERS.includes(provider)) {
     throw new Error(`Unknown sign-in provider: ${provider}`);
   }
   // Which provider we left with, so the message on the way back can name it.
@@ -111,6 +116,9 @@ export async function signInWithProvider(provider) {
       // A shared family device is the normal case here, so never silently
       // resume whichever Google account the browser saw last.
       ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}),
+      // WorkOS needs `email` for Supabase to link the verified address to an
+      // existing guardian rather than create a second account.
+      ...(provider === 'custom:workos' ? { scopes: 'openid email profile' } : {}),
     },
   });
   if (error) throw error;
@@ -340,7 +348,7 @@ export async function signOut() {
 }
 
 export function onAuthChange(fn) {
-  return sb.auth.onAuthStateChange((_event, session) => fn(session));
+  return sb.auth.onAuthStateChange((event, session) => fn(session, passwordRecoveryPending && session ? 'PASSWORD_RECOVERY' : event));
 }
 
 const GUARDIAN_IDENTITY_COLUMNS = 'id, auth_user_id, name, contact';

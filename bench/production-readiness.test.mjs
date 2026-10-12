@@ -55,6 +55,11 @@ test('production host configuration carries transport protections', () => {
   assert.match(cloudflareHeaders, /script-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /connect-src[^\n]+https:\/\/\*\.posthog\.com/);
   assert.match(cloudflareHeaders, /worker-src 'self' blob: data:/);
+  // The password breach check fetches this exact host from the browser; a CSP
+  // copy without it makes every new password fail closed (AXO-235).
+  for (const [name, csp] of [['netlify.toml', netlify], ['public/_headers', cloudflareHeaders], ['src/index.ts', read('src/index.ts')]]) {
+    assert.match(csp, /connect-src[^\n"]+https:\/\/api\.pwnedpasswords\.com/, `${name} connect-src must allow api.pwnedpasswords.com`);
+  }
   // The self-hosted ONNX runtime compiles WebAssembly; that needs this token
   // (not 'unsafe-eval') in all three CSP copies.
   assert.match(cloudflareHeaders, /script-src[^\n]+'wasm-unsafe-eval'/);

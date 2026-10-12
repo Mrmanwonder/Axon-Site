@@ -75,9 +75,12 @@ async function setup() {
     insert into public.paper(id, student_id) values ('20000000-0000-0000-0000-000000000006', '${STUDENT}');
     insert into public.extraction_run(paper_id, tier_routing) values ('20000000-0000-0000-0000-000000000006',
       '{"triage":{"subject":"Mathematics","confidence":"high","assessment_identity":{"subject_code":"9231","confidence":"high"}}}');`);
-  await db.exec(await MIG("20261004100000_syllabus_topics_and_mastery.sql"));
+  // Recovered production versions replay subject assignment before syllabus.
+  // The deferred topic block must have no prerequisite dependency in this file.
   await db.exec(await MIG("20261004110000_paper_subject_auto_and_topic_tagging.sql"));
-  await db.exec(await MIG("20261007130000_auto_subject_by_printed_code.sql"));
+  assert.equal((await db.query("select to_regclass('private.topic_tag_job') as name")).rows[0].name, null);
+  await db.exec(await MIG("20261004192648_syllabus_topics_and_mastery.sql"));
+  await db.exec(await MIG("20261007133240_auto_subject_by_printed_code.sql"));
   return db;
 }
 

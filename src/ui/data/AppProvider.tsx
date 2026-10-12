@@ -30,7 +30,7 @@ import { paths } from "../app/paths";
 import type { ReactNode } from "react";
 import {
   sb, currentSession, currentGuardian, studentScopeState, setStudentScope, clearStudentScope,
-  signOut, onAuthChange, takeProviderError,
+  signOut, onAuthChange, takeProviderError, clearPasswordRecovery,
   loadPrefs, savePrefs, readLocal,
   readConsentState, recordConsent, withdrawConsent,
   listPapers, paperProgress, watchLibrary,
@@ -65,6 +65,8 @@ type AppValue = {
   retryBoot: () => void;
   providerError: ProviderError | null;
   session: unknown;
+  passwordRecovery: boolean;
+  finishPasswordRecovery: () => void;
   guardian: Guardian | null;
   student: Student | null;
   profiles: Student[];
@@ -188,6 +190,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const [providerError, setProviderError] = useState<ProviderError | null>(null);
   const [session, setSession] = useState<unknown>(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const finishPasswordRecovery = useCallback(() => { clearPasswordRecovery(); setPasswordRecovery(false); }, []);
   const [guardian, setGuardian] = useState<Guardian | null>(null);
   const [profiles, setProfiles] = useState<Student[]>([]);
   const [profileStale, setProfileStale] = useState(false);
@@ -678,7 +682,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // A sign-out in another tab must not leave this one showing a signed-in app.
   useEffect(() => {
     let had = false;
-    const { data: { subscription } } = onAuthChange((s: unknown) => {
+    const { data: { subscription } } = onAuthChange((s: unknown, event?: string) => {
+      if (event === 'PASSWORD_RECOVERY' && s) setPasswordRecovery(true);
+      if (!s) setPasswordRecovery(false);
       if (s) had = true;
       else if (had) location.reload();
       setSession(s);
@@ -687,7 +693,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AppValue>(() => ({
-    gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent,
+    gate, bootError, retryBoot, providerError, session, passwordRecovery, finishPasswordRecovery, guardian, student, profiles, profileStale, selectStudent,
     prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent,
@@ -695,7 +701,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAvatar, updateStudentProfile,
     online, finishOnboarding, takePendingPaperType, signOutNow,
   }), [
-    gate, bootError, retryBoot, providerError, session, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
+    gate, bootError, retryBoot, providerError, session, passwordRecovery, finishPasswordRecovery, guardian, student, profiles, profileStale, selectStudent, prefs, setPref,
     papersResource, progressResource, consentResource,
     consent, refreshConsent, setConsent, papers, papersStale, papersError, progress, refreshLibrary, removePaperFromLibrary,
     setAvatar, updateStudentProfile, online, finishOnboarding, takePendingPaperType, signOutNow,

@@ -222,34 +222,43 @@ begin
          started_at = now(), heartbeat_at = now()
    where id = v_run;
 
-  begin
-    perform public.begin_explanations(v_run);
-    perform public._t('explanations refuse to start before review is done', false, 'call succeeded');
-  exception when insufficient_privilege then
-    perform public._t('explanations refuse to start before review is done', true);
-  end;
+  -- D1 (AXO-216): explanations can begin without a student check, but
+  -- the flagged parts must be held, not sent to a model. The paper itself can
+  -- already be ready while those parts await confirmation.
+  select public.begin_explanations(v_run) into v_queued;
+  perform public._t('unconfirmed marked parts are not queued for explanation',
+                    (v_queued ->> 'queued')::int = 0
+                    and jsonb_array_length(v_queued -> 'region_ids') = 0,
+                    v_queued::text);
+  perform public._t('the flagged mark-loss question is held for checking',
+                    (select explain_status = 'skipped'
+                            and explain_failure_reason = 'held_for_check'
+                       from public.question_region
+                      where run_id = v_run and order_index = 1));
+  perform public._t('a paper with held parts can become ready',
+                    (select status from public.extraction_run where id = v_run) = 'ready');
 
   update public.question_region set student_confirmed_at = now() where run_id = v_run;
 
-  -- Also jsonb since the fan-out migration: {queued, region_ids}, so the
-  -- caller can enqueue the ids it is told about.
-  select public.begin_explanations(v_run) into v_queued;
-  perform public._t('only the question that lost marks is queued',
+  -- Confirmation promotes only the held, mark-losing region. Retrying the
+  -- original begin-explanations call is intentionally a no-op once ready.
+  select public.retry_failed_explanations(v_run) into v_queued;
+  perform public._t('only the checked question that lost marks is queued',
                     (v_queued ->> 'queued')::int = 1,
                     format('%s queued', v_queued ->> 'queued'));
-  perform public._t('and it hands back exactly that one region id',
-                    jsonb_array_length(v_queued -> 'region_ids') = 1);
-  perform public._t('and the run is explaining',
-                    (select status from public.extraction_run where id = v_run) = 'explaining');
+  perform public._t('and retry hands back exactly that one region id',
+                    jsonb_array_length(v_queued -> 'region_ids') = 1
+                    and (v_queued -> 'region_ids' ->> 0) =
+                      (select id::text from public.question_region
+                        where run_id = v_run and order_index = 1));
 
-  -- Called again, as a retried request would.
-  select public.begin_explanations(v_run) into v_queued;
-  perform public._t('a second call does not queue the same question twice',
-                    (v_queued ->> 'queued')::int = 0,
-                    format('%s queued', v_queued ->> 'queued'));
+  select public.retry_failed_explanations(v_run) into v_queued;
+  perform public._t('a repeated retry never queues the question twice',
+                    (v_queued ->> 'queued')::int = 0, v_queued::text);
 
-  perform public._t('the run is not ready while an explanation is outstanding',
-                    not public.advance_after_explain(v_run));
+  perform public._t('advance-after-explain does not restart an already ready run',
+                    not public.advance_after_explain(v_run)
+                    and (select status from public.extraction_run where id = v_run) = 'ready');
   perform public._t('a question with full marks is skipped, not left pending',
                     (select explain_status from public.question_region
                       where run_id = v_run and order_index = 2) = 'skipped');
@@ -267,9 +276,9 @@ begin
   update public.question_region set explain_status = 'done'
    where run_id = v_run and order_index = 1;
 
-  perform public._t('once every explanation has landed the run is ready',
-                    public.advance_after_explain(v_run));
-  perform public._t('and it says so',
+  perform public._t('a late explanation cannot reopen a ready run',
+                    not public.advance_after_explain(v_run));
+  perform public._t('and the run remains ready after the explanation arrives',
                     (select status from public.extraction_run where id = v_run) = 'ready');
 end $$;
 

@@ -153,3 +153,9 @@
     padding-inline: 11px;
   }
 }
+
+/* AXO-219: the blue wash lowers contrast for small selected labels in light
+   mode. Keep the accent hue while darkening its text locally. */
+[data-theme="light"] .app-dropdown-trigger.fchip.is-filtered {
+  color: color-mix(in srgb, var(--accent) 75%, var(--label));
+}

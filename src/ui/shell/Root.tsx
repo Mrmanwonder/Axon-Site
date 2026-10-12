@@ -26,6 +26,7 @@ import { skeletonVariantForPath } from "../components/PageSkeleton";
    in and will never load this, and onboarding drags the whole eight-step flow
    and its notice text onto a critical path it has no business being on. */
 const Onboarding = lazy(() => import("../onboarding/Onboarding"));
+const PasswordRecovery = lazy(() => import("../onboarding/PasswordRecovery"));
 
 /* The recovery screen. Deliberately not the onboarding flow, and deliberately
    not a blank page. */
@@ -55,11 +56,13 @@ function BootError() {
 }
 
 function Gate() {
-  const { gate } = useApp();
+  const { gate, passwordRecovery } = useApp();
   const { pathname } = useLocation();
   const skeletonVariant = skeletonVariantForPath(pathname);
   const cleanupError = sessionStorage.getItem("axon.cleanup-error");
   if (cleanupError) return <main><h1>Local cleanup needs attention</h1><p>{cleanupError}</p><button onClick={async () => { try { const { LocalDataService } = await import("../../local-data.js"); await LocalDataService.clearAll(); sessionStorage.removeItem("axon.cleanup-error"); location.reload(); } catch { /* Keep the recovery message visible. */ } }}>Retry local cleanup</button></main>;
+
+  if (passwordRecovery) return <Suspense fallback={<SkeletonLoader label="Loading password reset" variant="onboarding" />}><PasswordRecovery /></Suspense>;
 
   // Nothing, not a spinner: the document is already painted in the right theme
   // by the inline script in index.html, and a spinner that appears for 80ms and

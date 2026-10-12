@@ -49,6 +49,8 @@ export type TorchMode = "auto" | "on" | "off";
 
 /** What the live camera is reporting, one measured reason at a time. */
 export type LiveState = {
+  /** Still acquisition/evidence is in flight; it has not been saved yet. */
+  capturing?: boolean;
   hint: string;
   blocking?: string | null;
   tone?: "neutral" | "locked" | "attention";
@@ -119,6 +121,8 @@ export type ReviewModel = {
   noTotal?: string | null;
   outstanding: number;
   cleanCount: number;
+  /** Unsure or flagged parts with a reading to accept, not yet accepted. */
+  unsureCount: number;
   saving?: boolean;
   /** "Check the reading" on a saved paper: fixes save at once, no rescan. */
   committed?: boolean;
@@ -131,6 +135,7 @@ export type ReviewHandlers = {
   onAction: (id: string, action: string) => void;
   onRelabel?: (id: string, label: string) => Promise<void>;
   onConfirmClean: () => void;
+  onConfirmAll: () => void;
   onSave: () => void;
 };
 

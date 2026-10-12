@@ -152,23 +152,23 @@ insert into public.question_region (
   5,'{"page":1,"x":900,"y":1020,"w":50,"h":40}',
   'confident','{"recognition":true,"structural":true,"arithmetic":false,"plausibility":true}', false);
 
--- ── review is not skippable ────────────────────────────────────────────────
--- Two regions still need the student's eyes. Committing now would put an
--- unconfirmed reading into the record, where it starts shaping insights.
-
-do $$
-declare v_err text;
+-- ── saving is independent of checking (AXO-216 D1) ─────────────────────────
+-- Probe saving inside a subtransaction, then restore the fixture so the
+-- confirmation, explanation and commit lifecycle below can still run in order.
+do $save_probe$
+declare v_saved boolean := false; v_result jsonb;
 begin
   begin
-    perform public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000010');
-    perform public._t('commit refuses while review is outstanding', false, 'commit succeeded');
-  exception when insufficient_privilege then
-    get stacked diagnostics v_err = message_text;
-    perform public._t('commit refuses while review is outstanding', v_err like '2 question(s)%', v_err);
+    v_result := public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000010');
+    v_saved := (v_result ->> 'attempts_committed') = '2';
+    raise exception 'roll back the early-save probe' using errcode = 'ZX216';
+  exception when sqlstate 'ZX216' then
+    null;
   end;
-end $$;
+  perform public._t('saving does not wait for outstanding checks', v_saved, v_result::text);
+end $save_probe$;
 
-select public._t('nothing was committed by the refused attempt',
+select public._t('the early-save probe restores the lifecycle fixture',
   (select count(*) = 0 from public.student_attempt
     where paper_id = 'aaaaaaaa-0000-4000-8000-000000000003'));
 
@@ -384,29 +384,32 @@ insert into public.question_region (
   5,'{"page":1,"x":900,"y":100,"w":50,"h":40}',
   'confident', true);
 
-do $$
-declare v_err text;
-begin
-  begin
-    perform public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
-    perform public._t('a confident question still blocks the commit until confirmed', false, 'commit succeeded');
-  exception when insufficient_privilege then
-    get stacked diagnostics v_err = message_text;
-    perform public._t('a confident question still blocks the commit until confirmed',
-      v_err like '1 question(s)%', v_err);
-  end;
-end $$;
-
-update public.question_region set student_confirmed_at = now()
- where id = 'aaaaaaaa-0000-4000-8000-000000000031';
-
-do $$
-declare v_result jsonb;
+-- D1 (AXO-216): saving must not wait for a flagged region. Its teacher's
+-- marks persist as *unsure*, outside confirmed analytics; no AI mark assignment.
+do $axo216$
+declare v_result jsonb; v_err text;
 begin
   v_result := public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
-  perform public._t('confirming the clean question lets the paper save',
+  perform public._t('an unconfirmed marked part does not block saving',
     (v_result ->> 'attempts_committed') = '1', v_result::text);
-end $$;
+  perform public._t('the unconfirmed part stays unsure after saving',
+    (select a.extraction_confidence = 'unsure'
+       and a.student_confirmed_at is null
+       and a.marks_awarded = 5
+       and a.max_marks = 5
+      from public.question_region r
+      join public.student_attempt a on a.id = r.committed_attempt_id
+     where r.id = 'aaaaaaaa-0000-4000-8000-000000000031'));
+  -- A second submit must not write a duplicate set of attempts.
+  begin
+    perform public.commit_extraction_run('aaaaaaaa-0000-4000-8000-000000000030');
+    perform public._t('a committed run cannot be committed again', false, 'second commit succeeded');
+  exception when unique_violation then
+    get stacked diagnostics v_err = message_text;
+    perform public._t('a committed run cannot be committed again',
+      v_err = 'this run is already committed', v_err);
+  end;
+end $axo216$;
 
 -- ── commit ─────────────────────────────────────────────────────────────────
 

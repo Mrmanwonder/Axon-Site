@@ -8,10 +8,11 @@ directory and applies the files the live ledger does not have
 one transaction with its own ledger row, so a failure leaves nothing
 half-applied and the next run retries it.
 
-- **Identity is the name, not the version.** The Supabase MCP stamps a
-  migration with the time it was applied, so a file and its ledger row routinely
-  carry different versions. Files sharing a name (two exist) are matched
-  one-to-one against ledger rows of that name.
+- **The custom planner matches names.** Supabase Preview also compares versions.
+  Historical files must therefore retain the actual production version as well
+  as the logical name. Files sharing a name (two exist) are matched one-to-one
+  against ledger rows of that name. MCP application timestamps are recovered
+  from the ledger rather than guessed from a local filename.
 - **`BASELINE.txt`** lists files the live project already has under another name
   or without a ledger row. Add to it only after checking the objects exist.
 - **Setup, once, by a person:** repository secret `SUPABASE_DB_URL` (Dashboard →
@@ -110,8 +111,10 @@ Reconciled is not the same as authoritative. Two things are still true:
 1. **The Stripe FDW is not in the migration history.** `public."Subscribers"`
    and the `stripe` schema exist in production and are created by nothing here.
 2. **The production ledger records historical application order.** Local files
-   use those exact versions now. Do not rename a migration after it is applied;
-   add a forward migration instead.
+   use those exact versions. Do not alter production versions or rename an
+   established migration to introduce a change; add a forward migration instead.
+   Recovery of a mismatched local filename restores its recorded production
+   identity and must document any dependency-order replay exception.
 
 ## Applying one
 
@@ -123,3 +126,28 @@ Then confirm by querying the live project for the thing the migration was
 supposed to create — a table, a column, a function body. `db push` reporting
 success is not the same as the change being there, and "assumed applied" has
 been wrong more than once.
+
+## Version recovery (2026-10-09, AXO-221)
+
+Supabase Preview rejected eight repository versions that did not exist in the
+production ledger. The filenames now use the eight recorded production versions;
+no production ledger row or schema object was changed. The stored SQL matched
+each repository body under token normalization that preserves quoted literals
+(five bodies matched byte-for-byte after trimming, three differed only in
+comments and formatting). The existing baseline exclusions are unchanged.
+
+There is one dependency-order replay exception. Production recorded
+`paper_subject_auto_and_topic_tagging` before `syllabus_topics_and_mastery`,
+although the former's topic queue had already-existing syllabus prerequisites.
+For a clean database, the unchanged section 5 topic-tagging block is replayed
+at the end of `20261004192648_syllabus_topics_and_mastery.sql`. The original
+`20261004110000_paper_subject_auto_and_topic_tagging.sql` retains subject
+assignment, authorization and backfill. Intervening migrations do not reference
+the deferred topic objects. Both logical migrations are already applied in
+production, so the name-based planner schedules neither body again.
+
+The read-only planner comparison against all 150 production rows reports zero
+pending files and zero unknown ledger names both before and after recovery.
+See [the audit](../../docs/claude_migration-version-recovery-2026-10-09.md)
+for the recovered versions. Fresh replay is checked by CI; a hosting build alone
+does not establish migration or runtime correctness.

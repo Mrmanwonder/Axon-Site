@@ -1,3 +1,4 @@
+import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    HOME — the snapshot
 
@@ -43,6 +44,7 @@ import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
 import { paths } from "../app/paths";
 import { ExamCard } from "../components/ExamPlan";
 import "../styles/insights.css";
+import "../styles/home.css";
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -126,16 +128,15 @@ export default function Home() {
 
       {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
-        {subjects.map((subject) => <span className="subjectchip" key={subject}>{subject}</span>)}
+        {subjects.map((subject) => {
+          const selection = student?.subject_selections?.find(item => item.subject === subject);
+          const filter = selection?.offering_id ? `subject:${selection.offering_id}` : `name:${subject}`;
+          return <PressBox as={Link} to={`${paths.library}?subject=${encodeURIComponent(filter)}`}
+            className="subjectchip" key={subject} aria-label={`Open ${subject} papers`}>{subject}</PressBox>;
+        })}
       </div>
 
-      <div className="card nextstep">
-        <div className="eyebrow">Next step</div>
-        <div className="line">{attention.copy}</div>
-        {attention.destination && (
-          <PressBox as={Link} to={attention.destination} className="textaction">{attention.actionLabel} <Chevron /></PressBox>
-        )}
-      </div>
+
 
 
       {/* Shown only when there is something to check. The count and the paper
@@ -167,8 +168,8 @@ export default function Home() {
       )}
 
       {focus && (
-        <div className="card focuscard">
-          <div className="eyebrow">Before your next paper</div>
+        <div className="card nextstep focuscard">
+          <div className="eyebrow">Next step</div>
           <div className="line">{focus.fix.text}</div>
           <div className="why">
             <span className="sw2" style={{ background: CAUSE_HUE[focus.pattern.cause] }} aria-hidden="true" />
@@ -202,9 +203,7 @@ export default function Home() {
                   {p.tier === "tier_2" ? "Scheme-matched" : "Teacher's marks"}
                 </span>
                 <span>
-                  {new Date(p.date_taken).toLocaleDateString("en-IN", {
-                    day: "numeric", month: "short",
-                  })}
+                  {paperDateLabel(p, { short: true })}
                 </span>
               </div>
             </div>

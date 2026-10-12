@@ -194,6 +194,21 @@ test.describe("camera screen on a phone", () => {
     await expect.poll(async () => (await calls(page, "onResume")).length).toBe(1);
   });
 
+  test("review and send progress are exclusive surfaces at phone width in both themes (AXO-165)", async ({ page }) => {
+    for (const theme of ["dark", "light"]) {
+      await open(page, "review", theme);
+      await expect(page.locator(".sheet.sc-review")).toBeVisible();
+      await expect(page.locator(".sc-reading.is-overlay")).toHaveCount(0);
+
+      await open(page, "reading", theme);
+      await expect(page.locator(".sc-reading.is-overlay")).toBeVisible();
+      await expect(page.locator(".sheet.sc-review")).toHaveCount(0);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByText("What kind of paper is this?")).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();
+    }
+  });
+
   test("sending is told in pages, shows the real pages, and can always be left", async ({ page }) => {
     await open(page, "reading");
     await expect(page.getByRole("heading", { name: "Sending your paper" })).toBeVisible();

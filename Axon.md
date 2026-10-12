@@ -250,7 +250,7 @@ Backend, in `Mrmanwonder/axon-backend`: `npm run typecheck`, `npm test`, `npm ru
 
 ## 12. Known inconsistencies to fix, not to copy
 
-- `README.md` was brought up to date on 3 Oct 2026; re-check it whenever the product changes. The opening of `AGENTS.md` still describes a single static `index.html` with no build step; the app is Vite and React now, and `reference/prototype.html` is the pre-port original.
+- Re-check `README.md` whenever the product changes. `AGENTS.md` describes the Vite/React app; `reference/prototype.html` is the pre-port reference, not shipping architecture.
 - `docs/claude_*` files are dated records. They are evidence, not instructions.
 - Comments in applied migrations still mention `CLAUDE.md`; applied migration files are not edited for a comment.
 - The legal pages may still describe a retention route that is no longer true; counsel decides the corrected wording.

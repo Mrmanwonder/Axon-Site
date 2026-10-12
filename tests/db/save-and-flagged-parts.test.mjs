@@ -6,7 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 // AXO-216: commit_extraction_run, fix_saved_part, begin_explanations, the D7 paper type rules and
 // the share resolver, run from the migration itself against the columns and constraints they
 // touch in production.
-const MIGRATION = new URL('../../supabase/migrations/20261007180000_save_placed_labels_and_flagged_parts.sql', import.meta.url);
+const MIGRATION = new URL('../../supabase/migrations/20261008044957_save_placed_labels_and_flagged_parts.sql', import.meta.url);
 
 const STUDENT = '00000000-0000-0000-0000-0000000000a1';
 const PAPER = '00000000-0000-0000-0000-0000000000b1';

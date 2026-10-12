@@ -149,10 +149,12 @@ export default function Scan() {
 
   const live = camera.on;
   const torch = hint.torch;
+  const capturing = Boolean(hint.capturing);
   const strip: Strip = (() => {
     if (!live) {
       return { tone: camera.phase === "starting" || camera.phase === "idle" ? "neutral" : "attention", text: hint.hint };
     }
+    if (capturing) return { tone: "neutral", text: "Taking this page" };
     if (hint.tone === "attention" && hint.reason) {
       if (hint.action === "torch" && torch?.supported) {
         return { tone: "attention", text: hint.hint,
@@ -181,7 +183,7 @@ export default function Scan() {
 
   const locked = live && hint.phase === "locked";
   const cameraProblem = !live && ["unavailable", "blocked", "failed"].includes(camera.phase);
-  const shutterOff = !live || submitting || pendingCaptureCount >= 2;
+  const shutterOff = !live || capturing || submitting || pendingCaptureCount >= 2;
   const draftsCount = drafts.length;
 
   const closeMenuThen = (fn: () => void) => { window.setTimeout(fn, 0); };
@@ -258,7 +260,8 @@ export default function Scan() {
         <div className="sc-dock">
           <PaperStack pages={tray} onOpen={openPageReview} disabled={submitting} />
           <PressBox as="button" type="button" className="sc-shutter" aria-label="Take this page"
-                    data-locked={locked && auto ? "true" : undefined} disabled={shutterOff}
+                    data-locked={locked && auto ? "true" : undefined} data-capturing={capturing ? "true" : undefined}
+                    aria-busy={capturing} disabled={shutterOff}
                     onClick={() => { hapticTick(); shoot(); }}>
             <span />
           </PressBox>

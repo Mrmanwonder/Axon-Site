@@ -14,26 +14,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import PressBox from "../components/PressBox";
+import { hapticFirm } from "../lib/haptics";
 import MathText from "../components/MathText";
 import Chevron from "../components/Chevron";
 import PageSkeleton from "../components/PageSkeleton";
+import PaperDateEditor from "../components/PaperDateEditor";
+import { paperDateLabel } from "../../paperDate.js";
 import { useApp } from "../data/AppProvider";
 import { paperTypeLabel, paperTypesFor, providerKeyForStudent, setPaperSubject, setPaperType } from "../data/modules";
-import { openFlags } from "../data/flaggedParts";
+import { acceptableFlag, openFlags } from "../data/flaggedParts";
 import type { OpenFlag } from "../data/flaggedParts";
 import { FlaggedCard } from "../components/FlaggedPart";
 import AppDropdown from "../components/AppDropdown";
 import { usePaperDelete } from "../data/usePaperDelete";
-import { relabelAttempt } from "../data/modules";
+import { fixSavedPart, relabelAttempt } from "../data/modules";
 import { useSheetControls } from "../components/SheetProvider";
 import { useToast } from "../components/ToastProvider";
 import { numMark } from "../data/causes";
 import { isPartialTotal } from "../data/paperTotals";
 import { subjectPresentation } from "../data/subjectPresentation";
 import { paperStructure } from "../data/paperStructure";
+import { EXPLANATION_GAP_LABEL } from "../data/explanationGap";
 import type { PaperPart, PaperStructure } from "../data/paperStructure";
 import { paths } from "../app/paths";
 import ResourceActions from "../components/ResourceActions";
+import PaperDifficultyPrompt from "../components/PaperDifficultyPrompt";
 import { tutorEntryVisible } from "../data/tutor";
 import { useAcademicShare } from "../data/useAcademicShare";
 import { usePaperResource } from "../data/usePaperResource";
@@ -68,8 +73,9 @@ function PartRow({ paperId, part, label }: { paperId: string; part: PaperPart; l
         </div>
         {/* The list says only what needs the student. "Confirmed by you" and
             "Read clearly" live on the question itself, beside its confidence. */}
-        {(needsAttention(part) || part.placedByPosition) && (
+        {(needsAttention(part) || part.placedByPosition || part.explanationGap) && (
           <div className="t2">
+            {part.explanationGap && <span>{EXPLANATION_GAP_LABEL[part.explanationGap]}</span>}
             {needsAttention(part) && <span className={"conf " + part.confidence}>{stateText(part)}</span>}
             {part.placedByPosition && <span>Placed under this question by its position on the page</span>}
           </div>
@@ -103,14 +109,34 @@ function suggestedLabel(part: PaperPart, structure: PaperStructure): string | nu
 
 /** What needs the student, counted from the parts that actually ask (AXO-216). The
     cards themselves sit on the parts below; this only says how many there are. */
-function NextAction({ structure, flags }: { structure: PaperStructure; flags: OpenFlag[] }) {
+function NextAction({ structure, flags, onAcceptAll, accepting }: {
+  structure: PaperStructure; flags: OpenFlag[]; onAcceptAll: () => void; accepting: boolean;
+}) {
   const all = [...structure.questions.flatMap((q) => q.parts), ...structure.unassigned];
   const unmarked = all.filter((p) => p.marks.kind === "unread");
+  // Owner, 8 Oct 2026: one tap for a student who has already compared these
+  // with the paper. It says plainly that accepted parts count in Insights.
+  const acceptable = flags.filter(acceptableFlag).length;
   if (!flags.length && !unmarked.length) return null;
   return (
-    <div className="po-next" role="status">
-      {flags.length > 0 && <div>{plural(flags.length, "part")} {flags.length === 1 ? "needs" : "need"} a look. {flags.length === 1 ? "It is" : "They are"} marked below.</div>}
-      {unmarked.length > 0 && <div>{plural(unmarked.length, "part")} {unmarked.length === 1 ? "has" : "have"} no readable mark.</div>}
+    <div className="po-next">
+      {/* The counts are a live region; the button sits outside it so it is not re-announced. */}
+      <div role="status">
+        {flags.length > 0 && <div>{plural(flags.length, "part")} {flags.length === 1 ? "needs" : "need"} a look. {flags.length === 1 ? "It is" : "They are"} marked below.</div>}
+        {unmarked.length > 0 && <div>{plural(unmarked.length, "part")} {unmarked.length === 1 ? "has" : "have"} no readable mark.</div>}
+      </div>
+      {acceptable > 0 && (
+        <div className="po-next-accept">
+          <span className="hint">
+            {acceptable === 1 ? "Compared it with your paper?" : "Compared them with your paper?"} Accepted parts count in your Insights.
+            {acceptable < flags.length && " Parts missing a mark still need a fix."}
+          </span>
+          <PressBox as="button" type="button" className="qact accent" disabled={accepting} aria-busy={accepting || undefined}
+                    onClick={onAcceptAll}>
+            {acceptable === 1 ? "Accept it as read" : `Accept all ${acceptable} as read`}
+          </PressBox>
+        </div>
+      )}
     </div>
   );
 }
@@ -125,7 +151,7 @@ export default function PaperOverview() {
     title: "Shared paper from Axon",
   });
 
-  const { paper, stale, error, reload } = usePaperResource(student?.id, paperId);
+  const { paper, stale, error, reload, updateData } = usePaperResource(student?.id, paperId);
   const schemeCheck = useSchemeCheck(paperId);
   const [savingSubject, setSavingSubject] = useState(false);
   const { openSheet } = useSheetControls();
@@ -137,6 +163,7 @@ export default function PaperOverview() {
     ? openFlags(paper, new Set(structure.unassigned.map((p) => p.attemptId)))
     : []), [paper, structure]);
   const [savingType, setSavingType] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   // Save closes review at once; the paper fills in here when its marks are
   // committed. Until then, say what is happening and keep checking.
   const runStatus = paperId ? progressResource?.data?.get(paperId)?.status : undefined;
@@ -222,7 +249,25 @@ export default function PaperOverview() {
     <FlaggedCard key={`flag-${flag.region.id}`} label={label} reason={flag.reason} region={flag.region}
                  paperId={paper.id} onChanged={async () => { await reload(); void refreshLibrary(); }} />
   );
-  const dated = new Date(paper.date_taken).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+  const acceptAll = async () => {
+    const ids = flags.filter(acceptableFlag).map((f) => f.region.id!);
+    if (!ids.length || accepting) return;
+    hapticFirm();
+    setAccepting(true);
+    try {
+      await Promise.all(ids.map((id) => fixSavedPart(id)));
+      await reload();
+      void refreshLibrary();
+      toast(ids.length === 1 ? "Accepted as read." : `${ids.length} parts accepted as read.`);
+    } catch {
+      // Some may have saved; reload so the cards show what is still open.
+      await reload().catch(() => {});
+      toast("Not every part could be accepted. Try again with a connection.");
+    } finally {
+      setAccepting(false);
+    }
+  };
 
   const requestDelete = () => { if (paperId) deletePaperSheet(paperId); };
 
@@ -256,14 +301,15 @@ export default function PaperOverview() {
           <h1>{subjectLabel || typeLabel}</h1>
           <div className="sub po-meta">
             {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
-            {/* No exam date is recorded for a paper yet; date_taken is the day it
-                was added, so it is labelled that way (Axon.md §4, Dates on a paper). */}
-            <span>Added {dated}</span>
+            <span>{paperDateLabel(paper)}</span>
             {stale && <span>offline copy</span>}
           </div>
         </div>
         <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
       </div>
+
+      {student?.id && <PaperDifficultyPrompt key={paper.id} paperId={paper.id} studentId={student.id}
+        ready={paper.student_attempt.length > 0} />}
 
       {paper.subject_identity_source !== "assessment_identity" && (student?.subject_selections?.length ?? 0) > 0 && (
         <div className="po-subject">
@@ -281,6 +327,12 @@ export default function PaperOverview() {
         {paper.type_source === "triage" && <span className="hint">Set from the paper code printed on it. Change it if it&rsquo;s wrong.</span>}
         {paper.type_source === "default" && <span className="hint">Treated as a school test. Change it if this is a past paper.</span>}
       </div>
+
+      <PaperDateEditor key={`${student?.id}:${paper.id}`} paperId={paper.id} examDate={paper.exam_date}
+        onSaved={exam_date => {
+          updateData(current => ({ ...current, exam_date }));
+          void refreshLibrary().catch(() => {});
+        }} />
 
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">
@@ -312,7 +364,7 @@ export default function PaperOverview() {
               {numMark(Number(paper.reported_total))}. Worth a look at the questions below.
             </div>
           )}
-          <NextAction structure={structure} flags={flags} />
+          <NextAction structure={structure} flags={flags} onAcceptAll={() => void acceptAll()} accepting={accepting} />
         </section>
       )}
 
