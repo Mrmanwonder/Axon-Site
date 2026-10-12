@@ -9,6 +9,7 @@ for (const theme of ["dark", "light"]) {
       await expect(page.getByRole("heading", { name: "Understand your marked paper." })).toBeVisible();
       await expect(page.getByRole("list", { name: "How Axon works" }).getByRole("listitem")).toHaveCount(3);
       await page.screenshot({ path: testInfo.outputPath(`onboarding-welcome-${theme}-${width}.png`) });
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       await page.getByRole("button", { name: /a parent/ }).click();
       const methods = page.getByRole("group", { name: "Account sign-in method" });
       const code = methods.getByRole("button", { name: "Email or phone code" });
@@ -17,6 +18,7 @@ for (const theme of ["dark", "light"]) {
       await password.click();
       await expect(password).toHaveAttribute("aria-pressed", "true");
       await expect(code).toHaveAttribute("aria-pressed", "false");
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
       const bounds = await page.locator(".password-access").boundingBox();
       expect(bounds!.x).toBeGreaterThanOrEqual(16);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 16);
