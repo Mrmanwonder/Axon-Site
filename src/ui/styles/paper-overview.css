@@ -23,6 +23,9 @@
 
 .po-next { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5;
   background: var(--attention-wash-soft); border: .5px solid var(--attention-rim); }
+.po-next-accept { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.po-next-accept .hint { flex: 1 1 200px; font-size: 13px; color: var(--label-2); }
+.po-next-accept .qact { min-height: 44px; }
 .po-next-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 2px; font-weight: 600; color: var(--label); }
 
 .po .po-qtitle { text-transform: none; letter-spacing: -.01em; font-size: 17px; font-weight: 650; color: var(--label); }
