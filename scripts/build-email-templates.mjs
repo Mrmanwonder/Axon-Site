@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 
 const out = new URL('../supabase/templates/', import.meta.url);
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
-const MONO = "ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace";
 
 const shell = ({ preheader, heading, lead, body, note, footer }) => `<!doctype html>
 <html lang="en">
@@ -56,16 +55,18 @@ const button = (label, href = '{{ .ConfirmationURL }}') => `      <table role="p
         </td>
       </tr></table>`;
 
-// The code sits in the same blue block as the reset button, so the three emails
-// read as one family. Plain digits (no spaced-out styling) and a plain sentence
-// naming the code give Gmail's own detector the best chance of offering its
+// The code sits on a raised dark surface with a hairline border, in the same
+// sans-serif as the rest of the email with tabular figures. A flat slab of
+// saturated blue in a monospace face read as a code editor, not as Axon. The
+// digits stay plain text in their own container, with a sentence naming the
+// code above, which is what Gmail's own detector looks for to offer its
 // "Copy code" chip; nothing in an email can force it.
 const code = `      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-        <td align="center" style="background:#3A86FF;border-radius:14px;padding:18px 12px;">
-          <span style="display:block;font-family:${MONO};font-size:32px;line-height:1.1;font-weight:700;letter-spacing:0.06em;color:#ffffff;-webkit-user-select:all;user-select:all;">{{ .Token }}</span>
+        <td align="center" style="background:#161E36;border:1px solid #2C3B68;border-radius:14px;padding:22px 12px;">
+          <span style="display:block;font-family:${FONT};font-size:34px;line-height:1.1;font-weight:700;letter-spacing:0.1em;font-variant-numeric:tabular-nums;color:#F4F6FB;-webkit-user-select:all;user-select:all;">{{ .Token }}</span>
         </td>
       </tr></table>
-      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Double-tap the code to select it, then copy.</p>`;
+      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Tap and hold the code to copy it.</p>`;
 
 const safety = "Did not ask for this? You can ignore this email, and nobody can sign in without it. Axon will never ask you for this code by phone, message or email.";
 const footer = "Axon turns a marked paper into feedback a student can act on.<br>You are receiving this because someone entered this email address at Axon.";

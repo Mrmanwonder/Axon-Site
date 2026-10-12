@@ -6,7 +6,7 @@ import "../../src/ui/styles/system.css";
 document.documentElement.dataset.theme = new URLSearchParams(location.search).get("theme") === "light" ? "light" : "dark";
 const long = String.raw`\mathrm{Var}(X)=\frac{32460}{120}-\left(\frac{642}{120}\right)^2+\frac{32460}{120}-\left(\frac{642}{120}\right)^2+\frac{32460}{120}-\left(\frac{642}{120}\right)^2`;
 // A fraction numerator is one unbreakable box; the equality chain above may wrap.
-const wide = String.raw`\frac{32460+32460+32460+32460+32460+32460+32460+32460}{120}`;
+const wide = String.raw`\frac{32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460+32460}{120}`;
 const style = document.createElement("style");
 style.textContent = "body{margin:0;padding:20px;background:var(--bg);color:var(--label);font:17px/1.5 sans-serif}main{max-width:920px;margin:auto}section{min-width:0;padding:16px;margin:16px 0;border:1px solid var(--hairline)}";
 document.head.append(style);
