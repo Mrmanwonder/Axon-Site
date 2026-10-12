@@ -13,7 +13,8 @@
 --
 -- Privacy: outputs can restate a student's handwriting, so the table is private,
 -- reachable only through the service-only functions below, removed with the paper
--- (cascade) and unreusable after 14 days (purged on the next begin for that paper).
+-- (cascade), and deleted 14 days after it was written (daily pg_cron purge, plus
+-- on the next begin for that paper).
 
 create table private.paper_work_item (
   work_id            uuid primary key default gen_random_uuid(),
@@ -110,6 +111,12 @@ begin
      and w.model_id = p_model_id and w.prompt_version = p_prompt_version
      and w.schema_version = p_schema_version and w.status <> 'invalidated'
    for update;
+
+  if not found then
+    -- Invalidated between the insert and this read by a concurrent caller.
+    -- A serialization failure is retried by the worker; nothing was paid.
+    raise exception 'work item changed concurrently; retry' using errcode = '40001';
+  end if;
 
   if v.status in ('output_saved', 'applied') then
     update private.paper_work_item w set reuse_count = w.reuse_count + 1, updated_at = now() where w.work_id = v.work_id;
@@ -243,3 +250,24 @@ comment on function public.work_begin(uuid, uuid, text, text, text, text, text, 
   'AXO-225: returns reuse (a saved answer exists, make no model call), busy (a live lease holds it) or run (you now hold the lease; pay once, then work_save_output). Service role only.';
 comment on function public.work_save_output(uuid, uuid, jsonb, jsonb) is
   'AXO-225: saves the paid answer if the caller still holds the lease. A fenced caller must not publish. Service role only.';
+
+-- ── retention: expired outputs go for every paper, retried or not ──────────
+create function private.purge_expired_work_items()
+returns integer
+language plpgsql security definer set search_path = '' as $$
+declare v_rows integer;
+begin
+  delete from private.paper_work_item w where w.expires_at < now();
+  get diagnostics v_rows = row_count;
+  return v_rows;
+end;
+$$;
+revoke all on function private.purge_expired_work_items() from public, anon, authenticated, service_role;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.unschedule(jobid) from cron.job where jobname = 'axon-work-journal-retention';
+    perform cron.schedule('axon-work-journal-retention', '41 3 * * *', 'select private.purge_expired_work_items();');
+  end if;
+end $$;

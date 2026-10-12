@@ -169,6 +169,21 @@ test('answers older than the retention window are purged and not reused', async 
   } finally { await db.close(); }
 });
 
+test('the daily purge removes expired answers on papers that are never retried', async () => {
+  const db = await boot();
+  try {
+    const a = await begin(db);
+    await save(db, a.work_id, a.lease_token);
+    const b = await begin(db, { paper: OTHER_PAPER, student: OTHER_STUDENT });
+    await save(db, b.work_id, b.lease_token);
+    await db.query(`update private.paper_work_item set expires_at = now() - interval '1 day' where work_id=$1`, [a.work_id]);
+    assert.equal((await db.query('select private.purge_expired_work_items() n')).rows[0].n, 1);
+    assert.equal((await db.query('select count(*)::int n from private.paper_work_item')).rows[0].n, 1);
+    await db.exec('set role service_role');
+    await assert.rejects(db.query('select private.purge_expired_work_items()'), /permission denied/);
+  } finally { await db.close(); }
+});
+
 test('deleting the paper removes its saved answers', async () => {
   const db = await boot();
   try {
