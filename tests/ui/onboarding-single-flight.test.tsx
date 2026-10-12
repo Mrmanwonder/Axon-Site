@@ -17,6 +17,7 @@ const fixture = vi.hoisted(() => ({
   listPurposes: vi.fn(),
   recordConsent: vi.fn(),
   parentGuard: vi.fn((action: () => void | Promise<void>) => action()),
+  workos: false,
 }));
 vi.mock("../../src/ui/data/AppProvider", () => ({
   useApp: () => ({
@@ -54,7 +55,8 @@ vi.mock("../../src/ui/data/modules", async () => {
     currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
     passwordSignIn: fixture.passwordSignIn, passwordSignUp: vi.fn(), requestPasswordReset: vi.fn(),
     signInWithProvider: fixture.provider, isProviderNotEnabled: () => false,
-    OAUTH_PROVIDERS: ["google"], PROVIDER_LABEL: { google: "Google" },
+    OAUTH_PROVIDERS: ["google"], PROVIDER_LABEL: { google: "Google", "custom:workos": "your email and password" },
+    get WORKOS_PASSWORD() { return fixture.workos; },
     listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
     NOTICE_LANGUAGES: notice.LANGUAGES, noticeStrings: notice.noticeStrings,
     purposeLabel: notice.purposeLabel, purposeNote: notice.purposeNote, noticeIsComplete: notice.noticeIsComplete,
@@ -430,4 +432,27 @@ test("Google is single-flight and keeps Back and password entry disabled during 
   expect((screen.getByRole("button", { name: "Continue with email or phone" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   await act(async () => handoff.resolve());
+});
+
+// AXO-234: with the staging flag on, the password choice hands off to WorkOS,
+// which holds the password and applies the policy and breach check.
+test("with WorkOS on, the password choice hands off to WorkOS and shows no Supabase password form", async () => {
+  fixture.session = null;
+  fixture.workos = true;
+  try {
+    window.history.replaceState({}, "", "/");
+    fixture.provider.mockReset().mockReturnValue(new Promise(() => {}));
+    render(<MemoryRouter><Onboarding /></MemoryRouter>);
+    await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+    expect(screen.queryByRole("button", { name: /WorkOS/i })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sign in with a password instead" }));
+    expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
+    expect(screen.queryByLabelText(/^Password$/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+    expect(fixture.provider).toHaveBeenCalledWith("custom:workos");
+    expect(fixture.passwordSignIn).not.toHaveBeenCalled();
+  } finally {
+    fixture.workos = false;
+  }
 });

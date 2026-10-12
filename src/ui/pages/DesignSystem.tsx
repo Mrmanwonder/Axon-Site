@@ -66,7 +66,12 @@ function useTokenValue(token: string, theme: Theme) {
   const [value, setValue] = useState("");
   useEffect(() => {
     const host = document.querySelector(".ds-site");
-    if (host) setValue(getComputedStyle(host).getPropertyValue(token).trim());
+    // Browsers return a custom property's hex in either case; tokens.css and
+    // the reference write it in upper case, so show it the same everywhere.
+    if (host) {
+      const raw = getComputedStyle(host).getPropertyValue(token).trim();
+      setValue(/^#[0-9a-f]{3,8}$/i.test(raw) ? raw.toUpperCase() : raw);
+    }
   }, [token, theme]);
   return value;
 }
