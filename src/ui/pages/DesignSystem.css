@@ -231,12 +231,17 @@
 .ds-component-card > p { color:var(--label-3); font-size:11.5px; line-height:1.55; margin:22px 0 0; }
 .ds-component-wide { grid-column:1 / -1; min-height:0; }
 .ds-button-stack { display:flex; flex-wrap:wrap; align-items:center; gap:11px; }
-.ds-demo-primary,.ds-demo-secondary,.ds-demo-text { padding:0 18px; min-height:44px; border-radius:14px; font-size:12px !important; font-weight:650 !important; transition:transform var(--d-state) var(--spring); }
-.ds-demo-primary { background:var(--accent);color:#fff;border:1px solid transparent; }
-.ds-demo-primary span { margin-left:10px; }
-.ds-demo-secondary { background:var(--surface-sunk); color:var(--label);border:1px solid var(--hairline); }
-.ds-demo-text { background:transparent;border:1px solid transparent;color:var(--label-2); }
-.ds-demo-primary:active,.ds-demo-secondary:active,.ds-demo-text:active { transform:scale(.96); }
+.ds-essential-showcase { align-items:flex-start; gap:9px; }
+.ds-essential-showcase .essential-button { font-size:13px; }
+.ds-demo-response { font-size:10px; line-height:1.5; color:var(--label-3); margin-top:11px; }
+.ds-button-controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.ds-essential-state-controls { display:flex; flex-wrap:wrap; gap:4px; padding:4px; border-radius:14px; background:var(--surface-sunk); }
+.ds-essential-state-controls button { min-height:44px; padding:0 11px; background:transparent; color:var(--label-2); border:0; border-radius:11px; font-size:11px; text-transform:capitalize; }
+.ds-essential-state-controls button.is-on { background:var(--field); color:var(--label); font-weight:650; }
+.ds-essential-states { margin-top:20px; border:1px solid var(--hairline); border-radius:15px; background:var(--surface-sunk); padding:25px 15px; display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:12px; }
+.ds-essential-state-hover .essential-button { opacity:.84; }
+.ds-essential-state-pressed .essential-button { transform:scale(.963); opacity:.93; }
+.ds-essential-state-focus .essential-button { outline:var(--focus-ring); outline-offset:3px; }
 .ds-demo-segment { display:flex; gap:4px; background:var(--surface-sunk); padding:5px; border-radius:16px; max-width:390px; }
 .ds-demo-segment button { flex:1; min-height:43px; border-radius:12px; border:0; padding:0 7px; font-size:12px; background:transparent; color:var(--label-2); transition:background var(--d-disclose),color var(--d-state); }
 .ds-demo-segment button.is-on { background:var(--field); box-shadow:0 2px 8px rgba(0,0,0,.1); font-weight:650; color:var(--label); }
