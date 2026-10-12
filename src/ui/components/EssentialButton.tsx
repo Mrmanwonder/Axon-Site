@@ -20,7 +20,7 @@ type Common = {
 };
 
 type ActionButton = Common & Omit<ButtonHTMLAttributes<HTMLButtonElement>,
-  "children" | "className" | "size"> & { to?: never };
+  "children" | "className" | "size"> & { to?: never; loading?: boolean };
 
 type NavButton = Common & {
   to: string;
