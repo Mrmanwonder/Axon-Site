@@ -79,7 +79,7 @@
   flex-shrink: 0;
 }
 .ob-intro-story h1 {
-  max-width: 12.5ch;
+  max-width: 16ch;
   margin: clamp(13px, 2svh, 18px) 0 0;
   color: #fafbff;
   font-size: clamp(35px, 9.4vw, 52px);
