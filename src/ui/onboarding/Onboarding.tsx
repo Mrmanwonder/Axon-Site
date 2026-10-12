@@ -82,7 +82,7 @@ import { useParentMode } from "../data/useParentMode";
 import { audienceForOnboardingStep, setAnalyticsAudience } from "../lib/analytics";
 
 type Step =
-  | "landing" | "studentDead" | "account" | "otp" | "nameOnly"
+  | "landing" | "account" | "otp" | "nameOnly"
   | "consent" | "plan" | "student"
   | "firstRun";
 
@@ -90,7 +90,6 @@ type Step =
    already written. Nothing past consent has a way back: consent is recorded,
    and re-deciding it belongs in Settings, where withdrawal is first-class. */
 const BACK_TO: Partial<Record<Step, Step>> = {
-  studentDead: "landing",
   account: "landing",
   otp: "account",
 };
@@ -174,7 +173,7 @@ export default function Onboarding() {
     passwordFlight.current = busy;
     setPasswordBusy(busy);
   }, []);
-  const [accountMethod, setAccountMethod] = useState<"code" | "password">("code");
+  const [accountMethod, setAccountMethod] = useState<"choices" | "code" | "password">("choices");
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
@@ -387,28 +386,8 @@ export default function Onboarding() {
         <div className="obfoot">
           <PressBox as="button" type="button" className="btn primary"
                     onClick={() => { hapticTick(); go("account"); }}>
-            I&rsquo;m a parent — set this up
+            Continue
           </PressBox>
-          <PressBox as="button" type="button" className="btn plain"
-                    onClick={() => { hapticTick(); go("studentDead"); }}>
-            I&rsquo;m the student
-          </PressBox>
-        </div>
-      </Shell>
-    );
-  }
-
-  if (step === "studentDead") {
-    return (
-      <Shell {...shellProps} title="Nearly there">
-        <div className="estate">
-          <div className="ic"><Icon d={ICONS.info} /></div>
-          <h4>Ask a parent to set this up</h4>
-          <p>
-            Because you&rsquo;re under 18, a parent or guardian has to create the
-            account and give consent first. Once they&rsquo;ve done that, this
-            device is yours to use.
-          </p>
         </div>
       </Shell>
     );
@@ -448,10 +427,18 @@ export default function Onboarding() {
     };
 
     return (
-      <Shell {...shellProps} title="Your account">
+      <Shell {...shellProps} title="Set up your account"
+             sub="A parent or guardian signs in first. The student gets their own profile next."
+             onBack={shellProps.onBack
+               ? (accountMethod === "choices" ? shellProps.onBack : () => { setError(null); setAccountMethod("choices"); })
+               : undefined}>
         <Err message={error} />
-        {/* "Continue with" rather than "Sign in with": a parent arriving here
-            does not have an account yet, so this describes the action accurately. */}
+        <div className="obaccount-role">
+          <Icon d={ICONS.shield} />
+          <span>Parent or guardian account</span>
+        </div>
+        {accountMethod === "choices" ? (
+          <>
         <div className="obalt">
           {OAUTH_PROVIDERS.map((p) => (
             <PressBox as="button" type="button" key={p} className="btn googleauth"
@@ -468,42 +455,66 @@ export default function Onboarding() {
             </PressBox>
           ))}
         </div>
-        <div className="obor">or</div>
-        <div className="obfoot">
-          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "code"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("code"); }}>Email or phone code</button>
-          <button type="button" className="btn plain" disabled={!!busyProvider || passwordBusy} aria-pressed={accountMethod === "password"} onClick={() => { if (!passwordFlight.current && !providerFlight.current) setAccountMethod("password"); }}>Email and password</button>
+            <div className="obor">or</div>
+            <div className="obaccount-alternative">
+              <PressBox as="button" type="button" className="btn obaccount-secondary"
+                        disabled={!!busyProvider || passwordBusy || sendingCode}
+                        onClick={() => { hapticTick(); setAccountMethod("code"); setError(null); }}>
+                Continue with email or phone
+              </PressBox>
+            </div>
+          </>
+        ) : accountMethod === "password" ? (
+          <>
+            <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider}
+              onBusyChange={passwordBusyChanged}
+              onAuthenticated={async () => {
+                try {
+                  const sess = await currentSession() as SessionUser;
+                  setContact(sess.user?.email ?? "");
+                  const existing = await currentGuardian();
+                  if (existing) { setGuardian(existing); await continueAsGuardian(existing); }
+                  else go("nameOnly");
+                } catch { setError("We could not open your account. Try again later."); }
+              }} />
+            <div className="obaccount-switch">
+              <button type="button" disabled={!!busyProvider || passwordBusy || sendingCode}
+                      onClick={() => { hapticTick(); setError(null); setAccountMethod("code"); }}>
+                Use a sign-in code instead
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="obaccount-method-title">Continue with a code</h2>
+            <p className="obaccount-method-sub">We'll send a one-time sign-in code to your email or phone.</p>
+            <div className="obfields">
+              <Field id="ob-name" label="Your name" value={parentName} onChange={setParentName}
+                     placeholder="Full name" autoComplete="name"
+                     hint="So the student knows whose account this is." />
+              <Field id="ob-contact" label="Email or phone" value={contact} onChange={setContact}
+                     placeholder="you@example.com or +91…" autoComplete="email"
+                     onEnter={() => void send()}
+                     hint="We'll send a one-time code to your email or phone." />
+            </div>
+            <div className="obfoot">
+              <PressBox as="button" type="button" className="btn primary"
+                        disabled={sendingCode} aria-busy={sendingCode} onClick={() => void send()}>
+                {sendingCode ? "Sending code…" : "Send me a code"}
+              </PressBox>
+            </div>
+            <div className="obaccount-switch">
+              <button type="button" disabled={!!busyProvider || passwordBusy || sendingCode}
+                      onClick={() => { hapticTick(); setError(null); setAccountMethod("password"); }}>
+                Sign in with a password instead
+              </button>
+            </div>
+          </>
+        )}
+        <div className="obaccount-assurance">
+          <Icon d={ICONS.shield} />
+          <span>Student papers aren't processed until the parent or guardian has given consent.</span>
         </div>
-        {accountMethod === "password" ? <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider} onBusyChange={passwordBusyChanged}
-          onAuthenticated={async () => {
-            try {
-              const sess = await currentSession() as SessionUser;
-              setContact(sess.user?.email ?? "");
-              const existing = await currentGuardian();
-              if (existing) { setGuardian(existing); await continueAsGuardian(existing); }
-              else go("nameOnly");
-            } catch { setError("We could not open your account. Try again later."); }
-          }} /> : <>
-        <div className="obfields">
-          <Field id="ob-name" label="Your name" value={parentName} onChange={setParentName}
-                 placeholder="Full name" autoComplete="name"
-                 hint="So the student knows whose account this is." />
-          <Field id="ob-contact" label="Email or phone" value={contact} onChange={setContact}
-                 placeholder="you@example.com or +91…" autoComplete="email"
-                 onEnter={() => void send()}
-                 hint="We'll send a one-time code to your email or phone." />
-        </div>
-        <div className="obpanel tint" style={{ marginTop: 16 }}>
-          <div className="body" style={{ marginTop: 0 }}>
-            Nothing about the student is collected yet, and nothing is processed
-            until you&rsquo;ve consented.
-          </div>
-        </div>
-        <div className="obfoot">
-          <PressBox as="button" type="button" className="btn primary" onClick={() => void send()}>
-            Send me a code
-          </PressBox>
-        </div>
-        </>}
       </Shell>
     );
   }
