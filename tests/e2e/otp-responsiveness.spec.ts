@@ -9,6 +9,16 @@ test("slow OTP delivery opens code entry immediately, recovers from failure, and
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const url = input instanceof Request ? input.url : String(input);
+      // The account check answers "signs in with a code", so the code button
+      // shows. Answered here, not with page.route: the direct lookup carries an
+      // apikey header, so it needs a CORS preflight, which WebKit does not let a
+      // route intercept (the call then reaches the real server).
+      if (url.includes("/rest/v1/rpc/account_lookup_public")) {
+        return Promise.resolve(new Response(JSON.stringify("code"), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
+      if (url.includes("/functions/v1/account-lookup")) {
+        return Promise.resolve(new Response(JSON.stringify({ result: "code" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
       if (!url.includes("/auth/v1/otp")) return originalFetch(input, init);
       control.__axoOtpAttempts++;
       return new Promise<Response>(resolve => {
@@ -18,17 +28,6 @@ test("slow OTP delivery opens code entry immediately, recovers from failure, and
       });
     };
   });
-  // The account check answers "signs in with a code", so the code button shows.
-  await page.route("**/functions/v1/account-lookup", route => route.fulfill({
-    status: route.request().method() === "OPTIONS" ? 204 : 200,
-    headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "content-type": "application/json" },
-    body: route.request().method() === "OPTIONS" ? "" : JSON.stringify({ result: "code" }),
-  }));
-  await page.route("**/rest/v1/rpc/account_lookup_public", route => route.fulfill({
-    status: route.request().method() === "OPTIONS" ? 204 : 200,
-    headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "content-type": "application/json" },
-    body: route.request().method() === "OPTIONS" ? "" : JSON.stringify("code"),
-  }));
   await page.goto("http://127.0.0.1:5175/");
   await page.getByRole("button", { name: /reject|essential only|necessary only/i }).click();
   // One Continue on the intro; the account step recognises the address and offers the code.
