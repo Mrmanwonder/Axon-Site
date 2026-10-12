@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PRESETS as AVATAR_PRESETS, avatarRenderFor, initialFor } from "../../avatar.js";
 import { MaterialSymbol, type MaterialSymbolName } from "../components/MaterialSymbols";
+import Switch from "../components/Switch";
 import "./DesignSystem.css";
 
 /*
@@ -294,7 +295,7 @@ export default function DesignSystem() {
             </div>
             <div className="ds-component-card">
               <Meta>CONTROL / TOGGLE</Meta>
-              <div className="ds-toggle-row"><div><strong>Paper notifications</strong><small>When a paper is ready to read</small></div><button type="button" role="switch" aria-checked={switchOn} className={switchOn ? "ds-toggle is-on" : "ds-toggle"} onClick={() => setSwitchOn(!switchOn)}><span/></button></div>
+              <div className="ds-toggle-row"><div><strong>Paper notifications</strong><small>When a paper is ready to read</small></div><Switch on={switchOn} onChange={setSwitchOn} label="Paper notifications" /></div>
               <p>Functional example. The switch changes this preview only.</p>
             </div>
             <div className="ds-component-card ds-component-wide">
