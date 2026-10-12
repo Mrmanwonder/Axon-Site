@@ -904,7 +904,11 @@
       radial-gradient(90% 34% at 52% -10%,
         rgba(112,178,255,calc(var(--ob-wash) * .42)) 0%,
         rgba(112,178,255,calc(var(--ob-wash) * .16)) 52%,
-        transparent 100%);
+        transparent 100%),
+      /* Dither. Smooth gradients on near-black quantise to 8-bit steps and read
+         as bands. A static, near-invisible noise tile breaks them up without
+         adding a compositing layer. */
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
     -webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.82) 30%,rgba(0,0,0,.42) 62%,transparent 100%);
             mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.82) 30%,rgba(0,0,0,.42) 62%,transparent 100%);}
 

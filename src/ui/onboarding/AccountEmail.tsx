@@ -34,9 +34,9 @@ export type AccountKind = "idle" | "checking" | "new" | "password" | "code" | "u
 const LOOKUP_DELAY_MS = 90;
 const SIGN_IN_FAILED = "That password didn't work. Check it and try again, or have us email you a code.";
 
-export function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
+export function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange, placeholder }: {
   id: string; label: string; value: string; onChange: (v: string) => void;
-  creating: boolean; disabled: boolean; onFocusChange?: (focused: boolean) => void;
+  creating: boolean; disabled: boolean; onFocusChange?: (focused: boolean) => void; placeholder?: string;
 }) {
   const [shown, setShown] = useState(false);
   return (
@@ -47,7 +47,7 @@ export function PasswordInput({ id, label, value, onChange, creating, disabled, 
                onChange={(e) => onChange(e.target.value)}
                onFocus={() => onFocusChange?.(true)} onBlur={() => onFocusChange?.(false)}
                autoComplete={creating ? "new-password" : "current-password"}
-               autoCapitalize="none" spellCheck={false} placeholder={creating ? "Create a password" : "Your password"} />
+               autoCapitalize="none" spellCheck={false} placeholder={placeholder ?? (creating ? "Create a password" : "Your password")} />
         <button type="button" className="obpassword-toggle" disabled={disabled}
                 aria-label={shown ? "Hide password" : "Show password"} aria-pressed={shown}
                 onClick={() => setShown((v) => !v)}>
