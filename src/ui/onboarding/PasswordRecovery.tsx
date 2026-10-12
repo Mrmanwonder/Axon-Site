@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useApp } from "../data/AppProvider";
 import { changePassword } from "../data/modules";
-import PasswordField from "../components/PasswordField";
+import { PASSWORD_RULES } from "../data/modules";
+import { PasswordInput, Requirements } from "./AccountEmail";
 import { Shell, Err } from "./chrome";
 
 export default function PasswordRecovery() {
@@ -12,8 +13,11 @@ export default function PasswordRecovery() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const flight = useRef(false);
+  const rulesMet = PASSWORD_RULES.every((r: { test: (p: string) => boolean }) => r.test(password));
+  const matches = confirmation !== "" && password === confirmation;
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (flight.current) return;
+    if (!rulesMet) { setError("That password does not meet the requirements yet."); return; }
     if (password !== confirmation) { setError("The passwords do not match."); return; }
     flight.current = true; setBusy(true); setError(null);
     try {
@@ -24,14 +28,24 @@ export default function PasswordRecovery() {
     finally { flight.current = false; setBusy(false); }
   };
   return <Shell title="Choose a new password">
+    <div className="obaccount-stage">
     <form className="password-access" onSubmit={event => void submit(event)}>
       <Err message={error} />
-      <PasswordField id="reset-password" label="New password" value={password} onChange={setPassword} creating disabled={busy} />
-      <PasswordField id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} />
+      <PasswordInput id="reset-password" label="New password" value={password} onChange={setPassword} creating disabled={busy} />
+      <div style={{ marginTop: 12 }}>
+        <PasswordInput id="reset-confirmation" label="Confirm password" value={confirmation} onChange={setConfirmation} creating disabled={busy} placeholder="Type it again" />
+      </div>
+      {password !== "" && <div style={{ marginTop: 16 }}><Requirements password={password} /></div>}
+      {confirmation !== "" && (
+        <p className="obrules-title" role="status" style={{ marginTop: 10 }}>
+          {matches ? "The passwords match." : "The passwords don't match yet."}
+        </p>
+      )}
       <div className="obfoot">
-        <button type="submit" className="btn primary" disabled={busy} aria-busy={busy}>{busy ? "Saving…" : "Save password"}</button>
+        <button type="submit" className="btn primary" disabled={busy || !rulesMet || !matches} aria-busy={busy}>{busy ? "Saving…" : "Save password"}</button>
         <button type="button" className="btn plain" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); finishPasswordRecovery(); }}>Cancel</button>
       </div>
     </form>
+    </div>
   </Shell>;
 }

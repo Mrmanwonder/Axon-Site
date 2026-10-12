@@ -48,7 +48,15 @@ older environments. New environments should use `AXON_SITE_URL`.
 ```bash
 supabase functions deploy --project-ref dlgcqieyevoebefhcggi \
   billing-checkout billing-portal stripe-webhook
+supabase functions deploy --project-ref dlgcqieyevoebefhcggi --no-verify-jwt \
+  account-lookup
 ```
+
+`account-lookup` is called by a signed-out browser that holds only the
+publishable key, which is not a JWT, so it is deployed with `--no-verify-jwt`.
+It answers `new`, `password` or `code` for an email and is rate limited per
+caller; apply `20261012090000_account_lookup.sql` first. Optional secret
+`ACCOUNT_LOOKUP_SALT` keys the caller hash (it falls back to the service key).
 
 Do **not** deploy scanner/pipeline workers from this repository. Names such as
 `w-triage`, `w-structure`, `w-content`, `w-adjudicate`, `w-explain`,
@@ -83,3 +91,41 @@ After deployment:
 
 The Stripe webhook is the only service-role function in this repository that
 updates entitlement state; it must fail loudly on database or signature errors.
+
+## Email templates (Supabase Dashboard, not deployable from the repo)
+
+Source: `node scripts/build-email-templates.mjs` writes `supabase/templates/*.html`.
+Paste each into Dashboard → Authentication → Email Templates and set the subject:
+
+| Template | File | Subject |
+| --- | --- | --- |
+| Magic link (sign-in code) | `magic_link.html` | `{{ .Token }} is your Axon code` |
+| Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon code` |
+| Reset password | `recovery.html` | `Reset your Axon password` |
+
+The code is in the subject and preheader so Gmail and phone lock screens can offer
+their own "Copy code" action; an email cannot copy on click. The reset button points at
+`{{ .SiteURL }}/?token_hash=…&type=recovery`, so Authentication → URL Configuration → Site URL
+must be the production address and that address must be in the redirect allow-list.
+
+## Slow auth emails
+
+Measured from the project's auth logs (12 Oct 2026): `/recover` took 1.4–2.3 s and `/otp` about 1.9 s
+before answering, because Supabase sends over SMTP before it replies. Delivery after that is the
+sender's. To cut it, Authentication → SMTP Settings should point at a transactional provider close to
+the project's region (for example Resend over port 465 or 587, with SPF, DKIM and DMARC set for
+axonstudy.online so mail lands in the inbox, not spam). Sending through an HTTPS API instead (Auth Hook →
+Send Email, an Edge Function) would be faster still but is a larger change and the owner's call.
+Supabase also refuses a second request for the same address within about a minute, and each new
+reset email cancels the one before it, so the app now waits 60 s before offering a resend.
+
+## Account lookup (one hop)
+
+The email step asks `public.account_lookup_public(p_email)` through the REST API
+(`/rest/v1/rpc/account_lookup_public`), about 0.2 s, instead of the
+`account-lookup` Edge Function (1 to 2 s, 8 s cold). Apply
+`supabase/migrations/20261012160000_account_lookup_direct.sql` BEFORE the build
+that calls it ships; until it is applied the browser falls back to the Edge
+Function, so nothing breaks, it is just slower. Re-run the Supabase advisors
+afterwards: expect the intended "anon can execute a SECURITY DEFINER function"
+notice for this one function.

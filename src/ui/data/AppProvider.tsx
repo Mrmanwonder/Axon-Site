@@ -501,6 +501,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const s = await currentSession();
       if (cancelled) return;
+      // A reset link is exchanged while the session is read; if it failed, say so.
+      if (!err) { const late = takeProviderError(); if (late) setProviderError(late); }
       setSession(s);
       if (!s) return setGate("onboarding");
 

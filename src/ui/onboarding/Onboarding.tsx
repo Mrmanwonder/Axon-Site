@@ -66,14 +66,16 @@ import { useApp } from "../data/AppProvider";
 import { hapticTick, hapticFirm } from "../lib/haptics";
 import {
   sb, sendOtp, verifyOtp, currentSession, currentGuardian,
-  signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL, WORKOS_PASSWORD,
+  signInWithProvider, isProviderNotEnabled, OAUTH_PROVIDERS, PROVIDER_LABEL,
   listPurposes, recordConsent,
   NOTICE_LANGUAGES, noticeStrings, purposeLabel, purposeNote, noticeIsComplete,
-  startCheckout,
+  startCheckout, changePassword, forgetAccount,
 } from "../data/modules";
 import type { Guardian, Student, NoticeLanguage } from "../data/modules";
 import GlideSegment from "../components/GlideSegment";
-import PasswordAccess from "./PasswordAccess";
+import AccountEmail from "./AccountEmail";
+import type { AccountKind } from "./AccountEmail";
+import "./Onboarding.css";
 import { Shell, Err, Field, Method, SRow, Icon, ICONS, BRAND } from "./chrome";
 import PressBox from "../components/PressBox";
 import Switch from "../components/Switch";
@@ -129,6 +131,8 @@ type SessionUser = {
   };
 };
 
+const OTP_LENGTH = 8;
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { session, providerError, finishOnboarding } = useApp();
@@ -169,7 +173,12 @@ export default function Onboarding() {
     passwordFlight.current = busy;
     setPasswordBusy(busy);
   }, []);
-  const [accountMethod, setAccountMethod] = useState<"choices" | "code" | "password">("choices");
+  const [accountKind, setAccountKind] = useState<AccountKind>("idle");
+  /* A new account is made by the emailed code, then the password chosen on the
+     account step is saved against the confirmed address. Held in memory only,
+     for that one hop, and cleared the moment it is used or the flow is left. */
+  const pendingPassword = useRef<string | null>(null);
+  const otpVerified = useRef(false);
   const provider = s?.user?.app_metadata?.provider ?? null;
 
   const [guardian, setGuardian] = useState<Guardian | null>(null);
@@ -303,10 +312,25 @@ export default function Onboarding() {
     setOtpBusy(true);
     setError(null);
     try {
-      await verifyOtp(contact.trim(), raw.trim());
+      if (!otpVerified.current) {
+        await verifyOtp(contact.trim(), raw.trim());
+        otpVerified.current = true;
+      }
+      if (pendingPassword.current) {
+        // The address is confirmed; now keep the password the parent chose. A
+        // failure here is shown, never swallowed: the code stays accepted, so
+        // pressing Continue again retries only this step.
+        try { await changePassword(pendingPassword.current); }
+        catch { setError("Your email is confirmed, but we couldn't save your password. Press Continue to try again."); return; }
+        pendingPassword.current = null;
+        forgetAccount(contact);
+      }
       // Guardian row first: it holds no student data, so it is safe before
-      // consent.
+      // consent. A returning guardian already has one and keeps their name.
       const sess = await currentSession() as SessionUser;
+      const existing = await currentGuardian();
+      if (existing) { setGuardian(existing); await continueAsGuardian(existing); return; }
+      if (!parentName.trim()) { go("nameOnly"); return; }
       const { data, error: e } = await sb.from("guardian").upsert(
         { auth_user_id: sess.user!.id, name: parentName, contact },
         { onConflict: "auth_user_id" },
@@ -317,16 +341,20 @@ export default function Onboarding() {
     } catch (e) { fail(e, "That code did not work."); }
     finally { otpFlight.current = false; setOtpBusy(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contact, parentName, continueAsGuardian, codeDeliveryFailed]);
+  }, [contact, parentName, continueAsGuardian, codeDeliveryFailed, go]);
 
-  /* Auto-submit the instant a 6-digit numeric code is complete — typed,
+  /* Supabase Auth issues 8-digit email codes for this project (Authentication →
+     Providers → Email → OTP length). Auto-submitting at six digits sent a wrong,
+     truncated code. Change OTP_LENGTH together with that setting.
+
+     Auto-submit the instant a numeric code is complete — typed,
      pasted, or autofilled from the iOS QuickType bar — rather than making the
      student make a separate tap once autofill has already done the work. A
      pasted magic link is much longer than 6 characters and is handled by the
      "Continue" button instead, via verifyOtp's own link-parsing. */
   useEffect(() => {
     if (step !== "otp" || otpBusy) return;
-    if (/^\d{6}$/.test(code.trim())) void verifyOtpCode(code);
+    if (new RegExp(`^\\d{${OTP_LENGTH}}$`).test(code.trim())) void verifyOtpCode(code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, step, sendingCode]);
 
@@ -357,14 +385,24 @@ export default function Onboarding() {
       setOtpSentAt(now); setCooldownNow(now);
     } catch (e) {
       setCodeDeliveryFailed(true); setOtpSentAt(null);
-      fail(e, "That code could not be sent. Please try again.");
+      const detail = e instanceof Error ? e.message : "";
+      if (/invalid format|unable to validate email/i.test(detail)) {
+        fail(e, "That email address doesn't look right. Go back and check it.");
+      } else if (/only request this after|rate limit|too many/i.test(detail)) {
+        const wait = detail.match(/after (\d+) second/)?.[1];
+        fail(e, wait ? `Please wait ${wait} seconds, then try again.` : "Too many requests. Please wait a minute, then try again.");
+      } else fail(e, "That code could not be sent. Please try again.");
     } finally { sendFlight.current = false; setSendingCode(false); }
   };
 
   const back = sendingCode || otpBusy || passwordBusy || busyProvider ? undefined : BACK_TO[step];
   const shellProps = {
     phase: STEP_PHASE[step],
-    onBack: back ? () => { if (!passwordFlight.current && !providerFlight.current) go(back, "back"); } : undefined,
+    onBack: back ? () => {
+      if (passwordFlight.current || providerFlight.current) return;
+      pendingPassword.current = null; otpVerified.current = false;
+      go(back, "back");
+    } : undefined,
     stepKey: step,
     direction: flowDirection,
   };
@@ -396,129 +434,79 @@ export default function Onboarding() {
         setError(isProviderNotEnabled(e)
           ? (p === "custom:workos"
             ? "Password sign-in isn't switched on yet. Use a sign-in code instead."
-            : `${PROVIDER_LABEL[p]} sign-in isn't switched on yet. Use your email or phone below.`)
+            : `${PROVIDER_LABEL[p]} sign-in isn't switched on yet. Use your email below.`)
           : (e as Error).message || `${PROVIDER_LABEL[p]} sign-in didn't open.`);
       }
     };
 
-    const send = async () => {
+    /* Starts the emailed code for a returning guardian (no password) or a new
+       one (password held for after the code is confirmed). */
+    const startCode = async (password: string | null) => {
       if (sendFlight.current || providerFlight.current || passwordFlight.current) return;
-      if (!parentName.trim()) return setError("We need your name.");
-      if (!contact.trim()) return setError("Enter an email address or phone number.");
       hapticFirm();
+      pendingPassword.current = password;
+      otpVerified.current = false;
       setCode("");
       go("otp");
       await requestCode();
     };
 
+    const signedIn = async () => {
+      try {
+        const sess = await currentSession() as SessionUser;
+        setContact(sess.user?.email ?? contact);
+        const existing = await currentGuardian();
+        if (existing) { setGuardian(existing); await continueAsGuardian(existing); }
+        else go("nameOnly");
+      } catch { setError("We could not open your account. Try again later."); }
+    };
+
+    const COPY: Record<AccountKind, { title: string; sub: string }> = {
+      idle: { title: "Welcome to Axon",
+        sub: "Parents and guardians sign in first. Your student gets their own profile next." },
+      checking: { title: "Welcome to Axon",
+        sub: "Parents and guardians sign in first. Your student gets their own profile next." },
+      new: { title: "Create your account",
+        sub: "Choose a password for your parent or guardian account." },
+      password: { title: "Welcome back",
+        sub: "Enter your password to open your account." },
+      code: { title: "Welcome back",
+        sub: "Your account signs in with a code. We'll email one to you." },
+      unknown: { title: "Sign in",
+        sub: "Enter your password to open your account." },
+      workos: { title: "Continue to Axon",
+        sub: "You'll set or enter your password on a secure page, then come straight back here." },
+    };
+
     return (
-      <Shell {...shellProps} title="Set up your account"
-             sub="A parent or guardian signs in first. The student gets their own profile next."
-             onBack={shellProps.onBack
-               ? (accountMethod === "choices" ? shellProps.onBack : () => { setError(null); setAccountMethod("choices"); })
-               : undefined}>
+      <Shell {...shellProps} title={COPY[accountKind].title} sub={COPY[accountKind].sub}>
         <Err message={error} />
-        <div className="obaccount-role">
-          <Icon d={ICONS.shield} />
-          <span>Parent or guardian account</span>
-        </div>
-        <div className="obaccount-stage" key={accountMethod}>
-        {accountMethod === "choices" ? (
-          <>
-        <div className="obalt">
-          {OAUTH_PROVIDERS.map((p) => (
-            <PressBox as="button" type="button" key={p} className="btn googleauth"
-                      disabled={passwordBusy || !!busyProvider || sendingCode}
-                      aria-busy={busyProvider === p}
-                      data-busy={busyProvider === p ? "" : undefined}
-                      onClick={() => void useProvider(p)}>
-              {BRAND[p]}
-              <span>
-                {busyProvider === p
-                  ? `Opening ${PROVIDER_LABEL[p]}…`
-                  : `Continue with ${PROVIDER_LABEL[p]}`}
-              </span>
-            </PressBox>
-          ))}
-        </div>
-            <div className="obor">or</div>
-            <div className="obaccount-alternative">
-              <PressBox as="button" type="button" className="btn obaccount-secondary"
-                        disabled={!!busyProvider || passwordBusy || sendingCode}
-                        onClick={() => { hapticTick(); setAccountMethod("code"); setError(null); }}>
-                Continue with email or phone
+        <div className="obaccount-stage">
+          <div className="obalt">
+            {OAUTH_PROVIDERS.map((p) => (
+              <PressBox as="button" type="button" key={p} className="btn googleauth"
+                        disabled={passwordBusy || !!busyProvider || sendingCode}
+                        aria-busy={busyProvider === p}
+                        data-busy={busyProvider === p ? "" : undefined}
+                        onClick={() => void useProvider(p)}>
+                {BRAND[p]}
+                <span>
+                  {busyProvider === p
+                    ? `Opening ${PROVIDER_LABEL[p]}…`
+                    : `Continue with ${PROVIDER_LABEL[p]}`}
+                </span>
               </PressBox>
-            </div>
-          </>
-        ) : accountMethod === "password" && WORKOS_PASSWORD ? (
-          <>
-            {/* AXO-234: the password is held and checked by WorkOS, which applies
-                the password rules and rejects passwords found in known breaches.
-                Signing in, creating a password and resetting it all happen there. */}
-            <h2 className="obaccount-method-title">Sign in with a password</h2>
-            <p className="obaccount-method-sub">You'll set or enter your password on a secure page, then come straight back here.</p>
-            <div className="obfoot">
-              <PressBox as="button" type="button" className="btn primary"
-                        disabled={!!busyProvider || sendingCode}
-                        aria-busy={busyProvider === "custom:workos"}
-                        onClick={() => void useProvider("custom:workos")}>
-                {busyProvider === "custom:workos" ? "Opening…" : "Continue"}
-              </PressBox>
-            </div>
-            <div className="obaccount-switch">
-              <button type="button" disabled={!!busyProvider || sendingCode}
-                      onClick={() => { hapticTick(); setError(null); setAccountMethod("code"); }}>
-                Use a sign-in code instead
-              </button>
-            </div>
-          </>
-        ) : accountMethod === "password" ? (
-          <>
-            <PasswordAccess email={contact} onEmail={setContact} disabled={!!busyProvider}
-              onBusyChange={passwordBusyChanged}
-              onAuthenticated={async () => {
-                try {
-                  const sess = await currentSession() as SessionUser;
-                  setContact(sess.user?.email ?? "");
-                  const existing = await currentGuardian();
-                  if (existing) { setGuardian(existing); await continueAsGuardian(existing); }
-                  else go("nameOnly");
-                } catch { setError("We could not open your account. Try again later."); }
-              }} />
-            <div className="obaccount-switch">
-              <button type="button" disabled={!!busyProvider || passwordBusy || sendingCode}
-                      onClick={() => { hapticTick(); setError(null); setAccountMethod("code"); }}>
-                Use a sign-in code instead
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="obaccount-method-title">Continue with a code</h2>
-            <p className="obaccount-method-sub">We'll send a one-time sign-in code to your email or phone.</p>
-            <div className="obfields">
-              <Field id="ob-name" label="Your name" value={parentName} onChange={setParentName}
-                     placeholder="Full name" autoComplete="name"
-                     hint="So the student knows whose account this is." />
-              <Field id="ob-contact" label="Email or phone" value={contact} onChange={setContact}
-                     placeholder="you@example.com or +91…" autoComplete="email"
-                     onEnter={() => void send()}
-                     hint="We'll send a one-time code to your email or phone." />
-            </div>
-            <div className="obfoot">
-              <PressBox as="button" type="button" className="btn primary"
-                        disabled={sendingCode} aria-busy={sendingCode} onClick={() => void send()}>
-                {sendingCode ? "Sending code…" : "Send me a code"}
-              </PressBox>
-            </div>
-            <div className="obaccount-switch">
-              <button type="button" disabled={!!busyProvider || passwordBusy || sendingCode}
-                      onClick={() => { hapticTick(); setError(null); setAccountMethod("password"); }}>
-                Sign in with a password instead
-              </button>
-            </div>
-          </>
-        )}
+            ))}
+          </div>
+          <div className="obor">or</div>
+          <AccountEmail
+            email={contact} onEmail={setContact}
+            locked={!!busyProvider || sendingCode}
+            onKind={setAccountKind}
+            onSendCode={startCode}
+            onSignedIn={signedIn}
+            onWorkOS={() => useProvider("custom:workos")}
+            onBusyChange={passwordBusyChanged} />
         </div>
         <div className="obaccount-assurance">
           <Icon d={ICONS.shield} />
@@ -538,7 +526,7 @@ export default function Onboarding() {
               maxLength, because a pasted magic link is longer than 6 chars
               and still has to fit here — see the subnote below. */}
           <Field id="ob-code" label="Your code" className="obcode" value={code} onChange={setCode}
-                 placeholder="6 digits, or paste the link" autoComplete="one-time-code"
+                 placeholder={`${OTP_LENGTH} digits, or paste the link`} autoComplete="one-time-code"
                  inputMode="numeric" onEnter={() => void verifyOtpCode(code)} />
         </div>
         <div className="subnote">
@@ -548,6 +536,18 @@ export default function Onboarding() {
           paste the whole link here.
         </div>
         <div className="obfoot">
+          {typeof navigator !== "undefined" && typeof navigator.clipboard?.readText === "function" && (
+            <PressBox as="button" type="button" className="btn plain" disabled={otpBusy}
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          const six = text.match(new RegExp(`\\b\\d{${OTP_LENGTH}}\\b`))?.[0];
+                          if (six) setCode(six); else if (text.trim()) setCode(text.trim());
+                        } catch { /* clipboard permission refused: the field still takes a paste */ }
+                      }}>
+              Paste code
+            </PressBox>
+          )}
           <PressBox as="button" type="button" className="btn primary" disabled={otpBusy || sendingCode || codeDeliveryFailed}
                     aria-busy={otpBusy}
                     onClick={() => void verifyOtpCode(code)}>

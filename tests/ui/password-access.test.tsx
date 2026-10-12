@@ -4,10 +4,17 @@ import { beforeEach, expect, test, vi } from "vitest";
 const fake = vi.hoisted(() => ({ signIn: vi.fn(), signUp: vi.fn(), reset: vi.fn(), update: vi.fn(), finish: vi.fn() }));
 vi.mock("../../src/ui/data/modules", () => ({
   passwordSignIn: fake.signIn, passwordSignUp: fake.signUp, requestPasswordReset: fake.reset, changePassword: fake.update,
+  PASSWORD_RULES: [
+    { id: "length", label: "At least 8 characters", test: (p: string) => p.length >= 8 },
+    { id: "upper", label: "An uppercase letter", test: (p: string) => /[A-Z]/.test(p) },
+    { id: "lower", label: "A lowercase letter", test: (p: string) => /[a-z]/.test(p) },
+    { id: "number", label: "A number", test: (p: string) => /\d/.test(p) },
+  ],
 }));
 vi.mock("../../src/ui/data/AppProvider", () => ({ useApp: () => ({ finishPasswordRecovery: fake.finish }) }));
 vi.mock("../../src/ui/onboarding/chrome", () => ({
   Err: ({ message }: { message: string | null }) => message ? <p role="alert">{message}</p> : null,
+  Icon: () => null, ICONS: { tick: null, warn: null }, BRAND: {}, Field: () => null, Method: () => null, SRow: () => null, Chev: () => null,
   Shell: ({ title, children }: { title: string; children: React.ReactNode }) => <main><h1>{title}</h1>{children}</main>,
 }));
 import { useState } from "react";
@@ -35,7 +42,7 @@ test("sign-in is single-flight and clears credentials before opening the account
   fake.signIn.mockReturnValue(new Promise(r => { resolve = r; }));
   const done = vi.fn();
   render(<Access done={done} />);
-  await userEvent.type(screen.getByLabelText("Password"), "secret123");
+  await userEvent.type(screen.getByLabelText("Password"), "Secret123");
   const form = screen.getByRole("button", { name: "Sign in" }).closest("form")!;
   for (let i = 0; i < 8; i++) fireEvent.submit(form);
   expect(fake.signIn).toHaveBeenCalledOnce(); expect(done).not.toHaveBeenCalled();
@@ -47,14 +54,14 @@ test("unconfirmed signup does not advance or create a guardian", async () => {
   fake.signUp.mockResolvedValue(null);
   const done = vi.fn(); render(<Access done={done} />);
   await userEvent.click(screen.getByRole("button", { name: "Create an account" }));
-  await userEvent.type(screen.getByLabelText("Password"), "secret123");
+  await userEvent.type(screen.getByLabelText("Password"), "Secret123");
   await userEvent.click(screen.getByRole("button", { name: "Create account" }));
   expect((await screen.findByRole("status")).textContent).toContain("confirmation link if one is needed");
   expect(done).not.toHaveBeenCalled();
 });
 test("forgot-password status is generic and password is discarded on mode change", async () => {
   fake.reset.mockResolvedValue(undefined); render(<Access />);
-  await userEvent.type(screen.getByLabelText("Password"), "secret123");
+  await userEvent.type(screen.getByLabelText("Password"), "Secret123");
   await userEvent.click(screen.getByRole("button", { name: "Forgot password" }));
   expect(screen.queryByLabelText("Password")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Send reset link" }));
@@ -64,21 +71,22 @@ test("forgot-password status is generic and password is discarded on mode change
 });
 test("recovery requires matching passwords and only finishes after successful update", async () => {
   fake.update.mockResolvedValue(undefined); render(<PasswordRecovery />);
-  await userEvent.type(screen.getByLabelText("New password"), "secret123");
-  await userEvent.type(screen.getByLabelText("Confirm password"), "different");
-  await userEvent.click(screen.getByRole("button", { name: "Save password" }));
-  expect(screen.getByRole("alert").textContent).toContain("do not match");
+  await userEvent.type(screen.getByLabelText("New password"), "Secret123");
+  await userEvent.type(screen.getByLabelText("Confirm password"), "Different1");
+  expect(screen.getByText(/don't match yet/)).toBeTruthy();
+  expect((screen.getByRole("button", { name: "Save password" }) as HTMLButtonElement).disabled).toBe(true);
   expect(fake.update).not.toHaveBeenCalled();
   await userEvent.clear(screen.getByLabelText("Confirm password"));
-  await userEvent.type(screen.getByLabelText("Confirm password"), "secret123");
+  await userEvent.type(screen.getByLabelText("Confirm password"), "Secret123");
+  expect(screen.getByText("The passwords match.")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Save password" }));
   await waitFor(() => expect(fake.finish).toHaveBeenCalledOnce());
 });
 test("a failed recovery remains visible and retryable", async () => {
   fake.update.mockRejectedValue(new Error("We could not complete that request. Try again later."));
   render(<PasswordRecovery />);
-  await userEvent.type(screen.getByLabelText("New password"), "secret123");
-  await userEvent.type(screen.getByLabelText("Confirm password"), "secret123");
+  await userEvent.type(screen.getByLabelText("New password"), "Secret123");
+  await userEvent.type(screen.getByLabelText("Confirm password"), "Secret123");
   await userEvent.click(screen.getByRole("button", { name: "Save password" }));
   expect((await screen.findByRole("alert")).textContent).toContain("could not complete");
   expect(fake.finish).not.toHaveBeenCalled();

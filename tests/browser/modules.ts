@@ -1,3 +1,4 @@
+import * as notice from "../../src/notice.js";
 const scenario = new URLSearchParams(location.search).get("scenario");
 const HOUSEHOLD = scenario === "student-scope-household";
 const PASSWORD = scenario === "password";
@@ -91,6 +92,21 @@ export const passwordSignIn = async (_email: string, password: string) => {
   return passwordSession;
 };
 export const passwordSignUp = async () => null;
+// The account step's email check. The local part picks the answer so a spec can
+// reach every state: new…, code…, unknown…, anything else has a password.
+import { PASSWORD_RULES as policyRules, validateNewPassword as validatePolicy } from "../../src/lib/auth/passwordPolicy.js";
+import { normalisedEmail as normalise, EMAIL_SHAPE as emailShape } from "../../src/lib/auth/accountLookup.js";
+export const PASSWORD_RULES = policyRules;
+export const normalisedEmail = normalise;
+export const EMAIL_SHAPE = emailShape;
+export const assertSafeNewPassword = async (password: string) => validatePolicy(password);
+export const lookupAccount = async (email: string) => {
+  const local = email.trim().toLowerCase().split("@")[0];
+  return local.startsWith("new") ? "new" : local.startsWith("code") ? "code" : local.startsWith("unknown") ? "unknown" : "password";
+};
+export const cachedAccount = () => null;
+export const forgetAccount = () => {};
+export const warmAccountLookup = () => {};
 export const requestPasswordReset = async () => {};
 export const changePassword = async () => {};
 export const reauthenticateWithPassword = async () => {};
@@ -377,3 +393,23 @@ export const fixSavedPart = async (
   savedPaperCalls.push({ action: "fixSavedPart", id: regionId, value: fix });
   return { region_id: regionId, attempt_id: null, run_id: "fixture-run", explain: false };
 };
+
+// Account-layout fixture only: no network auth, mail, consent or billing writes.
+export const OAUTH_PROVIDERS = ["google"];
+export const PROVIDER_LABEL = { google: "Google" };
+export const isProviderNotEnabled = () => false;
+export const signInWithProvider = async () => { throw new Error("Provider handoff is not available in this fixture."); };
+export const sendOtp = async () => ({ channel: "email", sentTo: "parent@example.test" });
+export const verifyOtp = async () => { throw new Error("Code verification is not available in this fixture."); };
+export const listPurposes = async () => [];
+export const startCheckout = async () => { throw new Error("Billing is not available in this fixture."); };
+export const parentModeState = async () => ({ fresh: false, amrPresent: false });
+export const sendParentCode = async () => { throw new Error("Parent verification is not available in this fixture."); };
+export const unlockWithCode = async () => ({ outcome: "failed", message: "Fixture only." });
+export const NOTICE_LANGUAGES = notice.LANGUAGES;
+export const noticeStrings = notice.noticeStrings;
+export const purposeLabel = notice.purposeLabel;
+export const purposeNote = notice.purposeNote;
+export const noticeIsComplete = notice.noticeIsComplete;
+
+export const WORKOS_PASSWORD = false;

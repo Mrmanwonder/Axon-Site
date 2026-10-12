@@ -180,6 +180,31 @@
 
 
 /* ───────────────────────────────────────────────────────────────────────────
+   4 · COMPONENT — B5 Essential button roles
+   Graphite is primary on light; near-white reverses contrast on dark.
+   A navigation arrow uses the accent only when the control is a real link.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --button-primary-bg: var(--p-mist-100);
+  --button-primary-ink: var(--p-ink-950);
+  --button-secondary-bg: var(--surface);
+  --button-secondary-ink: var(--label);
+  --button-secondary-rim: var(--hairline);
+  --button-quiet-ink: var(--label-2);
+  --button-nav-ink: var(--p-blue-l);
+}
+[data-theme="light"] {
+  --button-primary-bg: var(--p-ink-800);
+  --button-primary-ink: var(--p-white);
+  --button-secondary-bg: var(--surface);
+  --button-secondary-ink: var(--label);
+  --button-secondary-rim: var(--hairline);
+  --button-quiet-ink: var(--label-2);
+  --button-nav-ink: var(--accent);
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
    3 · ROLE — cause + confidence
 
    Cause colours are aliased into the role layer under their enum names, so a

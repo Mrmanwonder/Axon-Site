@@ -879,11 +879,38 @@
   /* One wash, painted once and never animated. A gradient this large is the
      most expensive thing on a budget Android GPU and this one is decoration,
      so it gets a static paint and no compositing layer of its own. */
+  /* Three soft lights, each fading through several eased stops rather than one
+     linear ramp, so there is no visible edge or banding where a light ends. A
+     blue key from the top left, a violet fill from the top right and a cool
+     bloom across the top; the mask then dissolves the whole sky into the page
+     instead of stopping at a line. Dark is primary, so the washes are strong
+     there and quiet in light. */
   .obwrap::before{content:"";position:absolute;left:0;right:0;top:0;z-index:0;
-    height:min(46vh,380px);pointer-events:none;
+    height:min(78vh,640px);pointer-events:none;
     background:
-      radial-gradient(120% 82% at 14% -10%,rgba(58,134,255,var(--ob-wash)),transparent 62%),
-      radial-gradient(92% 64% at 98% 2%,rgba(138,111,209,var(--ob-wash-2)),transparent 66%);}
+      radial-gradient(64% 52% at 10% -6%,
+        rgba(58,134,255,calc(var(--ob-wash) * 1.15)) 0%,
+        rgba(58,134,255,calc(var(--ob-wash) * .78)) 22%,
+        rgba(58,134,255,calc(var(--ob-wash) * .42)) 44%,
+        rgba(58,134,255,calc(var(--ob-wash) * .16)) 66%,
+        rgba(58,134,255,calc(var(--ob-wash) * .04)) 84%,
+        transparent 100%),
+      radial-gradient(56% 46% at 98% 0%,
+        rgba(138,111,209,calc(var(--ob-wash-2) * 1.1)) 0%,
+        rgba(138,111,209,calc(var(--ob-wash-2) * .7)) 26%,
+        rgba(138,111,209,calc(var(--ob-wash-2) * .34)) 50%,
+        rgba(138,111,209,calc(var(--ob-wash-2) * .1)) 74%,
+        transparent 100%),
+      radial-gradient(90% 34% at 52% -10%,
+        rgba(112,178,255,calc(var(--ob-wash) * .42)) 0%,
+        rgba(112,178,255,calc(var(--ob-wash) * .16)) 52%,
+        transparent 100%),
+      /* Dither. Smooth gradients on near-black quantise to 8-bit steps and read
+         as bands. A static, near-invisible noise tile breaks them up without
+         adding a compositing layer. */
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.06'/%3E%3C/svg%3E");
+    -webkit-mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.82) 30%,rgba(0,0,0,.42) 62%,transparent 100%);
+            mask-image:linear-gradient(to bottom,#000 0%,rgba(0,0,0,.82) 30%,rgba(0,0,0,.42) 62%,transparent 100%);}
 
   /* header: back affordance + phase rail */
   .obhead{position:relative;z-index:2;flex:0 0 auto;display:flex;align-items:center;gap:13px;
@@ -1044,28 +1071,6 @@
 
   /* Parent account entry: one method visible at a time. Google is the clean
      default; alternate methods stay reachable as subordinate text actions. */
-  #obroot .obaccount-role {
-    margin: 0 var(--gutter);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    border-radius: 999px;
-    padding: 8px 11px;
-    background: var(--surface-sunk);
-    color: var(--label-2);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: -.008em;
-  }
-  #obroot .obaccount-role svg {
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: var(--blue);
-    stroke-width: 1.85;
-    stroke-linejoin: round;
-    flex-shrink: 0;
-  }
   #obroot .obaccount-stage {
     margin-top: clamp(22px, 5.3vh, 40px);
     animation: obaccount-reveal .22s cubic-bezier(.2,.75,.2,1) both;
@@ -1073,52 +1078,7 @@
   #obroot .obaccount-stage .obalt { margin-bottom: 0; }
   #obroot .obaccount-stage .obalt .btn { min-height: 56px; }
   #obroot .obaccount-stage .obor { margin-top: 22px; margin-bottom: 5px; }
-  #obroot .obaccount-alternative { margin: 0 var(--gutter); }
-  #obroot .obaccount-secondary {
-    width: 100%;
-    min-height: 50px;
-    padding: 12px 14px;
-    background: transparent;
-    color: var(--label-2);
-    box-shadow: none;
-    border: 0;
-    border-radius: 15px;
-    font-size: 14px;
-    font-weight: 550;
-  }
-  #obroot .obaccount-secondary:hover { color: var(--label); }
-  #obroot .obaccount-method-title {
-    margin: 0 var(--text-gutter) 7px;
-    font-size: clamp(20px, 5.3vw, 26px);
-    font-weight: 650;
-    letter-spacing: -.034em;
-    line-height: 1.12;
-  }
-  #obroot .obaccount-method-sub {
-    margin: 0 var(--text-gutter) 21px;
-    font-size: 13.5px;
-    line-height: 1.48;
-    color: var(--label-3);
-  }
   #obroot .obaccount-stage .obfoot { margin-top: 18px; }
-  #obroot .obaccount-switch {
-    margin: 4px var(--gutter) 0;
-    text-align: center;
-  }
-  #obroot .obaccount-switch button {
-    background: transparent;
-    border: 0;
-    color: var(--label-2);
-    padding: 12px;
-    min-height: 46px;
-    border-radius: 12px;
-    font: inherit;
-    font-size: 13px;
-    font-weight: 550;
-    cursor: pointer;
-  }
-  #obroot .obaccount-switch button:hover { color: var(--label); }
-  #obroot .obaccount-switch button:disabled { opacity: .42; cursor: default; }
   #obroot .obaccount-assurance {
     display: flex;
     align-items: flex-start;
@@ -1392,8 +1352,6 @@
      so maths has one visual grammar everywhere instead of looking like code. */
   .answerblock .katex,.mathtext .katex{font-size:1.02em;color:inherit;}
   .mathtext{white-space:pre-wrap;overflow-wrap:anywhere;}
-  /* Inline OCR working can be wider than its card too. Preserve the equation
-     and text size; scroll the expression rather than the whole page. */
   .math-rendered{display:inline-block;max-width:100%;white-space:normal;
     overflow-x:auto;overflow-y:hidden;vertical-align:middle;scrollbar-width:thin;}
   .math-rendered:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}

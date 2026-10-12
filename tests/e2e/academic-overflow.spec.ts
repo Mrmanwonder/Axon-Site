@@ -13,10 +13,10 @@ for (const width of [320, 390, 768, 1440]) for (const theme of ["light", "dark"]
     await expect(table.getByRole("row")).toHaveCount(2);
     await expect(table.getByRole("rowheader", { name: "P", exact: true })).toBeVisible();
     await expect(table.locator("tbody tr").nth(1).locator("td")).toHaveCount(4);
-    for (const name of ["Inline working", "Display working"]) {
+    for (const name of ["Inline working", "Display working", "Wide inline fraction"]) {
       const formula = page.getByRole("region", { name, exact: true }).locator(".math-rendered");
       const overflowing = await formula.evaluate(node => node.scrollWidth > node.clientWidth + 1);
-      if (width <= 390) expect(overflowing).toBe(true);
+      if (name === "Wide inline fraction" && width <= 390) expect(overflowing).toBe(true);
       if (overflowing) {
         await expect(formula).toHaveAttribute("tabindex", "0");
         await formula.focus();
