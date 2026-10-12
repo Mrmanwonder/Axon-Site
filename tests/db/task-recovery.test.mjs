@@ -31,6 +31,7 @@ async function boot({ flag = true, status = 'content' } = {}) {
     create table private.feature_flag(key text primary key, enabled boolean not null default false, note text, updated_at timestamptz default now());
     create function private.flag(p_key text) returns boolean language sql stable as
       $$ select coalesce((select enabled from private.feature_flag where key = p_key), false) $$;
+    create function private.run_lock(p uuid) returns void language sql as $$ select pg_advisory_xact_lock(hashtextextended(p::text, 0)) $$;
     create function private.run_pages_stored(p uuid) returns boolean language sql as $$ select true $$;
     create function private.sweep_stuck_explanations(p interval default '15 minutes') returns integer language sql as $$ select 0 $$;
     grant usage on schema public, private to service_role, authenticated, anon;
@@ -110,6 +111,24 @@ test('bounded: the third stall takes the old path and fails the run', async () =
     assert.equal(run.status, 'failed');
     assert.equal(run.failure_reason, 'sweep_timeout:content');
     assert.equal(run.recovery_attempts, 2);
+  } finally { await db.close(); }
+});
+
+test("an old run's undelivered row does not block the next run's re-drive", async () => {
+  const db = await boot({ status: 'structure' });
+  try {
+    await db.exec(`update public.paper_page set structure_status = 'running' where page_number = 2`);
+    await sweep(db); // old run queues page 2
+    const NEW = '30000000-0000-0000-0000-000000000002';
+    await db.exec(`update public.extraction_run set status = 'failed', failure_reason = 'x';
+      insert into public.extraction_run(id, paper_id, student_id, status, heartbeat_at)
+      values ('${NEW}', '${PAPER}', '${STUDENT}', 'structure', now() - interval '20 minutes');
+      update public.paper_page set structure_status = 'running' where page_number = 2`);
+    await sweep(db);
+    const rows = await all(db, `select run_id from private.stage_outbox where unit_id = '${page(2)}' and delivered_at is null order by created_at`);
+    assert.deepEqual(rows.map((r) => r.run_id), [RUN, NEW]);
+    const claimed = await all(db, 'select run_id from public.claim_stage_outbox(10)');
+    assert.deepEqual(claimed.map((c) => c.run_id), [NEW]); // the failed run's row is dropped, the new one is sent
   } finally { await db.close(); }
 });
 

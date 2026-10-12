@@ -52,8 +52,9 @@ create table private.stage_outbox (
 comment on table private.stage_outbox is
   'AXO-225: queue messages written in the same transaction that makes work runnable. The sweep Worker sends them and marks them delivered. A message is only a wake-up: workers re-read the database.';
 
--- One undelivered message per unit is enough.
-create unique index stage_outbox_pending_unit_uq on private.stage_outbox (stage, unit_id) where delivered_at is null;
+-- One undelivered message per unit per run is enough. Scoped by run: a page id
+-- survives into the next run, and an old run's row must not block the new one.
+create unique index stage_outbox_pending_unit_uq on private.stage_outbox (run_id, stage, unit_id) where delivered_at is null;
 create index stage_outbox_ready_idx on private.stage_outbox (available_at) where delivered_at is null;
 create index stage_outbox_run_idx on private.stage_outbox (run_id);
 create index stage_outbox_paper_idx on private.stage_outbox (paper_id, student_id);
@@ -70,6 +71,9 @@ declare
   v_count   integer := 0;
   v_pending integer := 0;
 begin
+  -- The same advisory lock the stage workers write under, so a re-drive never
+  -- interleaves with an advance or a pipeline write on this run.
+  perform private.run_lock(p_run_id);
   select * into v_run from public.extraction_run r where r.id = p_run_id for update;
   if not found or v_run.status::text not in ('structure', 'content') then
     return 0;
@@ -93,7 +97,7 @@ begin
     select p_run_id, v_run.paper_id, v_run.student_id, 'structure', p.id, 'recover'
       from public.paper_page p
      where p.paper_id = v_run.paper_id and p.structure_status = 'pending'
-    on conflict (stage, unit_id) where delivered_at is null do nothing;
+    on conflict (run_id, stage, unit_id) where delivered_at is null do nothing;
     get diagnostics v_count = row_count;
 
     -- Nothing unfinished: the fan-out after the last page was lost. Nudge one page.
@@ -102,7 +106,7 @@ begin
       select p_run_id, v_run.paper_id, v_run.student_id, 'structure', p.id, 'nudge'
         from public.paper_page p where p.paper_id = v_run.paper_id
        order by p.page_number limit 1
-      on conflict (stage, unit_id) where delivered_at is null do nothing;
+      on conflict (run_id, stage, unit_id) where delivered_at is null do nothing;
       get diagnostics v_count = row_count;
     end if;
   else
@@ -119,7 +123,7 @@ begin
     select p_run_id, v_run.paper_id, v_run.student_id, 'content', q.id, 'recover'
       from public.question_region q
      where q.run_id = p_run_id and q.extract_status = 'pending'
-    on conflict (stage, unit_id) where delivered_at is null do nothing;
+    on conflict (run_id, stage, unit_id) where delivered_at is null do nothing;
     get diagnostics v_count = row_count;
 
     -- Nothing unfinished: the fan-out after the last region was lost. Nudge one region.
@@ -128,7 +132,7 @@ begin
       select p_run_id, v_run.paper_id, v_run.student_id, 'content', q.id, 'nudge'
         from public.question_region q where q.run_id = p_run_id
        order by q.order_index limit 1
-      on conflict (stage, unit_id) where delivered_at is null do nothing;
+      on conflict (run_id, stage, unit_id) where delivered_at is null do nothing;
       get diagnostics v_count = row_count;
     end if;
   end if;
@@ -159,7 +163,6 @@ begin
        where status::text in ('structure', 'content')
          and recovery_attempts < 2
          and coalesce(heartbeat_at, started_at) < now() - p_stale
-       for update skip locked
     loop
       perform private.redrive_run(v_run);
     end loop;
