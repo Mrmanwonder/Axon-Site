@@ -413,7 +413,7 @@ test("password flight locks method switching and Back, then releases after failu
   expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
   // Missing confirmed session is a recoverable sign-in response.
   await act(async () => proof.resolve(null));
-  expect((google as HTMLButtonElement).disabled).toBe(false);
+  expect((code as HTMLButtonElement).disabled).toBe(false);
   await userEvent.click(code);
   expect(screen.getByLabelText("Email or phone")).toBeTruthy();
 });
