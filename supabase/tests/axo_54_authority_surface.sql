@@ -37,14 +37,15 @@ select n.nspname::text as schema, p.proname::text as name, p.oid,
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
  where p.prosecdef and n.nspname in ('public', 'private');
 
-select public._t('anon may execute exactly one SECURITY DEFINER function: the share-token resolver',
+select public._t('anon may execute exactly two SECURITY DEFINER functions: the share-token resolver and the one-word account lookup (12 Oct 2026, owner-approved: answers new/password/code/throttled/invalid, throttled per gateway address by a salted hash)',
   (select coalesce(array_agg(schema||'.'||name order by name), '{}') from _definer where anon_x)
-    = array['public.resolve_academic_share'],
+    = array['public.account_lookup_public','public.resolve_academic_share'],
   (select string_agg(schema||'.'||name, ', ') from _definer where anon_x));
 
 select public._t('authenticated may execute exactly the audited browser-facing public RPCs (AXO-57 adds begin_guardian_verification: derives the guardian from auth.uid, fresh Parent Mode, creates no verification)',
   (select coalesce(array_agg(name order by name), '{}') from _definer where schema = 'public' and auth_x)
-    = array['begin_guardian_verification','claim_guardian_verification','clear_student_scope','commit_extraction_run','delete_my_account',
+    = array['account_lookup_public',  -- 12 Oct 2026, owner-approved: one word out, no ids; throttled per gateway address
+            'begin_guardian_verification','claim_guardian_verification','clear_student_scope','commit_extraction_run','delete_my_account',
             'get_cross_subject_signal','get_entitlements','parent_mode_state',
             'record_explanation_feedback',  -- #169: student from the attempt, gated by student_scope_allows
             'resolve_academic_share',
