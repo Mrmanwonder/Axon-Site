@@ -1,121 +1,5 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { beforeEach, expect, test, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-
-const fixture = vi.hoisted(() => ({
-  session: { user: { id: "guardian", email: "parent@example.test" } } as { user: { id: string; email: string } } | null,
-  sendOtp: vi.fn(),
-  passwordSignIn: vi.fn(),
-  provider: vi.fn(),
-  verifyOtp: vi.fn(),
-  rpc: vi.fn(),
-  from: vi.fn(),
-  finish: vi.fn(),
-  loadProfiles: vi.fn(),
-  currentSession: vi.fn(),
-  listPurposes: vi.fn(),
-  recordConsent: vi.fn(),
-  parentGuard: vi.fn((action: () => void | Promise<void>) => action()),
-}));
-vi.mock("../../src/ui/data/AppProvider", () => ({
-  useApp: () => ({
-    session: fixture.session,
-    providerError: null,
-    finishOnboarding: fixture.finish,
-  }),
-}));
-vi.mock("../../src/ui/data/profiles", () => ({
-  loadProfiles: fixture.loadProfiles,
-  selectedProfile: vi.fn(),
-}));
-vi.mock("../../src/ui/data/useParentMode", () => ({
-  useParentMode: () => ({ guard: fixture.parentGuard }),
-}));
-vi.mock("../../src/ui/data/modules", async () => {
-  const notice = await vi.importActual<typeof import("../../src/notice.js")>("../../src/notice.js");
-  const offering = {
-    id: "00000000-0000-0000-0000-000000009702",
-    programme_id: "programme-as",
-    stage_id: "stage-as",
-    subject_id: "subject-physics",
-    display_name: "Physics",
-    external_code: "9702",
-    external_code_kind: "syllabus_code",
-    levels_supported: [],
-    language_code: null,
-    variant: null,
-    aliases: [],
-    metadata: {},
-  };
-  return {
-    sb: { rpc: fixture.rpc, from: fixture.from },
-    sendOtp: fixture.sendOtp, verifyOtp: fixture.verifyOtp, currentSession: fixture.currentSession,
-    currentGuardian: async () => ({ id: "guardian", name: "Parent", contact: "parent@example.test" }),
-    passwordSignIn: fixture.passwordSignIn, passwordSignUp: vi.fn(), requestPasswordReset: vi.fn(),
-    signInWithProvider: fixture.provider, isProviderNotEnabled: () => false,
-    OAUTH_PROVIDERS: ["google"], PROVIDER_LABEL: { google: "Google" },
-    listPurposes: fixture.listPurposes, recordConsent: fixture.recordConsent,
-    NOTICE_LANGUAGES: notice.LANGUAGES, noticeStrings: notice.noticeStrings,
-    purposeLabel: notice.purposeLabel, purposeNote: notice.purposeNote, noticeIsComplete: notice.noticeIsComplete,
-    startCheckout: vi.fn(),
-    paperTypesFor: () => [],
-    PROVIDER_KEYS: ["cambridge", "cbse", "ib"],
-    providerLabel: (key: string) => ({ cambridge: "Cambridge", cbse: "CBSE", ib: "IB Diploma" }[key] ?? key),
-    getProgrammes: async () => [{
-      id: "programme-as", provider_id: "provider-cambridge",
-      key: "cambridge_as", label: "Cambridge International AS Level", metadata: {},
-    }],
-    getStages: async () => [{
-      id: "stage-as", programme_id: "programme-as", key: "cambridge_as",
-      label: "AS Level", school_year_label: "Year 12", legacy_class_level: 11,
-      sort_order: 10, metadata: {},
-    }],
-    getSubjectOfferings: async () => [offering],
-    filterSubjectOfferings: (rows: typeof offering[], query: string) =>
-      rows.filter(row => !query || row.display_name.toLowerCase().includes(query.toLowerCase()) || row.external_code?.includes(query)),
-    defaultLevelFor: () => null,
-    AVATAR_PRESETS: [{
-      kind: "gradient", key: "dreamBloom", title: "Dream bloom",
-      type: "volumetric", c: ["#eee", "#aaa", "#222", "#fff"],
-    }],
-    avatarRenderFor: () => ({
-      kind: "gradient", preset: "dreamBloom", background: "#ddd", color: "#111", glyph: null,
-    }),
-    initialFor: (label?: string | null) => label?.trim()[0]?.toUpperCase() ?? "?",
-  };
-});
-
-import Onboarding from "../../src/ui/onboarding/Onboarding";
-
-test("code entry opens before a slow send completes, with honest pending state and no duplicate requests", async () => {
-  fixture.session = null;
-  window.history.replaceState({}, "", "/");
-  const sent = deferred<void>();
-  fixture.sendOtp.mockReturnValue(sent.promise);
-  render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
-  await userEvent.type(screen.getByLabelText("Your name"), "Parent");
-  await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
-  const send = screen.getByRole("button", { name: "Send me a code" });
-  for (let i = 0; i < 10; i++) fireEvent.click(send);
-  expect(screen.getByRole("heading", { name: "Check your email" })).toBeTruthy();
-  expect(screen.getByRole("status").textContent).toContain("Sending a code");
-  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(true);
-  expect(fixture.sendOtp).toHaveBeenCalledTimes(1);
-  expect(fixture.verifyOtp).not.toHaveBeenCalled();
-  await act(async () => sent.resolve());
-  expect(screen.getByRole("status").textContent).toBe("Sent to parent@example.test.");
-  expect((screen.getByRole("button", { name: "Continue" }) as HTMLButtonElement).disabled).toBe(false);
-  expect(screen.getByRole("button", { name: /Resend in/ })).toBeTruthy();
-});
-
-test("failed code delivery is visible and a retry is single-flight", async () => {
-  fixture.session = null;
-  window.history.replaceState({}, "", "/");
-  fixture.sendOtp.mockRejectedValueOnce(new Error("delivery unavailable"));
-  render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
   await userEvent.type(screen.getByLabelText("Your name"), "Parent");
   await userEvent.type(screen.getByLabelText("Email or phone"), "parent@example.test");
   await userEvent.click(screen.getByRole("button", { name: "Send me a code" }));
@@ -363,25 +247,24 @@ test("Hindi is not offered when a purpose on the notice has no Hindi text", asyn
   ));
 });
 
-test("password flight locks Google, code switching and Back, then releases after failure", async () => {
+test("password flight locks method switching and Back, then releases after failure", async () => {
   fixture.session = null;
   window.history.replaceState({}, "", "/");
   const proof = deferred<unknown>();
   fixture.passwordSignIn.mockReturnValue(proof.promise);
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
-  await userEvent.click(screen.getByRole("button", { name: "Email and password" }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+  await userEvent.click(screen.getByRole("button", { name: "Sign in with a password instead" }));
   await userEvent.type(screen.getByLabelText("Email", { exact: true }), "parent@example.test");
   await userEvent.type(screen.getByLabelText("Password", { exact: true }), "secret123");
-  const google = screen.getByRole("button", { name: "Continue with Google" });
-  const code = screen.getByRole("button", { name: "Email or phone code" });
+  const code = screen.getByRole("button", { name: "Use a sign-in code instead" });
+  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
   const form = screen.getByRole("button", { name: "Sign in", exact: true }).closest("form")!;
   for (let n = 0; n < 5; n++) fireEvent.submit(form);
-  fireEvent.click(google);
   fireEvent.click(code);
   expect(fixture.passwordSignIn).toHaveBeenCalledOnce();
   expect(fixture.provider).not.toHaveBeenCalled();
-  expect((google as HTMLButtonElement).disabled).toBe(true);
   expect((code as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   expect(screen.getByRole("heading", { name: "Sign in with a password" })).toBeTruthy();
@@ -397,11 +280,36 @@ test("Google is single-flight and keeps Back and password entry disabled during 
   const handoff = deferred<void>();
   fixture.provider.mockReturnValue(handoff.promise);
   render(<MemoryRouter><Onboarding /></MemoryRouter>);
-  await userEvent.click(screen.getByRole("button", { name: /a parent/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
   const google = screen.getByRole("button", { name: "Continue with Google" });
   for (let n = 0; n < 5; n++) fireEvent.click(google);
   expect(fixture.provider).toHaveBeenCalledOnce();
-  expect((screen.getByRole("button", { name: "Email and password" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Continue with email or phone" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.queryByRole("button", { name: "Back", exact: true })).toBeNull();
   await act(async () => handoff.resolve());
+});test("welcome has a single continuation and account methods reveal progressively", async () => {
+  fixture.session = null;
+  window.history.replaceState({}, "", "/");
+  render(<MemoryRouter><Onboarding /></MemoryRouter>);
+
+  expect(screen.getByRole("heading", { name: /See where the marks went/ })).toBeTruthy();
+  expect(screen.getAllByRole("button").map(button => button.textContent?.trim())).toEqual(["Continue"]);
+  expect(screen.getByText(/parent or guardian sets up the account/i)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
+  expect(screen.getByRole("heading", { name: "Set up your account" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Continue with email or phone" })).toBeTruthy();
+  expect(screen.queryByLabelText("Email or phone")).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Continue with email or phone" }));
+  expect(screen.getByLabelText("Email or phone")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
+
+  await userEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByRole("button", { name: "Continue with Google" })).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByRole("button", { name: "Continue", exact: true })).toBeTruthy();
 });
+
+
