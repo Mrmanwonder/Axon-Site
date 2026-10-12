@@ -343,6 +343,24 @@ export const explainRetry = async () => {};
 export const recordExplanationFeedback = async () => ({});
 
 
+// Stateful synthetic difficulty responses, scoped exactly like the product API.
+type Feedback = { rating: number | null; skipped: boolean };
+const feedbackKey = (student: string, paper: string) => "test.difficulty:" + student + ":" + paper;
+export const paperDifficultyFeedback = async (student: string, paper: string): Promise<Feedback | null> => {
+  const value = sessionStorage.getItem(feedbackKey(student, paper));
+  return value ? JSON.parse(value) : null;
+};
+export const savePaperDifficultyFeedback = async (input: { studentId: string; paperId: string; rating: number | null; skipped: boolean }) => {
+  sessionStorage.setItem(feedbackKey(input.studentId, input.paperId), JSON.stringify({ rating: input.rating, skipped: input.skipped }));
+};
+let difficultyFailedOnce = false;
+export const readQuestionDifficulty = async () => {
+  if (!location.pathname.includes("difficulty")) return null;
+  if (!difficultyFailedOnce) { difficultyFailedOnce = true; throw new Error("Test read unavailable"); }
+  return { attempt_id: "attempt", paper_id: "paper", normalized_score: .6, band: 4, confidence: .28, source: "structural_estimate", max_marks: 4, marks_awarded: 2, method_version: "test-v1" };
+};
+
+
 // AXO-216 saved-paper mutations. This adapter is test-only: record calls rather
 // than invoking a production API. Dedicated fixtures may supply changed data.
 export const savedPaperCalls: { action: string; id: string; value?: unknown }[] = [];

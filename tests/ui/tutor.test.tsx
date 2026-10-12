@@ -25,6 +25,7 @@ vi.mock("../../src/ui/data/useAcademicShare", () => ({
 }));
 vi.mock("../../src/ui/data/modules", () => ({
   readPaper: fixture.readPaper,
+  readQuestionDifficulty: vi.fn().mockResolvedValue(null),
   askTutor: fixture.askTutor,
   explainRetry: vi.fn(),
   recordExplanationFeedback: vi.fn(),
