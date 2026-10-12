@@ -372,7 +372,7 @@ select public._t('anon reads no papers',      (select count(*) = 0 from public.p
 select public._t('anon reads no attempts',    (select count(*) = 0 from public.student_attempt));
 select public._t('anon reads no loss events', (select count(*) = 0 from public.mark_loss_event));
 select public._t('anon reads no consent',     (select count(*) = 0 from public.consent_event));
-select public._t('anon reads no analytics',   (select count(*) = 0 from public.attempt_analytics));
+select public._t('anon cannot select analytics', not has_table_privilege('anon','public.attempt_analytics'::regclass,'SELECT'));
 -- The publishable key ships in the client. It must not enumerate a single page
 -- of a single child's exam paper.
 select public._t('anon reads no paper objects',

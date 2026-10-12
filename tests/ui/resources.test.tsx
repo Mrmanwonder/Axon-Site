@@ -147,12 +147,15 @@ test("Home names a focus only when a mistake repeats inside enough evidence", as
   const first = mount(<Home />);
   await screen.findByText("Recent scans");
   await waitFor(() => expect(mocks.insights).toHaveBeenCalled());
-  expect(screen.queryByText("Before your next paper")).toBeNull();
+  expect(screen.queryByText("Next step")).toBeNull();
   first.unmount();
   const enough = evidence(4);
   mocks.papers.mockResolvedValue({ data: enough.papers, stale: false });
   mocks.insights.mockResolvedValue({ data: { attempts: enough.attempts, losses: enough.losses }, stale: false });
   mount(<Home />);
-  expect(await screen.findByText("Before your next paper")).toBeTruthy();
+  expect(await screen.findByText("Next step")).toBeTruthy();
   expect(screen.getByText("Name the law in sentence one (4)")).toBeTruthy();
+  const card = screen.getByText("Next step").closest(".nextstep")!;
+  expect(card.textContent).not.toMatch(/ready to save|confirmation|Add your next|still being processed/);
+  expect(card.querySelector('a[href^="/library/"]')?.getAttribute("href")).toMatch(/^\/library\/[^/]+\/[^/]+$/);
 });

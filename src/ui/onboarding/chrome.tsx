@@ -65,13 +65,16 @@ export const BRAND = {
     and on the two dead ends a rail would claim progress through a flow that has
     just stopped. */
 export function Shell({
-  children, title, sub, phase, onBack, lang,
+  children, title, sub, phase, onBack, lang, variant, stepKey, direction,
 }: {
   children: ReactNode;
   title?: string;
   sub?: string;
   phase?: number;
   onBack?: () => void;
+  variant?: "intro";
+  stepKey?: string;
+  direction?: "forward" | "back";
   /** Language of the step's content, when it is not English (the consent
       notice in Hindi). Covers the title and the body, not the chrome above. */
   lang?: string;
@@ -82,7 +85,9 @@ export function Shell({
      tint the background wash. Without this wrapper the flow renders, and the
      row icons silently lose their colour — which is exactly how it was found. */
   return (
-    <div id="obroot" aria-label="Set up your account">
+    // The page's main landmark. An aria-label on a plain div names nothing and
+    // left the whole flow outside any landmark (axe "region").
+    <main id="obroot" className={variant === "intro" ? "obroot-intro" : undefined} aria-label="Set up your account">
       <div className="obwrap">
         <div className="obhead">
         {onBack && (
@@ -113,7 +118,7 @@ export function Shell({
           </div>
           )}
         </div>
-        <div className="view on obview" lang={lang}>
+        <div key={stepKey} className="view on obview" lang={lang} data-nav={direction}>
           {title && (
             <div className="greet">
               <h1>{title}</h1>
@@ -123,7 +128,7 @@ export function Shell({
           {children}
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
