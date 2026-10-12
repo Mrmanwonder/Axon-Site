@@ -3,27 +3,6 @@
  * Specialized scanner, glide, Google auth and navigation controls are not
  * redefined as buttons by this stylesheet.
  */
-:root,
-[data-theme="dark"] {
-  --essential-primary-bg: var(--p-mist-100);
-  --essential-primary-ink: var(--p-ink-950);
-  --essential-secondary-bg: var(--surface);
-  --essential-secondary-ink: var(--label);
-  --essential-secondary-rim: var(--hairline);
-  --essential-quiet-ink: var(--label-2);
-  --essential-nav-ink: var(--p-blue-l);
-}
-
-[data-theme="light"] {
-  --essential-primary-bg: var(--p-ink-800);
-  --essential-primary-ink: var(--p-white);
-  --essential-secondary-bg: var(--surface);
-  --essential-secondary-ink: var(--label);
-  --essential-secondary-rim: var(--hairline);
-  --essential-quiet-ink: var(--label-2);
-  --essential-nav-ink: var(--accent);
-}
-
 .essential-button,
 .ds-site .essential-button {
   display: inline-flex;
@@ -37,8 +16,8 @@
   padding: 0 21px;
   border: 1px solid transparent;
   border-radius: 16px;
-  color: var(--essential-primary-ink);
-  background: var(--essential-primary-bg);
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
   text-decoration: none;
   white-space: nowrap;
   font: inherit;
@@ -61,24 +40,24 @@
 .essential-button--full,
 .ds-site .essential-button--full { width: 100%; }
 .essential-button--secondary,
-.ds-site .essential-button--secondary { color: var(--essential-secondary-ink); background: var(--essential-secondary-bg); border-color: var(--essential-secondary-rim); }
+.ds-site .essential-button--secondary { color: var(--button-secondary-ink); background: var(--button-secondary-bg); border-color: var(--button-secondary-rim); }
 .essential-button--quiet,
-.ds-site .essential-button--quiet { color: var(--essential-quiet-ink); background: transparent; border-color: transparent; font-weight: 500; }
+.ds-site .essential-button--quiet { color: var(--button-quiet-ink); background: transparent; border-color: transparent; font-weight: 500; }
 
 /* Direction is semantic. Only Link/to creates this arrow; it is never
  * present in Save, Confirm or another imperative action. */
 .essential-button__label { min-width: 0; }
-.essential-button__arrow { color: var(--essential-nav-ink); transform: rotate(180deg); flex: 0 0 auto; }
+.essential-button__arrow { color: var(--button-nav-ink); transform: rotate(180deg); flex: 0 0 auto; }
 .essential-button__spinner { flex: 0 0 17px; width: 17px; height: 17px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: essential-turn .8s linear infinite; }
 .essential-button__sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes essential-turn { to { transform: rotate(360deg); } }
 
 .essential-button:not(:disabled):hover,
-.ds-site .essential-button:not(:disabled):hover { opacity: .84; color: var(--essential-primary-ink); }
+.ds-site .essential-button:not(:disabled):hover { opacity: .84; color: var(--button-primary-ink); }
 .essential-button--secondary:not(:disabled):hover,
-.ds-site .essential-button--secondary:not(:disabled):hover { color: var(--essential-secondary-ink); }
+.ds-site .essential-button--secondary:not(:disabled):hover { color: var(--button-secondary-ink); }
 .essential-button--quiet:not(:disabled):hover,
-.ds-site .essential-button--quiet:not(:disabled):hover { color: var(--essential-quiet-ink); }
+.ds-site .essential-button--quiet:not(:disabled):hover { color: var(--button-quiet-ink); }
 .essential-button:not(:disabled):active { transform: scale(.963); opacity: .93; }
 .essential-button:focus-visible,
 .ds-site .essential-button:focus-visible { outline: var(--focus-ring); outline-offset: 3px; }
@@ -96,18 +75,18 @@
   transition: transform var(--d-state) var(--spring), opacity var(--d-state) ease;
 }
 .btn.primary:not(.ob-intro-continue) {
-  background: var(--essential-primary-bg);
-  color: var(--essential-primary-ink);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-ink);
   box-shadow: none;
 }
 .btn.primary[data-waiting] { background: var(--surface-sunk); color: var(--label-2); box-shadow: none; }
-.btn.ghost { background: var(--essential-secondary-bg); color: var(--essential-secondary-ink); border: 1px solid var(--essential-secondary-rim); }
-.btn.plain { color: var(--essential-quiet-ink); background: transparent; border: 1px solid transparent; font-weight: 500; }
+.btn.ghost { background: var(--button-secondary-bg); color: var(--button-secondary-ink); border: 1px solid var(--button-secondary-rim); }
+.btn.plain { color: var(--button-quiet-ink); background: transparent; border: 1px solid transparent; font-weight: 500; }
 .btn:is(.primary,.ghost,.plain):not(:disabled):not([aria-disabled="true"]):hover { opacity: .84; filter: none; }
 .btn:is(.primary,.ghost,.plain):not(:disabled):not([aria-disabled="true"]):active { opacity: .93; }
 /* Actions in the onboarding footer share the tall size; selectors do not
  * change the intentionally illustrated intro's unique CTA. */
-#obroot .obfoot .btn.primary:not(.ob-intro-continue) { background: var(--essential-primary-bg); color: var(--essential-primary-ink); box-shadow: none; }
+#obroot .obfoot .btn.primary:not(.ob-intro-continue) { background: var(--button-primary-bg); color: var(--button-primary-ink); box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .essential-button, .essential-button__spinner, .btn:is(.primary,.ghost,.plain) { transition: none !important; animation: none !important; }
