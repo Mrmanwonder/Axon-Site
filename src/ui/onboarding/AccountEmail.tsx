@@ -29,9 +29,10 @@ import "./AccountEmail.css";
 
 export type AccountKind = "idle" | "checking" | "new" | "password" | "code" | "unknown" | "workos";
 
-/* Short enough to feel instant, long enough that a paste or a fast typist asks
-   once. The check starts the moment the address is complete in shape. */
-const LOOKUP_DELAY_MS = 90;
+/* No wait at all: the check starts the moment the address is complete in shape.
+   A stale answer is cancelled and dropped, and the server allows 120 lookups
+   per caller in ten minutes, so asking while typing is safe. */
+const LOOKUP_DELAY_MS = 0;
 const SIGN_IN_FAILED = "That password didn't work. Check it and try again, or have us email you a code.";
 
 export function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange, placeholder }: {

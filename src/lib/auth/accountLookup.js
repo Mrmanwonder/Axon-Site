@@ -11,14 +11,19 @@
 // answered from its own memory with no network at all (and re-checked quietly
 // afterwards), the function is woken before the first address is typed, and a
 // superseded request is cancelled rather than waited for.
-import { SUPABASE_URL } from '../../config.js';
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '../../config.js';
 import { fetchWithTimeout } from '../request.js';
 
 // Stricter than "something@something.xx": the auth server rejects what this lets
 // through (a leading, trailing or doubled dot, a label that starts with a hyphen).
 export const EMAIL_SHAPE = /^(?!\.)(?!.*\.\.)[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+(?<!\.)@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
 const ANSWERS = new Set(['new', 'password', 'code']);
-const ENDPOINT = SUPABASE_URL.replace(/\/$/, '') + '/functions/v1/account-lookup';
+const BASE = SUPABASE_URL.replace(/\/$/, '');
+// One hop: the REST API straight to the database function (about 0.2 s), where
+// the Edge Function took 1 to 2 s. The Edge Function stays as the fallback.
+const DIRECT = BASE + '/rest/v1/rpc/account_lookup_public';
+const ENDPOINT = BASE + '/functions/v1/account-lookup';
+const DIRECT_HEADERS = { 'Content-Type': 'application/json', apikey: SUPABASE_PUBLISHABLE_KEY };
 const STORE = 'axon.acct.v1';
 const TTL_MS = 30 * 24 * 3600 * 1000;
 const known = new Map();
@@ -68,9 +73,12 @@ export function warmAccountLookup() {
   if (warmed) return;
   warmed = true;
   try {
-    void fetchWithTimeout(ENDPOINT, {
-      method: 'POST', headers: SIMPLE,
-      body: '{}', credentials: 'omit', cache: 'no-store',
+    // An empty address answers 'invalid' and writes nothing. What it buys: the
+    // TLS connection is open and the browser has the CORS preflight cached
+    // (an hour) before the first real address is typed.
+    void fetchWithTimeout(DIRECT, {
+      method: 'POST', headers: DIRECT_HEADERS,
+      body: JSON.stringify({ p_email: '' }), credentials: 'omit', cache: 'no-store',
     }).catch(() => {});
   } catch { /* nothing to warm */ }
 }
@@ -84,19 +92,33 @@ export async function lookupAccount(emailInput, { signal, fresh = false } = {}) 
   const email = normalisedEmail(emailInput);
   if (!EMAIL_SHAPE.test(email)) return 'unknown';
   if (!fresh) { const saved = cachedAccount(email); if (saved) return saved; }
+  const answer = async (response) => {
+    if (!response.ok) return null;
+    const body = await response.json();
+    const result = typeof body === 'string' ? body : body?.result;
+    return ANSWERS.has(result) ? result : null;
+  };
+  let result = null;
   try {
-    const response = await fetchWithTimeout(ENDPOINT, {
-      method: 'POST',
-      headers: SIMPLE,
-      body: JSON.stringify({ email }),
+    const direct = await fetchWithTimeout(DIRECT, {
+      method: 'POST', headers: DIRECT_HEADERS,
+      body: JSON.stringify({ p_email: email }),
       credentials: 'omit', cache: 'no-store', signal,
     });
-    if (!response.ok) return 'unknown';
-    const { result } = await response.json();
-    if (!ANSWERS.has(result)) return 'unknown';
-    remember(email, result);   // 'unknown' is never kept, so a retry can succeed
-    return result;
-  } catch { return 'unknown'; }
+    result = await answer(direct);
+  } catch (error) { if (signal?.aborted) return 'unknown'; }
+  if (!result && !signal?.aborted) {
+    try {
+      const response = await fetchWithTimeout(ENDPOINT, {
+        method: 'POST', headers: SIMPLE, body: JSON.stringify({ email }),
+        credentials: 'omit', cache: 'no-store', signal,
+      });
+      result = await answer(response);
+    } catch { /* offline or throttled: neutral form */ }
+  }
+  if (!result) return 'unknown';
+  remember(email, result);   // 'unknown' is never kept, so a retry can succeed
+  return result;
 }
 
 /** After this browser creates or confirms an account, any saved answer is stale. */
