@@ -76,7 +76,7 @@ function PasswordDemo() {
 function IntroDemo() {
   const [advanced, setAdvanced] = React.useState(false);
   return advanced
-    ? <Shell title="Set up your account" sub="Parent or guardian setup" />
+    ? <Shell title="Set up your account" sub="Parent or guardian setup"><p>Continue to guardian sign-in</p></Shell>
     : <Shell variant="intro"><Intro onContinue={() => setAdvanced(true)} /></Shell>;
 }
 function Boom(): never { throw new Error("Intentional route failure"); }
