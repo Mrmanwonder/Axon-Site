@@ -244,14 +244,10 @@
 .ds-demo-choice b { color:var(--label);font-size:12px; }
 .ds-chip-row { display:flex; flex-wrap:wrap; gap:8px; }
 .ds-chip { font-size:12px !important; font-weight:600 !important; color:var(--label-2); background:var(--surface-sunk); border:1px solid var(--hairline); min-height:44px; padding:0 13px; border-radius:14px; }
-.ds-chip.is-on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ds-chip.is-on { background:var(--accent-wash); color:var(--accent); border-color:color-mix(in srgb, var(--accent) 28%, var(--hairline)); }
 .ds-toggle-row { display:flex; align-items:center; justify-content:space-between; gap:22px; min-height:74px; max-width:390px; }
 .ds-toggle-row strong { display:block; font-weight:650; font-size:13px; }
 .ds-toggle-row small { color:var(--label-3); display:block; margin-top:6px; font-size:11px; }
-.ds-toggle { position:relative; display:block; width:51px; height:31px; border-radius:20px; border:0; background:var(--track-off); flex-shrink:0; transition:background var(--d-recompute) ease; }
-.ds-toggle.is-on { background:var(--positive); }
-.ds-toggle span { position:absolute; display:block; background:#fff; border-radius:50%; width:27px;height:27px;top:2px;left:2px;box-shadow:0 2px 6px rgba(0,0,0,.2);transform:translateX(0);transition:transform var(--d-recompute) var(--spring); }
-.ds-toggle.is-on span { transform:translateX(20px); }
 .ds-icon-grid { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:14px; }
 .ds-icon-grid > div { text-align:center; min-width:0; }
 .ds-icon-grid > div > span { display:grid; place-items:center; height:65px; border:1px solid var(--hairline); border-radius:13px; background:var(--surface-sunk); color:var(--label-2); }
@@ -263,6 +259,8 @@
 .ds-confidence-grid p { color:var(--label-3); margin:20px 0 0; font-size:12px; line-height:1.6; }
 .ds-status { display:inline-flex; align-items:center; gap:6px; padding:8px 12px; min-height:36px; border-radius:10px; font-size:11px; font-weight:650; }
 .ds-status-confirmed { background:var(--positive); color:#08190d; }
+/* Light theme uses white ink on a subtly deeper positive fill to retain 4.5:1 contrast. */
+.ds-site[data-theme="light"] .ds-status-confirmed { color:#fff; background:color-mix(in srgb, var(--positive) 85%, #000); }
 .ds-status-likely { border:1px solid var(--accent);background:var(--accent-wash);color:var(--accent); }
 .ds-status-unsure { border:1px dashed var(--label-2);color:var(--label-2);background:transparent; }
 .ds-evidence-example { position:relative; margin-top:28px; background:var(--surface); border:1px solid var(--hairline); border-radius:20px; padding:25px; overflow:hidden; min-height:360px; }
