@@ -1,3 +1,4 @@
+import { paperDateLabel } from "../../paperDate.js";
 import { useEffect, useMemo, useState } from "react";
 import DocumentMeta from "../components/DocumentMeta";
 import MathText from "../components/MathText";
@@ -247,9 +248,7 @@ export default function SharedAcademic() {
           <h1>{snapshot.kind === "paper" ? typeLabel(paper.type) : "Shared question"}</h1>
           <div className="shared-sub">
             {paper.subject ? paper.subject + " · " : ""}
-            {new Date(paper.date_taken).toLocaleDateString(undefined, {
-              day: "numeric", month: "short", year: "numeric",
-            })}
+            {paperDateLabel(paper)}
           </div>
           <p className="shared-expiry">This read-only link expires {expiry}.</p>
         </section>

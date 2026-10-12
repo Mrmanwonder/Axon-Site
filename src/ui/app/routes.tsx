@@ -8,6 +8,7 @@ export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
 
 export const router = createBrowserRouter([
+  { path: "/design-system", lazy: async () => ({ Component: (await import("../pages/DesignSystem")).default }) },
   { path: "/privacy", lazy: async () => ({ Component: (await import("../pages/Privacy")).default }) },
   { path: "/terms", lazy: async () => ({ Component: (await import("../pages/Terms")).default }) },
   { path: "/cookies", lazy: async () => ({ Component: (await import("../pages/Cookies")).default }) },
