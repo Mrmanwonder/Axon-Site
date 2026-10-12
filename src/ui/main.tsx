@@ -13,6 +13,7 @@ import "./styles/system.css";
 import "./styles/shell.css";
 import "./styles/performance.css";
 import "./styles/cookie-consent.css";
+import "./components/EssentialButton.css";
 
 const academicShareRoute = isAcademicSharePath(location.pathname);
 
