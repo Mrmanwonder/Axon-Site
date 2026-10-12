@@ -302,7 +302,8 @@
   font-size: clamp(10.5px, 2.8vw, 13px);
   line-height: 1.18;
   letter-spacing: -.022em;
-  white-space: nowrap;
+  white-space: normal;
+  text-wrap: balance;
 }
 .ob-intro-insight-arrow {
   margin-left: auto;
