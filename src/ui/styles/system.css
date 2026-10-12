@@ -1204,7 +1204,7 @@
     animation: none;
   }
   /* Do not fade the new DOM twice while it is being snapshotted. */
-  :root[data-axon-flow-direction] #obroot .obview > * { animation: none; }
+  :root[data-axon-flow-direction] #obroot .obview > *:not(.obaccount-stage) { animation: none; }
   #obroot .obview[data-nav="back"] > * { animation-name: obstep-back; }
   @keyframes obstep-back {
     from { opacity: 0; transform: translate3d(-10px,0,0); }
