@@ -34,7 +34,7 @@ export type AccountKind = "idle" | "checking" | "new" | "password" | "code" | "u
 const LOOKUP_DELAY_MS = 90;
 const SIGN_IN_FAILED = "That password didn't work. Check it and try again, or have us email you a code.";
 
-function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
+export function PasswordInput({ id, label, value, onChange, creating, disabled, onFocusChange }: {
   id: string; label: string; value: string; onChange: (v: string) => void;
   creating: boolean; disabled: boolean; onFocusChange?: (focused: boolean) => void;
 }) {
@@ -58,7 +58,7 @@ function PasswordInput({ id, label, value, onChange, creating, disabled, onFocus
   );
 }
 
-function Requirements({ password }: { password: string }) {
+export function Requirements({ password }: { password: string }) {
   const results = PASSWORD_RULES.map((rule: { id: string; label: string; test: (p: string) => boolean }) => (
     { id: rule.id, label: rule.label, met: rule.test(password) }));
   const metCount = results.filter((r: { met: boolean }) => r.met).length;
