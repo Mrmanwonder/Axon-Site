@@ -62,3 +62,28 @@ test("design-system previews match app switch and restrained semantic states", a
   const primaryFill = await page.locator(".ds-demo-primary").evaluate(el => getComputedStyle(el).backgroundColor);
   expect(chipFill).not.toBe(primaryFill);
 });
+
+
+test("B5 Essential uses graphite on light, near-white on dark, and arrows only for navigation", async ({ page }) => {
+  await page.goto(url);
+  const root = page.locator(".ds-site");
+  const nav = page.getByRole("link", { name: "Explore layout" });
+  const action = page.getByRole("button", { name: "Save changes" });
+  await expect(nav.locator(".essential-button__arrow")).toHaveCount(1);
+  await expect(action.locator(".essential-button__arrow")).toHaveCount(0);
+  await page.getByRole("button", { name: "Light", exact: true }).click();
+  await expect(root).toHaveAttribute("data-theme", "light");
+  await expect(action).toHaveCSS("background-color", "rgb(27, 27, 30)");
+  await expect(action).toHaveCSS("color", "rgb(255, 255, 255)");
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
+  await expect(action).toHaveCSS("background-color", "rgb(245, 245, 247)");
+  await expect(action).toHaveCSS("color", "rgb(12, 12, 16)");
+  await page.getByRole("group", { name: "Essential button size" }).getByRole("button", { name: "44px" }).click();
+  await expect(action).toHaveCSS("min-height", "44px");
+  await page.getByRole("group", { name: "Essential button state" }).getByRole("button", { name: "loading" }).click();
+  await expect(action).toBeDisabled();
+  await expect(action).toHaveAttribute("aria-busy", "true");
+  await page.getByRole("group", { name: "Essential button state" }).getByRole("button", { name: "disabled" }).click();
+  await expect(action).toBeDisabled();
+  await expect(action).not.toHaveAttribute("aria-busy", "true");
+});
