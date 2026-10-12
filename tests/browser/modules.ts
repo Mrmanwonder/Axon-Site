@@ -106,6 +106,7 @@ export const lookupAccount = async (email: string) => {
 };
 export const cachedAccount = () => null;
 export const forgetAccount = () => {};
+export const warmAccountLookup = () => {};
 export const requestPasswordReset = async () => {};
 export const changePassword = async () => {};
 export const reauthenticateWithPassword = async () => {};

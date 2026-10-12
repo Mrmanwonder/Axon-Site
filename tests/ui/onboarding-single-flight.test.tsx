@@ -19,6 +19,7 @@ const fixture = vi.hoisted(() => ({
   parentGuard: vi.fn((action: () => void | Promise<void>) => action()),
   workos: false,
   lookup: vi.fn(),
+  saved: null as string | null,
   changePassword: vi.fn(),
   assertSafe: vi.fn(),
   guardian: { id: "guardian", name: "Parent", contact: "parent@example.test" } as { id: string; name: string; contact: string } | null,
@@ -59,7 +60,7 @@ vi.mock("../../src/ui/data/modules", async () => {
     sb: { rpc: fixture.rpc, from: fixture.from },
     sendOtp: fixture.sendOtp, verifyOtp: fixture.verifyOtp, currentSession: fixture.currentSession,
     currentGuardian: async () => fixture.guardian,
-    lookupAccount: fixture.lookup, cachedAccount: () => null, forgetAccount: vi.fn(),
+    lookupAccount: fixture.lookup, cachedAccount: () => fixture.saved, forgetAccount: vi.fn(), warmAccountLookup: vi.fn(),
     normalisedEmail: lookupLib.normalisedEmail, EMAIL_SHAPE: lookupLib.EMAIL_SHAPE,
     PASSWORD_RULES: policy.PASSWORD_RULES, assertSafeNewPassword: fixture.assertSafe,
     changePassword: fixture.changePassword,
@@ -141,7 +142,7 @@ test("an existing password account is recognised as the email is typed and asks 
   await typeEmail("nt@example.test");
   expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeTruthy();
   expect(fixture.lookup).toHaveBeenCalledTimes(1);
-  expect(fixture.lookup).toHaveBeenCalledWith(EMAIL);
+  expect(fixture.lookup).toHaveBeenCalledWith(EMAIL, expect.objectContaining({ signal: expect.anything() }));
   const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
   expect(password.autocomplete).toBe("current-password");
   expect(screen.queryByText("Your password needs")).toBeNull();
@@ -562,4 +563,21 @@ test("with WorkOS on, a typed email offers the WorkOS password hand-off and no S
   } finally {
     fixture.workos = false;
   }
+});
+
+test("an address this device has seen before is recognised immediately, before any network answer", async () => {
+  // The saved answer is shown at once; the quiet re-check is still in flight.
+  const recheck = deferred<string>();
+  fixture.lookup.mockReset().mockReturnValue(recheck.promise);
+  fixture.saved = "password";
+  try {
+    await openAccountStep();
+    await typeEmail();
+    expect(screen.getByRole("heading", { name: "Welcome back" })).toBeTruthy();
+    expect(screen.getByLabelText("Password", { exact: true })).toBeTruthy();
+    // The server disagrees (the account now signs in with a code): the screen follows.
+    await act(async () => recheck.resolve("code"));
+    expect(await screen.findByRole("button", { name: "Email me a code" })).toBeTruthy();
+    expect(screen.queryByLabelText("Password", { exact: true })).toBeNull();
+  } finally { fixture.saved = null; }
 });
