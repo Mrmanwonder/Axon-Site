@@ -142,6 +142,11 @@ export default function Onboarding() {
     s ? "nameOnly" : providerError ? "account" : "landing",
   );
   const [flowDirection, setFlowDirection] = useState<"forward" | "back">("forward");
+  /* The direction hint is needed only while this onboarding overlay exists.
+     Do not leak its document-wide view-transition selectors into the app. */
+  useEffect(() => () => {
+    document.documentElement.removeAttribute("data-axon-flow-direction");
+  }, []);
   /* Analytics audience follows the step: guardian-only steps are a parent
      surface, the landing (which a student may be reading) is unknown, and the
      student's first-run screens are a student session. See lib/analytics.ts. */
