@@ -72,13 +72,19 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
   const { ensureScan } = useScan();
   const linkFlight = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mounted = useRef(true);
   const importScope = useRef({ student: app.student?.id, guardian: app.guardian?.id });
   if (importScope.current.student !== app.student?.id || importScope.current.guardian !== app.guardian?.id) {
     importScope.current = { student: app.student?.id, guardian: app.guardian?.id };
   }
-  useEffect(() => () => { importScope.current = { ...importScope.current }; }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; importScope.current = { ...importScope.current }; };
+  }, []);
 
   const ingestFiles = useCallback(async (files: File[]) => {
+    // A delayed paste/drop callback may itself belong to a previous render.
+    if (!mounted.current || app.student?.id !== importScope.current.student || app.guardian?.id !== importScope.current.guardian) return;
     if (!app.student) return toast("Create a student profile first.", "warn");
     if (!files.length) return;
     // Uploads join the pipeline rather than bypassing it. An unconditioned page

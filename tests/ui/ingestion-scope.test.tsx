@@ -5,7 +5,7 @@ const fixture = vi.hoisted(() => ({
   app: { student: { id: "a" }, guardian: { id: "g" }, takePendingPaperType: vi.fn(), refreshLibrary: vi.fn() },
   ensureScan: vi.fn(), acceptUploads: vi.fn(), setPendingPaperType: vi.fn(), toast: vi.fn(), navigate: vi.fn(),
 }));
-vi.mock("../../src/ui/data/AppProvider", () => ({ useApp: () => fixture.app }));
+vi.mock("../../src/ui/data/AppProvider", () => ({ useApp: () => ({ ...fixture.app }) }));
 vi.mock("../../src/ui/scan/ScanProvider", () => ({ useScan: () => ({ ensureScan: fixture.ensureScan }) }));
 vi.mock("../../src/ui/components/ToastProvider", () => ({ useToast: () => fixture.toast }));
 vi.mock("../../src/ui/components/SheetProvider", () => ({ useSheetControls: () => ({ openSheet: vi.fn() }) }));
@@ -78,4 +78,19 @@ test("module initialization failure is visible without an unhandled rejection", 
   await act(async () => { await ingest(file()); });
   expect(fixture.toast).toHaveBeenCalledWith(expect.stringContaining("Try selecting them again"), "warn");
   expect(fixture.acceptUploads).not.toHaveBeenCalled();
+});
+
+test.each(["student", "guardian", "unmount"])("a delayed old ingestion callback cannot start after %s changes", async change => {
+  const view = render(<App />);
+  const previousIngest = ingest;
+  if (change === "unmount") view.unmount();
+  else {
+    if (change === "guardian") fixture.app.guardian = { id: "new-g" };
+    else fixture.app.student = { id: "b" };
+    view.rerender(<App />);
+  }
+  await act(async () => { await previousIngest(file()); });
+  expect(fixture.ensureScan).not.toHaveBeenCalled();
+  expect(fixture.acceptUploads).not.toHaveBeenCalled();
+  expect(fixture.navigate).not.toHaveBeenCalled();
 });
