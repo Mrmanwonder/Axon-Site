@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 const url = "/tests/browser/index.html?view=onboarding-intro&styled=1";
 
-test("intro remains readable and its only action stays in bounds from phones to desktop @a11y", async ({ page }) => {
+test("intro remains readable and its only action stays in bounds from phones to desktop @a11y", async ({ page, browserName }) => {
   await page.goto(url);
   for (const [width, height] of [
     [320, 568], [360, 720], [390, 844], [414, 896], [768, 900], [1024, 768],
@@ -31,7 +31,7 @@ test("intro remains readable and its only action stays in bounds from phones to 
     expect(g.title.left).toBeGreaterThanOrEqual(0);
     expect(g.title.right).toBeLessThanOrEqual(g.viewport + 1);
     if (width === 390 || width === 1024) {
-      await page.screenshot({ path: `test-results/onboarding-intro-${width}.png`, fullPage: true });
+      await page.screenshot({ path: `test-results/onboarding-intro-${browserName}-${width}.png`, fullPage: true });
     }
   }
 
