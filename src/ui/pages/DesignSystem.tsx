@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AVATAR_PRESETS } from "../data/modules";
 import { AvatarDisc } from "../components/AvatarPicker";
 import { MaterialSymbol, type MaterialSymbolName } from "../components/MaterialSymbols";
@@ -108,7 +108,7 @@ function Swatch({ name, token, note, theme }: { name: string; token: string; not
     </div>
   </div>;
 }
-function Meta({ children }: { children: React.ReactNode }) { return <div className="ds-label">{children}</div>; }
+function Meta({ children }: { children: ReactNode }) { return <div className="ds-label">{children}</div>; }
 function DividerLabel({ children }: { children: React.ReactNode }) { return <div className="ds-subtitle">{children}</div>; }
 
 export default function DesignSystem() {
@@ -122,7 +122,8 @@ export default function DesignSystem() {
   const visibleSections = sections.filter(s => (s.name + " " + s.group).toLowerCase().includes(search.toLowerCase()));
   const navigate = (id: string) => {
     setActive(id);
-    document.getElementById("ds-" + id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+    setSearch("");
+    document.getElementById("ds-" + id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   };
 
   return <div className="ds-site" data-theme={theme}>
@@ -138,7 +139,7 @@ export default function DesignSystem() {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a section" />
         <span className="ds-search-key">/</span>
       </label>
-      <nav className="ds-nav">
+      <nav className={search ? "ds-nav ds-mobile-open" : "ds-nav"}>
         {visibleSections.length === 0 && <p className="ds-no-result">No matching sections</p>}
         {visibleSections.map((s, i) => <div key={s.id}>
           {(i === 0 || visibleSections[i - 1].group !== s.group) && <div className="ds-nav-group">{s.group}</div>}
