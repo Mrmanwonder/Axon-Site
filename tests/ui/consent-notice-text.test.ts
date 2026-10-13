@@ -35,8 +35,8 @@ const PURPOSES = [
   { purpose: "improve_extraction", label: "Improving extraction accuracy from corrections", is_required: false, sort_order: 6 },
 ];
 
-test("the current notice version is 1.1.0", () => {
-  expect(CONSENT_NOTICE_VERSION).toBe("1.1.0");
+test("the current notice version is 1.2.0", () => {
+  expect(CONSENT_NOTICE_VERSION).toBe("1.2.0");
 });
 
 test("src/notice.js renders exactly the stored text of the current version, in both languages", () => {
@@ -57,6 +57,16 @@ test("1.0.0 is not seeded, because no single 1.0.0 text exists", () => {
 test("the stored notice says behavioural tracking is never done", () => {
   const en = noticeContent("en", PURPOSES) as { sections: { items: { label: string; tag?: string }[] }[] };
   expect(en.sections[2].items).toContainEqual({ label: "Behavioural tracking", tag: "Never" });
+});
+
+test("the digest item names what the email contains, that it has no scores, and where it is stored", () => {
+  const note = purposeNote("weekly_parent_digest", "en");
+  expect(note).toMatch(/first name/);
+  expect(note).toMatch(/subjects/);
+  expect(note).toMatch(/lost marks/);
+  expect(note).toMatch(/No scores or predictions/);
+  expect(note).toMatch(/United States/);
+  expect(note).not.toMatch(/!/);
 });
 
 test("purpose notes are English only, and unknown purposes have none", () => {

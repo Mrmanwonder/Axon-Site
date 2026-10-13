@@ -30,7 +30,12 @@ export const MASTERY_API_URL = 'https://mastery-api.tanmay-harkawat.workers.dev'
 // 1.1.0 (7 Oct 2026, council D2): the notice as restored by PR #224, English
 // and Hindi, with "Never: behavioural tracking". Consents given under 1.0.0
 // stay valid.
-export const CONSENT_NOTICE_VERSION = '1.1.0';
+//
+// 1.2.0 (13 Oct 2026, AXO-266): the weekly parent digest item now says what the
+// email contains and where it is stored. Only a digest consent given under
+// 1.2.0 or later makes a guardian eligible for the digest (database gate,
+// private.digest_consent_current); every other consent is unchanged.
+export const CONSENT_NOTICE_VERSION = '1.2.0';
 
 // Which guardian-verification adapter to use.
 //

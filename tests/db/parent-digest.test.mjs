@@ -30,7 +30,9 @@ const STUBS = `
     marks_lost numeric, command_word text, confidence text,
     student_confirmed_at timestamptz, student_rejected_at timestamptz);
   create table public.consent_event (
-    seq bigserial primary key, guardian_id uuid, student_id uuid, purpose text, granted boolean);
+    seq bigserial primary key, guardian_id uuid, student_id uuid, purpose text, granted boolean,
+    notice_version text not null default '1.2.0');
+  create table public.consent_notice_text (version text, language text, content jsonb, primary key (version, language));
 
   -- Same logic as production (harden_helpers_into_private_schema).
   create function private.consent_is_granted(p_guardian uuid, p_student uuid, p_purpose text)
@@ -68,6 +70,11 @@ async function load(db) {
   const migration = await readFile(
     new URL('../../supabase/migrations/20261012210000_axo_263_parent_digest.sql', import.meta.url), 'utf8');
   await db.exec(migration);
+  // AXO-266: the digest now needs a grant under notice 1.2.0 or later.
+  const gate = await readFile(
+    new URL('../../supabase/migrations/20261013120000_axo_266_digest_consent_notice_1_2_0.sql', import.meta.url), 'utf8');
+  await db.exec(gate);
+  await db.exec(gate); // idempotent
   return migration;
 }
 
@@ -277,6 +284,48 @@ test('parent digest: a paper whose questions were all left out is reported as un
     assert.equal(row.payload.papers_committed, 1);
     assert.equal(row.payload.questions_counted, 0, 'the Worker must say Axon left them out, not that no marks were lost');
     assert.equal(row.payload.questions_lost, 0);
+  } finally {
+    await db.close();
+  }
+});
+
+test('parent digest: only a grant under notice 1.2.0 or later makes a guardian eligible', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(STUBS);
+    await load(db);
+    const ev = (g, st, granted, v) => db.query(
+      `insert into public.consent_event (guardian_id, student_id, purpose, granted, notice_version)
+       values ($1, $2, 'weekly_parent_digest', $3, $4)`, [id(g), st, granted, v]);
+    const ok = async (g, st = null) =>
+      (await db.query(`select private.digest_consent_current($1, $2) as v`, [id(g), st])).rows[0].v;
+
+    assert.equal(await ok(1), false, 'no decision');
+    await ev(2, null, true, '1.0.0'); assert.equal(await ok(2), false, '1.0.0 grant: vague wording');
+    await ev(3, null, true, '1.1.0'); assert.equal(await ok(3), false, '1.1.0 grant: same wording');
+    await ev(4, null, true, '1.2.0'); assert.equal(await ok(4), true);
+    await ev(5, null, true, '1.10.0'); assert.equal(await ok(5), true, 'compared as numbers, not text');
+    await ev(6, null, true, 'abc'); assert.equal(await ok(6), false, 'unreadable version never counts');
+    await ev(7, null, true, '1.2.0'); await ev(7, null, false, '1.2.0');
+    assert.equal(await ok(7), false, 'withdrawn');
+    await ev(8, null, true, '1.1.0'); await ev(8, null, true, '1.2.0');
+    assert.equal(await ok(8), true, 're-confirming under 1.2.0 makes the guardian eligible');
+    await ev(9, null, true, '1.2.0'); await ev(9, id(250), false, '1.2.0');
+    assert.equal(await ok(9, id(250)), false, 'a student-specific withdrawal wins over a guardian-wide grant');
+    assert.equal(await ok(9, id(251)), true, 'another child of the same guardian is unaffected');
+
+    // Queue: only the 1.2.0 guardian is queued, and a 1.1.0 one is skipped at claim time.
+    for (const [g, email] of [[3, 'a'], [4, 'b']]) {
+      await db.query(`insert into auth.users (id, email) values ($1, $2)`, [id(900 + g), `${email}@example.test`]);
+      await db.query(`insert into public.guardian (id, auth_user_id) values ($1, $2)`, [id(g), id(900 + g)]);
+      await db.query(`insert into public.student (id, guardian_id, first_name) values ($1, $2, 'Kid')`, [id(200 + g), id(g)]);
+      await db.query(`insert into public.paper (id, student_id, subject) values ($1, $2, 'Maths')`, [id(1900 + g), id(200 + g)]);
+      await db.query(`insert into public.extraction_run (paper_id, student_id, status, committed_at)
+                      values ($1, $2, 'committed', '2026-10-08T10:00:00Z')`, [id(1900 + g), id(200 + g)]);
+    }
+    await db.query(`select public.queue_parent_digests('2026-10-11')`);
+    const q = await db.query(`select student_id from private.parent_digest_delivery`);
+    assert.deepEqual(q.rows.map((r) => r.student_id), [id(204)], 'the 1.1.0 guardian is not queued');
   } finally {
     await db.close();
   }
