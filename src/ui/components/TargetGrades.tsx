@@ -22,6 +22,7 @@ import { useResource } from "../data/useResource";
 import { gradeOutlook, practicePref, setPracticePref, setTargetGrade, targetGradeScale, targetGrades, type GradeOutlook } from "../data/practice";
 import { paths } from "../app/paths";
 import { hapticTick } from "../lib/haptics";
+import "../styles/targets.css";
 
 type Loaded = {
   scale: string[] | null;
@@ -63,8 +64,7 @@ function SubjectTarget({ subject, scale, value, outlook, optIn, onSet }: {
   const hint = !optIn ? null
     : suggestion?.suggested ? `Past papers suggest ${suggestion.low_grade}–${suggestion.high_grade}; a realistic stretch is ${suggestion.stretch ?? suggestion.suggested}. Based on ${suggestion.papers} papers.`
     : outlook?.state === "not_enough" ? `No suggestion yet: it needs ${outlook.needed} identified papers covering each of your papers.`
-    : outlook?.state === "unsupported" ? "No suggestion for this subject: verified grade thresholds are not loaded yet."
-    : null;
+    : null; // "unsupported" is said once for the whole card, not on every row (AXO-268)
   const id = `target-${subject.replace(/\W+/g, "-")}`;
   return (
     <div className="trow">
@@ -162,11 +162,17 @@ export default function TargetGrades({ mode }: { mode: "prompt" | "settings" }) 
                          optIn={data.optIn} onSet={(g, sug) => set(s, g, sug)} />
         ))}
       </div>
+      {data.optIn && (() => {
+        const none = list.filter((s) => data.outlook[s]?.state === "unsupported");
+        if (!none.length) return null;
+        const who = none.length === list.length ? "these subjects" : none.join(", ");
+        return <div className="tnote">No suggestion yet for {who}: verified grade thresholds are not loaded.</div>;
+      })()}
       {mode === "settings" && (
-        <div className="trow" style={{ marginTop: 10 }}>
+        <div className="trow toutlook">
           <div className="n">
             Show grade outlook
-            <span className="hint">A projected grade range from your identified past papers, with a suggestion when you set a target. Off unless you turn it on. Always a range, never a promise.</span>
+            <span className="hint">A likely grade range from your identified past papers. Always a range, never a promise.</span>
           </div>
           <Switch label="Show grade outlook" on={data.optIn} busy={optBusy} disabled={optBusy} onChange={(n) => void toggleOutlook(n)} />
         </div>

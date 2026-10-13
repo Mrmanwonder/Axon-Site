@@ -534,6 +534,13 @@
   .srow .lbl{flex:1;font-size:16px;font-weight:400;letter-spacing:-.015em;}
   .srow .lbl small{display:block;font-size:12.5px;color:var(--label-3);margin-top:2px;letter-spacing:-.005em;}
   .srow .aux{font-size:15.5px;color:var(--label-3);letter-spacing:-.015em;}
+  .srow-more{margin-top:4px;}
+  .srow-more summary{display:inline-flex;align-items:center;gap:4px;min-height:44px;margin:-12px 0;font-size:12.5px;color:var(--accent);cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent;}
+  .srow-more summary::-webkit-details-marker{display:none;}
+  .srow-more summary::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform 200ms;}
+  .srow-more[open] summary::after{transform:translateY(1px) rotate(-135deg);}
+  .srow-more[open] > small{margin-top:6px;}
+  @media (prefers-reduced-motion: reduce){.srow-more summary::after{transition:none;}}
   .locked{font-size:12px;font-weight:600;color:var(--label-3);background:var(--surface-sunk);padding:3px 8px;border-radius:7px;}
   .sprofile{margin:16px var(--gutter) 0;padding:20px;display:flex;align-items:center;gap:15px;border-radius:var(--r-card);}
   /* The gradient here is a FALLBACK, not the avatar. src/avatar.js writes the

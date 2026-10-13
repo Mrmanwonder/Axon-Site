@@ -46,7 +46,7 @@ export function useParentMode(contactOverride?: string | null) {
           openSheet({
             title: "Check your messages",
             body: `We've sent a code to ${contact}. Enter it to continue.`,
-            input: { label: "Verification code", id: "parent-mode-code", placeholder: "Code" },
+            input: { label: "Verification code", id: "parent-mode-code", placeholder: "Code", inputMode: "numeric", autoComplete: "one-time-code", strip: /\D/g },
             primary: "Continue",
             onConfirm: async (value) => {
               const r = await unlockWithCode(contact, value);

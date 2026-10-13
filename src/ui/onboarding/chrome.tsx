@@ -214,11 +214,34 @@ export function SRow({
   small?: string;
   trailing?: ReactNode;
 }) {
+  const layered = small ? layerNote(small) : null;
   return (
     <div className="srow">
       <div className={"ic " + tone}><Icon d={icon} /></div>
-      <div className="lbl">{label}{small && <small>{small}</small>}</div>
+      <div className="lbl">{label}
+        {layered ? (
+          <>
+            <small>{layered.lead}</small>
+            {/* The full notice words stay on the page, one tap away (AXO-268):
+                a layered notice, not a shorter one, so the text stored in
+                consent_notice_text is still exactly what the guardian can read. */}
+            <details className="srow-more">
+              <summary>What it contains</summary>
+              <small>{layered.detail}</small>
+            </details>
+          </>
+        ) : small && <small>{small}</small>}
+      </div>
       {trailing}
     </div>
   );
+}
+
+/** A note longer than a glance is shown as its opening clause plus a
+    disclosure holding the rest, word for word. Short notes are left alone. */
+export function layerNote(note: string): { lead: string; detail: string } | null {
+  if (note.length <= 120) return null;
+  const cut = note.indexOf(": ");
+  if (cut < 8 || cut > 60) return null;
+  return { lead: note.slice(0, cut) + ".", detail: note.slice(cut + 2).replace(/^./, (c) => c.toUpperCase()) };
 }

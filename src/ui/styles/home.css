@@ -34,9 +34,3 @@
 .progresscard .subnote { margin: 8px 0 0; color: var(--label-2); }
 .journallink { display: flex; justify-content: flex-end; margin: 4px var(--text-gutter) 0; }
 .scanprompt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px var(--text-gutter) 0; font-size: 14px; color: var(--label-2); }
-.targetcard .tgrid { display: grid; gap: 10px; margin-top: 12px; }
-.targetcard .trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 44px; }
-.targetcard .trow .n { font-size: 14.5px; font-weight: 600; color: var(--label); }
-.targetcard .trow .hint { display: block; font-size: 12.5px; font-weight: 450; color: var(--label-2); }
-.targetcard select { min-height: 44px; min-width: 76px; padding: 0 10px; border-radius: 10px; border: .5px solid var(--hairline); background: var(--surface-sunk); color: var(--label); font: inherit; font-variant-numeric: tabular-nums; }
-.targetcard .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; align-items: center; }

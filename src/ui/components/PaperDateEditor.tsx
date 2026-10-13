@@ -37,7 +37,7 @@ export default function PaperDateEditor({ paperId, examDate, onSaved }: {
     {value !== (examDate ?? "") && <button className="btn ghost" type="submit" disabled={busy} aria-busy={busy}>
       {busy ? "Saving…" : "Save date"}
     </button>}
-    <span id={`${id}-hint`} className="hint">Optional. Leave it blank to show when the paper was added.</span>
+    <span id={`${id}-hint`} className="hint">Optional. Blank shows the date it was added.</span>
     {error && <span id={`${id}-error`} className="hint" role="alert">{error}</span>}
     {saved && <span className="hint" role="status">{value ? "Exam date saved." : "Exam date cleared. Showing the added date."}</span>}
   </form>;

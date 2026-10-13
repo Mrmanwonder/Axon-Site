@@ -140,7 +140,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     openSheet({
       title: "Add a link",
       body: "Paste a link to a school-shared PDF or drive file. We fetch it on our side — a browser can't hand us the file directly.",
-      input: { label: "Paper link", id: "linkUrl", placeholder: "https://…" },
+      input: { label: "Paper link", id: "linkUrl", placeholder: "https://…", inputMode: "url" },
       primary: "Add this link",
       onConfirm: async (raw) => {
         if (!raw.trim()) return toast("Paste a link first.", "warn");

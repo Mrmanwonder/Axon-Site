@@ -168,17 +168,44 @@ function PaperChooser({ plan, seriesLabel, onSaved, onCancel }: {
           {plan.known.length ? `Everyone at your level sits ${papersText(plan.known)}. ` : ""}
           Choose the papers you are entered for in {seriesLabel}.
         </p>
-        <div className="examopts" role="radiogroup" aria-label={`${plan.subject} papers`}>
-          {plan.routes.map((r) => {
-            const on = r.papers.join() === [...picked].sort((a, b) => a - b).join();
-            return (
-              <PressBox key={r.papers.join()} as="button" type="button" role="radio" aria-checked={on}
-                className={`examopt${on ? " on" : ""}`} onClick={() => setPicked(r.papers)}>
-                <span className="mark" aria-hidden="true" />{routeLabel(r, plan.available)}
-              </PressBox>
-            );
-          })}
-        </div>
+        {/* Each route as its paper numbers, with the papers that differ named
+            under them, grouped by whole A Level or completing after AS
+            (AXO-268: the one-line sentences were too long to compare). */}
+        {(["whole", "complete"] as const).map((kind) => {
+          const routes = plan.routes.filter((r) => r.kind === kind);
+          if (!routes.length) return null;
+          const grouped = plan.routes.some((r) => r.kind !== kind);
+          const head = kind === "complete" ? "Completing after AS" : "Whole qualification";
+          return (
+            <div key={kind} className="examgroup">
+              {grouped && <div className="examgrouphead" id={`examgroup-${plan.code}-${kind}`}>{head}</div>}
+              <div className="examopts" role="radiogroup" aria-label={grouped ? `${plan.subject} papers, ${head.toLowerCase()}` : `${plan.subject} papers`}>
+                {routes.map((r) => {
+                  const on = r.papers.join() === [...picked].sort((a, b) => a - b).join();
+                  const named = r.papers.filter((p) => !plan.known.includes(p))
+                    .map((p) => plan.available.find((a) => a.paper === p)?.name).filter(Boolean);
+                  return (
+                    <PressBox key={r.papers.join()} as="button" type="button" role="radio" aria-checked={on}
+                      aria-label={routeLabel(r, plan.available)}
+                      className={`examopt route${on ? " on" : ""}`} onClick={() => setPicked(r.papers)}>
+                      <span className="mark" aria-hidden="true" />
+                      <span className="examoptbody" aria-hidden="true">
+                        <span className="exampapers">
+                          {r.papers.map((p) => (
+                            <span key={p} className={"exampaper" + (plan.known.includes(p) ? " known" : "")}>P{p}</span>
+                          ))}
+                        </span>
+                        {named.length > 0 && <span className="examnames">{named.map((n, i) => (
+                          <span key={i}>{i > 0 && " · "}<span className="examname">{n}</span></span>
+                        ))}</span>}
+                      </span>
+                    </PressBox>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </> : <>
         <p className="examnote">Tick the {plan.subject} papers you are entered for in {seriesLabel}. Your school or the syllabus tells you which.</p>
         <div className="examopts" role="group" aria-label={`${plan.subject} papers`}>

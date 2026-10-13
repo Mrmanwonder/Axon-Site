@@ -23,7 +23,7 @@ beforeEach(() => {
 
 test("never interrupts a paper before saving is done", () => {
   mount(false);
-  expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
+  expect(screen.queryByText("How did this paper feel?")).toBeNull();
   expect(fixture.read).not.toHaveBeenCalled();
 });
 
@@ -34,12 +34,12 @@ test("one tap records the response and dismisses; reopening shows only deliberat
   await waitFor(() => expect(fixture.save).toHaveBeenCalledWith({
     paperId: "p1", studentId: "s1", rating: 4, skipped: false,
   }));
-  expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
+  expect(screen.queryByText("How did this paper feel?")).toBeNull();
   first.unmount();
   fixture.read.mockResolvedValue({ rating: 4, skipped: false });
   mount();
   expect(await screen.findByText("How this paper felt:", { exact: false })).toBeTruthy();
-  expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
+  expect(screen.queryByText("How did this paper feel?")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Edit" }));
   await user.click(screen.getByRole("button", { name: "Easy", exact: true }));
   await waitFor(() => expect(fixture.save).toHaveBeenLastCalledWith({
@@ -58,7 +58,7 @@ test("Not now is persisted and never prompts on repeated open", async () => {
   fixture.read.mockResolvedValue({ rating: null, skipped: true });
   mount();
   await waitFor(() => expect(fixture.read).toHaveBeenCalledTimes(2));
-  expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
+  expect(screen.queryByText("How did this paper feel?")).toBeNull();
 });
 
 test("offline read does not pretend there is no response; retry is possible", async () => {
@@ -66,9 +66,9 @@ test("offline read does not pretend there is no response; retry is possible", as
   const user = userEvent.setup();
   mount();
   expect(await screen.findByText(/feedback is unavailable right now/)).toBeTruthy();
-  expect(screen.queryByText("How difficult did this paper feel?")).toBeNull();
+  expect(screen.queryByText("How did this paper feel?")).toBeNull();
   await user.click(screen.getByRole("button", { name: "Retry" }));
-  expect(await screen.findByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(await screen.findByText("How did this paper feel?")).toBeTruthy();
 });
 
 test("failed write leaves choice open, never claims it was saved", async () => {
@@ -77,7 +77,7 @@ test("failed write leaves choice open, never claims it was saved", async () => {
   mount();
   await user.click(await screen.findByRole("button", { name: "Very easy", exact: true }));
   expect(await screen.findByText(/Couldn't save that response/)).toBeTruthy();
-  expect(screen.getByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(screen.getByText("How did this paper feel?")).toBeTruthy();
 });
 
 test("Insight comparison uses only rated, matching, complete teacher-marked papers", () => {
@@ -113,7 +113,7 @@ test("a previous paper's delayed save cannot replace the next paper's prompt", a
   view.rerender(<ToastProvider><PaperDifficultyPrompt paperId="p2" studentId="s2" ready /></ToastProvider>);
   await screen.findByRole("button", { name: "Hard", exact: true });
   await act(async () => resolve());
-  expect(screen.getByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(screen.getByText("How did this paper feel?")).toBeTruthy();
   expect(screen.queryByText("How it felt is saved.")).toBeNull();
   expect(screen.queryByText("How this paper felt:", { exact: false })).toBeNull();
 });
@@ -124,8 +124,8 @@ test("an old retry cannot overwrite feedback in a different student scope", asyn
   const next = mount();
   await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
   next.rerender(<ToastProvider><PaperDifficultyPrompt paperId="p2" studentId="s2" ready /></ToastProvider>);
-  await screen.findByText("How difficult did this paper feel?");
+  await screen.findByText("How did this paper feel?");
   await act(async () => resolve({ rating: 5, skipped: false }));
-  expect(screen.getByText("How difficult did this paper feel?")).toBeTruthy();
+  expect(screen.getByText("How did this paper feel?")).toBeTruthy();
   expect(screen.queryByText("How this paper felt:", { exact: false })).toBeNull();
 });

@@ -84,22 +84,23 @@ export default function PaperDifficultyPrompt({ paperId, studentId, ready }: {
 
   return (
     <section className="pd-prompt" aria-labelledby="pd-title">
-      <div className="pd-caption">ONE QUICK QUESTION</div>
-      <h2 id="pd-title">How difficult did this paper feel?</h2>
-      <p>Just how it felt to you. Your teacher's marks stay exactly as they are.</p>
+      <div className="pd-head">
+        <h2 id="pd-title">How did this paper feel?</h2>
+        <button type="button" className="pd-skip" disabled={busy}
+          onClick={() => editing ? setEditing(false) : void choose(null)}>
+          {editing ? "Cancel" : "Not now"}
+        </button>
+      </div>
+      <p>Only for you. Your teacher&rsquo;s marks stay as they are.</p>
       <div className="pd-options" role="group" aria-label="How difficult the paper felt">
         {CHOICES.map(({ value, label }) => (
           <button key={value} type="button" disabled={busy}
             className={"pd-option" + (answer?.rating === value ? " chosen" : "")}
             aria-pressed={answer?.rating === value} onClick={() => void choose(value)}>
-            <span className="pd-dot" aria-hidden="true" />{label}
+            {label}
           </button>
         ))}
       </div>
-      <button type="button" className="pd-skip" disabled={busy}
-        onClick={() => editing ? setEditing(false) : void choose(null)}>
-        {editing ? "Cancel" : "Not now"}
-      </button>
     </section>
   );
 }
