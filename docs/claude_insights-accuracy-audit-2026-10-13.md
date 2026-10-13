@@ -105,9 +105,30 @@ This file is a record and a design reference. It is evidence, not an instruction
 
 ## Not done, for the owner
 
-1. **Cross-subject pattern signal.** `pattern_insight` has no writer anywhere, so `get_cross_subject_signal` never returns a row and the Pro teaser never shows.
-   - **Proposed rule:** the same cause in at least 2 subjects, each with at least 4 papers and at least 2 papers showing it, and its exposure-adjusted rate above the student's base rate beyond chance.
-   - **Why it needs a decision:** turning it on shows parents an upsell, so it is the owner's call. Recommendation: build it with that rule.
+1. **Cross-subject pattern signal.** Decided and built in AXO-273; see the addendum below.
 2. **Older series equating.** This needs the board's older weighting factors files, and the weighting page links only the current file. Until then, papers from before November 2025 are not equated.
 3. **Catalogue identities.** The printed reference now fills the paper number. The `assessment_identity` catalogue for Cambridge is still empty, which also limits scheme retrieval. Out of scope here.
 4. **Topic tags.** The free-text `concepts` remain model text. The verified syllabus tags (`region_topic`) are the better source, and the map already uses them. Retiring "Topics that keep coming up" in favour of the map is a product choice.
+
+## Addendum: cross-subject patterns (AXO-273, 13 Oct 2026)
+
+**The owner's rule:** "the same cause in at least 2 subjects, each with 4 or more papers, and above the student's usual rate beyond chance." It is built in `20261013210000_axo_273_cross_subject_patterns.sql`.
+
+**How each part of the rule reads**
+- **A question's cause.** It is the eligible loss event with the most marks, the same choice as `private.attempt_tags`. Only the analytics views are read.
+- **A cause's rate in a subject.** It is the number of questions lost to that cause divided by every eligible question in the subject, lost or not.
+- **The student's usual rate.** Their rate of losing a question to any one cause, averaged over the seven causes, across all subjects (lost questions / all questions / 7).
+  - It does not use the cause being tested. Leave-one-out against the student's other subjects was rejected, because with exactly two subjects neither can sit above the other.
+- **Beyond chance.** The subject's one-sided 95% Wilson lower bound (z = 1.645, counted in questions) must be above the usual rate.
+- **Each qualifying subject also needs** 4 or more papers, with the cause appearing in at least 2 of them.
+- **A row is written** when 2 or more subjects qualify for the same cause.
+
+**What a row says.** It uses a fixed template, for example: "Missing keywords cost marks more often than usual in Chemistry and Physics: 16 questions across 8 papers."
+
+**When it refreshes.** Rows refresh whenever the student's evidence changes, through the same dirty flag that keeps error items in step (`private.ensure_error_items`).
+- A refresh failure never fails the practice read.
+- Rows that no longer hold are removed. Dismissed rows stay dismissed.
+
+**One known limit.** The dominant cause of a student who loses very few marks can still clear the rule. Example: 2 lost questions out of 48 in each subject, both of them misreads. The rate is compared with the student's average per cause, not with an absolute floor.
+
+**Where it shows.** `get_cross_subject_signal()` already exposes existence only, under Pro RLS. No screen reads it yet: `getCrossSubjectSignal` in `src/entitlements.js` has no caller. Surfacing it to parents is a separate piece of UI.
