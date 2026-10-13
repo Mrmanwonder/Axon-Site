@@ -92,7 +92,7 @@ const PURPOSE_NOTE_EN = {
   generate_explanations: 'Grounded in the marks the teacher gave',
   track_progress: 'So a repeated cause shows up over time',
   weekly_parent_digest:
-    'One email a week, to you: your child\'s first name, the subjects of the papers they read that week, and how many questions lost marks. No scores or predictions. Sent through Resend, an email service that stores it in the United States for 30 days.',
+    'One email a week, to you: your child\'s first name, the subjects of the papers they read that week, how many questions lost marks and how many marks that was, and up to two command words (such as Explain) that cost the most marks, with the number of questions behind each. No scores or predictions. Sent through Resend, an email service that stores it in the United States for 30 days.',
   improve_extraction: 'Uses anonymised corrections',
 };
 

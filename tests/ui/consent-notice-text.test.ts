@@ -35,8 +35,8 @@ const PURPOSES = [
   { purpose: "improve_extraction", label: "Improving extraction accuracy from corrections", is_required: false, sort_order: 6 },
 ];
 
-test("the current notice version is 1.2.0", () => {
-  expect(CONSENT_NOTICE_VERSION).toBe("1.2.0");
+test("the current notice version is 1.3.0", () => {
+  expect(CONSENT_NOTICE_VERSION).toBe("1.3.0");
 });
 
 test("src/notice.js renders exactly the stored text of the current version, in both languages", () => {
@@ -64,6 +64,8 @@ test("the digest item names what the email contains, that it has no scores, and 
   expect(note).toMatch(/first name/);
   expect(note).toMatch(/subjects/);
   expect(note).toMatch(/lost marks/);
+  expect(note).toMatch(/how many marks that was/);
+  expect(note).toMatch(/command words/);
   expect(note).toMatch(/No scores or predictions/);
   expect(note).toMatch(/United States/);
   expect(note).not.toMatch(/!/);
