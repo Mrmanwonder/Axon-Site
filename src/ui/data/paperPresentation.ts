@@ -15,7 +15,11 @@ export function paperPresentation(paper: Paper, progress: Loadable<Map<string, P
     status: key ?? (committed ? "committed" : "unknown"),
     statusLabel: status?.label ?? (committed ? "Saved" : progress.state === "ready" ? "Not read yet" : "Status unavailable"),
     stale, reason,
-    destination: status || !committed ? paths.review(paper.id) : paths.paper(paper.id),
+    // Review is only meaningful for a paper with a pipeline run. A paper with
+    // no run (an added link, or one whose run was swept) has nothing to review,
+    // and sending it there always ended on "We couldn't find this paper to
+    // review" (issue #301). Its own page is the right destination.
+    destination: status ? paths.review(paper.id) : paths.paper(paper.id),
     canOpen: committed || (progress.state === "ready" && !stale),
     canRetry: key === "failed" && progress.state === "ready" && !stale,
     tone: status?.tone ?? "wait",
