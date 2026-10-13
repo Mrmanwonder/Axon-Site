@@ -25,7 +25,13 @@ export type SheetConfig = {
   /** [lead, rest] — the lead is emphasised, the rest explains it. */
   items?: [string, string][];
   choices?: SheetChoice[];
-  input?: { id: string; label: string; placeholder?: string; type?: "text" | "password"; autoComplete?: string };
+  input?: {
+    id: string; label: string; placeholder?: string; type?: "text" | "password"; autoComplete?: string;
+    /** "numeric" brings up the digit pad and lets the OS offer the code from the message (AXO-268). */
+    inputMode?: "text" | "numeric" | "url";
+    /** Keep only these characters as the person types or pastes, e.g. /\D/g for a code. */
+    strip?: RegExp;
+  };
   primary?: string;
   /** An informational sheet: one button with this label that only closes it. */
   acknowledge?: string;
@@ -142,7 +148,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     {children}
     {cfg && <Dialog key={token} title={cfg.title} description={cfg.body} busy={busy} onClose={closeSheet} restoreFocus={entry.trigger}>
       {!!cfg.items?.length && <ul>{cfg.items.map(([lead, rest], index) => <li key={index}><span className="d" aria-hidden="true" /><span><b>{lead}</b> {rest}</span></li>)}</ul>}
-      {cfg.input?.type === "password" ? <PasswordField key={token} id={cfg.input.id} label={cfg.input.label} value={inputValue} onChange={setInputValue} disabled={busy} /> : cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} autoComplete={cfg.input.autoComplete} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
+      {cfg.input?.type === "password" ? <PasswordField key={token} id={cfg.input.id} label={cfg.input.label} value={inputValue} onChange={setInputValue} disabled={busy} /> : cfg.input && <div className="sh-input"><label htmlFor={cfg.input.id}>{cfg.input.label}</label><input id={cfg.input.id} autoComplete={cfg.input.autoComplete} inputMode={cfg.input.inputMode} pattern={cfg.input.inputMode === "numeric" ? "[0-9]*" : undefined} enterKeyHint="go" autoCapitalize="off" autoCorrect="off" spellCheck={false} value={inputValue} placeholder={cfg.input.placeholder} disabled={busy} onChange={event => setInputValue(cfg.input?.strip ? event.target.value.replace(cfg.input.strip, "") : event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void act(); } }} /></div>}
       {error && <p role="alert">{error}</p>}
       {cfg.choices && <div className="sh-choices">{cfg.choices.map(choice => <button type="button" className={"sh-choice" + (choice.emphasis ? ` ${choice.emphasis}` : "")} data-emphasis={choice.emphasis} key={choice.value} disabled={busy} onClick={() => void act(choice.value)} aria-busy={busy}>{busy ? "Working…" : choice.label}</button>)}</div>}
       <div className="acts">

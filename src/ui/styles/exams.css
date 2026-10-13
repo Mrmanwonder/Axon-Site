@@ -54,3 +54,19 @@
 @media (prefers-reduced-motion: no-preference){
   .examopt{transition:background-color 120ms ease}
 }
+
+/* AXO-268: a route reads as its paper numbers first, the differing papers
+   named underneath, in two groups. Papers everyone sits are quieter. */
+.examgroup{display:grid;gap:6px}
+.examgroup + .examgroup{margin-top:6px}
+.examgrouphead{font-size:12.5px;font-weight:600;color:var(--label-2);letter-spacing:-.005em;padding:0 2px}
+.examopt.route{align-items:flex-start;padding:12px 14px}
+.examopt.route .mark{margin-top:3px}
+.examoptbody{display:grid;gap:5px;min-width:0}
+.exampapers{display:flex;flex-wrap:wrap;gap:5px}
+.exampaper{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border-radius:7px;
+  background:var(--surface);border:.5px solid var(--hairline);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--label)}
+.exampaper.known{background:transparent;color:var(--label-2);font-weight:500}
+.examopt.on .exampaper:not(.known){border-color:var(--accent);color:var(--accent)}
+.examnames{font-size:12.5px;font-weight:450;line-height:1.4;color:var(--label-2)}
+.examname{white-space:nowrap}

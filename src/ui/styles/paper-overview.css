@@ -69,3 +69,17 @@
 .fixpart { display: grid; gap: 12px; }
 .fixpart-crop { border-radius: 10px; overflow: hidden; }
 .fixpart textarea { width: 100%; min-height: 44px; font: inherit; }
+
+/* AXO-268: subject, paper type and exam date in one card, label on the left,
+   control on the right, the hint under the control. */
+.po-facts { margin-top: 22px; padding: 4px 16px 6px; }
+.po .po-facts-title { margin: 12px 0 2px; font-size: 13px; font-weight: 600; letter-spacing: -.005em; color: var(--po-secondary); }
+.po-facts .po-subject { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 4px 12px; margin: 0; padding: 10px 0; }
+.po-facts .po-subject + .po-subject { border-top: .5px solid var(--hairline); }
+.po-facts .po-subject > :not(.k):not(.hint) { justify-self: start; max-width: 100%; }
+.po-facts .po-subject .hint { grid-column: 2; flex-basis: auto; line-height: 1.4; }
+.po-facts .po-date { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.po-facts .po-date .k { flex: 0 0 92px; }
+.po-facts .po-date input { flex: 1 1 140px; max-width: 190px; background: var(--surface-sunk); }
+.po-facts .po-date .hint { flex-basis: 100%; padding-left: 104px; }
+@media (max-width: 359px) { .po-facts .po-subject { grid-template-columns: 1fr; } .po-facts .po-subject .hint { grid-column: 1; } .po-facts .po-date .hint { padding-left: 0; } }

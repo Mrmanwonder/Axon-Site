@@ -290,27 +290,15 @@ export default function PaperOverview() {
     });
   };
 
-  return (
-    <div className="po">
-      <nav className="po-crumb" aria-label="Breadcrumb">
-        <Link to={paths.library}>Library</Link>
-      </nav>
-
-      <div className="greet detailgreet">
-        <div className="detailcopy">
-          <h1>{subjectLabel || typeLabel}</h1>
-          <div className="sub po-meta">
-            {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
-            <span>{paperDateLabel(paper)}</span>
-            {stale && <span>offline copy</span>}
-          </div>
-        </div>
-        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
-      </div>
-
-      {student?.id && <PaperDifficultyPrompt key={paper.id} paperId={paper.id} studentId={student.id}
-        ready={paper.student_attempt.length > 0} />}
-
+  /* What the paper is, gathered in one quiet card at the end rather than three
+     loose form rows above the result (AXO-268): the title and the line under it
+     already say the subject, type and date. An unidentified subject is
+     something to fix first, so then the card leads. */
+  const factsFirst = !paper.subject_offering_id && paper.subject_identity_source !== "assessment_identity"
+    && (student?.subject_selections?.length ?? 0) > 0;
+  const factsCard = (
+    <section className="card po-facts" aria-labelledby="po-facts-title">
+      <h2 className="po-facts-title" id="po-facts-title">About this paper</h2>
       {paper.subject_identity_source !== "assessment_identity" && (student?.subject_selections?.length ?? 0) > 0 && (
         <div className="po-subject">
           <span className="k">Subject</span>
@@ -333,6 +321,28 @@ export default function PaperOverview() {
           updateData(current => ({ ...current, exam_date }));
           void refreshLibrary().catch(() => {});
         }} />
+    </section>
+  );
+
+  return (
+    <div className="po">
+      <nav className="po-crumb" aria-label="Breadcrumb">
+        <Link to={paths.library}>Library</Link>
+      </nav>
+
+      <div className="greet detailgreet">
+        <div className="detailcopy">
+          <h1>{subjectLabel || typeLabel}</h1>
+          <div className="sub po-meta">
+            {subjectLabel ? <span>{typeLabel}</span> : <span>Subject not identified</span>}
+            <span>{paperDateLabel(paper)}</span>
+            {stale && <span>offline copy</span>}
+          </div>
+        </div>
+        <ResourceActions resourceLabel="paper" onShare={requestShare} shareActive={shareStatusKnown ? !!activeShare : null} onDelete={requestDelete} />
+      </div>
+
+      {factsFirst && factsCard}
 
       {attempts.length > 0 && (
         <section className="card po-summary" aria-label="Summary">
@@ -387,6 +397,9 @@ export default function PaperOverview() {
           </Link>
         </div>
       )}
+
+      {student?.id && <PaperDifficultyPrompt key={paper.id} paperId={paper.id} studentId={student.id}
+        ready={paper.student_attempt.length > 0} />}
 
       {saving && (
         <div className="list" role="status">
@@ -480,6 +493,8 @@ export default function PaperOverview() {
           </div>
         </section>
       )}
+
+      {!factsFirst && factsCard}
     </div>
   );
 }
