@@ -7,6 +7,7 @@ import { AppProvider, useApp } from "../../src/ui/data/AppProvider";
 import Library from "../../src/ui/pages/Library";
 import Home from "../../src/ui/pages/Home";
 import Insights from "../../src/ui/pages/Insights";
+import Practice from "../../src/ui/pages/Practice";
 import SyllabusDetail from "../../src/ui/pages/SyllabusDetail";
 import AppRouteErrorBoundary from "../../src/ui/pages/AppRouteErrorBoundary";
 import NotFound from "../../src/ui/pages/NotFound";
@@ -84,7 +85,7 @@ function Boom(): never { throw new Error("Intentional route failure"); }
 function Screen() {
   const { gate, consentResource } = useApp();
   if (gate !== "ready") return <p role="status">{gate}</p>;
-  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Routes><Route path="/" element={<Home />} /><Route path="/library" element={<Library />} /></Routes> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
+  return <><p role="status">Consent {consentResource.state}</p>{params.get("view") === "home" ? <Routes><Route path="/" element={<Home />} /><Route path="/library" element={<Library />} /></Routes> : params.get("view") === "practice" ? <Routes><Route path="/practice/:sessionId" element={<Practice />} /><Route path="*" element={<p>Left practice</p>} /></Routes> : params.get("view") === "exam-settings" ? <ExamSettings /> : params.get("view") === "insights"
     ? <Routes><Route path="/insights/syllabus/:offeringId" element={<SyllabusDetail />} /><Route path="*" element={<Insights />} /></Routes>
     : <Library />}</>;
 }

@@ -17,13 +17,11 @@ import { paperDateLabel } from "../../paperDate.js";
    which is the most confident lie the interface can tell." It also runs
    straight into hard rule 4 — never fill a gap with a plausible guess.
 
-   So this screen renders from `papers`, `useAnalytics` and the Insights engine
-   and from nothing else. Where there is no data there is no card. The one
-   insight Home may show is `nextFocus`: a mistake that has cost marks in two
-   or more papers of one subject, inside at least four papers of evidence, with
-   the student's own fix quoted from the question it came from. Home never
-   writes that sentence itself; when the engine has nothing supported, there is
-   no card.
+   So this screen renders from `papers`, `useAnalytics` and the practice reads
+   (AXO-244: next best action, due queue, leaks, progress) and from nothing
+   else. Where there is no data there is no card. Every practice number comes
+   from error items the server derives from confirmed evidence only, and each
+   card states its own empty, loading and failed states.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { Link, useNavigate } from "react-router-dom";
@@ -38,11 +36,11 @@ import PageSkeleton from "../components/PageSkeleton";
 import { useIngestion } from "../data/useIngestion";
 import { isPartialTotal } from "../data/paperTotals";
 import { homeAttention } from "../data/homeAttention";
-import { useInsights } from "../data/useInsights";
-import { ALL_FILTERS, nextFocus } from "../data/insights";
-import { CAUSE_HUE, CAUSE_LABEL } from "../data/causes";
 import { paths } from "../app/paths";
 import { ExamCard } from "../components/ExamPlan";
+import { useHomePractice, useRefreshOnReturn } from "../data/useHomePractice";
+import { JournalLink, DueQueueList, LeaksCard, NextBestActionCard, ProgressStrip, ScanPrompt } from "../components/HomePractice";
+import TargetGrades from "../components/TargetGrades";
 import "../styles/insights.css";
 import "../styles/home.css";
 
@@ -54,8 +52,8 @@ export default function Home() {
   const { student, guardian, papers, papersStale, papersError, papersResource, progressResource, progress } = useApp();
   const { state, stale, needsCheck, unreadable, readiness } = useAnalytics();
   const { addPaper } = useIngestion();
-  const insights = useInsights(ALL_FILTERS);
-  const focus = insights.model ? nextFocus(insights.model) : null;
+  const practice = useHomePractice();
+  useRefreshOnReturn(practice.reload);
 
   const navigate = useNavigate();
 
@@ -167,18 +165,36 @@ export default function Home() {
         </PressBox>
       )}
 
-      {focus && (
-        <div className="card nextstep focuscard">
+      {/* AXO-255: the practice home in the brief's order — next best action,
+          today's queue, the three biggest leaks, the progress strip — with the
+          scan prompt last. Each card owns its loading and failure; a failed
+          practice read never turns Home into an empty state. The old
+          insight-quoted "Next step" lives on in Insights' "Before your next
+          paper"; Home now has one next step, and it starts practice. */}
+      <TargetGrades mode="prompt" />
+      {practice.resource.data ? (
+        <>
+          <NextBestActionCard nba={practice.resource.data.nba} showTypes={practice.resource.data.flags.mistake_type_ui} onScan={addPaper} hasPapers={papers.length > 0} />
+          {/* When the next best action is already the due queue, the list would repeat it. */}
+          {!(practice.resource.data.nba.state === "ready" && practice.resource.data.nba.kind === "due") && (
+            <DueQueueList due={practice.resource.data.due} />
+          )}
+          <LeaksCard leaks={practice.resource.data.leaks} showTypes={practice.resource.data.flags.mistake_type_ui} />
+          {practice.resource.data.nba.state !== "no_scans" && practice.resource.data.nba.state !== "no_lost_marks" && (
+            <div className="journallink"><JournalLink /></div>
+          )}
+          <ProgressStrip progress={practice.resource.data.progress} streak={practice.streak} />
+        </>
+      ) : practice.resource.state === "failed" ? (
+        <div className="card nextstep focuscard" role="status">
           <div className="eyebrow">Next step</div>
-          <div className="line">{focus.fix.text}</div>
-          <div className="why">
-            <span className="sw2" style={{ background: CAUSE_HUE[focus.pattern.cause] }} aria-hidden="true" />
-            {CAUSE_LABEL[focus.pattern.cause]}{focus.pattern.subject ? ` · ${focus.pattern.subject}` : ""} · in {focus.pattern.recentHits} of your last {focus.pattern.recentWindow} papers · {focus.pattern.papers} papers in all
-          </div>
-          <div className="actions">
-            <PressBox as={Link} to={paths.question(focus.fix.ref.paperId, focus.fix.ref.attemptId)} className="textaction">Open {focus.fix.ref.label} <Chevron /></PressBox>
-            <PressBox as={Link} to={paths.insights} className="textaction">All patterns <Chevron /></PressBox>
-          </div>
+          <div className="why">Your practice plan could not be loaded. Your papers are safe; this is us failing to read them.</div>
+          <PressBox as="button" type="button" className="textaction" onClick={() => void practice.reload()}>Try again <Chevron /></PressBox>
+        </div>
+      ) : (
+        <div className="card nextstep focuscard" role="status" aria-busy="true">
+          <div className="eyebrow">Next step</div>
+          <div className="why">Working out what to practise…</div>
         </div>
       )}
 
@@ -219,6 +235,8 @@ export default function Home() {
         <div className="subnote">Offline copy. New uploads need a connection.</div>
       )}
 
+      {/* The scan prompt closes Home, unless the next step above already is one. */}
+      {!(practice.resource.data && ["no_lost_marks", "caught_up", "nothing_due"].includes(practice.resource.data.nba.state)) && <ScanPrompt onScan={addPaper} />}
 
       <ExamCard />
     </>

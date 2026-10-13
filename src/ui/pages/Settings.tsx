@@ -71,6 +71,7 @@ import PressBox from "../components/PressBox";
 import AvatarPicker, { AvatarDisc } from "../components/AvatarPicker";
 import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
 import { ExamSettings } from "../components/ExamPlan";
+import TargetGrades from "../components/TargetGrades";
 import type { CurriculumSelection } from "../components/CurriculumEditor";
 import type { Prefs } from "../data/modules";
 import { paths } from "../app/paths";
@@ -373,6 +374,14 @@ export default function Settings() {
 
 
       <ExamSettings />
+
+      {/* AXO-245: every target stays editable here, with the opt-in outlook switch (AXO-262). */}
+      {student && (
+        <>
+          <div className="sectitle">Target grades</div>
+          <TargetGrades mode="settings" />
+        </>
+      )}
 
       {/* ── Billing ──
           Four states, and the read itself is a fifth. "Loading" is not "free"

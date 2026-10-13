@@ -132,6 +132,12 @@ function payloadFor(url: URL) {
     return { active: true, student_id: student.id, remaining_seconds: 1800 };
   }
   if (key === "rpc/clear_student_scope") return true;
+  // AXO-244 practice reads: a student with one paper and nothing to practise.
+  if (key === "rpc/next_best_action") return { state: "no_lost_marks" };
+  if (key === "rpc/progress_summary") return { weeks: [], marks_recovered_total: 0, topics_passed_30d: 0, reattempts_this_week: 0, session_dates: [], today: "2026-10-13" };
+  if (key === "rpc/practice_flags") return { mistake_type_ui: false, if_then_prompt: false };
+  if (key === "rpc/target_grade_scale") return null;
+  if (key === "student_practice_pref") return null;
 
   if (key === "guardian") {
     return { id: "guardian", auth_user_id: runMarker, name: "Parent", contact: "perf@example.test" };

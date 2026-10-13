@@ -23,6 +23,8 @@ export const paths = {
   scan: "/scan",
   review: (draftId: string) => `/scan/review/${draftId}`,
   insights: "/insights",
+  journal: "/insights/journal",
+  practice: (sessionId: string) => `/practice/${sessionId}`,
   syllabus: (offeringId: string) => `/insights/syllabus/${offeringId}`,
   settings: "/settings",
   tutor: (ctx: { paperId?: string; attemptId?: string } = {}) => {

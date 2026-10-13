@@ -46,11 +46,18 @@ select public._t('authenticated may execute exactly the audited browser-facing p
   (select coalesce(array_agg(name order by name), '{}') from _definer where schema = 'public' and auth_x)
     = array['account_lookup_public',  -- 12 Oct 2026, owner-approved: one word out, no ids; throttled per gateway address
             'begin_guardian_verification','claim_guardian_verification','clear_student_scope','commit_extraction_run','delete_my_account',
-            'get_cross_subject_signal','get_entitlements','parent_mode_state',
+            -- AXO-244 practice loop: every one takes a student, item or session and refuses
+            -- anything outside student_scope_allows (private.require_scope); B-vs-A below.
+            'due_queue','error_journal','finish_practice_session','focus_areas',
+            'get_cross_subject_signal','get_entitlements','grade_outlook','next_best_action','parent_mode_state',
+            'practice_flags',  -- AXO-244: no arguments; two feature-flag booleans
+            'practice_item','progress_summary','reattempt_reveal',
             'record_explanation_feedback',  -- #169: student from the attempt, gated by student_scope_allows
-            'resolve_academic_share',
+            'record_intention','record_reattempt','refresh_error_items',
+            'resolve_academic_share','scorecard',
             'set_paper_subject',  -- 4 Oct 2026: student from the paper, gated by student_scope_allows; only the student's own subjects
-            'set_student_scope','student_scope_state',
+            'set_practice_pref','set_student_scope','set_target_grade','start_practice_session','student_scope_state',
+            'target_grade_scale','topic_readiness',
             'tutor_enabled'],  -- AXO-126: no arguments; reads only the caller's own flag via auth.uid()
   (select string_agg(name, ', ' order by name) from _definer where schema = 'public' and auth_x));
 
@@ -142,6 +149,15 @@ values ('a5400000-0000-4000-8000-000000000030',
         'a5400000-0000-4000-8000-000000000010',
         'a5400000-0000-4000-8000-000000000002', '1.0.0', 'ready');
 
+-- AXO-244: one practice item and session of A's, so the item and session RPCs
+-- are tested against a real row and not only their not-found guard.
+insert into public.error_item (id, student_id, dedupe_key, group_key, paper_id, question_label, marks_lost, marks_available, paper_date, next_review_at)
+values ('a5400000-0000-4000-8000-000000000040','a5400000-0000-4000-8000-000000000002','axo54-a-q1','axo54-a-q1',
+        'a5400000-0000-4000-8000-000000000010','Q1',1,2,current_date - 5, now());
+insert into public.practice_session (id, student_id, focus_kind, item_ids)
+values ('a5400000-0000-4000-8000-000000000041','a5400000-0000-4000-8000-000000000002','item',
+        array['a5400000-0000-4000-8000-000000000040']::uuid[]);
+
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"b5400000-2222-4222-8222-222222222222","role":"authenticated","session_id":"axo54-b"}';
 
@@ -218,6 +234,42 @@ select public._t('B: clear_student_scope touches nothing of A''s', public.clear_
 
 select public._t('B: parent_mode_state carries no account identifiers',
   not (public.parent_mode_state() ?| array['guardian_id','student_id','user_id','email']));
+
+-- AXO-244: every practice RPC refuses A's student, item or session to B.
+do $$
+declare
+  a constant uuid := 'a5400000-0000-4000-8000-000000000002';
+  calls text[] := array[
+    format('select public.refresh_error_items(%L)', a),
+    format('select public.next_best_action(%L)', a),
+    format('select * from public.focus_areas(%L, null, 5)', a),
+    format('select * from public.due_queue(%L)', a),
+    format('select public.progress_summary(%L)', a),
+    format('select * from public.error_journal(%L)', a),
+    format('select * from public.scorecard(%L, %L)', a, 'Physics'),
+    format('select public.grade_outlook(%L, %L)', a, 'Physics'),
+    format('select public.target_grade_scale(%L)', a),
+    format('select public.set_target_grade(%L, %L, %L, null)', a, 'Physics', 'A'),
+    format('select public.set_practice_pref(%L, null, true, null)', a),
+    format('select public.start_practice_session(%L, %L, null, null, null)', a, 'due'),
+    format('select public.record_intention(%L, null, now() + interval ''1 day'', null)', a),
+    'select public.practice_item(''a5400000-0000-4000-8000-000000000040'')',
+    'select public.reattempt_reveal(''a5400000-0000-4000-8000-000000000040'')',
+    'select public.record_reattempt(''a5400000-0000-4000-8000-000000000041'', ''a5400000-0000-4000-8000-000000000040'', ''got_it'', null, null, null, null, null)',
+    'select public.finish_practice_session(''a5400000-0000-4000-8000-000000000041'')'];
+  c text;
+begin
+  foreach c in array calls loop
+    begin
+      execute c;
+      perform public._t('B: practice RPC refuses A''s data — ' || c, false, 'returned');
+    exception when others then
+      perform public._t('B: practice RPC refuses A''s data — ' || c, sqlstate = '42501', sqlstate || ' ' || sqlerrm);
+    end;
+  end loop;
+end $$;
+select public._t('B: practice_flags carries only the two booleans',
+  (select array_agg(k order by k) from jsonb_object_keys(public.practice_flags()) k) = array['if_then_prompt','mistake_type_ui']);
 
 -- Fresh parent auth for B only: erasure must still reach nothing of A's.
 select set_config('request.jwt.claims', jsonb_build_object(
