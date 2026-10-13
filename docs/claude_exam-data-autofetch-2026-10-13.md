@@ -80,19 +80,32 @@ factor fails `a_e` or `max` (`scripts/exams/test_thresholds.py` proves both).
    The previous version picked one variant with `limit 1`, which was arbitrary. Insights now says
    "N variants, widest range".
 
-## First load (13 Oct 2026)
+## First load (13 Oct 2026, production)
 
-Run locally against the live site before merge, limited to the ten syllabus codes production
-students take:
-
-- **Thresholds:** for 9093, 9231, 9609, 9618, 9699, 9701, 9702, 9708, 9709 and 9990 (June 2026),
-  124 linear and AS routes verified and 155 staged routes kept as drafts. No failures.
-- **Weighting file:** covers November 2025, March 2026 and June 2026.
-- **Timetables:** discovery found 14 zone timetables on the board's page. Together with the
-  manifest that made 15 to load: June 2026 and November 2026 for zones 1 to 6 plus 3 UK, and
-  March 2027 zone 4. All 15 passed the cross-check.
-
-The production load is done by the workflow after merge; its run ids are recorded on AXO-262.
+- The migration `20261013110000` was applied before merge through `migrate.yml` on the branch:
+  dry run 38358495404, apply run 38358602748.
+- `exam-ingest.yml` was dispatched on the branch:
+  - Run 38358724759 loaded the 2026-layout tables and all 15 timetables. It also exposed the
+    older and AS-only layouts, which were fixed in `4d0083c`.
+  - Run 38360939571 then read 85 more tables and skipped 28 already verified ones.
+  - The weighting file used was SHA `d96f96e5d884…` and covers November 2025, March 2026 and
+    June 2026.
+- **Live result:** 577 routes verified and 802 drafts across 114 table loads.
+  - Every code a production student takes has verified June 2026 routes: 9093 (9), 9231 (15),
+    9609 (8), 9618 (8), 9699 (8), 9701 (16), 9702 (16), 9708 (11), 9709 (25) and 9990 (8).
+  - Spot check: 9709 June 2026 route 11, 31, 41, 51 reads A* 223 / A 197 / B 163 / C 128 / D 94 /
+    E 60 out of 250, as printed in the PDF.
+- **Timetables live:** June 2026 and November 2026 for zones 1 to 6 plus 3 UK, and March 2027
+  zone 4. That is 15 timetables, all of which passed the cross-check.
+- **Known leftover:** six draft rows from the first run for Sociology 9699, filed under 2025-03
+  from the mislabelled file `758535-sociology-9699-march-2025-…pdf`. The first run predated the
+  "not loaded" rule. The outlook never reads drafts. A cleanup delete was not run, and the rows
+  can be removed with
+  `delete from public.grade_threshold_set where source_url like '%758535-sociology-9699-march-2025%' and status = 'draft';`.
+- **Remaining drafts:** apart from staged routes, they are routes that carry earlier components
+  (8x), and a handful of language syllabuses (9680, 9689, 8022, 8028, 9626, 9686, 9718, 9395)
+  where A and E don't reconcile with the weighting file. No production student takes those
+  syllabuses.
 
 ## When something fails
 
