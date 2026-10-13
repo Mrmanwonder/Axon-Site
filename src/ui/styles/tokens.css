@@ -163,16 +163,16 @@
   --attention: var(--amber);
   --signout: var(--red);
 
-  --accent-wash: rgba(44, 116, 232, .15);
-  --accent-glow: rgba(44, 116, 232, .26);
-  --accent-glow-strong: rgba(44, 116, 232, .28);
-  --accent-select: rgba(44, 116, 232, .32);
-  --positive-wash: rgba(36, 155, 73, .16);
-  --attention-wash: rgba(199, 122, 6, .16);
-  --attention-wash-soft: rgba(199, 122, 6, .11);
-  --attention-wash-firm: rgba(199, 122, 6, .18);
-  --attention-wash-strong: rgba(199, 122, 6, .22);
-  --attention-rim: rgba(199, 122, 6, .28);
+  --accent-wash: rgba(58, 134, 255, .15);
+  --accent-glow: rgba(58, 134, 255, .26);
+  --accent-glow-strong: rgba(58, 134, 255, .28);
+  --accent-select: rgba(58, 134, 255, .32);
+  --positive-wash: rgba(48, 209, 88, .16);
+  --attention-wash: rgba(255, 159, 10, .16);
+  --attention-wash-soft: rgba(255, 159, 10, .11);
+  --attention-wash-firm: rgba(255, 159, 10, .18);
+  --attention-wash-strong: rgba(255, 159, 10, .22);
+  --attention-rim: rgba(255, 159, 10, .28);
 
   --track-off: var(--p-paper-400);
   --seg-on: var(--surface);
