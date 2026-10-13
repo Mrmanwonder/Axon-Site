@@ -4,7 +4,7 @@ Status: implemented on branches, not merged, not applied, not deployed. Off by d
 
 ## Before
 
-`private.sweep_stuck_runs` runs every minute (pg_cron `axon-stuck-run-recovery`). Any run with a heartbeat older than 10 minutes is failed, and the paper's done pages are reset to pending. Both 9 Oct failures were `sweep_timeout:content`.
+`private.sweep_stuck_runs` runs every 5 minutes (pg_cron `axon-stuck-run-recovery`; every minute until AXO-274 changed it on 13 Oct 2026). Any run with a heartbeat older than 10 minutes is failed, and the paper's done pages are reset to pending. Both 9 Oct failures were `sweep_timeout:content`.
 
 ## After (flag `task_recovery` on)
 
