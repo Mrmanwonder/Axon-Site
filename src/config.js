@@ -30,7 +30,23 @@ export const MASTERY_API_URL = 'https://mastery-api.tanmay-harkawat.workers.dev'
 // 1.1.0 (7 Oct 2026, council D2): the notice as restored by PR #224, English
 // and Hindi, with "Never: behavioural tracking". Consents given under 1.0.0
 // stay valid.
-export const CONSENT_NOTICE_VERSION = '1.1.0';
+//
+// 1.2.0 (13 Oct 2026, AXO-266): the weekly parent digest item now says what the
+// email contains and where it is stored. Only a digest consent given under
+// 1.4.0 or later (see below) makes a guardian eligible for the digest (database gate,
+// private.digest_consent_current); every other consent is unchanged.
+//
+// 1.3.0 (13 Oct 2026, AXO-266): the digest note now lists everything the email
+// contains (total marks lost, up to two command words with their sample sizes).
+// 1.2.0 was stored in the database but never shown to a guardian, and the digest
+// gate now needs 1.3.0, so no grant under 1.2.0 can make a digest eligible.
+//
+// 1.4.0 (13 Oct 2026, AXO-266): the owner asked the email to say what the student
+// did that week and how they are improving. The digest note now lists the
+// per-subject breakdown and the comparison with earlier papers (counts only). The
+// digest gate needs 1.4.0, and every guardian with an older grant is shown the
+// current notice once (src/reconfirm.js) and can confirm it.
+export const CONSENT_NOTICE_VERSION = '1.4.0';
 
 // Which guardian-verification adapter to use.
 //

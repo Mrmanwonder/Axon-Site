@@ -91,7 +91,8 @@ const PURPOSE_NOTE_EN = {
   extract_text: 'Reading the questions, answers and remarks',
   generate_explanations: 'Grounded in the marks the teacher gave',
   track_progress: 'So a repeated cause shows up over time',
-  weekly_parent_digest: 'A short email to you, once a week',
+  weekly_parent_digest:
+    'One email a week, to you: your child\'s first name, the subjects and number of papers they read that week, for each subject how many questions lost marks and how many marks that was, up to two command words (such as Explain) that cost the most marks, and, once there is enough earlier work, how this week compares with their earlier papers, shown as counts. No scores, percentages, rankings or predictions. Sent through Resend, an email service that stores it in the United States for 30 days.',
   improve_extraction: 'Uses anonymised corrections',
 };
 

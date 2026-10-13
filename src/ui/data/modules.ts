@@ -22,6 +22,7 @@
 import * as supabaseMod from "../../supabase.js";
 import * as prefsMod from "../../prefs.js";
 import * as consentMod from "../../consent.js";
+import * as reconfirmMod from "../../reconfirm.js";
 import * as noticeMod from "../../notice.js";
 import * as papersMod from "../../papers.js";
 import * as sharesMod from "../../shares.js";
@@ -295,6 +296,16 @@ export const withdrawConsent = consentMod.withdrawConsent as (a: {
   guardianId: string;
   studentId?: string | null;
   purpose: string;
+}) => Promise<unknown>;
+export type ReconfirmRow = { purpose: string; student_id: string | null; granted: boolean };
+export const readReconfirmation = reconfirmMod.readReconfirmation as (
+  guardianId: string,
+) => Promise<{ needed: boolean; rows: ReconfirmRow[] }>;
+export const confirmCurrentNotice = reconfirmMod.confirmCurrentNotice as (a: {
+  guardianId: string;
+  rows: ReconfirmRow[];
+  choices: Record<string, boolean>;
+  noticeLanguage?: NoticeLanguage;
 }) => Promise<unknown>;
 export const listPurposes = consentMod.listPurposes as () => Promise<
   { purpose: string; label: string; is_required: boolean; sort_order: number }[]

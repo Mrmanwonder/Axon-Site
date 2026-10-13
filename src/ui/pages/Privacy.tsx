@@ -263,9 +263,30 @@ export default function Privacy() {
           <li><strong>Cloudflare</strong> for network delivery, Workers (the processing pipeline), Queues (job scheduling) and R2 object storage for uploaded pages and crops;</li>
           <li><strong>Google</strong> for AI processing (Gemini models via Google AI Studio) and, when the user chooses Google authentication, sign-in;</li>
           <li><strong>Tavily</strong> for web search used in some explanations, as described in section 8;</li>
+          <li><strong>Resend</strong> for sending the optional weekly summary email to a parent or guardian, as described below;</li>
           <li><strong>Stripe</strong> for hosted payments and subscription management;</li>
           <li><strong>PostHog</strong> for optional product analytics when analytics is enabled.</li>
         </ul>
+        <h3>Weekly summary email</h3>
+        <p>
+          If a parent or guardian switches on the weekly summary, Axon sends one email a week to the
+          email address on their account. The email contains the child's first name, the subjects
+          and number of papers read that week, for each subject how many questions were counted,
+          how many lost marks and how many marks were lost, up to two command words that cost marks
+          with the number of questions behind each, and, once there is enough earlier work, how
+          this week compares with the child's own earlier papers, shown as counts, plus a link to
+          Settings. It contains no scores, percentages, rankings or grade predictions, no answers
+          and no images. It is not sent unless the guardian has given this
+          consent under the current wording, and it stops when the guardian switches it off in
+          Settings. Axon does not track whether the email is opened or links in it are clicked.
+        </p>
+        <p>
+          The email is sent through Resend, which receives the guardian's email address and the
+          contents of the email. Resend stores that data in the United States and keeps email
+          content and logs for 30 days (backups for 7 days). Axon cannot delete a sent copy before
+          that period ends. Axon's own delivery record keeps only identifiers, dates and a status,
+          not the contents of the email.
+        </p>
         <p>
           Providers receive information only to the extent reasonably necessary for their role, subject
           to Axon's configuration, agreements and the provider's applicable terms. We may also disclose
