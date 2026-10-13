@@ -238,13 +238,22 @@ function Readiness({ studentId, subject, documentId }: { studentId: string; subj
 }
 
 /** The outlook in words. Never one grade on its own: a range, its basis, and what it takes. */
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** "2026-06" → "June 2026". */
+export function seriesLabel(key: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  return m ? `${MONTH_NAMES[Number(m[2]) - 1]} ${m[1]}` : key;
+}
+
 export function outlookLines(o: Extract<GradeOutlook, { state: "ready" }>): { range: string; basis: string; target: string | null } {
   const range = o.low_grade === o.high_grade ? `Around ${o.low_grade}` : `${o.low_grade} to ${o.high_grade}`;
-  const basis = `Based on ${plural(o.papers, "paper")} · ${o.low_total} to ${o.high_total} of ${o.max_total} weighted marks · ${o.series_key} thresholds, ${o.syllabus_code} option ${o.option_code}`;
+  const papers = o.components.map((c) => c.paper).join(", ");
+  const variants = o.routes && o.routes > 1 ? ` (${o.routes} variants, widest range)` : "";
+  const basis = `Based on ${plural(o.papers, "paper")} · ${o.low_total} to ${o.high_total} of ${o.max_total} weighted marks · ${seriesLabel(o.series_key)} thresholds for ${o.syllabus_code}, papers ${papers}${variants}`;
   let target: string | null = null;
   if (o.target) {
     target = o.marks_to_target && o.marks_to_target > 0
-      ? `About ${plural(o.marks_to_target, "more weighted mark")} across the option would reach your target of ${o.target}, on these thresholds.`
+      ? `About ${plural(o.marks_to_target, "more weighted mark")} across these papers would reach your target of ${o.target}, on these thresholds.`
       : `Your target of ${o.target} is inside or below this range on these thresholds.`;
   }
   return { range, basis, target };

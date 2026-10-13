@@ -157,6 +157,8 @@ export type GradeOutlook =
       syllabus_code: string;
       series_key: string;
       option_code: string;
+      /** Variants of the student's route the range was widened across. */
+      routes?: number;
       source_url: string;
       papers: number;
       components: { paper: number; papers: number }[];
