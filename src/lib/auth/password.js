@@ -1,6 +1,7 @@
 // Guardian credentials only. No student auth principal is created.
 import { createClient } from '@supabase/supabase-js';
 import { sb } from '../../supabase.js';
+import { isolatedAuthStorage } from './isolatedStorage.js';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '../../config.js';
 import { fetchWithTimeout } from '../request.js';
 import { assertSafeNewPassword } from './passwordPolicy.js';
@@ -18,7 +19,7 @@ function requirePassword(password) {
 function probeClient() {
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { fetch: fetchWithTimeout },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, ...isolatedAuthStorage() },
   });
 }
 async function installSession(session, email, expectedId = undefined) {
