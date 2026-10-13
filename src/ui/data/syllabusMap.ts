@@ -15,11 +15,16 @@
    · No shading until the subject has 4 papers placed on its syllabus; before
      that the map shows only which topics have been tested.
    · A question on several objectives of one topic counts once for that topic.
+   · The shade reads a topic's lost share after empirical-Bayes shrinkage
+     toward the student's own share across the whole subject (stats.ts). A
+     topic seen on one 2-mark question can no longer take the darkest shade;
+     a topic with plenty of marks behind it keeps its own share.
    · Only evidence from the document chosen for the subject is used, and only
      from papers inside the current filters and filed under that subject.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { applyFilters, orderPapers, PATTERN_PAPERS, ALL_FILTERS } from "./insights";
+import { priorStrength, shrunkShare } from "./stats";
 import type { InsightAttempt, InsightFilters, InsightPaper, QuestionRef } from "./insights";
 
 export type SyllabusSubject = { subject: string; subject_offering_id: string | null; display_name_snapshot: string | null; external_code_snapshot: string | null };
@@ -108,7 +113,22 @@ export function chooseDocument(docs: SyllabusDocument[], year: number): Syllabus
 
 export function levelFor(lost: number, available: number): number {
   if (available <= 0 || lost <= 0) return 0;
-  return Math.min(4, Math.max(1, Math.ceil((lost / available) * 4)));
+  return levelForShare(lost / available);
+}
+
+/** 0 = nothing lost; 1..4 by quarter of the share lost. */
+export function levelForShare(share: number): number {
+  if (!(share > 0)) return 0;
+  return Math.min(4, Math.max(1, Math.ceil(share * 4)));
+}
+
+/**
+ * The shade for one topic: nothing lost stays 0 (an honest clean record);
+ * otherwise the lost share shrunk toward the subject's share.
+ */
+export function shadeFor(lost: number, available: number, priorShare: number, strength: number): number {
+  if (available <= 0 || lost <= 0) return 0;
+  return levelForShare(shrunkShare(lost, available, priorShare, strength));
 }
 
 export function buildSyllabusMaps(input: {
@@ -158,6 +178,7 @@ export function buildSyllabusMaps(input: {
     const placed = new Set<string>();
     const placedPapers = new Set<string>();
     const availableByAttempt = new Map<string, number>();
+    const lostByAttempt = new Map<string, number>();
     for (const e of data.evidence) {
       if (e.document_id !== document.id || !subjectPapers.has(e.paper_id)) continue;
       const topic = topicOf(e.topic_id);
@@ -180,6 +201,7 @@ export function buildSyllabusMaps(input: {
         perUnit.set(topic.parent_id, u);
       }
       availableByAttempt.set(e.attempt_id, max);
+      lostByAttempt.set(e.attempt_id, lost);
       if (byId.get(e.topic_id)?.kind === "objective") {
         perObjective.set(e.topic_id, (perObjective.get(e.topic_id) ?? new Set()).add(e.attempt_id));
       }
@@ -188,6 +210,17 @@ export function buildSyllabusMaps(input: {
     const papersPlaced = placedPapers.size;
     const shadingReady = papersPlaced >= PATTERN_PAPERS;
     const subjectAttempts = input.attempts.filter((a) => subjectPapers.has(a.paper_id) && num(a.max_marks) !== null && (num(a.max_marks) as number) > 0);
+
+    // The subject's own share and how much a topic's share is trusted.
+    const topicTotals = [...perTopic.values()].map((m) => {
+      const refs = [...m.values()];
+      return { lost: refs.reduce((n, r) => n + r.marks, 0), available: refs.reduce((n, r) => n + (availableByAttempt.get(r.attemptId) ?? 0), 0) };
+    });
+    // Each placed question once, however many topics it sits on.
+    const subjectAvailable = [...availableByAttempt.values()].reduce((n, x) => n + x, 0);
+    const subjectLost = [...lostByAttempt.values()].reduce((n, x) => n + x, 0);
+    const priorShare = subjectAvailable > 0 ? subjectLost / subjectAvailable : 0;
+    const strength = priorStrength(topicTotals);
 
     const units: UnitRow[] = [];
     let topicsTested = 0; let topicsTotal = 0;
@@ -203,7 +236,7 @@ export function buildSyllabusMaps(input: {
         if (refs.length) topicsTested += 1;
         cells.push({
           id: t.id, code: t.code, title: t.title, scope: t.qualification_scope,
-          state, level: refs.length && shadingReady ? levelFor(lost, available) : null,
+          state, level: refs.length && shadingReady ? shadeFor(lost, available, priorShare, strength) : null,
           lost, available, questions: refs.length, papers,
           objectives: rows.filter((o) => o.kind === "objective" && o.parent_id === t.id).map((o) => ({
             id: o.id, code: o.code, text: o.objective_text ?? o.title, notes: o.notes_text, group: o.group_title,

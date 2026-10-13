@@ -25,7 +25,10 @@
      student's own explained questions, with a link back to the question.
 
    The research behind each module is in
-   docs/claude_insights-research-and-design-2026-10-04.md.
+   docs/claude_insights-research-and-design-2026-10-04.md, and the accuracy
+   rules (noise, shrinkage, denominators, choice papers) in
+   docs/claude_insights-accuracy-audit-2026-10-13.md. Every comparison goes
+   through `stats.ts`, so no module invents its own threshold.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export const CAUSES = [
@@ -57,6 +60,9 @@ export const RECUR_PAPERS = 2;
 /** The window "recent" means, in papers. */
 export const RECENT_WINDOW = 3;
 
+import { pairedPapers, priorStrength, shareChange, shrunkShare, twoProportionZ, wilson, Z95 } from "./stats";
+import { printedCommandWord } from "./commandWords";
+
 export type InsightPaper = {
   id: string;
   type: string;
@@ -68,6 +74,8 @@ export type InsightPaper = {
   total_available?: number | string | null;
   total_awarded?: number | string | null;
   total_partial?: boolean | null;
+  /** The maximum the paper prints ("Total: 80"), when it prints one. */
+  stated_maximum?: number | string | null;
 };
 
 export type InsightAttempt = {
@@ -78,6 +86,8 @@ export type InsightAttempt = {
   marks_awarded: number | string | null;
   question_order: number | null;
   answer_blank: boolean | null;
+  /** The question as read; used only for its printed command word. */
+  question_text?: string | null;
 };
 
 export type LossReason = { cause?: string | null; marks?: number | string | null; error_type?: string | null; note?: string | null };
@@ -140,9 +150,36 @@ export type TariffBand = { key: string; label: string; lost: number; available: 
 
 export type TopicRow = { label: string; questions: number; papers: number; marks: number; refs: QuestionRef[] };
 
-export type CommandWordRow = Tally & { word: string };
+/**
+ * One command word. The tally counts questions that lost marks with this
+ * word (printed first, the explain stage's tag otherwise). `rate` is the
+ * honest denominator: every question that prints the word, lost or not. It is
+ * null until three questions print it.
+ */
+export type CommandWordRow = Tally & {
+  word: string;
+  rate: {
+    questions: number; lost: number; available: number;
+    /** Lost share pulled toward the student's overall share by the evidence it lacks. */
+    shrunk: number;
+    /** 95% interval for the lost share, counted in questions. */
+    lo: number; hi: number;
+    /** The whole interval sits above the student's overall lost share. */
+    standsOut: boolean;
+  } | null;
+};
 
 export type StageRow = { type: ErrorType; marks: number; questions: number };
+
+/** Careless slips (procedural slips and misreads) by where the question sat in its paper. */
+export type SlipThird = { slips: number; questions: number };
+export type SlipPosition = {
+  papersRead: number;
+  first: SlipThird; middle: SlipThird; last: SlipThird;
+  /** "late" only when slips cluster in the last third beyond noise, in more than one paper. */
+  note: "late" | null;
+  refs: QuestionRef[];
+};
 
 export type Pacing = {
   papersRead: number;
@@ -164,6 +201,10 @@ export type InsightsModel = {
     marksLost: number;
     marksExplained: number;
     enough: boolean;
+    /** Papers whose questions add up to more than the maximum they print: a choice of questions. */
+    choicePapers: number;
+    /** Unanswered questions on those papers, left out because they were probably not chosen. */
+    choiceSkipped: number;
   };
   causes: CauseRow[];
   groups: { knowledge: number; technique: number; completion: number };
@@ -177,6 +218,7 @@ export type InsightsModel = {
   stages: { rows: StageRow[]; coverage: { split: number; total: number } };
   topics: TopicRow[];
   pacing: Pacing;
+  slips: SlipPosition;
   knockOn: Tally;
   subjects: SubjectRow[];
 };
@@ -185,6 +227,8 @@ export type TrendSummary = {
   direction: "fewer" | "more" | "similar";
   earlier: number;
   recent: number;
+  /** True when papers from more than one subject were compared, each against its own average. */
+  withinSubjects: boolean;
 };
 
 /* ── small, exact helpers ─────────────────────────────────────────────────── */
@@ -235,9 +279,26 @@ export function normaliseCommandWord(raw: string | null | undefined): string | n
   return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 }
 
-/** Topic tags are model text; only casing, spacing and edge punctuation are folded. */
+/**
+ * Topic tags are model text, so one idea arrives as "Newton's Laws",
+ * "newtons law" and "Newton's laws of motion." This folds the differences that
+ * never change meaning: case, spacing, punctuation, "&" for "and", a leading
+ * article, and a plain English plural on each word. It never merges two
+ * different words; "laws of motion" stays longer than "laws".
+ */
 export function normaliseTopic(raw: string): string {
-  return raw.toLowerCase().replace(/[\s ]+/g, " ").replace(/^[\s.,;:()\-–]+|[\s.,;:()\-–]+$/g, "").trim();
+  const words = raw.toLowerCase()
+    .replace(/[\u2019']s\b/g, "s")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9\u00c0-\u024f\u0900-\u097f]+/g, " ")
+    .trim().split(" ").filter(Boolean);
+  if (words[0] === "the" || words[0] === "a" || words[0] === "an") words.shift();
+  return words.map((w) => (w.length >= 4 && /[^su]s$/.test(w) && !/(ss|us|is|ics)$/.test(w) ? w.slice(0, -1) : w)).join(" ");
+}
+
+/** "Q 3(b)(ii)" and "3 b ii" are the same part. */
+export function partKey(label: string | null | undefined): string {
+  return (label ?? "").toLowerCase().replace(/^(q|question)\s*/, "").replace(/[^a-z0-9]+/g, "");
 }
 
 /**
@@ -302,7 +363,21 @@ export function buildInsights(input: {
 
   const inScope = orderPapers(applyFilters(input.papers, filters, now));
   const scopeIds = new Set(inScope.map((p) => p.id));
-  const attempts = input.attempts.filter((a) => scopeIds.has(a.paper_id));
+  const scoped = input.attempts.filter((a) => scopeIds.has(a.paper_id));
+
+  /* Choice papers. "Answer any two of the four" prints a maximum smaller than
+     its questions add up to. An unanswered question there was most likely
+     not chosen, and counting its marks as lost would invent a weakness. Such
+     questions are left out of every count and the screen says how many. A
+     paper with no printed maximum is never treated as a choice paper. */
+  const maxSum = new Map<string, number>();
+  for (const a of scoped) maxSum.set(a.paper_id, (maxSum.get(a.paper_id) ?? 0) + (num(a.max_marks) ?? 0));
+  const choiceIds = new Set(inScope
+    .filter((p) => { const stated = num(p.stated_maximum); return stated !== null && stated > 0 && (maxSum.get(p.id) ?? 0) > stated + 0.5; })
+    .map((p) => p.id));
+  const skippedChoice = (a: InsightAttempt) => choiceIds.has(a.paper_id) && a.answer_blank === true && num(a.marks_awarded) === 0;
+  const attempts = scoped.filter((a) => !skippedChoice(a));
+  const choiceSkipped = scoped.length - attempts.length;
   // Papers count as evidence only once at least one eligible attempt is on them.
   const evidencePapers = inScope.filter((p) => attempts.some((a) => a.paper_id === p.id));
   const paperIndex = new Map(evidencePapers.map((p, i) => [p.id, i]));
@@ -377,6 +452,9 @@ export function buildInsights(input: {
   const fading: Fading[] = [];
   if (enough) {
     for (const [subject, subjectPapers] of bySubject) {
+      // A pattern is a claim about one subject, so the four-paper floor
+      // applies to that subject's papers, not to the whole library.
+      if (subjectPapers.length < PATTERN_PAPERS) continue;
       const window = subjectPapers.slice(-RECENT_WINDOW).map((p) => p.id);
       for (const cause of CAUSES) {
         const items = lossesByCauseSubject.get(`${cause}\u0000${subject ?? ""}`) ?? [];
@@ -424,15 +502,32 @@ export function buildInsights(input: {
     if (avail === null || got === null || avail <= 0 || p.total_partial === true) continue;
     points.push({ paperId: p.id, index: points.length + 1, lost: round(Math.max(0, avail - got)), available: avail, date: p.date_taken });
   }
+  /* The trend sentence. Two rules make it honest:
+     1. Subjects are never compared with each other. Physics papers losing
+        less than Economics papers says nothing about improvement, so each
+        paper is read against its own subject's average, and a subject with a
+        single complete paper has no average to read against and sits out.
+     2. A direction is named only when the change between the earlier and the
+        later papers is larger than the noise of the papers themselves: the
+        spread they actually show, and never less than one paper's own
+        measurement error (stats.ts). */
   let summary: TrendSummary | null = null;
-  if (points.length >= 6) {
-    const half = Math.floor(points.length / 2);
-    const share = (xs: TrendPoint[]) => xs.reduce((n, x) => n + x.lost, 0) / xs.reduce((n, x) => n + x.available, 0);
-    const early = points.slice(0, half); const late = points.slice(points.length - half);
-    const diff = share(late) - share(early);
-    // Five points of share either way before a direction is named; smaller
-    // movements are within what one harder paper explains.
-    summary = { direction: diff <= -0.05 ? "fewer" : diff >= 0.05 ? "more" : "similar", earlier: early.length, recent: late.length };
+  const pointSubject = new Map(evidencePapers.map((p) => [p.id, subjectOf(p) ?? ""]));
+  const bySubjectPoints = new Map<string, TrendPoint[]>();
+  for (const pt of points) {
+    const s = pointSubject.get(pt.paperId) ?? "";
+    bySubjectPoints.set(s, [...(bySubjectPoints.get(s) ?? []), pt]);
+  }
+  const usable = [...bySubjectPoints.values()].filter((xs) => xs.length >= 2);
+  const centred = usable.flatMap((xs) => {
+    const mean = xs.reduce((n, x) => n + x.lost, 0) / xs.reduce((n, x) => n + x.available, 0);
+    return xs.map((x) => ({ order: x.index, share: x.lost / x.available - mean, max: x.available }));
+  }).sort((a, b) => a.order - b.order);
+  if (centred.length >= 6) {
+    const half = Math.floor(centred.length / 2);
+    const early = centred.slice(0, half); const late = centred.slice(centred.length - half);
+    const change = shareChange(early, late);
+    if (change) summary = { direction: change.direction, earlier: early.length, recent: late.length, withinSubjects: usable.length > 1 };
   }
 
   /* Question size. Every eligible attempt counts, lost or not, so this is the one
@@ -465,22 +560,76 @@ export function buildInsights(input: {
         return { b, share: b.lost / b.available, rest, restQuestions };
       })
       .filter((c) => c.rest !== null && c.restQuestions >= 3 && c.share - (c.rest as number) >= 0.1 && c.share >= (c.rest as number) * 1.5)
+      // Questions on one paper share its difficulty and the student's day, so
+      // a pooled gap can come from one bad paper. The gap must also hold
+      // paper by paper: worse on this band in at least two papers, and in
+      // more papers than it was better.
+      .filter((c) => {
+        const band = bands.find((x) => x.key === c.b.key)!;
+        const rows: { a: number; b: number }[] = [];
+        for (const p of evidencePapers) {
+          let bl = 0; let ba = 0; let rl = 0; let ra = 0;
+          for (const a of attempts) {
+            if (a.paper_id !== p.id) continue;
+            const max = num(a.max_marks); const got = num(a.marks_awarded);
+            if (max === null || got === null || max <= 0) continue;
+            if (band.test(max)) { ba += max; bl += Math.max(0, max - got); } else { ra += max; rl += Math.max(0, max - got); }
+          }
+          if (ba > 0 && ra > 0) rows.push({ a: bl / ba, b: rl / ra });
+        }
+        const pp = pairedPapers(rows);
+        return pp.worse >= 2 && pp.worse > pp.better;
+      })
       .sort((x, y) => (y.share - (y.rest as number)) - (x.share - (x.rest as number)));
     if (candidates[0]) tariffNote = `You lose a larger share of the marks on ${candidates[0].b.label} than on the rest of your questions.`;
   }
 
-  /* Command words: only questions that lost marks carry one, so this counts
-     losses, never a success rate. */
+  /* Command words. Two readings, kept apart:
+     · where marks went: questions that lost marks, by the word printed on the
+       question, or the explain stage's tag when nothing is printed (the same
+       order as the practice scorecard's `attempt_tags`);
+     · the rate: every question that prints the word, lost or not. The explain
+       stage tags only lost parts, so its tag can never give a rate.
+     The rate is pulled toward the student's own overall rate in proportion to
+     how little evidence the word has (stats.ts), so three questions cannot
+     make a word look like the student's worst. */
+  const printed = new Map<string, string | null>();
+  for (const a of attempts) printed.set(a.id, printedCommandWord(a.question_text ?? null));
   const cwRefs = new Map<string, QuestionRef[]>();
   let cwTagged = 0;
   for (const l of losses) {
-    const w = normaliseCommandWord(l.command_word);
+    const w = printed.get(l.attempt_id) ?? normaliseCommandWord(l.command_word);
     if (!w) continue;
     cwTagged += 1;
     cwRefs.set(w, [...(cwRefs.get(w) ?? []), ref(attemptById.get(l.attempt_id)!, num(l.marks_lost) ?? 0)]);
   }
+  const cwRate = new Map<string, { questions: number; lost: number; available: number }>();
+  for (const a of attempts) {
+    const w = printed.get(a.id);
+    const max = num(a.max_marks); const got = num(a.marks_awarded);
+    if (!w || max === null || got === null || max <= 0) continue;
+    const r = cwRate.get(w) ?? { questions: 0, lost: 0, available: 0 };
+    r.questions += 1; r.available += max; r.lost += Math.max(0, max - got);
+    cwRate.set(w, r);
+  }
+  const cwPrior = marksAvailable > 0 ? marksLost / marksAvailable : 0;
+  const cwStrength = priorStrength([...cwRate.values()]);
   const commandWords = {
-    rows: [...cwRefs].map(([word, refs]) => ({ word, ...tallyFrom(refs) }))
+    rows: [...cwRefs].map(([word, refs]): CommandWordRow => {
+      const r = cwRate.get(word);
+      // Marks inside one question are not independent trials, so the
+      // interval counts questions: its width reflects how many times the word
+      // was actually tested.
+      const ci = r ? wilson((r.lost / r.available) * r.questions, r.questions) : null;
+      return {
+        word, ...tallyFrom(refs),
+        rate: r && r.questions >= MIN_COMMAND_WORD_QUESTIONS && ci
+          ? { questions: r.questions, lost: round(r.lost), available: round(r.available),
+              shrunk: shrunkShare(r.lost, r.available, cwPrior, cwStrength), lo: ci.lo, hi: ci.hi,
+              standsOut: ci.lo > cwPrior }
+          : null,
+      };
+    })
       .filter((r) => r.marks > 0 && r.questions >= MIN_COMMAND_WORD_QUESTIONS)
       .sort((a, b) => b.marks - a.marks || b.questions - a.questions || a.word.localeCompare(b.word)),
     coverage: { tagged: cwTagged, total: losses.length },
@@ -550,14 +699,69 @@ export function buildInsights(input: {
     isPattern: enough && papersWithEndBlanks >= RECUR_PAPERS,
   };
 
-  /* Knock-on: marks lost on parts the explain stage found were built on an
-     earlier part's answer. */
+  /* Knock-on: marks lost on a part that built on an earlier part which
+     itself lost marks. `depends_on_parts` lists every earlier part the explain
+     stage read for context, and that includes a full-mark previous part
+     carried forward as safe context, which is no slip at all. So the earlier
+     part is looked up on the same paper, and only one that lost marks counts.
+     An earlier part that cannot be found is not assumed to have lost any. */
+  const partsByPaper = new Map<string, Map<string, InsightAttempt>>();
+  for (const a of attempts) {
+    const m = partsByPaper.get(a.paper_id) ?? new Map<string, InsightAttempt>();
+    m.set(partKey(a.question_label), a);
+    partsByPaper.set(a.paper_id, m);
+  }
+  const lostMarks = (a: InsightAttempt | undefined) => {
+    const max = num(a?.max_marks); const got = num(a?.marks_awarded);
+    return max !== null && got !== null && got < max;
+  };
   const knockRefs: QuestionRef[] = [];
   for (const l of losses) {
-    if (!Array.isArray(l.depends_on_parts) || !l.depends_on_parts.some((x) => typeof x === "string" && x.trim())) continue;
-    knockRefs.push(ref(attemptById.get(l.attempt_id)!, num(l.marks_lost) ?? 0));
+    if (!Array.isArray(l.depends_on_parts)) continue;
+    const a = attemptById.get(l.attempt_id)!;
+    const parts = partsByPaper.get(a.paper_id);
+    const slipBefore = l.depends_on_parts.some((x) => typeof x === "string" && x.trim()
+      && partKey(x) !== partKey(a.question_label) && lostMarks(parts?.get(partKey(x))));
+    if (slipBefore) knockRefs.push(ref(a, num(l.marks_lost) ?? 0));
   }
   const knockOn = knockRefs.length ? tallyFrom(knockRefs) : emptyTally();
+
+  /* Where slips happen. Careless slips (procedural slips and misreads) are
+     placed in the first, middle or last third of their paper by printed
+     order. Errors that climb toward the end of a paper are a known sign of
+     fatigue or time pressure, and the fix is different from a knowledge fix
+     (leave time to check the last questions). The note is made only when the
+     last third's slip rate beats the first third's beyond noise (two-
+     proportion test, questions as trials), with slips late in two or more
+     papers. */
+  const slipCauses = new Set<Cause>(["procedural_slip", "misread_question"]);
+  const slipAttempts = new Set<string>();
+  for (const l of losses) if (splitLoss(l).causes.some(([c]) => slipCauses.has(c))) slipAttempts.add(l.attempt_id);
+  const thirds = { first: { slips: 0, questions: 0 }, middle: { slips: 0, questions: 0 }, last: { slips: 0, questions: 0 } };
+  const lateRefs: QuestionRef[] = [];
+  const latePapers = new Set<string>();
+  let slipPapersRead = 0;
+  for (const p of evidencePapers) {
+    const rows = attempts.filter((a) => a.paper_id === p.id && a.question_order !== null);
+    if (rows.length < 6 || rows.length !== attempts.filter((a) => a.paper_id === p.id).length) continue;
+    slipPapersRead += 1;
+    const ordered = [...rows].sort((x, y) => (x.question_order as number) - (y.question_order as number));
+    ordered.forEach((a, i) => {
+      const pos = i / (ordered.length - 1);
+      const third = pos < 1 / 3 ? thirds.first : pos <= 2 / 3 ? thirds.middle : thirds.last;
+      third.questions += 1;
+      if (slipAttempts.has(a.id)) {
+        third.slips += 1;
+        if (third === thirds.last) { latePapers.add(p.id); lateRefs.push(ref(a, Math.max(0, (num(a.max_marks) ?? 0) - (num(a.marks_awarded) ?? 0)))); }
+      }
+    });
+  }
+  const slipZ = twoProportionZ(thirds.first.slips, thirds.first.questions, thirds.last.slips, thirds.last.questions);
+  const slips: SlipPosition = {
+    papersRead: slipPapersRead, ...thirds,
+    note: enough && slipZ !== null && slipZ >= Z95 && thirds.last.slips >= 3 && latePapers.size >= RECUR_PAPERS ? "late" : null,
+    refs: lateRefs.sort((a, b) => b.paperIndex - a.paperIndex),
+  };
 
   /* Subjects, each against its own denominator. */
   const subjects: SubjectRow[] = [...bySubject].map(([subject, ps]) => {
@@ -581,11 +785,13 @@ export function buildInsights(input: {
       marksLost: round(marksLost),
       marksExplained: round(marksExplained),
       enough,
+      choicePapers: choiceIds.size,
+      choiceSkipped,
     },
     causes, groups, patterns, fading, checklist,
     trend: { points, summary },
     tariff: shownBands, tariffNote,
-    commandWords, stages, topics, pacing, knockOn, subjects,
+    commandWords, stages, topics, pacing, slips, knockOn, subjects,
   };
 }
 

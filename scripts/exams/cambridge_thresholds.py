@@ -216,6 +216,27 @@ def routes_for_db(table, weights):
     return out
 
 
+def components_for_db(table, routes):
+    """One dict per component the table prints (AXO-270), for placing a past
+    paper's marks on the board's difficulty scale. A component is verified
+    only when it sits in a verified route of this same table (so its A and E
+    passed the weighted cross-check and its raw maximum matched the weighting
+    file), and its five thresholds strictly descend, stay under the maximum
+    and stay above zero. Everything else is a draft, which nothing reads."""
+    in_verified = {c for r in routes if r["status"] == "verified" for c in r["option_code"].split(",")}
+    out = []
+    for code, (max_raw, grades) in sorted(table["components"].items()):
+        if len(grades) != 5:
+            continue
+        ok = (all(a > b for a, b in zip(grades, grades[1:])) and grades[0] < max_raw and grades[-1] > 0)
+        out.append({
+            "component": code, "max_raw": max_raw,
+            "grades": dict(zip(["A", "B", "C", "D", "E"], grades)),
+            "status": "verified" if ok and code in in_verified else "draft",
+        })
+    return out
+
+
 # ── discovery: links on the board's own listing pages ──────────────────────
 
 # The code may be followed by a level word ("8027-as-level-june-2026-...").

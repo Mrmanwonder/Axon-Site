@@ -81,6 +81,9 @@ async function load(db) {
     new URL('../../supabase/migrations/20261013160000_axo_266_digest_content_notice_1_4_0.sql', import.meta.url), 'utf8');
   await db.exec(gate3);
   await db.exec(gate3); // idempotent
+  // AXO-270: the trend must clear a two-proportion test.
+  await db.exec(await readFile(
+    new URL('../../supabase/migrations/20261013200100_axo_270_digest_trend.sql', import.meta.url), 'utf8'));
   return migration;
 }
 
@@ -374,10 +377,15 @@ test('parent digest: the comparison with earlier papers needs enough on both sid
         if (i < lostCount) await db.query(`insert into public.mark_loss_event (attempt_id, student_id, marks_lost, command_word, confidence) values ($1, $2, 1, 'Explain', 'confirmed')`, [aid, st]);
       }
     };
-    // Fewer: earlier 8 of 12 lost marks, this week 3 of 10.
+    // Fewer: earlier 10 of 12 lost marks, this week 2 of 10.
     const s1 = await mk(1, 'Jo');
-    await attempts(s1, await paper(s1, '2026-09-20T10:00:00Z'), 12, 8);
-    await attempts(s1, await paper(s1, '2026-10-08T10:00:00Z'), 10, 3);
+    await attempts(s1, await paper(s1, '2026-09-20T10:00:00Z'), 12, 10);
+    await attempts(s1, await paper(s1, '2026-10-08T10:00:00Z'), 10, 2);
+    // Within chance: earlier 8 of 12, this week 3 of 10. A 37-point gap on
+    // this few questions does not clear the two-proportion test (AXO-270).
+    const s5 = await mk(5, 'Ned');
+    await attempts(s5, await paper(s5, '2026-09-20T10:00:00Z'), 12, 8);
+    await attempts(s5, await paper(s5, '2026-10-08T10:00:00Z'), 10, 3);
     // Similar: earlier 5 of 12, this week 5 of 10 (0.42 vs 0.50 is under a tenth apart? 0.08).
     const s2 = await mk(2, 'Kit');
     await attempts(s2, await paper(s2, '2026-09-20T10:00:00Z'), 12, 5);
@@ -394,7 +402,8 @@ test('parent digest: the comparison with earlier papers needs enough on both sid
     await db.query(`select public.queue_parent_digests('2026-10-11')`);
     const rows = (await db.query(`select * from public.claim_parent_digests(25)`)).rows;
     const by = (n) => rows.find(r => r.payload.first_name === n).payload;
-    assert.deepEqual([by('Jo').trend, by('Jo').earlier_questions, by('Jo').earlier_lost, by('Jo').questions_counted, by('Jo').questions_lost], ['fewer', 12, 8, 10, 3]);
+    assert.deepEqual([by('Jo').trend, by('Jo').earlier_questions, by('Jo').earlier_lost, by('Jo').questions_counted, by('Jo').questions_lost], ['fewer', 12, 10, 10, 2]);
+    assert.equal(by('Ned').trend, 'similar');
     assert.equal(by('Kit').trend, 'similar');
     assert.equal(by('Lee').trend, 'more');
     assert.equal(by('Max').trend, null, 'fewer than 10 earlier questions: no comparison');

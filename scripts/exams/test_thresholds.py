@@ -130,6 +130,24 @@ S1 130 11, 21, 31 – 93 80 65 51 37""".splitlines()
                                       "weighted a b c d e", "11, 21 100 70 63 57 51 45"])
         self.assertEqual([(r["qualification"], r["assessment"]) for r in t["routes"]], [("as", "as")])
 
+    def test_component_thresholds_verify_only_inside_a_verified_route(self):
+        t = ct.parse_threshold_lines(TABLE)
+        routes = ct.routes_for_db(t, ct.parse_weighting_lines(WEIGHTS))
+        comps = {c["component"]: c for c in ct.components_for_db(t, routes)}
+        self.assertEqual(comps["31"]["grades"], {"A": 33, "B": 31, "C": 28, "D": 25, "E": 23})
+        self.assertEqual(comps["31"]["max_raw"], 40)
+        self.assertEqual({k: v["status"] for k, v in comps.items()},
+                         {"11": "verified", "21": "verified", "31": "verified", "41": "verified", "51": "verified"})
+        # Without the weighting file nothing verifies, so no component does.
+        drafts = ct.components_for_db(t, ct.routes_for_db(t, {}))
+        self.assertTrue(all(c["status"] == "draft" for c in drafts))
+
+    def test_component_thresholds_out_of_order_stay_drafts(self):
+        bad = [l.replace("Component 31 40 33 31 28 25 23", "Component 31 40 33 31 32 25 23") for l in TABLE]
+        t = ct.parse_threshold_lines(bad)
+        comps = {c["component"]: c for c in ct.components_for_db(t, ct.routes_for_db(t, ct.parse_weighting_lines(WEIGHTS)))}
+        self.assertEqual(comps["31"]["status"], "draft")
+
     def test_paper_numbers(self):
         self.assertEqual([ct.paper_of(c) for c in ["11", "31", "02", "04", "50"]], [1, 3, 2, 4, 5])
 

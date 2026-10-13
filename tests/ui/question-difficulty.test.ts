@@ -28,7 +28,7 @@ test("insights relate mark loss to medium rated questions in one topic across mu
   const ratings = attempts.map(a => mkRating(a.id,a.paper_id));
   const result = difficultyInsights({papers,attempts,losses,ratings,filters:ALL_FILTERS,now:Date.parse("2026-10-05")});
   expect(result.rated).toBe(3);
-  expect(result.rows).toMatchObject([{topic:"vectors",band:3,count:3,papers:2,lost:6,confidence:"low"}]);
+  expect(result.rows).toMatchObject([{topic:"Vectors",band:3,count:3,papers:2,lost:6,confidence:"low"}]);
 });
 
 test("one paper never makes a pattern; filtered-out student evidence cannot leak through", () => {

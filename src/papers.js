@@ -528,7 +528,7 @@ export async function insightEvidence(studentId) {
     const [attempts, losses, felt, difficulty] = await Promise.all([
       readAllPages(() => sb
         .from('attempt_analytics')
-        .select('id,paper_id,question_label,max_marks,marks_awarded,question_order,answer_blank')
+        .select('id,paper_id,question_label,question_text,max_marks,marks_awarded,question_order,answer_blank')
         .eq('student_id', studentId)
         .order('id', { ascending: true })),
       readAllPages(() => sb
@@ -690,11 +690,13 @@ export async function syllabusMapData(studentId) {
 */
 export async function lossByCause(studentId) {
   return readThrough(`loss:${studentId}`, async () => {
-    const { data, error } = await sb
+    // Paged: a single read stops at the API's row cap and would quietly
+    // under-count a long history.
+    const data = await readAllPages(() => sb
     .from('mark_loss_analytics')
-    .select('cause,marks_lost')
-    .eq('student_id', studentId);
-    if (error) throw error;
+    .select('id,cause,marks_lost')
+    .eq('student_id', studentId)
+    .order('id', { ascending: true }));
     const totals = {};
     for (const row of data) totals[row.cause] = (totals[row.cause] || 0) + Number(row.marks_lost);
     return totals;
@@ -711,13 +713,13 @@ export async function lossByCause(studentId) {
 */
 export async function needsCheck(studentId) {
   return readThrough(`needscheck:${studentId}`, async () => {
-    const { data, error } = await sb
+    const data = await readAllPages(() => sb
     .from('student_attempt')
     .select('id,paper_id,question_label')
     .eq('student_id', studentId)
     .eq('extraction_confidence', 'unsure')
-    .is('student_confirmed_at', null);
-    if (error) throw error;
+    .is('student_confirmed_at', null)
+    .order('id', { ascending: true }));
     const papers = new Set(data.map((a) => a.paper_id));
     return { count: data.length, papers: papers.size };
   });
