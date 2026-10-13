@@ -128,9 +128,9 @@ describe("patterns", () => {
     expect(buildInsights({ ...s, now: NOW }).patterns).toEqual([]);
   });
 
-  test("patterns are never merged across subjects", () => {
-    const a = series(2, "keyword_miss", "Physics");
-    const b = series(2, "keyword_miss", "Chemistry");
+  test("patterns are never merged across subjects, and each subject needs its own four papers", () => {
+    const a = series(4, "keyword_miss", "Physics");
+    const b = series(4, "keyword_miss", "Chemistry");
     const m = buildInsights({
       papers: [...a.papers, ...b.papers], attempts: [...a.attempts, ...b.attempts], losses: [...a.losses, ...b.losses], now: NOW,
     });
@@ -142,6 +142,12 @@ describe("patterns", () => {
       papers: [...a.papers, ...b.papers, ...c.papers], attempts: [...a.attempts, ...b.attempts, ...c.attempts], losses: [...a.losses, ...b.losses, ...c.losses], now: NOW,
     });
     expect(m2.patterns.find((p) => p.subject === "Biology")).toBeUndefined();
+    // Two Physics papers inside a library of four are not a Physics pattern.
+    const few = series(2, "keyword_miss", "Physics");
+    const other = series(2, "procedural_slip", "Chemistry");
+    const m3 = buildInsights({ papers: [...few.papers, ...other.papers], attempts: [...few.attempts, ...other.attempts], losses: [...few.losses, ...other.losses], now: NOW });
+    expect(m3.evidence.enough).toBe(true);
+    expect(m3.patterns).toEqual([]);
   });
 
   test("a cause absent from the last three papers is reported as fading, not as a pattern", () => {
@@ -195,27 +201,65 @@ describe("trend", () => {
   test("no direction is named under six complete papers, and small movements read as similar", () => {
     const s = series(6);
     s.papers = s.papers.map((p, i) => ({ ...p, total_available: 50, total_awarded: i < 3 ? 30 : 41 }));
-    expect(buildInsights({ ...s, now: NOW }).trend.summary).toEqual({ direction: "fewer", earlier: 3, recent: 3 });
+    expect(buildInsights({ ...s, now: NOW }).trend.summary).toEqual({ direction: "fewer", earlier: 3, recent: 3, withinSubjects: false });
     s.papers = s.papers.map((p) => ({ ...p, total_awarded: 40 }));
     expect(buildInsights({ ...s, now: NOW }).trend.summary?.direction).toBe("similar");
     const five = series(5);
     five.papers = five.papers.map((p) => ({ ...p, total_available: 50, total_awarded: 40 }));
     expect(buildInsights({ ...five, now: NOW }).trend.summary).toBeNull();
   });
+
+  test("a change smaller than the papers' own noise is not called a direction", () => {
+    const s = series(6);
+    // 40% lost, then 32%: eight points, under the measurement error of 50-mark papers.
+    s.papers = s.papers.map((p, i) => ({ ...p, total_available: 50, total_awarded: i < 3 ? 30 : 34 }));
+    expect(buildInsights({ ...s, now: NOW }).trend.summary?.direction).toBe("similar");
+    // Papers that themselves swing widely need a bigger change still.
+    s.papers = s.papers.map((p, i) => ({ ...p, total_available: 50, total_awarded: [20, 45, 25, 44, 30, 46][i] }));
+    expect(buildInsights({ ...s, now: NOW }).trend.summary?.direction).toBe("similar");
+  });
+
+  test("subjects are compared only with themselves", () => {
+    // Early papers are Economics (lose a lot), late ones Physics (lose little).
+    // Within each subject nothing changed, so there is no trend.
+    const econ = series(3, "procedural_slip", "Economics");
+    const phys = series(3, "procedural_slip", "Physics");
+    econ.papers = econ.papers.map((p, i) => ({ ...p, date_taken: `2026-01-0${i + 1}`, total_available: 50, total_awarded: 20 }));
+    phys.papers = phys.papers.map((p, i) => ({ ...p, date_taken: `2026-06-0${i + 1}`, total_available: 50, total_awarded: 45 }));
+    const m = buildInsights({ papers: [...econ.papers, ...phys.papers], attempts: [...econ.attempts, ...phys.attempts], losses: [], now: NOW });
+    expect(m.trend.points).toHaveLength(6);
+    expect(m.trend.summary).toMatchObject({ direction: "similar", withinSubjects: true });
+  });
 });
 
 describe("question size", () => {
   test("bands need three questions and count every attempt, lost or not", () => {
-    const p = paper({ date: "2026-09-01" });
+    const p = paper({ date: "2026-09-01" }); const q = paper({ date: "2026-09-08" });
     const attempts = [
-      ...[1, 2, 2, 1].map((m) => attempt(p, { max_marks: m, marks_awarded: m })),
-      ...[8, 9, 10, 8, 8].map((m) => attempt(p, { max_marks: m, marks_awarded: m - 3 })),
+      ...[1, 2].map((m) => attempt(p, { max_marks: m, marks_awarded: m })),
+      ...[2, 1].map((m) => attempt(q, { max_marks: m, marks_awarded: m })),
+      ...[8, 9, 10].map((m) => attempt(p, { max_marks: m, marks_awarded: m - 3 })),
+      ...[8, 8].map((m) => attempt(q, { max_marks: m, marks_awarded: m - 3 })),
     ];
-    const m = buildInsights({ papers: [p], attempts, losses: [], now: NOW });
+    const m = buildInsights({ papers: [p, q], attempts, losses: [], now: NOW });
     expect(m.tariff.map((b) => [b.key, b.lost, b.available, b.questions])).toEqual([
       ["1-2", 0, 6, 4], ["8+", 15, 43, 5],
     ]);
     expect(m.tariffNote).toContain("8+ mark questions");
+  });
+
+  test("a gap that comes from one paper is not a note", () => {
+    // All the 8+ losses are on one paper; on the other the 8+ questions were fine.
+    const p = paper({ date: "2026-09-01" }); const q = paper({ date: "2026-09-08" });
+    const attempts = [
+      ...[1, 2].map((m) => attempt(p, { max_marks: m, marks_awarded: m })),
+      ...[2, 1].map((m) => attempt(q, { max_marks: m, marks_awarded: m })),
+      ...[8, 9, 10].map((m) => attempt(p, { max_marks: m, marks_awarded: m - 5 })),
+      ...[8, 8].map((m) => attempt(q, { max_marks: m, marks_awarded: m })),
+    ];
+    const m = buildInsights({ papers: [p, q], attempts, losses: [], now: NOW });
+    expect(m.tariff.find((b) => b.key === "8+")?.lost).toBe(15);
+    expect(m.tariffNote).toBeNull();
   });
 });
 
@@ -283,11 +327,20 @@ describe("pacing and knock-on", () => {
     expect(buildInsights({ papers: [p], attempts, losses: [], now: NOW }).pacing.papersWithEndBlanks).toBe(0);
   });
 
-  test("knock-on counts losses built on an earlier part", () => {
-    const s = series(4);
-    s.losses[0].depends_on_parts = ["5(a)"];
-    s.losses[1].depends_on_parts = [""];
-    const m = buildInsights({ ...s, now: NOW });
+  test("knock-on counts a loss only when the earlier part it built on also lost marks", () => {
+    const p = paper({ date: "2026-09-01" });
+    const a5 = attempt(p, { question_label: "5(a)", max_marks: 3, marks_awarded: 1 });
+    const b5 = attempt(p, { question_label: "5(b)", max_marks: 4, marks_awarded: 2 });
+    const a6 = attempt(p, { question_label: "6(a)", max_marks: 2, marks_awarded: 2 });
+    const b6 = attempt(p, { question_label: "6(b)", max_marks: 4, marks_awarded: 1 });
+    const c6 = attempt(p, { question_label: "6(c)", max_marks: 2, marks_awarded: 0 });
+    const losses = [
+      loss(a5),
+      loss(b5, { depends_on_parts: ["5 (a)"] }),           // built on a part that lost marks
+      loss(b6, { depends_on_parts: ["6(a)"] }),            // the earlier part was full marks: no slip carried
+      loss(c6, { depends_on_parts: ["9(z)", ""] }),        // an earlier part that cannot be found is not assumed
+    ];
+    const m = buildInsights({ papers: [p], attempts: [a5, b5, a6, b6, c6], losses, now: NOW });
     expect([m.knockOn.questions, m.knockOn.marks]).toEqual([1, 2]);
   });
 });

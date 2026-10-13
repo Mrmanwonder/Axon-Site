@@ -159,6 +159,10 @@ export type GradeOutlook =
       option_code: string;
       /** Variants of the student's route the range was widened across. */
       routes?: number;
+      /** The range covers this much of the likely spread (90), from the papers' own ups and downs (AXO-270). */
+      interval?: number;
+      /** Papers placed on these thresholds through the board's own grade lines for their series. */
+      equated_papers?: number;
       source_url: string;
       papers: number;
       components: { paper: number; papers: number }[];

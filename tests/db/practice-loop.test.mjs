@@ -199,7 +199,7 @@ test('AXO-250: ranking weighs marks, recurrence and the exam date, and says why'
   assert.equal(Number(top.marks_recoverable), 6);
   assert.equal(top.papers_seen, 2);
   assert.equal(top.exam_days, 20);
-  assert.match(top.reason, /6 marks recoverable across 2 papers; exam in 20 days/);
+  assert.match(top.reason, /6 marks to win back across 2 papers; exam in 20 days/);
   // "Explain" now covers three lost-mark parts, so it may be named.
   const explain = areas.find(a => a.kind === 'command_word');
   assert.equal(explain.key, 'Explain');
@@ -282,6 +282,12 @@ test('AXO-259/260/261: journal, scorecard and readiness read real states', async
   const sumAvail = card.filter(c => c.dimension === 'command_word').reduce((s, c) => s + Number(c.marks_available), 0);
   assert.equal(sumAvail, 3 + 2 + 4 + 3 + 2, 'every eligible mark appears once (unsure read excluded)');
   assert.ok(card.some(c => c.dimension === 'ao' && c.key === 'untagged'), 'no AO without an identified paper');
+  // AXO-270: 4(b) prints two command words, so it has no printed word; the
+  // explain stage's "Explain" tag (lost parts only) must not enter the rate.
+  const explain = card.find(c => c.dimension === 'command_word' && c.key === 'Explain');
+  assert.equal(Number(explain.marks_available), 4 + 3, 'only the two questions that print "Explain"');
+  const untagged = card.find(c => c.dimension === 'command_word' && c.key === 'untagged');
+  assert.equal(Number(untagged.marks_available), 2);
 
   const ready = await all('select * from public.topic_readiness($1, $2)', [ids.student, ids.doc]);
   const kin = ready.find(t => t.title === 'Kinematics');
@@ -342,6 +348,50 @@ test('AXO-262: the outlook reads every variant of the route and widens across th
   assert.equal(out.low_grade, 'below lowest grade', 'the strict variant decides the low end');
   assert.equal(out.high_grade, 'A*', 'the lenient variant decides the high end');
   assert.equal(out.mid_grade, null, 'the middle is the more cautious of the variants');
+});
+
+test('AXO-270: the outlook range narrows with evidence, and papers are equated through verified component thresholds', async () => {
+  const before = (await one(`select public.grade_outlook($1, 'Physics') j`, [ids.student])).j;
+  assert.equal(before.interval, 90);
+  assert.equal(before.equated_papers, 0, 'no component thresholds yet');
+  // The paper says where it came from: 9702/22, June 2025.
+  await db.exec(`select set_config('request.jwt.claims', '{"role":"service_role"}', false)`);
+  await db.query(`insert into public.extraction_run (paper_id, student_id, pipeline_version, status, committed_at, tier_routing)
+                  values ($1, $2, 'test', 'committed', now(), $3::jsonb)`,
+    [ids.papers[0], ids.student, JSON.stringify({ triage: { assessment_identity: { paper_code: '9702/22/M/J/25', confidence: 'high' } } })]);
+  const comp = (series, component, grades) => db.query(
+    `insert into public.grade_threshold_component (provider_key, syllabus_code, series_key, component, max_raw, grades, source_url, source_sha256, status, verified_by, verified_at)
+     values ('cambridge', '9702', $1, $2, 60, $3::jsonb, 'https://example.test/gt', repeat('e', 64), 'verified', 'auto:test', now())`,
+    [series, component, JSON.stringify(grades)]);
+  await comp('2025-06', '22', { A: 45, B: 38, C: 30, D: 22, E: 15 });
+  await comp('2026-06', '21', { A: 47, B: 40, C: 32, D: 24, E: 16 });
+  await comp('2026-06', '22', { A: 43, B: 36, C: 28, D: 20, E: 13 });
+  await as(ids.user, 'sess-1');
+  const ref = await one('select * from private.paper_printed_ref($1)', [ids.papers[0]]);
+  assert.deepEqual({ ...ref }, { syllabus_code: '9702', component: '22', series_key: '2025-06' });
+  const after = (await one(`select public.grade_outlook($1, 'Physics') j`, [ids.student])).j;
+  assert.equal(after.state, 'ready');
+  assert.equal(after.equated_papers, 1, 'the one paper with a printed reference, on every variant');
+  assert.ok(after.low_total <= after.mid_total && after.mid_total <= after.high_total);
+});
+
+test('AXO-270: a paper with no catalogue identity takes its paper number from its printed reference', async () => {
+  const p = await one(`insert into public.paper (student_id, type, tier, date_taken, subject) values ($1, 'unit_test', 'tier_1', current_date - 3, 'Physics') returning id`, [ids.student]);
+  ids.papers.push(p.id);
+  await attempt(ids.papers.length - 1, '1', 'State the unit of charge.', 1, 1);
+  await db.exec(`select set_config('request.jwt.claims', '{"role":"service_role"}', false)`);
+  await db.query(`insert into public.extraction_run (paper_id, student_id, pipeline_version, status, committed_at, tier_routing)
+                  values ($1, $2, 'test', 'committed', now(), $3::jsonb)`,
+    [p.id, ids.student, JSON.stringify({ triage: { assessment_identity: { paper_code: '9702/42/O/N/25', confidence: 'high' } } })]);
+  // A reference for another syllabus is never taken.
+  const other = await one(`insert into public.paper (student_id, type, tier, date_taken, subject) values ($1, 'pyq', 'tier_2', current_date - 2, 'Physics') returning id`, [ids.student]);
+  await db.query(`insert into public.extraction_run (paper_id, student_id, pipeline_version, status, committed_at, tier_routing)
+                  values ($1, $2, 'test', 'committed', now(), $3::jsonb)`,
+    [other.id, ids.student, JSON.stringify({ triage: { assessment_identity: { paper_code: '9709/42/O/N/25', confidence: 'high' } } })]);
+  await as(ids.user, 'sess-1');
+  const row = await one('select paper_number from private.attempt_tags($1) where paper_id = $2', [ids.student, p.id]);
+  assert.equal(row.paper_number, 4);
+  assert.equal((await one('select count(*)::int n from private.paper_printed_ref($1)', [other.id])).n, 0);
 });
 
 test('AXO-246: a part whose reading becomes unsure is withdrawn, and returns with its history when confirmed', async () => {

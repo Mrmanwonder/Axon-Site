@@ -1,0 +1,22 @@
+{
+  "about": "One deterministic command-word reading, run against private.printed_command_word (tests/db/insights-accuracy.test.mjs) and printedCommandWord (src/ui/data/__tests__/commandWords.test.ts). Each case is [question text, expected word or null].",
+  "cases": [
+    ["A car accelerates uniformly. Calculate the acceleration.", "Calculate"],
+    ["(b) (ii) State Ohm's law. [1]", "State"],
+    ["3(a) Show that the speed is 4.0 m s–1.", "Show that"],
+    ["To what extent is inflation caused by demand?", "How far / To what extent"],
+    ["How far do you agree with this view?", "How far / To what extent"],
+    ["Hence find the value of x.", "Find"],
+    ["Hence, or otherwise, show that y = 2.", "Show that"],
+    ["Hence, or otherwise, the result follows.", "Hence"],
+    ["Explain the effect. Calculate the current.", null],
+    ["Explain the effect. Explain the cause.", "Explain"],
+    ["The student will state the answer later.", null],
+    ["Describe the motion. Show your working.", "Describe"],
+    ["(c) Sketch the graph of y = x^2. [3]", "Sketch"],
+    ["Work out the total cost.\nGive your answer in dollars.", null],
+    ["Write down the gradient.", "Write down"],
+    ["", null],
+    [null, null]
+  ]
+}

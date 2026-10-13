@@ -328,13 +328,13 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
             </p>
           ))}
         </div>}
-        <p className="widgetnote">A mistake counts as repeating when it costs marks in two or more papers of the same subject. {evidenceLine}.</p>
+        <p className="widgetnote">A mistake counts as repeating when it costs marks in two or more papers of a subject with at least {PATTERN_PAPERS} papers. {evidenceLine}.</p>
       </div> : model.fading.length ? <div className="card tallycard"><div className="fading">
         {model.fading.map((f) => (
           <p key={f.cause + (f.subject ?? "")}><strong>{CAUSE_LABEL[f.cause]}{f.subject ? ` · ${f.subject}` : ""}</strong> appeared in {plural(f.earlierPapers, "earlier paper")} and in none of your last {f.recentWindow}.</p>
         ))}
       </div></div> : <EvidenceGap title="No repeating mistakes">
-        No cause has cost marks in two different papers of the same subject in this evidence. {evidenceLine}.
+        No cause has cost marks in two different papers of the same subject in this evidence. A subject is read for repeats once it has {PATTERN_PAPERS} papers. {evidenceLine}.
       </EvidenceGap>}
     </section>
 
@@ -365,7 +365,7 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
           refs={model.causes.flatMap((c) => c.refs).filter((r, i, all) => all.findIndex((x) => x.attemptId === r.attemptId) === i)
             .sort((a, b) => b.paperIndex - a.paperIndex || b.marks - a.marks)} />
         <p className="widgetnote">
-          {numMark(ev.marksLost)} marks lost in total across {evidenceLine}; {numMark(causeTotal)} of them have a confirmed cause. Uncertain readings and causes you marked &ldquo;Not why I lost it&rdquo; are left out. Colours identify kinds, not severity.
+          {numMark(ev.marksLost)} marks lost in total across {evidenceLine}; {numMark(causeTotal)} of them have a confirmed cause. Uncertain readings and causes you marked &ldquo;Not why I lost it&rdquo; are left out.{ev.choiceSkipped > 0 ? ` ${plural(ev.choiceSkipped, "unanswered question")} on ${plural(ev.choicePapers, "paper")} that offered a choice of questions ${ev.choiceSkipped === 1 ? "is" : "are"} left out too, because ${ev.choiceSkipped === 1 ? "it was" : "they were"} probably not chosen.` : ""} Colours identify kinds, not severity.
         </p>
       </div> : <EvidenceGap title="No explained marks lost">No confirmed marks lost have a cause in this evidence. {evidenceLine}.</EvidenceGap>}
     </section>
@@ -386,7 +386,8 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
           ? `Your last ${model.trend.summary.recent} papers lost a smaller share of their marks than your first ${model.trend.summary.earlier}.`
           : model.trend.summary.direction === "more"
             ? `Your last ${model.trend.summary.recent} papers lost a larger share of their marks than your first ${model.trend.summary.earlier}. Harder papers can do this on their own.`
-            : `Your last ${model.trend.summary.recent} papers and your first ${model.trend.summary.earlier} lost a similar share of their marks.`}</p>}
+            : `Your last ${model.trend.summary.recent} papers and your first ${model.trend.summary.earlier} lost a similar share of their marks. Differences smaller than one paper's own ups and downs read as similar.`}
+          {model.trend.summary.withinSubjects ? " Each paper is compared with your own average in its subject." : ""}</p>}
         <p className="widgetnote">Oldest paper first. Bar height is the share of that paper&rsquo;s marks lost, so short and long papers compare fairly. Papers with unreadable marks are left out.</p>
       </div> : <EvidenceGap title="Not enough complete papers">
         A trend needs {PATTERN_PAPERS} papers whose every mark was read. {model.trend.points.length ? `${model.trend.points.length} ${model.trend.points.length === 1 ? "is" : "are"} ready for this filter.` : "None are ready for this filter yet."}
@@ -406,8 +407,9 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
     <section className="isection">
       <div className="sectitle">Command words</div>
       {model.commandWords.rows.length ? <div className="card tallycard">
-        <MoreList shown={3} noun="command words" items={model.commandWords.rows.map((r) => <TallyRow key={r.word} label={r.word} tally={r} describe={describe} />)} />
-        <p className="widgetnote">Marks lost on questions by the instruction word they used. Only questions that lost marks are tagged, so this shows where marks went, not how often you get a kind right. {model.commandWords.coverage.tagged} of {plural(model.commandWords.coverage.total, "explained question")} carry a command word; a word is shown once it covers {MIN_COMMAND_WORD_QUESTIONS} questions.</p>
+        <MoreList shown={3} noun="command words" items={model.commandWords.rows.map((r) => <TallyRow key={r.word} label={r.word} tally={r} describe={describe}
+          extra={r.rate ? <div className="meta">{`On every question that prints “${r.word}”: ${numMark(r.rate.lost)} of ${numMark(r.rate.available)} marks lost, ${plural(r.rate.questions, "question")}`}{r.rate.standsOut ? ". More than your usual share." : "."}</div> : null} />)} />
+        <p className="widgetnote">Marks lost on questions by the instruction word printed on them. Where the word is printed on at least {MIN_COMMAND_WORD_QUESTIONS} questions, the line underneath counts all of them, full marks included. &ldquo;More than your usual share&rdquo; appears only when that holds beyond chance. {model.commandWords.coverage.tagged} of {plural(model.commandWords.coverage.total, "explained question")} carry a command word; a word is shown once it covers {MIN_COMMAND_WORD_QUESTIONS} questions that lost marks.</p>
       </div> : <EvidenceGap title="No command word repeats yet">{model.commandWords.coverage.tagged
         ? `A command word is shown once it covers ${MIN_COMMAND_WORD_QUESTIONS} questions that lost marks. None does yet (${model.commandWords.coverage.tagged} of ${model.commandWords.coverage.total} explained questions carry one).`
         : "None of the explained questions in this evidence carry a command word yet. Axon doesn’t guess one from loose text."}</EvidenceGap>}
@@ -432,7 +434,7 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
         <MoreList shown={4} noun="topics" items={model.topics.map((t) => (
           <TallyRow key={t.label} label={t.label} tally={{ marks: t.marks, questions: t.questions, papers: t.papers, refs: t.refs }} describe={describe} />
         ))} />
-        <p className="widgetnote">Topics named in the explanations of questions that lost marks, in two or more papers. Names are matched as written; similar names are not merged. Marks are those lost on the tagged questions.</p>
+        <p className="widgetnote">Topics named in the explanations of questions that lost marks, in two or more papers. Names that differ only in capitals, punctuation or a plural are treated as one; different words are never merged. Marks are those lost on the tagged questions.</p>
       </div> : <EvidenceGap title="No topic repeats across papers">No topic has been named on lost marks in two different papers yet. Unknown topics stay unknown; they are not shown as weak.</EvidenceGap>}
     </section>
 
@@ -446,14 +448,18 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
             {model.pacing.isPattern ? " Blanks at the end of more than one paper often point to time rather than knowledge." : ""}</p>
           {model.pacing.timedOutMarks > 0 && <div className="meta">{numMark(model.pacing.timedOutMarks)} further marks were explained as running out of time.</div>}
           <Evidence refs={model.pacing.refs} describe={describe} />
-          <p className="widgetnote">Counts the blank, zero-mark questions at the very end of each paper, in the order they were printed. A blank in the middle is not counted here.</p>
+          {model.slips.note === "late" && <>
+            <p className="lede">Your careless slips cluster in the last third of your papers: {model.slips.last.slips} of {plural(model.slips.last.questions, "question")} there, against {model.slips.first.slips} of {model.slips.first.questions} in the first third. Leaving a few minutes to check the last questions is the usual fix.</p>
+            <Evidence refs={model.slips.refs} describe={describe} />
+          </>}
+          <p className="widgetnote">Counts the blank, zero-mark questions at the very end of each paper, in the order they were printed. A blank in the middle is not counted here.{model.slips.papersRead ? ` Slips are placed by where the question sat in its paper, across ${plural(model.slips.papersRead, "paper")} with at least six questions in known order, and named only when the end of the paper is worse beyond chance.` : ""}</p>
         </div>}
     </section>
 
     {model.knockOn.questions >= 2 && <section className="isection">
       <div className="sectitle">Built on an earlier part</div>
       <div className="card tallycard">
-        <p className="lede">{numMark(model.knockOn.marks)} marks were lost on {plural(model.knockOn.questions, "part")} that used an answer from an earlier part. One early slip can cost marks more than once.</p>
+        <p className="lede">{numMark(model.knockOn.marks)} marks were lost on {plural(model.knockOn.questions, "part")} that used the answer to an earlier part which had itself lost marks. One early slip can cost marks more than once.</p>
         <Evidence refs={model.knockOn.refs} describe={describe} />
       </div>
     </section>}

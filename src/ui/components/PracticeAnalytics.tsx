@@ -249,7 +249,14 @@ export function outlookLines(o: Extract<GradeOutlook, { state: "ready" }>): { ra
   const range = o.low_grade === o.high_grade ? `Around ${o.low_grade}` : `${o.low_grade} to ${o.high_grade}`;
   const papers = o.components.map((c) => c.paper).join(", ");
   const variants = o.routes && o.routes > 1 ? ` (${o.routes} variants, widest range)` : "";
-  const basis = `Based on ${plural(o.papers, "paper")} · ${o.low_total} to ${o.high_total} of ${o.max_total} weighted marks · ${seriesLabel(o.series_key)} thresholds for ${o.syllabus_code}, papers ${papers}${variants}`;
+  // How the range was made, in words: its coverage, and how many papers were
+  // carried across series on the board's own grade lines.
+  const how = [
+    // No coverage figure on screen: confidence is never shown as a number.
+    o.interval ? "range set by how much your papers vary" : null,
+    o.equated_papers ? `${plural(o.equated_papers, "paper")} adjusted for how hard its series was` : null,
+  ].filter(Boolean).join(" · ");
+  const basis = `Based on ${plural(o.papers, "paper")} · ${o.low_total} to ${o.high_total} of ${o.max_total} weighted marks · ${seriesLabel(o.series_key)} thresholds for ${o.syllabus_code}, papers ${papers}${variants}${how ? ` · ${how}` : ""}`;
   let target: string | null = null;
   if (o.target) {
     target = o.marks_to_target && o.marks_to_target > 0

@@ -80,6 +80,15 @@ def table_sql(url, sha, table, routes, weights_url, weights_sha):
             f"{q(CHECKER) if ver else 'null'}, {'now()' if ver else 'null'}, {q(r['assessment'])}, "
             f"{q(weights_url)}, {q(weights_sha)}, {q(json.dumps(r['checks']))}::jsonb) returning id) "
             f"insert into public.grade_threshold (set_id, grade, min_total) select s.id, v.g, v.m from s, (values {grades}) as v(g, m);")
+    # Component thresholds (AXO-270): the same table, one row per component.
+    out.append(f"delete from public.grade_threshold_component where provider_key = 'cambridge' and syllabus_code = {q(code)} and series_key = {q(series)};")
+    for c in ct.components_for_db(table, routes):
+        ver = c["status"] == "verified"
+        out.append(
+            "insert into public.grade_threshold_component (provider_key, syllabus_code, series_key, component, max_raw, grades, "
+            "source_url, source_sha256, status, verified_by, verified_at) values ("
+            f"'cambridge', {q(code)}, {q(series)}, {q(c['component'])}, {c['max_raw']}, {q(json.dumps(c['grades']))}::jsonb, "
+            f"{q(url)}, {q(sha)}, {q(c['status'])}, {q(CHECKER) if ver else 'null'}, {'now()' if ver else 'null'});")
     return out
 
 

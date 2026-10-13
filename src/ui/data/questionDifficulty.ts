@@ -43,11 +43,18 @@ export function difficultyInsights(args: {
         || !Number.isFinite(Number(r.marks_awarded)) || Number(r.max_marks) <= 0
         || Number(r.marks_awarded) > Number(r.max_marks) || Number(r.marks_awarded) < 0) continue;
     const atLoss = args.losses.filter(l => l.attempt_id === r.attempt_id);
-    const words=new Set(atLoss.flatMap(l => l.concepts ?? []).map(normaliseTopic).filter(t => t.length >= 3));
+    // Grouped by the folded key; shown as the tag was first written, so the
+    // student never reads a folded form like "vector" for "Vectors".
+    const words=new Map<string,string>();
+    for (const raw of atLoss.flatMap(l => l.concepts ?? [])) {
+      if (typeof raw !== "string") continue;
+      const key=normaliseTopic(raw);
+      if (key.length >= 3 && !words.has(key)) words.set(key, raw.trim());
+    }
     const lost=Math.max(0,Number(r.max_marks)-Number(r.marks_awarded));
-    for(const topic of words) {
-      const k=`${topic}|${r.band}`;
-      const v=topics.get(k) ?? {topic,band:r.band,count:0,paperIds:new Set<string>(),lost:0,estimated:0};
+    for(const [key,label] of words) {
+      const k=`${key}|${r.band}`;
+      const v=topics.get(k) ?? {topic:label,band:r.band,count:0,paperIds:new Set<string>(),lost:0,estimated:0};
       v.count++; v.paperIds.add(r.paper_id); v.lost+=lost; if(r.confidence < .6) v.estimated++;
       topics.set(k,v);
     }
