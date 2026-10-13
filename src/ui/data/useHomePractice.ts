@@ -25,6 +25,11 @@ type HomePracticeData = {
   targets: TargetGrade[];
 };
 
+const TZ_SYNC_WAIT_MS = 1500;
+const TZ_SENT_KEY = "axon.practice-tz-sent";
+function readTzSent() { try { return localStorage.getItem(TZ_SENT_KEY); } catch { return null; } }
+function writeTzSent(value: string) { try { localStorage.setItem(TZ_SENT_KEY, value); } catch { /* memory only */ } }
+
 export function useHomePractice() {
   const { student } = useApp();
   const id = student?.id ?? null;
@@ -33,8 +38,16 @@ export function useHomePractice() {
   const { resource, reload } = useResource<HomePracticeData>(id ? `home-practice:${id}` : null, async () => {
     // The day the streak and "today" are counted in is the device's.
     const tz = deviceTimeZone();
-    if (tz && tzSent.current !== `${id}:${tz}`) {
-      try { await setPracticePref(id!, { timezone: tz }); tzSent.current = `${id}:${tz}`; } catch { /* an unknown zone keeps UTC */ }
+    // Sent once per student and zone, not on every visit (remembered across
+    // reloads), and never allowed to hold Home's cards for more than a moment:
+    // this write used to sit in front of every read and, when the database
+    // was slow, took Home's first paint with it (issue #301).
+    const tzKey = `${id}:${tz}`;
+    if (tz && tzSent.current !== tzKey && readTzSent() !== tzKey) {
+      const sync = setPracticePref(id!, { timezone: tz })
+        .then(() => { tzSent.current = tzKey; writeTzSent(tzKey); })
+        .catch(() => { /* an unknown zone keeps UTC */ });
+      await Promise.race([sync, new Promise((resolve) => setTimeout(resolve, TZ_SYNC_WAIT_MS))]);
     }
     // next_best_action brings the error items up to date first; the rest read after.
     const nba = await nextBestAction(id!);
