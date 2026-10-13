@@ -13,9 +13,17 @@ let householdScope = HOUSEHOLD
   ? (sessionStorage.getItem("axon.test.household.scope") ?? "student-a")
   : null;
 export const sb = {
+  rpc: async (fn: string) => practiceRpc(fn),
   from: (table: string) => ({
     select: () => ({
-      eq: () => table === "student"
+      eq: () => table === "student_practice_pref"
+        ? { maybeSingle: async () => ({ data: null, error: null }) }
+        : table === "practice_session"
+        ? { maybeSingle: async () => ({ error: null, data: { id: "sess", student_id: "student", focus_kind: "topic", focus_key: "t1.2", focus_subject: "Physics",
+            item_ids: ["e1", "e5"], budget_minutes: 15, started_at: new Date().toISOString(), finished_at: null, completed_items: 0 } }) }
+        : table === "student_target_grade" || table === "reattempt"
+        ? Promise.resolve({ data: [], error: null })
+        : table === "student"
         ? { order: async () => ({ data: HOUSEHOLD
           ? [
               { id: "student-a", first_name: "Alpha", programme_id: null, stage_id: null },
@@ -413,3 +421,78 @@ export const purposeNote = notice.purposeNote;
 export const noticeIsComplete = notice.noticeIsComplete;
 
 export const WORKOS_PASSWORD = false;
+
+const practiceItems = [
+  { id: "e1", paper_id: "ip6", attempt_id: "ip6-a4", question_label: "3(b)", subject: "Physics", question_text: "Explain why the total momentum of the two trolleys is the same before and after they collide.", marks_available: 8, marks_lost: 2, command_word: "Explain", remedy: "explain_then_retry", mistake_type: "misconception", status: "open", attempts: 0 },
+  { id: "e5", paper_id: "ip5", attempt_id: "ip5-a3", question_label: "3(a)", subject: "Physics", question_text: "Describe the energy transfers when a ball is dropped.", marks_available: 6, marks_lost: 3, command_word: "Describe", remedy: "rewrite", mistake_type: "technique", status: "retried", attempts: 1 },
+];
+// AXO-244 practice reads. `insights` is a student with lost marks to practise;
+// `insights-early` has papers but nothing due; everyone else has no confirmed
+// paper yet. Topic ids are the syllabus fixture's own, so readiness lines up.
+function practiceRpc(fn: string): { data: unknown; error: null } {
+  const ready = scenario === "insights";
+  const r = (data: unknown) => ({ data, error: null });
+  const iso = (d: number) => { const t = new Date(); t.setDate(t.getDate() - d); return t.toISOString().slice(0, 10); };
+  switch (fn) {
+    case "practice_flags": return r({ mistake_type_ui: false, if_then_prompt: false });
+    case "set_practice_pref": return r({});
+    case "target_grade_scale": return r(null);
+    case "next_best_action":
+      return r(ready
+        ? { state: "ready", kind: "topic", key: "t1.2", label: "Momentum", subject: "Physics", item_ids: ["e1", "e2", "e3", "e4"], marks_recoverable: 9, minutes: 15, papers_seen: 3, reason: "lost marks in 3 papers, and your next Physics exam is the soonest" }
+        : EARLY ? { state: "nothing_due", next_review_at: null } : { state: "no_scans" });
+    case "due_queue":
+      return r(ready ? [
+        { id: "e5", subject: "Physics", question_label: "3(a)", paper_id: "ip5", attempt_id: "ip5-a3", marks_lost: 3, marks_available: 6, minutes: 4, next_review_at: iso(1), overdue_days: 1, status: "retried" },
+        { id: "e6", subject: "Mathematics", question_label: "1(b)", paper_id: "ip4", attempt_id: "ip4-a1", marks_lost: 2, marks_available: 4, minutes: 3, next_review_at: iso(0), overdue_days: 0, status: "open" },
+      ] : []);
+    case "focus_areas":
+      return r(ready ? [
+        { kind: "topic", key: "t1.2", label: "Momentum", subject: "Physics", marks_recoverable: 9, items_open: 4, papers_seen: 3, exam_date: null, exam_days: null, heaviest_paper: null, heaviest_weight_pct: null, score: 9, reason: "" },
+        { kind: "command_word", key: "Describe", label: "Describe", subject: "Physics", marks_recoverable: 7, items_open: 3, papers_seen: 3, exam_date: null, exam_days: null, heaviest_paper: null, heaviest_weight_pct: null, score: 7, reason: "" },
+        { kind: "mistake_type", key: "careless", label: "careless", subject: "Mathematics", marks_recoverable: 4, items_open: 2, papers_seen: 2, exam_date: null, exam_days: null, heaviest_paper: null, heaviest_weight_pct: null, score: 4, reason: "" },
+      ] : []);
+    case "progress_summary":
+      return r({
+        weeks: Array.from({ length: 8 }, (_, i) => ({ week: iso((7 - i) * 7), marks: ready ? [0, 0, 2, 0, 3, 4, 2, 5][i] : 0 })),
+        marks_recovered_total: ready ? 16 : 0, topics_passed_30d: ready ? 2 : 0, reattempts_this_week: ready ? 5 : 0,
+        session_dates: ready ? [iso(3), iso(2), iso(1)] : [], today: iso(0),
+      });
+    case "error_journal":
+      return r(ready ? [
+        { id: "e1", paper_id: "ip6", attempt_id: "ip6-a4", question_label: "3(b)", subject: "Physics", syllabus_code: "0000", topic_id: "t1.2", topic_label: "Momentum", command_word: "Explain", ao: "AO2", mistake_type: "misconception", marks_lost: 2, marks_available: 8, original_answer: "Momentum is lost in the collision.", explanation: "The answer treats momentum as lost; in a closed system it is conserved.", status: "open", attempts: 0, next_review_at: iso(-1), paper_date: "2026-09-24", recurrence_count: 2 },
+        { id: "e5", paper_id: "ip5", attempt_id: "ip5-a3", question_label: "3(a)", subject: "Physics", syllabus_code: "0000", topic_id: "t1.3", topic_label: "Energy transfers", command_word: "Describe", ao: "AO1", mistake_type: "technique", marks_lost: 3, marks_available: 6, original_answer: "Energy moves to the surroundings.", explanation: "Six marks need six linked points; this gives one.", status: "retried", attempts: 1, next_review_at: iso(1), paper_date: "2026-09-03", recurrence_count: 1 },
+        ...["ip1", "ip3"].map((paper, i) => ({ id: `e-d${i}`, paper_id: paper, attempt_id: `${paper}-a3`, question_label: "3(a)", subject: "Physics", syllabus_code: "0000", topic_id: "t1.3", topic_label: "Energy transfers", command_word: "Describe", ao: "AO1", mistake_type: "technique", marks_lost: 3, marks_available: 6, original_answer: "Energy is wasted.", explanation: "One point for a six-mark question.", status: "open", attempts: 0, next_review_at: iso(-2), paper_date: i ? "2026-07-08" : "2026-05-12", recurrence_count: 3 })),
+      ] : []);
+    case "scorecard": {
+      const t = (g: number[], a: number[]) => g.map((x, i) => ({ paper_id: `ip${i}`, date: iso(60 - i * 10), gained: x, available: a[i] }));
+      return r(ready ? [
+        { dimension: "command_word", key: "Describe", questions: 4, papers: 4, marks_gained: 12, marks_available: 24, weighted_gained: 12, weighted_available: 24, trend: t([3, 3, 3, 3], [6, 6, 6, 6]) },
+        { dimension: "command_word", key: "Explain", questions: 4, papers: 4, marks_gained: 26, marks_available: 32, weighted_gained: 26, weighted_available: 32, trend: t([6, 7, 6, 7], [8, 8, 8, 8]) },
+        { dimension: "command_word", key: "untagged", questions: 4, papers: 4, marks_gained: 10, marks_available: 12, weighted_gained: 10, weighted_available: 12, trend: [] },
+        { dimension: "ao", key: "AO1", questions: 8, papers: 4, marks_gained: 22, marks_available: 30, weighted_gained: 22, weighted_available: 30, trend: t([5, 6, 5, 6], [7, 8, 7, 8]) },
+        { dimension: "ao", key: "AO2", questions: 8, papers: 4, marks_gained: 26, marks_available: 38, weighted_gained: 26, weighted_available: 38, trend: t([6, 7, 6, 7], [9, 10, 9, 10]) },
+      ] : []);
+    }
+    case "topic_readiness": {
+      const level: Record<string, string> = { "u1": "attempted", "t1.1": "familiar", "t1.2": "attempted", "t1.3": "proficient", "u3": "attempted", "t3.1": "mastered", "u4": "attempted", "t4.1": "attempted" };
+      return r(ready ? (syllabusFixture().topics as { id: string; parent_id: string | null; code: string; title: string; kind: string; sort_order: number }[])
+        .filter((t) => t.kind !== "objective")
+        .map((t) => ({ topic_id: t.id, parent_id: t.parent_id, code: t.code, title: t.title, depth: t.kind === "unit" ? 0 : 1, sort_order: t.sort_order,
+          level: level[t.id] ?? "no_data", questions: level[t.id] ? 3 : 0, papers: level[t.id] ? 2 : 0, open_items: t.id === "t1.2" ? 4 : 0,
+          marks_recoverable: t.id === "t1.2" ? 9 : 0, last_evidence_at: null })) : []);
+    }
+    case "grade_outlook": return r({ state: "off" });
+    case "practice_item": return r(practiceItems.shift() ?? null);
+    case "reattempt_reveal": return r({
+      marks_awarded: 6, max_marks: 8, marks_source: "teacher_pen", teacher_remark: "Momentum is conserved.",
+      original_answer: "Momentum is lost in the collision.", explanation: "The answer treats momentum as lost; in a closed system the total is the same before and after.",
+      do_this_next: "Write the conservation statement before you substitute any numbers.", model_answer: null, model_answer_source: null,
+      command_word: "Explain", command_word_note: null, scheme: null, scheme_withheld_reason: "not_permitted" });
+    case "record_reattempt": return r({ status: "retried", next_review_at: iso(-3), interval_days: 3 });
+    case "finish_practice_session": return r({ completed_items: 2, local_date: iso(0), first_of_week: true, ask_if_then: true });
+    case "record_intention": return r("intent");
+    case "start_practice_session": return r({ state: "empty" });
+    default: return r(null);
+  }
+}

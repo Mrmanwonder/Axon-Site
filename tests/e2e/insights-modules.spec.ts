@@ -11,7 +11,7 @@ test("Insights renders every evidence-backed module from confirmed rows", async 
   await expect(page.getByText("Name the law in your first sentence, then apply it to this situation.")).toBeVisible();
   await expect(page.getByText("Where your marks go", { exact: true })).toBeVisible();
   await expect(page.getByText("By question size")).toBeVisible();
-  await expect(page.getByText("Command words")).toBeVisible();
+  await expect(page.getByText("Command words", { exact: true })).toBeVisible();
   await expect(page.getByText("Topics that keep coming up")).toBeVisible();
   await expect(page.getByText(/2 of 6 papers ended with unanswered questions/)).toBeVisible();
   // Never a percentage on a summary surface.
@@ -54,7 +54,7 @@ test("a subject filter narrows every module", async ({ page }) => {
   await page.goto(URL);
   await expect(page.getByText("Mistakes that repeat", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Filter insights by subject" }).click();
-  await page.getByRole("option", { name: "Mathematics" }).click();
+  await page.getByRole("listbox").getByRole("option", { name: "Mathematics" }).click();
   await expect(page.getByText("Coverage")).toBeVisible();
   await expect(page.getByText("This filter has 2 confirmed papers.", { exact: false })).toBeVisible();
 });

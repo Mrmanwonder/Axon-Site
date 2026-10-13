@@ -399,3 +399,11 @@ test('AXO-246: a second scan of the same assessment joins the existing item, his
   assert.equal(Number(after.marks_lost), 3);
   assert.equal((await one('select count(*)::int n from public.error_item where student_id = $1 and withdrawn_at is null', [ids.student])).n, countBefore);
 });
+
+test('AXO-254: the progress summary counts fixed marks and session days from real sessions', async () => {
+  const p = (await one('select public.progress_summary($1) j', [ids.student])).j;
+  assert.equal(p.weeks.length, 8);
+  assert.ok(Number(p.marks_recovered_total) > 0, 'one item was fixed earlier in this suite');
+  assert.ok(p.session_dates.length >= 1);
+  assert.ok(p.reattempts_this_week >= 1);
+});

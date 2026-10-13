@@ -1,0 +1,55 @@
+/* AXO-256 practice loop. Role tokens only, red never used, marks small. */
+.practice { padding: 8px 0 32px; }
+.practice-back { display: inline-flex; margin: 12px var(--gutter) 0; }
+.practice-top { display: flex; align-items: center; gap: 14px; margin: 4px var(--gutter) 0; }
+.practice-top .textaction { min-height: 44px; }
+.practice-progress { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.practice-progress span { font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.practice-card { padding-bottom: 14px; }
+.practice-type { margin: 6px 16px 0; font-size: 12.5px; font-weight: 600; color: var(--label-2); }
+.practice-input {
+  display: block; width: 100%; margin-top: 6px; padding: 12px 14px; min-height: 44px;
+  border-radius: 14px; border: .5px solid var(--hairline); background: var(--surface-sunk);
+  color: var(--label); font: inherit; font-size: 15px; line-height: 1.5; resize: vertical;
+}
+.practice-input:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.practice-input[readonly] { color: var(--label-2); }
+.practice-actions { display: grid; gap: 8px; margin: 14px 16px 0; }
+.qfield .practice-actions { margin: 14px 0 0; }
+.practice-results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.practice-results .btn { min-height: 48px; padding: 0 8px; }
+.practice-results .btn.on { background: var(--accent); color: #fff; }
+.practice-note { margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); }
+.practice-lede { margin: 6px 0 0; font-size: 14.5px; line-height: 1.5; color: var(--label); }
+.practice-label { display: block; margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--label); }
+.practice-checks { margin: 0; padding: 0; border: 0; }
+.practice-check { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 44px; font-size: 14.5px; color: var(--label); }
+.practice-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.practice-ifthen { display: grid; gap: 2px; }
+/* AXO-259 journal filters and AXO-260/261/262 analytics. */
+.crumbs { margin: 8px var(--text-gutter) 0; font-size: 13px; }
+.crumbs a { color: var(--accent); }
+.journalfilters { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px var(--gutter) 12px; }
+.journalfilter { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--label-2); }
+.journalfilter select, .analyticsselect select {
+  min-height: 44px; padding: 0 10px; border-radius: 10px; border: .5px solid var(--hairline);
+  background: var(--surface-sunk); color: var(--label); font: inherit; font-size: 14px; max-width: 46vw;
+}
+.scorerow .track { display: block; height: 6px; margin-top: 9px; border-radius: 3px; overflow: hidden; background: var(--surface-sunk); }
+.scorerow .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .8; transform-origin: left; }
+.scorerow .spark { display: flex; align-items: flex-end; gap: 3px; height: 18px; margin-top: 8px; }
+.scorerow .spark i { flex: 1; max-width: 12px; border-radius: 2px; background: var(--accent); opacity: .55; transform-origin: bottom; }
+.readylist { list-style: none; margin: 0; padding: 0; }
+.readylist li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 44px; padding: 8px 0; border-bottom: .5px solid var(--hairline); }
+.readylist li:last-child { border-bottom: 0; }
+.readylist .t { font-size: 14px; color: var(--label); }
+.readylist .t small { display: block; font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.ladder { display: inline-grid; grid-template-columns: repeat(4, 10px); gap: 3px; }
+.ladder i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-sunk); }
+.ladder i.on { background: var(--accent); }
+.ladder.nodata i { background: transparent; border: 1px dashed var(--label-3); }
+.outlookcard { padding: 16px 18px; }
+.outlookcard .range { font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--label); font-variant-numeric: tabular-nums; }
+.outlookcard .meta { margin-top: 6px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); }
+.analyticsselect { display: flex; align-items: center; gap: 10px; margin: 0 var(--gutter) 10px; font-size: 13px; color: var(--label-2); }
+@media (prefers-reduced-motion: reduce) { .practice * { transition: none !important; } }

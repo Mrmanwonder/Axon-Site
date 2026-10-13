@@ -30,6 +30,7 @@ import { useIngestion } from "../data/useIngestion";
 import PageSkeleton from "../components/PageSkeleton";
 import Disclose from "../components/Disclose";
 import { useInsights, useSyllabusMaps } from "../data/useInsights";
+import PracticeAnalytics from "../components/PracticeAnalytics";
 import { FELT_LABELS } from "../data/perceivedDifficulty";
 import { BANDS } from "../data/questionDifficulty";
 import SyllabusMap from "../components/SyllabusMap";
@@ -174,7 +175,7 @@ export default function Insights() {
   if (!model) return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
   return <>
-    <div className="greet insightsgreet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work, never predicted marks.</div></div>
+    <div className="greet insightsgreet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work. A grade outlook appears only if you turn it on.</div></div>
 
     <div className="filterbar insightfilters" aria-label="Filter insights">
       <AppDropdown ariaLabel="Filter insights by subject" value={filters.subject} options={subjectOptions} onChange={set("subject")} selected={filters.subject !== "all"} />
@@ -215,6 +216,10 @@ export default function Insights() {
       ? <div className="card filterempty"><h3>No matching papers</h3><p>There&rsquo;s no confirmed evidence for this combination yet.</p><button onClick={() => setFilters(ALL_FILTERS)}>Clear filters</button></div>
       : <Body model={model} describe={describe} addPaper={addPaper} filtered={filtered}
           syllabus={<SyllabusSection maps={syllabus.maps} state={syllabus.state} subject={filters.subject === "all" ? null : filters.subject} />} />}
+
+    {/* AXO-259 to 262: practice analytics per subject. Outside the filters on
+        purpose: each read is its own server calculation over confirmed evidence. */}
+    <PracticeAnalytics subjects={subjects} initialSubject={filters.subject === "all" ? null : filters.subject} syllabus={syllabus.maps} />
 
     {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis.</div>}
   </>;

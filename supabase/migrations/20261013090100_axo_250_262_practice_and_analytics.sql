@@ -513,10 +513,16 @@ begin
   select x.marks_awarded, x.max_marks, x.teacher_remark, x.student_answer, x.marks_source,
          x.canonical_question_id
     into a from public.attempt_analytics x where x.id = e.attempt_id;
+  -- The worked answer shows only where QuestionDetail would show it: grounded
+  -- explanation, with its source named.
   select x.ai_explanation, x.do_this_next, x.command_word,
-         (select r.model_answer from public.mark_loss_event r where r.id = x.id) as model_answer,
-         (select r.command_word_note from public.mark_loss_event r where r.id = x.id) as command_word_note
-    into m from public.mark_loss_analytics x where x.id = e.mark_loss_event_id;
+         case when r.grounding_status = 'complete' and r.model_answer_source is not null then r.model_answer end as model_answer,
+         case when r.grounding_status = 'complete' and r.model_answer_source is not null then r.model_answer_source end as model_answer_source,
+         r.command_word_note
+    into m
+    from public.mark_loss_analytics x
+    join public.mark_loss_event r on r.id = x.id
+   where x.id = e.mark_loss_event_id;
 
   select cq.marking_scheme, cq.scheme_source, cq.scheme_version
     into s
@@ -530,7 +536,8 @@ begin
     'marks_awarded', a.marks_awarded, 'max_marks', a.max_marks, 'marks_source', a.marks_source,
     'teacher_remark', a.teacher_remark, 'original_answer', a.student_answer,
     'explanation', m.ai_explanation, 'do_this_next', m.do_this_next,
-    'model_answer', m.model_answer, 'command_word', coalesce(m.command_word, e.command_word),
+    'model_answer', m.model_answer, 'model_answer_source', m.model_answer_source,
+    'command_word', coalesce(m.command_word, e.command_word),
     'command_word_note', m.command_word_note,
     'scheme', case when s.marking_scheme is not null then jsonb_build_object(
                 'text', s.marking_scheme, 'source', s.scheme_source, 'version', s.scheme_version) end,
@@ -1063,3 +1070,54 @@ end;
 $$;
 revoke all on function public.grade_outlook(uuid, text) from public, anon;
 grant execute on function public.grade_outlook(uuid, text) to authenticated;
+
+-- ── AXO-254: the progress strip ────────────────────────────────────────────
+-- Marks recovered: marks on items the student has fixed through spaced
+-- re-attempts, by the week they were fixed (the student's own week). These
+-- are practice marks, not exam marks, and the client says so. Topics: syllabus
+-- points where a re-attempt passed in the last 30 days. The streak is computed
+-- on the device from practice_session.local_date (src/ui/data/streak.ts).
+create or replace function public.progress_summary(p_student uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_today date;
+begin
+  perform private.require_scope(p_student);
+  v_today := private.student_today(p_student);
+  return jsonb_build_object(
+    'weeks', (
+      select jsonb_agg(jsonb_build_object('week', w.wk, 'marks', coalesce(r.marks, 0)) order by w.wk)
+        from generate_series(date_trunc('week', v_today) - interval '7 weeks', date_trunc('week', v_today), interval '1 week') w(wk)
+        left join (
+          select date_trunc('week', (x.created_at at time zone coalesce(p.timezone, 'UTC'))::date) as wk, sum(e.marks_lost) as marks
+            from public.reattempt x
+            join public.error_item e on e.id = x.error_item_id
+            left join public.student_practice_pref p on p.student_id = x.student_id
+           where x.student_id = p_student and x.status_after = 'fixed'
+           group by 1
+        ) r on r.wk = w.wk),
+    'marks_recovered_total', (
+      select coalesce(sum(e.marks_lost), 0) from public.error_item e
+       where e.student_id = p_student and e.status = 'fixed' and e.withdrawn_at is null),
+    'topics_passed_30d', (
+      select count(distinct e.topic_id)::int from public.reattempt x join public.error_item e on e.id = x.error_item_id
+       where x.student_id = p_student and x.result = 'got_it' and e.topic_id is not null
+         and x.created_at >= now() - interval '30 days'),
+    'reattempts_this_week', (
+      select count(*)::int from public.reattempt x
+        join public.practice_session s on s.id = x.session_id
+       where x.student_id = p_student and s.local_date >= date_trunc('week', v_today)::date),
+    'session_dates', (
+      select coalesce(jsonb_agg(distinct s.local_date order by s.local_date), '[]'::jsonb)
+        from public.practice_session s
+       where s.student_id = p_student and s.completed_items > 0 and s.local_date is not null
+         and s.local_date >= v_today - 400),
+    'today', v_today);
+end;
+$$;
+revoke all on function public.progress_summary(uuid) from public, anon;
+grant execute on function public.progress_summary(uuid) to authenticated;
