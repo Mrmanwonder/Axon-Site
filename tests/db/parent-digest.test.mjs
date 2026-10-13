@@ -31,7 +31,7 @@ const STUBS = `
     student_confirmed_at timestamptz, student_rejected_at timestamptz);
   create table public.consent_event (
     seq bigserial primary key, guardian_id uuid, student_id uuid, purpose text, granted boolean,
-    notice_version text not null default '1.3.0');
+    notice_version text not null default '1.4.0');
   create table public.consent_notice_text (version text, language text, content jsonb, primary key (version, language));
 
   -- Same logic as production (harden_helpers_into_private_schema).
@@ -70,14 +70,17 @@ async function load(db) {
   const migration = await readFile(
     new URL('../../supabase/migrations/20261012210000_axo_263_parent_digest.sql', import.meta.url), 'utf8');
   await db.exec(migration);
-  // AXO-266: the digest now needs a grant under notice 1.3.0 or later.
+  // AXO-266: the digest now needs a grant under notice 1.4.0 or later.
   const gate = await readFile(
     new URL('../../supabase/migrations/20261013120000_axo_266_digest_consent_notice_1_2_0.sql', import.meta.url), 'utf8');
   await db.exec(gate);
   const gate2 = await readFile(
     new URL('../../supabase/migrations/20261013140000_axo_266_digest_consent_notice_1_3_0.sql', import.meta.url), 'utf8');
   await db.exec(gate2);
-  await db.exec(gate2); // idempotent
+  const gate3 = await readFile(
+    new URL('../../supabase/migrations/20261013160000_axo_266_digest_content_notice_1_4_0.sql', import.meta.url), 'utf8');
+  await db.exec(gate3);
+  await db.exec(gate3); // idempotent
   return migration;
 }
 
@@ -86,7 +89,7 @@ test('parent digest: who is owed one, what it says, and when it stops', async ()
   try {
     await db.exec(STUBS);
     const migration = await load(db);
-    await db.exec(migration); // idempotent
+    await load(db); // idempotent, in order
 
     // Guardians 1-8, each with one student of the same number.
     for (let n = 1; n <= 8; n++) {
@@ -195,6 +198,14 @@ test('parent digest: who is owed one, what it says, and when it stops', async ()
       { kind: 'command_word', name: 'Explain', questions: 4, papers: 4, marks_lost: 11 },
     ], 'Describe covers only 2 questions, so it is not named');
 
+    assert.deepEqual(ana.payload.by_subject, [
+      { subject: 'Chemistry', papers: 1, questions: 4, lost_questions: 2, marks_lost: 5 },
+      { subject: 'Physics', papers: 1, questions: 3, lost_questions: 2, marks_lost: 3 },
+    ], 'per subject, counts only');
+    assert.equal(ana.payload.trend, null, 'too little earlier work to compare: not enough, not zero');
+    assert.equal(ana.payload.earlier_questions, null);
+    assert.equal(ana.payload.earlier_lost, null);
+
     assert.equal(ben.payload.has_enough_data, false);
     assert.deepEqual(ben.payload.areas, [], 'three Explain losses, but fewer than four papers overall: no pattern');
     assert.equal(ben.payload.papers_counted, 2);
@@ -292,7 +303,7 @@ test('parent digest: a paper whose questions were all left out is reported as un
   }
 });
 
-test('parent digest: only a grant under notice 1.3.0 or later makes a guardian eligible', async () => {
+test('parent digest: only a grant under notice 1.4.0 or later makes a guardian eligible', async () => {
   const db = new PGlite();
   try {
     await db.exec(STUBS);
@@ -307,18 +318,19 @@ test('parent digest: only a grant under notice 1.3.0 or later makes a guardian e
     await ev(2, null, true, '1.0.0'); assert.equal(await ok(2), false, '1.0.0 grant: vague wording');
     await ev(3, null, true, '1.1.0'); assert.equal(await ok(3), false, '1.1.0 grant: same wording');
     await ev(10, null, true, '1.2.0'); assert.equal(await ok(10), false, '1.2.0 was never shown and is narrower than the email');
-    await ev(4, null, true, '1.3.0'); assert.equal(await ok(4), true);
+    await ev(11, null, true, '1.3.0'); assert.equal(await ok(11), false, '1.3.0 does not list the per-subject and comparison contents');
+    await ev(4, null, true, '1.4.0'); assert.equal(await ok(4), true);
     await ev(5, null, true, '1.10.0'); assert.equal(await ok(5), true, 'compared as numbers, not text');
     await ev(6, null, true, 'abc'); assert.equal(await ok(6), false, 'unreadable version never counts');
-    await ev(7, null, true, '1.3.0'); await ev(7, null, false, '1.3.0');
+    await ev(7, null, true, '1.4.0'); await ev(7, null, false, '1.4.0');
     assert.equal(await ok(7), false, 'withdrawn');
-    await ev(8, null, true, '1.1.0'); await ev(8, null, true, '1.3.0');
-    assert.equal(await ok(8), true, 're-confirming under 1.3.0 makes the guardian eligible');
-    await ev(9, null, true, '1.3.0'); await ev(9, id(250), false, '1.3.0');
+    await ev(8, null, true, '1.1.0'); await ev(8, null, true, '1.4.0');
+    assert.equal(await ok(8), true, 're-confirming under 1.4.0 makes the guardian eligible');
+    await ev(9, null, true, '1.4.0'); await ev(9, id(250), false, '1.4.0');
     assert.equal(await ok(9, id(250)), false, 'a student-specific withdrawal wins over a guardian-wide grant');
     assert.equal(await ok(9, id(251)), true, 'another child of the same guardian is unaffected');
 
-    // Queue: only the 1.3.0 guardian is queued, and a 1.1.0 one is skipped at claim time.
+    // Queue: only the 1.4.0 guardian is queued, and a 1.1.0 one is skipped at claim time.
     for (const [g, email] of [[3, 'a'], [4, 'b']]) {
       await db.query(`insert into auth.users (id, email) values ($1, $2)`, [id(900 + g), `${email}@example.test`]);
       await db.query(`insert into public.guardian (id, auth_user_id) values ($1, $2)`, [id(g), id(900 + g)]);
@@ -330,6 +342,63 @@ test('parent digest: only a grant under notice 1.3.0 or later makes a guardian e
     await db.query(`select public.queue_parent_digests('2026-10-11')`);
     const q = await db.query(`select student_id from private.parent_digest_delivery`);
     assert.deepEqual(q.rows.map((r) => r.student_id), [id(204)], 'the 1.1.0 guardian is not queued');
+  } finally {
+    await db.close();
+  }
+});
+
+test('parent digest: the comparison with earlier papers needs enough on both sides and shows both counts', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(STUBS);
+    await load(db);
+    let p = 7000; let a = 9000;
+    const mk = async (g, studentName) => {
+      await db.query(`insert into auth.users (id, email) values ($1, $2)`, [id(950 + g), `t${g}@example.test`]);
+      await db.query(`insert into public.guardian (id, auth_user_id) values ($1, $2)`, [id(30 + g), id(950 + g)]);
+      await db.query(`insert into public.student (id, guardian_id, first_name) values ($1, $2, $3)`, [id(230 + g), id(30 + g), studentName]);
+      await db.query(`insert into public.consent_event (guardian_id, student_id, purpose, granted)
+                      values ($1, null, 'weekly_parent_digest', true)`, [id(30 + g)]);
+      return id(230 + g);
+    };
+    const paper = async (st, at, subject = 'Maths') => {
+      const pid = id(p++);
+      await db.query(`insert into public.paper (id, student_id, subject) values ($1, $2, $3)`, [pid, st, subject]);
+      await db.query(`insert into public.extraction_run (paper_id, student_id, status, committed_at) values ($1, $2, 'committed', $3)`, [pid, st, at]);
+      return pid;
+    };
+    const attempts = async (st, pid, total, lostCount) => {
+      for (let i = 0; i < total; i++) {
+        const aid = id(a++);
+        await db.query(`insert into public.student_attempt (id, student_id, paper_id, extraction_confidence) values ($1, $2, $3, 'confirmed')`, [aid, st, pid]);
+        if (i < lostCount) await db.query(`insert into public.mark_loss_event (attempt_id, student_id, marks_lost, command_word, confidence) values ($1, $2, 1, 'Explain', 'confirmed')`, [aid, st]);
+      }
+    };
+    // Fewer: earlier 8 of 12 lost marks, this week 3 of 10.
+    const s1 = await mk(1, 'Jo');
+    await attempts(s1, await paper(s1, '2026-09-20T10:00:00Z'), 12, 8);
+    await attempts(s1, await paper(s1, '2026-10-08T10:00:00Z'), 10, 3);
+    // Similar: earlier 5 of 12, this week 5 of 10 (0.42 vs 0.50 is under a tenth apart? 0.08).
+    const s2 = await mk(2, 'Kit');
+    await attempts(s2, await paper(s2, '2026-09-20T10:00:00Z'), 12, 5);
+    await attempts(s2, await paper(s2, '2026-10-08T10:00:00Z'), 10, 5);
+    // More: earlier 2 of 12, this week 7 of 10.
+    const s3 = await mk(3, 'Lee');
+    await attempts(s3, await paper(s3, '2026-09-20T10:00:00Z'), 12, 2);
+    await attempts(s3, await paper(s3, '2026-10-08T10:00:00Z'), 10, 7);
+    // Not enough earlier work: 9 earlier questions.
+    const s4 = await mk(4, 'Max');
+    await attempts(s4, await paper(s4, '2026-09-20T10:00:00Z'), 9, 4);
+    await attempts(s4, await paper(s4, '2026-10-08T10:00:00Z'), 10, 4);
+
+    await db.query(`select public.queue_parent_digests('2026-10-11')`);
+    const rows = (await db.query(`select * from public.claim_parent_digests(25)`)).rows;
+    const by = (n) => rows.find(r => r.payload.first_name === n).payload;
+    assert.deepEqual([by('Jo').trend, by('Jo').earlier_questions, by('Jo').earlier_lost, by('Jo').questions_counted, by('Jo').questions_lost], ['fewer', 12, 8, 10, 3]);
+    assert.equal(by('Kit').trend, 'similar');
+    assert.equal(by('Lee').trend, 'more');
+    assert.equal(by('Max').trend, null, 'fewer than 10 earlier questions: no comparison');
+    assert.equal(by('Max').earlier_questions, null);
   } finally {
     await db.close();
   }

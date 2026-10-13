@@ -35,8 +35,8 @@ const PURPOSES = [
   { purpose: "improve_extraction", label: "Improving extraction accuracy from corrections", is_required: false, sort_order: 6 },
 ];
 
-test("the current notice version is 1.3.0", () => {
-  expect(CONSENT_NOTICE_VERSION).toBe("1.3.0");
+test("the current notice version is 1.4.0", () => {
+  expect(CONSENT_NOTICE_VERSION).toBe("1.4.0");
 });
 
 test("src/notice.js renders exactly the stored text of the current version, in both languages", () => {
@@ -66,7 +66,9 @@ test("the digest item names what the email contains, that it has no scores, and 
   expect(note).toMatch(/lost marks/);
   expect(note).toMatch(/how many marks that was/);
   expect(note).toMatch(/command words/);
-  expect(note).toMatch(/No scores or predictions/);
+  expect(note).toMatch(/for each subject how many questions lost marks/);
+  expect(note).toMatch(/compares with their earlier papers, shown as counts/);
+  expect(note).toMatch(/No scores, percentages, rankings or predictions/);
   expect(note).toMatch(/United States/);
   expect(note).not.toMatch(/!/);
 });
@@ -77,11 +79,14 @@ test("purpose notes are English only, and unknown purposes have none", () => {
   expect(purposeNote("not_a_purpose", "en")).toBe("");
 });
 
-test("nothing in the client compares a stored notice_version with the current one", () => {
-  // A bump must not re-prompt returning guardians. If a comparison is added,
-  // forcing re-consent becomes a deliberate, reviewed change, not a side effect.
+test("only reconfirm.js compares a stored notice_version with the current one", () => {
+  // Re-prompting is a deliberate, reviewed behaviour (AXO-266). The comparison
+  // lives in one file; consent.js stays a plain reader and writer.
   const consent = readFileSync(resolve(__dirname, "../../src/consent.js"), "utf8");
   const uses = consent.match(/CONSENT_NOTICE_VERSION/g) ?? [];
   expect(uses).toHaveLength(2); // the import and the value written on insert
   expect(consent).toMatch(/notice_version: CONSENT_NOTICE_VERSION,/);
+  const reconfirm = readFileSync(resolve(__dirname, "../../src/reconfirm.js"), "utf8");
+  expect(reconfirm).toMatch(/isOlderNotice/);
+  expect(reconfirm).toMatch(/r\.granted && isOlderNotice/); // withdrawals are never re-asked
 });

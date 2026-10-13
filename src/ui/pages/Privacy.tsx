@@ -270,11 +270,13 @@ export default function Privacy() {
         <h3>Weekly summary email</h3>
         <p>
           If a parent or guardian switches on the weekly summary, Axon sends one email a week to the
-          email address on their account. The email contains the child's first name, the subjects of
-          the papers read that week, how many questions were counted and how many lost marks, how
-          many marks were lost, up to two command words that cost marks with the number of questions
-          behind each, and a link to Settings. It contains no scores, percentages or grade
-          predictions, no answers and no images. It is not sent unless the guardian has given this
+          email address on their account. The email contains the child's first name, the subjects
+          and number of papers read that week, for each subject how many questions were counted,
+          how many lost marks and how many marks were lost, up to two command words that cost marks
+          with the number of questions behind each, and, once there is enough earlier work, how
+          this week compares with the child's own earlier papers, shown as counts, plus a link to
+          Settings. It contains no scores, percentages, rankings or grade predictions, no answers
+          and no images. It is not sent unless the guardian has given this
           consent under the current wording, and it stops when the guardian switches it off in
           Settings. Axon does not track whether the email is opened or links in it are clicked.
         </p>

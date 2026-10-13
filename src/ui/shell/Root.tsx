@@ -10,9 +10,11 @@
 
 import ProfileChooser from "../components/ProfileChooser";
 
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AppProvider, useApp } from "../data/AppProvider";
+import { readReconfirmation } from "../data/modules";
+import type { ReconfirmRow } from "../data/modules";
 import { ToastProvider } from "../components/ToastProvider";
 import { SheetProvider } from "../components/SheetProvider";
 import { IngestionProvider } from "../data/useIngestion";
@@ -26,6 +28,7 @@ import { skeletonVariantForPath } from "../components/PageSkeleton";
    in and will never load this, and onboarding drags the whole eight-step flow
    and its notice text onto a critical path it has no business being on. */
 const Onboarding = lazy(() => import("../onboarding/Onboarding"));
+const ReconfirmNotice = lazy(() => import("../onboarding/ReconfirmNotice"));
 const PasswordRecovery = lazy(() => import("../onboarding/PasswordRecovery"));
 
 /* The recovery screen. Deliberately not the onboarding flow, and deliberately
@@ -55,6 +58,33 @@ function BootError() {
   );
 }
 
+/* A guardian whose saved consent predates the current notice sees it once and
+   confirms it (AXO-266). A failed read never blocks the app, and "Not now" holds
+   for the session only. */
+function ReadyWithReconfirm() {
+  const { guardian } = useApp();
+  const [rows, setRows] = useState<ReconfirmRow[] | null>(null);
+  const [later, setLater] = useState(() => { try { return sessionStorage.getItem("axon.reconfirm-later") === "1"; } catch { return false; } });
+  useEffect(() => {
+    if (!guardian || later) return;
+    let live = true;
+    readReconfirmation(guardian.id).then((r) => { if (live) setRows(r.needed ? r.rows : null); }).catch(() => { /* never block the app */ });
+    return () => { live = false; };
+  }, [guardian?.id, later]);
+  if (rows && !later) {
+    return (
+      <Suspense fallback={<SkeletonLoader label="Loading notice" variant="onboarding" />}>
+        <ReconfirmNotice
+          rows={rows}
+          onDone={() => setRows(null)}
+          onLater={() => { try { sessionStorage.setItem("axon.reconfirm-later", "1"); } catch { /* session only */ } setLater(true); }}
+        />
+      </Suspense>
+    );
+  }
+  return <AppShell />;
+}
+
 function Gate() {
   const { gate, passwordRecovery } = useApp();
   const { pathname } = useLocation();
@@ -74,7 +104,7 @@ function Gate() {
     return <Suspense fallback={<SkeletonLoader label="Loading setup" variant="onboarding" />}><Onboarding /></Suspense>;
 
   }
-  return <AppShell />;
+  return <ReadyWithReconfirm />;
 }
 
 export default function Root() {
