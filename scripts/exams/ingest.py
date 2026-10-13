@@ -6,7 +6,15 @@ SHA-256 differs from the manifest, parses it with cambridge_timetable.py, and
 refuses any timetable whose two views disagree. Writes SQL to stdout for
 scripts/syllabus/load.mjs, which runs it as one transaction.
 
-Run: python3 scripts/exams/ingest.py [--pdf-dir DIR] > exams.sql
+With --discover (the daily refresh; owner, 13 Oct 2026: exam dates load
+themselves), the board's exam timetables page is read as well: every zone
+timetable linked there is loaded, a newer file replaces the manifest's entry
+for the same series and zone, and a changed SHA-256 is accepted when the new
+file passes the same two-view cross-check. A timetable that fails is skipped
+with a warning and its earlier dates stay; without --discover any mismatch
+still stops the run.
+
+Run: python3 scripts/exams/ingest.py [--pdf-dir DIR] [--discover] > exams.sql
 """
 
 import argparse
@@ -22,6 +30,37 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
 import cambridge_timetable as ct  # noqa: E402
+import cambridge_thresholds as cgt  # noqa: E402
+
+TIMETABLE_PAGE = ("https://www.cambridgeinternational.org/exam-administration/cambridge-exams-officers-guide/"
+                  "phase-1-preparation/timetabling-exams/exam-timetables/")
+
+
+def warn(msg):
+    print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"warning: {msg}", file=sys.stderr)
+
+
+def discovered_timetables(manifest_timetables):
+    """Manifest entries, with the board's page merged in: same series, zone
+    and variant → the page's file wins; anything new is added."""
+    req = urllib.request.Request(TIMETABLE_PAGE, headers={"User-Agent": "Axon exam ingest (axon-site)"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        html = r.read().decode("utf-8", "replace")
+    found = cgt.timetable_pdfs(html)
+    if not found:
+        raise SystemExit(f"{TIMETABLE_PAGE}: no zone timetables found; the page layout may have changed")
+    merged = {(t["series_key"], t["zone"], t["timetable_variant"]): dict(t) for t in manifest_timetables}
+    for url, series, label, zone, variant in found:
+        key = (series, zone, variant)
+        status = "provisional" if "provisional" in url.lower() else "final"
+        if key in merged:
+            if merged[key]["source_url"] != url:
+                merged[key].update(source_url=url, source_sha256=None, status=status)
+        else:
+            merged[key] = {"provider_key": "cambridge", "series_key": series, "series_label": label, "zone": zone,
+                           "timetable_variant": variant, "status": status, "source_url": url, "source_sha256": None}
+    print(f"-- discovered {len(found)} zone timetables on the board's page; {len(merged)} to load", file=sys.stderr)
+    return sorted(merged.values(), key=lambda t: (t["series_key"], t["zone"], t["timetable_variant"]))
 
 
 def q(v):
@@ -68,6 +107,7 @@ def parse(data):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pdf-dir")
+    ap.add_argument("--discover", action="store_true")
     args = ap.parse_args()
     manifest = json.load(open(os.path.join(ROOT, "curriculum/exams/sources.json")))
     zones = json.load(open(os.path.join(ROOT, "curriculum/exams/cambridge-zones.json")))
@@ -83,16 +123,25 @@ def main():
                    "lookup_value = excluded.lookup_value, label = excluded.label, country = excluded.country, zone = excluded.zone, "
                    "timetable_variant = excluded.timetable_variant, source_url = excluded.source_url, fetched_at = excluded.fetched_at;")
 
-    for t in manifest["timetables"]:
-        data = fetch(t["source_url"], args.pdf_dir)
-        sha = hashlib.sha256(data).hexdigest()
-        if sha != t["source_sha256"]:
-            raise SystemExit(f"{t['source_url']}: SHA-256 {sha} differs from the manifest; review the new version first")
-        rows, windows, errata, problems, version = parse(data)
-        if problems:
-            raise SystemExit(f"{t['source_url']}: the weekly and A-Z views disagree: {problems}")
-        if not rows:
-            raise SystemExit(f"{t['source_url']}: no rows read")
+    timetables = discovered_timetables(manifest["timetables"]) if args.discover else manifest["timetables"]
+    for t in timetables:
+        try:
+            data = fetch(t["source_url"], args.pdf_dir)
+            sha = hashlib.sha256(data).hexdigest()
+            if t["source_sha256"] and sha != t["source_sha256"]:
+                if not args.discover:
+                    raise SystemExit(f"{t['source_url']}: SHA-256 {sha} differs from the manifest; review the new version first")
+                warn(f"{t['source_url']}: a new version ({sha[:12]}); loading it only if it passes the cross-check")
+            rows, windows, errata, problems, version = parse(data)
+            if problems:
+                raise ValueError(f"the weekly and A-Z views disagree: {problems}")
+            if not rows:
+                raise ValueError("no rows read")
+        except (ValueError, OSError) as e:
+            if not args.discover:
+                raise SystemExit(f"{t['source_url']}: {e}")
+            warn(f"{t['source_url']}: {e}; skipped, earlier dates for this timetable stay")
+            continue
         print(f"-- {t['series_label']} zone {t['zone']}{' ' + t['timetable_variant'] if t['timetable_variant'] else ''}: "
               f"{len(rows)} dated, {len(windows)} windows, {len(errata)} errata", file=sys.stderr)
         days = [r["date"] for r in rows] + [w["window_start"] for w in windows] + [w["window_end"] for w in windows]

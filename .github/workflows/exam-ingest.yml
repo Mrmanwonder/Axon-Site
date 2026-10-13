@@ -1,8 +1,19 @@
 name: Ingest exam timetables
 
-# Loads official exam dates, Cambridge administrative zones and syllabus paper
-# routes listed in curriculum/exams/. Each timetable PDF must match its recorded
-# SHA-256 and its weekly and A-Z views must agree, or nothing loads.
+# Loads official exam dates, Cambridge administrative zones, syllabus paper
+# routes and grade thresholds, by itself every day (owner, 13 Oct 2026: exam
+# dates and grade thresholds must not need loading by hand).
+#
+# Timetables: the manifest in curriculum/exams/ plus every zone timetable on
+# the board's exam timetables page (scripts/exams/ingest.py --discover). A new
+# or changed file loads only if its weekly and A-Z views agree; one that fails
+# is skipped with a warning and its earlier dates stay.
+#
+# Grade thresholds: every table on the board's grade threshold pages for the
+# newest series, checked route by route against the board's weighting factors
+# file (scripts/exams/thresholds_ingest.py). Routes that pass every check are
+# verified and usable; the rest stay drafts. Tables already fully verified are
+# not downloaded again.
 
 on:
   workflow_run:
@@ -15,6 +26,8 @@ on:
       - "curriculum/exams/**"
       - "scripts/exams/**"
       - ".github/workflows/exam-ingest.yml"
+  schedule:
+    - cron: "41 3 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -41,11 +54,25 @@ jobs:
         run: |
           python -m pip install --quiet -r scripts/syllabus/requirements.txt
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-      - name: Timetable reader tests
-        run: python scripts/exams/test_timetable.py
-      - name: Fetch, verify and parse
-        run: python scripts/exams/ingest.py > "$RUNNER_TEMP/exams.sql"
-      - name: Load
+      - name: Timetable and threshold reader tests
+        run: |
+          python scripts/exams/test_timetable.py
+          python scripts/exams/test_thresholds.py
+      - name: Fetch, verify and parse timetables
+        run: python scripts/exams/ingest.py --discover > "$RUNNER_TEMP/exams.sql"
+      - name: Load timetables
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/exams.sql"
+      - name: Fetch and check grade thresholds
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -o pipefail
+          node scripts/exams/known.mjs > "$RUNNER_TEMP/gt-known.txt"
+          python scripts/exams/thresholds_ingest.py --series 3 --known "$RUNNER_TEMP/gt-known.txt" > "$RUNNER_TEMP/gt.sql" 2> >(tee "$RUNNER_TEMP/gt.log" >&2)
+          grep '^-- ' "$RUNNER_TEMP/gt.log" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Load grade thresholds
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/gt.sql"

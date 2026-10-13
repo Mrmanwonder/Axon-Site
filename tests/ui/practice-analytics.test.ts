@@ -41,12 +41,13 @@ test("AXO-261: topics group under their unit and untested topics stay no_data", 
 test("AXO-262: the outlook is always a range with its basis, never a single confident grade", () => {
   const base = {
     state: "ready" as const, syllabus_code: "0625", series_key: "2026-06", option_code: "AX", source_url: "https://example.org/t.pdf",
-    papers: 4, components: [], low_grade: "C", mid_grade: "B", high_grade: "A", low_total: 110, mid_total: 130, high_total: 150,
+    papers: 4, components: [{ paper: 1, papers: 2 }, { paper: 3, papers: 2 }], routes: 3, low_grade: "C", mid_grade: "B", high_grade: "A", low_total: 110, mid_total: 130, high_total: 150,
     max_total: 200, target: "A", marks_to_target: 12, suggested: "B", stretch: "A",
   };
   const l = outlookLines(base);
   expect(l.range).toBe("C to A");
   expect(l.basis).toMatch(/^Based on 4 papers · 110 to 150 of 200/);
+  expect(l.basis).toMatch(/June 2026 thresholds for 0625, papers 1, 3 \(3 variants, widest range\)$/);
   expect(l.target).toMatch(/About 12 more weighted marks .* target of A/);
   expect(outlookLines({ ...base, low_grade: "B", high_grade: "B" }).range).toBe("Around B");
   expect(outlookLines({ ...base, target: null }).target).toBeNull();

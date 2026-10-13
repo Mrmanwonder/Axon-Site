@@ -320,6 +320,30 @@ test('AXO-245/262: targets are validated against the board scale; predictions ar
   assert.ok(out2.marks_to_target > 0);
 });
 
+test('AXO-262: the outlook reads every variant of the route and widens across them; staged and other-level routes are ignored', async () => {
+  const ins = async (series, qual, option, assessment, grades) => {
+    const s = await one(`insert into public.grade_threshold_set (provider_key, syllabus_code, series_key, qualification, option_code, components, component_max, component_weight, max_total, source_url, source_sha256, status, verified_by, verified_at, assessment)
+       values ('cambridge', '9702', $1, $2, $3, '{2}', '{"2":60}', '{"2":1}', 60, 'https://example.test/gt-' || $3, repeat('d', 64), 'verified', 'auto:test', now(), $4) returning id`,
+      [series, qual, option, assessment]);
+    for (const [g, m] of grades) await db.query('insert into public.grade_threshold (set_id, grade, min_total) values ($1, $2, $3)', [s.id, g, m]);
+  };
+  const lenient = [['A*', 6], ['A', 5], ['B', 4], ['C', 3], ['D', 2], ['E', 1]];
+  const strict = [['A*', 60], ['A', 59.5], ['B', 59], ['C', 58.5], ['D', 58], ['E', 57.5]];
+  await ins('2026-06', 'a_level', '21', 'linear', lenient);
+  await ins('2026-06', 'a_level', '22', 'linear', strict);
+  // Newer, but not this student's kind of route: never read.
+  await ins('2026-11', 'a_level', '22,87', 'staged', lenient);
+  await ins('2026-12', 'as', '21', 'as', lenient.slice(1).map(([g, m]) => [g.toLowerCase(), m]));
+  const out = (await one(`select public.grade_outlook($1, 'Physics') j`, [ids.student])).j;
+  assert.equal(out.state, 'ready');
+  assert.equal(out.series_key, '2026-06', 'the most recent June set of linear A Level routes');
+  assert.equal(out.routes, 2);
+  assert.equal(out.option_code, '21 | 22');
+  assert.equal(out.low_grade, 'below lowest grade', 'the strict variant decides the low end');
+  assert.equal(out.high_grade, 'A*', 'the lenient variant decides the high end');
+  assert.equal(out.mid_grade, null, 'the middle is the more cautious of the variants');
+});
+
 test('AXO-246: a part whose reading becomes unsure is withdrawn, and returns with its history when confirmed', async () => {
   await db.query(`update public.student_attempt set extraction_confidence = 'unsure', student_confirmed_at = null where id = $1`, [ids.a5]);
   await one('select public.refresh_error_items($1)', [ids.student]);

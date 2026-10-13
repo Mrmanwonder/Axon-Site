@@ -1,5 +1,5 @@
 {
- "$comment": "Official exam timetables Axon reads dates from, and paper routes read from each syllabus's assessment overview. scripts/exams/ingest.py refuses a download whose SHA-256 differs from the one here; a new version of a timetable is a new hash. Routes are facts (paper numbers) checked by a person against the cited syllabus; add a syllabus here only after reading its assessment overview.",
+ "$comment": "Official exam timetables Axon reads dates from, and paper routes read from each syllabus's assessment overview. Run by hand, scripts/exams/ingest.py refuses a download whose SHA-256 differs from the one here. The daily refresh (--discover; owner, 13 Oct 2026) also loads every zone timetable on the board's exam timetables page and accepts a new or changed file only when its weekly and A-Z views agree; the loaded hash is recorded on exam_timetable. Routes are facts (paper numbers) checked by a person against the cited syllabus; add a syllabus here only after reading its assessment overview.",
  "timetables": [
   {
    "provider_key": "cambridge",
