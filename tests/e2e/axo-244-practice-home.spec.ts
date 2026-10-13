@@ -11,7 +11,8 @@ for (const width of [380, 768, 1024]) {
     await page.goto("/tests/browser/index.html?view=home&scenario=insights&styled=1");
     const card = page.locator(".nbacard");
     await expect(card).toContainText("Re-attempt 4 questions on Momentum");
-    await expect(card).toContainText("+9 marks recoverable");
+    await expect(card).toContainText("9 marks to win back");
+    expect(await page.locator("body").textContent()).not.toMatch(/recoverable|\+\d+\s*marks?/);
     await expect(page.locator(".btn.primary")).toHaveCount(1);
     const order = await page.locator(".sectitle").allTextContents();
     expect(order.slice(0, 3).map((t) => t.replace(/\s+\d.*$/, ""))).toEqual(["Today’s re-attempts", "Where the most marks are", "Your progress"]);

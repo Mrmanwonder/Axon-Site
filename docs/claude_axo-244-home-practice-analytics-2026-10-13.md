@@ -108,10 +108,9 @@ files, so it is not in this PR. Text for the owner to apply:
 
 ## 4. Open product questions for the owner
 
-1. **"+9 marks recoverable"** (AXO-244 gain framing) sits against §8 "Marks lost, never
-   score". The number is sourced (the teacher's marks on parts not yet fixed), but the word
-   "recoverable" implies a promise. Options: (a) keep it; (b) "9 marks to win back", the
-   wording readiness already uses; (c) "9 marks lost here". Recommendation: (b).
+1. **Gain wording: decided (owner, 13 Oct 2026): "9 marks to win back".** It replaces
+   "+9 marks recoverable" on the next-step card, the leaks and the due list, so no "+N" or
+   "recoverable" remains on Home.
 2. **The scorecard ignores the Insights filters.** It has its own subject picker, and the
    sticky filter bar can sit above it. Recommendation: keep it separate for v1, and say so
    in a one-line note if testers are confused.

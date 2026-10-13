@@ -21,6 +21,7 @@ as $$
   select (now() at time zone coalesce(
             (select timezone from public.student_practice_pref where student_id = p_student), 'UTC'))::date;
 $$;
+revoke all on function private.student_today(uuid) from public, anon, authenticated;
 
 -- The next fixed sitting of any paper the student sits for this syllabus, from
 -- the board's own timetable (AXO-207). Null when the plan or timetable is not
@@ -46,6 +47,7 @@ as $$
      and es.exam_date >= p_today
      and (sep.papers is null or es.paper = any (sep.papers));
 $$;
+revoke all on function private.next_exam_date(uuid, text, date) from public, anon, authenticated;
 
 -- A paper's weight relative to an equal share of its qualification: 1.0 is an
 -- average paper, 1.7 a heavy one. Unknown paper or syllabus is 1.0, which
@@ -71,6 +73,7 @@ as $$
        from w where w.paper = p_paper),
     1.0)::numeric;
 $$;
+revoke all on function private.component_weight_factor(text, text, smallint, text) from public, anon, authenticated;
 
 create or replace function private.component_weight_pct(
   p_provider text, p_syllabus text, p_paper smallint, p_programme text)
@@ -85,6 +88,7 @@ as $$
     from public.syllabus_component c
    where c.provider_key = p_provider and c.syllabus_code = p_syllabus and c.paper = p_paper;
 $$;
+revoke all on function private.component_weight_pct(text, text, smallint, text) from public, anon, authenticated;
 
 -- Minutes a re-attempt takes: answer from memory, check, remedy. Bounded so a
 -- 15-minute session holds 3 to 6 items.

@@ -22,7 +22,8 @@ const ready: NextBestAction = {
 test("AXO-251: one task, gain-framed, and one primary button that starts that session", async () => {
   const { container } = wrap(<NextBestActionCard nba={ready} showTypes={false} onScan={() => {}} />);
   expect(screen.getByText("Re-attempt 4 questions on Rates of reaction")).toBeTruthy();
-  expect(screen.getByText("+9 marks recoverable")).toBeTruthy();
+  expect(screen.getByText("9 marks to win back")).toBeTruthy();
+  expect(container.textContent).not.toMatch(/recoverable|\+\d/);
   expect(container.querySelectorAll(".btn.primary")).toHaveLength(1);
   expect(container.textContent).not.toMatch(/%|score/i);
   await userEvent.click(screen.getByRole("button", { name: "Start · 15 min" }));

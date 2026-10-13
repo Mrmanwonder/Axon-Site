@@ -411,6 +411,7 @@ begin
   return null;
 end;
 $$;
+revoke all on function private.mark_error_items_dirty() from public, anon, authenticated;
 
 create trigger error_item_dirty_attempt
   after insert or update or delete on public.student_attempt

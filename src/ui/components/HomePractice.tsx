@@ -6,7 +6,7 @@
    a primary button; everything else is a quiet text action, so the screen
    keeps one obvious thing to do.
 
-   Every number here is sourced: marks lost are the teacher's, "recoverable"
+   Every number here is sourced: marks lost are the teacher's, "to win back"
    is the sum of those marks on parts not yet fixed, minutes are the server's
    budget estimate, and the streak counts completed re-attempt sessions only.
    Gain framing, no red, no percentages, no comparison with anyone else.
@@ -95,7 +95,7 @@ export function NextBestActionCard({ nba, showTypes, onScan, hasPapers = false }
       <div className="eyebrow">Next step</div>
       <div className="line">{line}</div>
       <div className="nbameta">
-        <span className="gain">+{numMark(nba.marks_recoverable)} {nba.marks_recoverable === 1 ? "mark" : "marks"} recoverable</span>
+        <span className="gain">{numMark(nba.marks_recoverable)} {nba.marks_recoverable === 1 ? "mark" : "marks"} to win back</span>
         <span aria-hidden="true">·</span>
         <span>{nba.minutes} min</span>
         {nba.subject && nba.kind !== "subject" ? <><span aria-hidden="true">·</span><span>{nba.subject}</span></> : null}
@@ -145,7 +145,7 @@ export function DueQueueList({ due }: { due: DueItem[] }) {
                 {" · "}{d.minutes} min
               </div>
             </div>
-            <div className="lost gainnum">+{numMark(d.marks_lost)}<small>{d.marks_lost === 1 ? "mark" : "marks"}</small></div>
+            <div className="lost gainnum">{numMark(d.marks_lost)}<small>to win back</small></div>
             <Chevron />
           </PressBox>
         ))}
@@ -166,7 +166,7 @@ export function LeaksCard({ leaks, showTypes }: { leaks: FocusArea[]; showTypes:
           <div className="tallyrow" key={`${a.kind}:${a.key}:${a.subject ?? ""}`}>
             <div className="top">
               <span className="n">{focusLabel(a, showTypes)}</span>
-              <span className="v gainnum">+{numMark(a.marks_recoverable)}<small>{a.marks_recoverable === 1 ? "mark" : "marks"}</small></span>
+              <span className="v gainnum">{numMark(a.marks_recoverable)}<small>to win back</small></span>
             </div>
             <div className="meta">
               {a.subject && a.kind !== "subject" ? `${a.subject} · ` : ""}
