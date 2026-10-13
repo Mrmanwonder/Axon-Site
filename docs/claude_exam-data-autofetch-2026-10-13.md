@@ -46,7 +46,7 @@ below is true. Each check's result is stored in `grade_threshold_set.checks`.
 | Check | What must hold |
 |---|---|
 | `title` | The table's own heading names the syllabus code and the series. |
-| `file_name_matches` | Those match the file name it was found under. This check is only written when they don't match, and then it is false. |
+| `factor` | Each factor is weighted maximum ÷ raw maximum, and agrees with the printed (rounded) factor to the places shown, e.g. 1.66667 for 5/3. |
 | `components` | Every component of the route has thresholds in the table and a factor in the weighting file, with the same raw maximum in both. |
 | `max` | The route's maximum weighted mark equals the sum of factor × raw maximum, exactly. |
 | `a_e` | Syllabus A and E equal the weighted sums of the component A and E thresholds, to within half a mark (the board's rounding). |
@@ -101,7 +101,7 @@ The production load is done by the workflow after merge; its run ids are recorde
 | Warning: "skipped, earlier dates stay" | A timetable's two views disagree, or it couldn't be read. | Open the PDF. If the board's own document is inconsistent, wait for its correction; nothing wrong loads in the meantime. |
 | `no zone timetables found` / `no series pages found` | The board changed its page layout. | Update the pattern in `cambridge_thresholds.py`. The job fails loudly rather than loading nothing quietly. |
 | Routes stuck in draft (`select option_code, checks from grade_threshold_set where status = 'draft' and assessment <> 'staged'`) | Usually a series the weighting file doesn't cover yet. | They verify by themselves once the board publishes the new weighting file. |
-| `file_name_matches = false` | The board's file name and its contents disagree. | Kept as draft. Report it to the board if it persists. |
+| Warning: "the table says … the file name …; not loaded" | The board's file name and its contents disagree (seen 13 Oct: Sociology 9699, file `march-2025`, contents March 2026). | Nothing loads for that file, so no other series is overwritten. It loads once the board fixes the name, or once the series page links a correct copy. |
 
 ## Not covered
 

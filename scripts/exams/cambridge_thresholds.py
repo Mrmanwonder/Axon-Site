@@ -13,6 +13,8 @@ A route is verified only when every check passes:
   title         the table names this syllabus code and this series
   components    every component of the route has thresholds in the table and
                 a factor in the weighting file, with the same raw maximum
+  factor        each factor is weighted maximum / raw maximum, and agrees with
+                the factor as printed (rounded, e.g. 1.66667) to the places shown
   max           the route's maximum weighted mark equals the sum of the
                 components' weighted maxima, exactly
   a_e           syllabus A and E equal the weighted sums of the component A and
@@ -35,6 +37,13 @@ SYLLABUS_RE = re.compile(r"\((\d{4})\)\s*$")
 COMPONENT_RE = re.compile(r"^Component (\d{2}) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)$")
 SECTION_RE = re.compile(r"^Cambridge International (A Level \(linear assessment\)|A Level \(staged assessment\)|AS Level|A Level)$")
 ROUTE_RE = re.compile(r"^((?:\d{2}, )*\d{2}) (\d+)((?: \d+){5,6})$")
+# The older layout (series up to November 2025): an option code first, the
+# maximum, then the route, with a long route wrapping onto the next line, and
+# "–" where AS has no A*:  "AX 260 11, 21, 31, 41, 210 183 156 131 106 82" / "51".
+OLD_ROUTE_RE = re.compile(r"^([A-Z][A-Z0-9]{0,3}) (\d+) ((?:\d{2}, )*\d{2},?) ((?:[–-]|\d+)(?: \d+){4,5})$")
+CONTINUATION_RE = re.compile(r"^(\d{2}(?:, \d{2})*),?$")
+GRADE_HEAD_AS = re.compile(r"(^|\s)a b c d e$")
+GRADE_HEAD_A = re.compile(r"(^|\s)A\* A B C D E$")
 WEIGHT_RE = re.compile(r"^(January|February|March|April|May|June|July|August|September|October|November|December) "
                        r"(\d{4}) (\d{4}) (\d{2}) (\d+) (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)$")
 SECTIONS = {"A Level (linear assessment)": ("a_level", "linear"), "A Level": ("a_level", "linear"),
@@ -44,9 +53,12 @@ HALF = Fraction(1, 2)
 
 
 def decimal_text(f):
-    """A factor as the board prints it: a terminating decimal, never "3/4"."""
-    from decimal import Decimal
-    d = Decimal(f.numerator) / Decimal(f.denominator)
+    """A factor as a decimal string SQL can read, never "3/4": exact where it
+    terminates (0.75), otherwise to 12 places (5/3 → 1.666666666667)."""
+    from decimal import Decimal, localcontext
+    with localcontext() as ctx:
+        ctx.prec = 28
+        d = (Decimal(f.numerator) / Decimal(f.denominator)).quantize(Decimal("1e-12"))
     return format(d.normalize(), "f")
 
 
@@ -58,14 +70,49 @@ def parse_threshold_lines(lines):
     """Lines of one threshold table, in reading order."""
     out = {"series": None, "syllabus_code": None, "components": {}, "routes": []}
     section = None
-    for raw in lines:
+    head = None      # grade header last seen: AS-only tables print no section heading
+    wrapping = None  # an older-layout route whose components continue on the next line
+    for i, raw in enumerate(lines):
         line = raw.strip()
+        prev = lines[i - 1].strip() if i else ""
+        if wrapping is not None:
+            more = CONTINUATION_RE.match(line)
+            if more:
+                wrapping["components"].extend(more.group(1).split(", "))
+                wrapping = None
+                continue
+            wrapping = None
+        if GRADE_HEAD_AS.search(line):
+            head = "as"
+        elif GRADE_HEAD_A.search(line):
+            head = "a_level"
+        o = OLD_ROUTE_RE.match(line)
+        if o:
+            comps = [c for c in o.group(3).rstrip(",").split(", ") if c]
+            tokens = o.group(4).split()
+            # "–" in the A* column, or an AS-only table with no A* column at all.
+            is_as = tokens[0] in ("–", "-") or len(tokens) == 5
+            grades = [int(x) for x in tokens if x not in ("–", "-")]
+            if is_as != (len(grades) == 5):
+                continue  # neither layout: read nothing rather than guess
+            staged = any(c[0] in "789" for c in comps)
+            route = {"qualification": "as" if is_as else "a_level",
+                     "assessment": "as" if is_as else ("staged" if staged else "linear"),
+                     "components": comps, "max_total": int(o.group(2)), "grades": grades}
+            out["routes"].append(route)
+            if o.group(3).endswith(","):
+                wrapping = route
+            continue
         t = TITLE_RE.match(line)
         if t and out["series"] is None:
             out["series"] = series_key(t.group(1), t.group(2))
             continue
         if out["syllabus_code"] is None and line.startswith("Cambridge International") and SYLLABUS_RE.search(line):
             out["syllabus_code"] = SYLLABUS_RE.search(line).group(1)
+            continue
+        # A long title wraps its code onto a line of its own: "... Research" / "(9239)".
+        if out["syllabus_code"] is None and prev.startswith("Cambridge International") and re.fullmatch(r"\((\d{4})\)", line):
+            out["syllabus_code"] = line[1:5]
             continue
         c = COMPONENT_RE.match(line)
         if c:
@@ -76,13 +123,16 @@ def parse_threshold_lines(lines):
             section = s.group(1)
             continue
         r = ROUTE_RE.match(line)
-        if r and section:
-            qual, assessment = SECTIONS[section]
+        if r and (section or head):
+            qual, assessment = SECTIONS[section] if section else (("as", "as") if head == "as" else ("a_level", "linear"))
             out["routes"].append({
                 "qualification": qual, "assessment": assessment,
                 "components": r.group(1).split(", "), "max_total": int(r.group(2)),
                 "grades": [int(x) for x in r.group(3).split()],
             })
+    for r in out["routes"]:
+        if r["assessment"] == "linear" and not all(c in out["components"] for c in r["components"]):
+            r["assessment"] = "staged"  # carries a component with no thresholds here
     return out
 
 
@@ -109,10 +159,16 @@ def check_route(table, route, weights):
     in_weights = all((series, code, c) in weights for c in comps)
     if not (in_table and in_weights):
         checks["components"] = False
-        checks["max"] = checks["a_e"] = "not_checked"
+        checks["max"] = checks["a_e"] = checks["factor"] = "not_checked"
         return checks, None
+    # The exact factor is weighted maximum / raw maximum; the printed factor is
+    # rounded (1.66667 for 5/3) and must agree with it to the places printed.
+    def exact(c):
+        raw, wmax, printed = weights[(series, code, c)]
+        return wmax / raw, printed
     checks["components"] = all(table["components"][c][0] == weights[(series, code, c)][0] for c in comps)
-    w = [weights[(series, code, c)][2] for c in comps]
+    checks["factor"] = all(abs(e - p) <= Fraction(1, 100000) for e, p in (exact(c) for c in comps))
+    w = [exact(c)[0] for c in comps]
     total = sum(f * table["components"][c][0] for f, c in zip(w, comps))
     checks["max"] = total == route["max_total"]
     if checks["grade_count"]:
@@ -125,6 +181,12 @@ def check_route(table, route, weights):
     return checks, dict(zip(comps, w))
 
 
+def paper_of(component):
+    """Paper number of a two-digit component: "31" is paper 3 variant 1;
+    single-paper syllabuses number from "01", where "02" is paper 2."""
+    return int(component[1]) if component[0] == "0" else int(component[0])
+
+
 def verified(checks):
     return all(v is True for v in checks.values())
 
@@ -135,7 +197,7 @@ def routes_for_db(table, weights):
     out = []
     for route in table["routes"]:
         checks, factors = check_route(table, route, weights)
-        papers = [int(c[0]) for c in route["components"]]
+        papers = [paper_of(c) for c in route["components"]]
         if len(set(papers)) != len(papers):
             checks["papers_distinct"] = False  # two variants of one paper in one route: not a route we can read
         status = "verified" if verified(checks) and route["assessment"] != "staged" else "draft"
@@ -145,8 +207,8 @@ def routes_for_db(table, weights):
             "qualification": route["qualification"], "assessment": route["assessment"],
             "option_code": ",".join(route["components"]),
             "components": sorted(papers),
-            "component_max": {str(int(c[0])): table["components"][c][0] for c in route["components"] if c in table["components"]},
-            "component_weight": {str(int(c[0])): decimal_text(factors[c]) for c in route["components"]} if factors else {},
+            "component_max": {str(paper_of(c)): table["components"][c][0] for c in route["components"] if c in table["components"]},
+            "component_weight": {str(paper_of(c)): decimal_text(factors[c]) for c in route["components"]} if factors else {},
             "max_total": route["max_total"],
             "grades": list(zip(names, grades)),
             "checks": checks, "status": status,

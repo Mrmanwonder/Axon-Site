@@ -88,6 +88,51 @@ class Checks(unittest.TestCase):
         self.assertFalse(r["checks"]["components"])
         self.assertEqual(r["status"], "draft")
 
+    def test_a_rounded_printed_factor_is_read_exactly(self):
+        t = ct.parse_threshold_lines(TABLE[:3] + ["Component 61 30 22 19 17 15 13"] + TABLE[3:])
+        w = ct.parse_weighting_lines(WEIGHTS + ["June 2030 9999 61 30 50 1.66667"])
+        checks, factors = ct.check_route(t, {"qualification": "as", "assessment": "as", "components": ["11", "61"],
+                                             "max_total": 90, "grades": [62, 55, 48, 41, 34]}, w)
+        self.assertEqual(factors["61"], Fraction(5, 3))
+        self.assertTrue(checks["factor"])
+        self.assertEqual(ct.decimal_text(Fraction(5, 3)), "1.666666666667")
+
+    def test_older_layout_with_wrapped_routes_and_as_dash(self):
+        old = """Grade thresholds – November 2029
+Cambridge International AS & A Level Example Science (9999)
+Component 11 40 29 25 22 19 16
+Component 21 60 43 38 33 26 20
+Component 31 40 33 31 28 25 23
+Component 41 100 59 51 41 31 21
+Component 51 30 21 19 16 13 10
+Option mark after A* A B C D E
+AX 260 11, 21, 31, 41, 198 177 156 132 108 84
+51
+BX1 260 41, 51, 84 193 174 155 130 106 82
+S1 130 11, 21, 31 – 93 80 65 51 37""".splitlines()
+        t = ct.parse_threshold_lines(old)
+        got = [(r["qualification"], r["assessment"], ",".join(r["components"]), len(r["grades"])) for r in t["routes"]]
+        self.assertEqual(got, [("a_level", "linear", "11,21,31,41,51", 6), ("a_level", "staged", "41,51,84", 6), ("as", "as", "11,21,31", 5)])
+
+    def test_a_title_whose_code_wraps_onto_the_next_line(self):
+        t = ct.parse_threshold_lines(["Grade thresholds – June 2030", "Cambridge International AS & A Level Global Perspectives & Research",
+                                      "(9239)", "Component grade thresholds"])
+        self.assertEqual(t["syllabus_code"], "9239")
+
+    def test_older_as_only_tables_have_no_a_star_column(self):
+        t = ct.parse_threshold_lines(["Grade thresholds – November 2029", "Cambridge International AS Level Example (8999)",
+                                      "Option mark after A B C D E", "SX 140 02, 11 101 89 77 65 54", "TX 140 11, 82/92 101 89 77 65 54"])
+        self.assertEqual([(r["qualification"], ",".join(r["components"]), r["grades"]) for r in t["routes"]],
+                         [("as", "02,11", [101, 89, 77, 65, 54])])
+
+    def test_as_only_tables_without_a_section_heading(self):
+        t = ct.parse_threshold_lines(["Grade thresholds – June 2030", "Cambridge International AS Level Example (8999)",
+                                      "weighted a b c d e", "11, 21 100 70 63 57 51 45"])
+        self.assertEqual([(r["qualification"], r["assessment"]) for r in t["routes"]], [("as", "as")])
+
+    def test_paper_numbers(self):
+        self.assertEqual([ct.paper_of(c) for c in ["11", "31", "02", "04", "50"]], [1, 3, 2, 4, 5])
+
     def test_grades_out_of_order_are_caught(self):
         bad = [l.replace("130 93 80 65 51 37", "130 93 80 81 51 37") for l in TABLE]
         self.assertFalse(self.routes(table=bad)["11,21,31"]["checks"]["order"])

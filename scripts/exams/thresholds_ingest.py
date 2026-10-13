@@ -12,7 +12,7 @@
      each table replaces that syllabus and series. Routes that pass every check
      are verified ('auto:cambridge-thresholds-v1'); the rest stay drafts.
 
-A table whose own title disagrees with its file name loads nothing verified.
+A table whose own title disagrees with its file name is not loaded at all.
 A download or read failure skips that table with a warning; earlier rows for
 it stay as they were. Nothing is guessed.
 
@@ -134,13 +134,24 @@ def main():
             stats["failed"] += 1
             warn(f"{url}: no routes read")
             continue
-        routes = ct.routes_for_db(table, weights)
         if table["syllabus_code"] != code or table["series"] != series:
-            for r in routes:
-                r["checks"]["file_name_matches"] = False
-                r["status"] = "draft"
-            warn(f"{url}: the table says {table['syllabus_code']} {table['series']}, the file name {code} {series}; kept as draft")
-            table["syllabus_code"], table["series"] = code, series
+            # Which one is right cannot be told from here, and writing it under
+            # either would replace that series' real table. Load nothing.
+            stats["failed"] += 1
+            warn(f"{url}: the table says {table['syllabus_code']} {table['series']}, the file name {code} {series}; not loaded")
+            continue
+        routes = ct.routes_for_db(table, weights)
+        # The older layout can list one route twice under two option codes.
+        # Identical: keep one. Different numbers for one route: load neither.
+        by_key = {}
+        for r in routes:
+            by_key.setdefault((r["qualification"], r["option_code"]), []).append(r)
+        routes = []
+        for (qual, option), same in by_key.items():
+            if all((x["max_total"], x["grades"]) == (same[0]["max_total"], same[0]["grades"]) for x in same):
+                routes.append(same[0])
+            else:
+                warn(f"{url}: route {option} ({qual}) is printed twice with different thresholds; not loaded")
         out.extend(table_sql(url, sha, table, routes, weights_url, weights_sha))
         stats["tables"] += 1
         for r in routes:
