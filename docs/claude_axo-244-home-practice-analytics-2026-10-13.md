@@ -115,11 +115,20 @@ files, so it is not in this PR. Text for the owner to apply:
    sticky filter bar can sit above it. Recommendation: keep it separate for v1, and say so
    in a one-line note if testers are confused.
 
-## 5. Rollout order after merge
+## 5. Rollout (done 13 Oct 2026, owner-approved)
 
-1. Apply both migrations to production, re-run Supabase advisors, record the output on
-   AXO-246.
-2. Call `public.refresh_error_items` for each active student, or let the first Home visit
-   do it, and record the counts.
-3. Deploy the site and check Home, Insights and Settings on a phone.
-4. Flags stay off until items 1, 2 and 5 in section 3 are cleared.
+1. The CI SQL suite caught five private SECURITY DEFINER helpers that still had the
+   default PUBLIC execute grant. Fixed in `901cc65` before anything was applied; the
+   authority test now also proves guardian B is refused on every practice RPC.
+2. Applied `20261013090000` and `20261013090100` with the repo's own `migrate.yml`
+   (workflow_dispatch on this branch; dry run 38334539181 listed exactly these two;
+   apply run 38334695326). Ledger versions equal the file versions.
+3. Verified on the live project: 12 tables, 19 RPCs, `anon` still limited to the two
+   approved functions, the five helpers not executable by any client role, both flags
+   off, 28 component rows, 0 threshold sets.
+4. Backfill: `private.ensure_error_items` for all 17 live students made 16 error items
+   for 2 students, with nothing left dirty.
+5. Advisors re-run. New findings: 19 authenticated-definer warnings (the audited
+   practice RPCs), `tag_eval_label` RLS-without-policy (service-role only, by design),
+   and two unindexed foreign keys, fixed by `20261013100000_axo_244_practice_fk_indexes.sql`.
+6. Flags stay off until the human items in section 3 are cleared.
