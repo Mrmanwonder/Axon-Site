@@ -4,7 +4,7 @@
    Reuses the draft-toast furniture rather than inventing a new surface.
 
    `tone` is neutral or warn — never an error red. Amber carries attention here
-   as it does everywhere else; red is for destructive deletes alone, and a failed save
+   as it does everywhere else; red is for Sign out and destructive deletes alone, and a failed save
    is not a rebuke.
 
    Announced with role="status" and aria-live="polite" so a screen reader hears

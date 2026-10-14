@@ -36,3 +36,6 @@
   [data-screen="home"],
   [data-screen="library"] { --vmax: 1040px; }
 }
+
+/* hazard mark on destructive Settings rows (owner, 14 Oct 2026) */
+.srow .danger-icon { flex: none; color: var(--danger); }

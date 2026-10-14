@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { expect, test } from "vitest";
 
-// Red is reserved for irreversible actions (deleting papers / the account),
-// consumed only through --danger. Not errors, warnings, low scores or badges.
-// Sign out is reversible and neutral (owner review, Oct 2026).
+// Red is reserved for Sign out and destructive deletes (papers / account),
+// consumed only through --danger; deletes also carry a hazard icon.
+// Not errors, warnings, low scores or badges (owner, 14 Oct 2026).
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = `${dir}/${name}`;
@@ -25,13 +25,24 @@ test("red is only defined as tokens and consumed through --danger", () => {
   expect(offenders, offenders.join("\n")).toEqual([]);
 });
 
-test("--danger is consumed only by the Settings delete rows", () => {
+test("--danger is consumed only by the Settings sign-out and delete rows", () => {
   const users: string[] = [];
   for (const file of walk(`${process.cwd()}/src/ui`)) {
     if (file.endsWith("styles/tokens.css")) continue;
     if (/var\(--danger\)/.test(readFileSync(file, "utf8"))) users.push(file.replace(process.cwd() + "/", ""));
   }
-  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx"]);
+  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/review-2026-10.css"]);
+});
+
+test("Sign out and both deletes are red, and only the deletes carry the hazard icon", () => {
+  const src = readFileSync(`${process.cwd()}/src/ui/pages/Settings.tsx`, "utf8");
+  for (const label of ["Sign out", "Delete the papers", "Delete this account"]) {
+    expect(src).toMatch(new RegExp(`style=\\{\\{ color: "var\\(--danger\\)" \\}\\}>${label}`));
+  }
+  for (const label of ["Delete the papers", "Delete this account"]) {
+    expect(src).toMatch(new RegExp(`<MaterialSymbol name="warning"[^>]*/>\\s*<div className="lbl"[^>]*>${label}`));
+  }
+  expect((src.match(/name="warning"/g) ?? []).length).toBe(2);
 });
 
 import { isTablet } from "../../src/ui/scan/useDeskMode";

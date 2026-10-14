@@ -13,9 +13,9 @@
    Two copy rules visible here:
    · Deleting is not preceded by "are you sure?". The consequence sheet states
      what will happen and offers the action.
-   · Red (--danger) marks the irreversible rows only: deleting papers and
-     deleting the account. Sign out is reversible and is set in plain ink
-     (owner, 14 Oct 2026 — previously the only red row was Sign out).
+   · Red (--danger) is for Sign out and the destructive deletes (papers,
+     account). The deletes also carry a hazard (warning) icon, aria-hidden,
+     so the label stays the accessible name (owner, 14 Oct 2026).
 
    ── Parent Mode ──────────────────────────────────────────────────────────
 
@@ -67,6 +67,7 @@ import { hapticTick, hapticFirm } from "../lib/haptics";
 import { ANALYTICS_CONSENT_EVENT, getAnalyticsConsent, setAnalyticsConsent } from "../lib/analytics";
 import Switch from "../components/Switch";
 import Chevron from "../components/Chevron";
+import { MaterialSymbol } from "../components/MaterialSymbols";
 import PressBox from "../components/PressBox";
 import AvatarPicker, { AvatarDisc } from "../components/AvatarPicker";
 import CurriculumEditor, { curriculumSelectionIsComplete } from "../components/CurriculumEditor";
@@ -608,6 +609,7 @@ export default function Settings() {
             });
           })}
         >
+          <MaterialSymbol name="warning" size={20} className="danger-icon" />
           <div className="lbl" style={{ color: "var(--danger)" }}>Delete the papers<small>Clears papers and analysis, keeps the profile</small></div>
           <Chevron />
         </PressBox>
@@ -643,6 +645,7 @@ export default function Settings() {
             });
           })}
         >
+          <MaterialSymbol name="warning" size={20} className="danger-icon" />
           <div className="lbl" style={{ color: "var(--danger)" }}>Delete this account<small>Removes everything. Cannot be undone.</small></div>
           <Chevron />
         </PressBox>
@@ -693,7 +696,7 @@ export default function Settings() {
           as="button" type="button" className="srow noicon" data-interactive=""
           onClick={() => { hapticFirm(); void signOutNow(); }}
         >
-          <div className="lbl">Sign out</div>
+          <div className="lbl" style={{ color: "var(--danger)" }}>Sign out</div>
         </PressBox>
       </div>
     </>

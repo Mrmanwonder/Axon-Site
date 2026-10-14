@@ -102,8 +102,8 @@
      accent    = blue, the only thing that draws the eye forward
      attention = amber, everything that would reach for red elsewhere
      positive  = green, confirmed states and gains
-     danger    = red, reserved for irreversible actions (delete papers/account);
-     signout is neutral ink — it is reversible
+     danger    = red, for Sign out and destructive deletes (papers/account);
+     the deletes also carry a hazard icon
 
      --blue / --green / --amber / --red are the design system's OWN names and
      the ones system.css uses in 44 places. They are not legacy and must not be
@@ -119,7 +119,7 @@
   --accent: var(--blue);
   --positive: var(--green);
   --attention: var(--amber);
-  --signout: var(--label);
+  --signout: var(--red);
   --danger: var(--red);
 
   /* tinted washes of the role colours, used as backgrounds behind them */
@@ -167,7 +167,7 @@
   --accent: var(--blue);
   --positive: var(--green);
   --attention: var(--amber);
-  --signout: var(--label);
+  --signout: var(--red);
   --danger: var(--red);
 
   --accent-wash: rgba(58, 134, 255, .15);
