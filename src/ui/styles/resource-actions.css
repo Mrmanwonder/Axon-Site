@@ -38,10 +38,11 @@
   white-space: nowrap;
 }
 .resourceactions.material-actions .material-action.danger {
-  border-color: color-mix(in srgb, var(--attention) 28%, var(--hairline));
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--hairline));
 }
 .resourceactions.material-actions .material-action.danger .material-symbol {
-  color: var(--attention);
+  color: var(--danger);
 }
 .resourceactions.material-actions .material-action.active {
   background: var(--accent-wash);
