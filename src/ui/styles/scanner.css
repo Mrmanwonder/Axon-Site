@@ -805,10 +805,10 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   border: 0;
   border-radius: var(--radius-24);
   background: var(--surface-sunk);
-  color: var(--label-2);
+  color: var(--danger);
   cursor: pointer;
 }
-.sc-draft-del svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sc-draft-del svg { width: 20px; height: 20px; fill: currentColor; stroke: none; }
 .sc-draft[data-confirming="true"] { flex-wrap: wrap; }
 .sc-draft-confirm { flex-basis: 100%; display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 /* The app's .sheet li rule is for bullet lists; these lists are layouts. */
