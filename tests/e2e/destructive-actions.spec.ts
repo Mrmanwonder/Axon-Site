@@ -25,6 +25,7 @@ for (const theme of ['light', 'dark']) {
     await expectHazard(remove);
     await remove.click();
     await expectHazard(page.getByRole('dialog').getByRole('button', { name: 'Delete paper', exact: true }));
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/tests/browser/index.html?view=scan-screen&state=saved&theme=${theme}`);
     await page.getByRole('button', { name: /Saved drafts/ }).first().click();
     const draft = page.getByRole('button', { name: 'Delete draft, 3 pages', exact: true });
