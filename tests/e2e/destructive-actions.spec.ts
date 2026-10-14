@@ -9,11 +9,12 @@ async function expectHazard(button: Locator) {
     const expected = getComputedStyle(probe).color;
     probe.remove();
     const icon = el.querySelector('svg')!;
-    return { expected, text: getComputedStyle(el).color, icon: getComputedStyle(icon).color, fill: getComputedStyle(icon).fill };
+    return { expected, text: getComputedStyle(el).color, icon: getComputedStyle(icon).color, fill: getComputedStyle(icon).fill, stroke: getComputedStyle(icon).stroke };
   });
   expect(colors.text).toBe(colors.expected);
   expect(colors.icon).toBe(colors.expected);
-  expect(colors.fill).not.toBe('none');
+  expect(colors.fill).toBe(colors.expected);
+  expect(colors.stroke).toBe('none');
 }
 for (const theme of ['light', 'dark']) {
   test(`delete controls keep red hazard styling after component styles load: ${theme}`, async ({ page }) => {

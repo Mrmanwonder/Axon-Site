@@ -9,8 +9,10 @@ import "../styles/material-symbol.css";
 type Props = { size?: number; className?: string; symbol?: string };
 
 function Glyph({ d, size = 24, className, symbol }: Props & { d: string }) {
+  // These paths encode their outlines as filled geometry. Legacy button/row
+  // stroke-icon rules must not turn them into empty or double-stroked glyphs.
   return (
-    <svg style={symbol ? {width: size, height: size} : undefined} className={className} data-symbol={symbol} aria-hidden="true" focusable="false" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
+    <svg style={{fill: 'currentColor', stroke: 'none', ...(symbol ? {width: size, height: size} : {})}} className={className} data-symbol={symbol} aria-hidden="true" focusable="false" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
          height={size} width={size} viewBox="0 -960 960 960">
       <path d={d} />
     </svg>
