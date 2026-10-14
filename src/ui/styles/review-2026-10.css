@@ -39,3 +39,9 @@
 
 /* hazard mark on destructive Settings rows (owner, 14 Oct 2026) */
 .srow .danger-icon { flex: none; color: var(--danger); }
+
+/* Destructive actions remain named; the hazard glyph is decorative. */
+.resourceaction.danger, .sc-draft-del, .btn.danger-soft, .btn.primary.destructive {
+  color: var(--danger);
+  background: var(--surface-sunk);
+}

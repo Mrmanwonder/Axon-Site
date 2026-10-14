@@ -74,8 +74,8 @@ export function useInsightEvidence() {
     const r = await insightEvidence(student!.id);
     return { data: r.data, stale: r.stale };
   }, async () => {
-    const cached = await getCached(`insights:${student!.id}`);
-    return (cached as Evidence | null) ?? null;
+    const cached = await getCached(`insight-snapshot:${student!.id}`);
+    return (cached as { evidence: Evidence } | null)?.evidence ?? null;
   }, libraryRevision(papersResource));
   useEvidenceRefresh(reload);
   // Evidence without its papers cannot be filtered or ordered, and computing
@@ -112,7 +112,7 @@ export function useSyllabusMaps(filters: InsightFilters) {
   const { resource, reload } = useResource<SyllabusMapInput>(student?.id ? `syllabus:${student.id}#${signature}` : null, async () => {
     const r = await syllabusMapData(student!.id);
     return { data: r.data, stale: r.stale };
-  }, async () => (await getCached(`syllabus:${student!.id}`)) as SyllabusMapInput | null, libraryRevision(papersResource));
+  }, async () => ((await getCached(`insight-snapshot:${student!.id}`)) as { syllabus: SyllabusMapInput } | null)?.syllabus ?? null, libraryRevision(papersResource));
   useEvidenceRefresh(reload);
   const attempts = evidenceResource.data?.attempts ?? null;
   const maps = useMemo(

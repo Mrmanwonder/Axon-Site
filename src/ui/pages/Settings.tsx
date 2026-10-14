@@ -592,6 +592,7 @@ export default function Settings() {
                 ["Usage logs stay, anonymised.", "We keep which model ran, how long it took and what it cost. The student, paper and page references are removed."],
               ],
               primary: "Delete the data",
+      destructive: true,
               onConfirm: async () => {
                 if (!student) return toast("Nothing to delete yet.");
                 try {
@@ -629,6 +630,7 @@ export default function Settings() {
                 ["Sign-in stops working immediately.", "The account is released, so this email or number can start fresh later."],
               ],
               primary: "Delete everything",
+      destructive: true,
               onConfirm: async () => {
                 if (!guardian) return;
                 try {

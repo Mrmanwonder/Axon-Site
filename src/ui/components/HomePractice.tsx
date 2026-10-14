@@ -55,7 +55,7 @@ export function NextBestActionCard({ nba, showTypes, onScan, hasPapers = false }
         <div className="eyebrow">Next step</div>
         <div className="line">Scan a marked paper to see where your marks went.</div>
         <div className="why">Practice starts from the marks you lost, so there is nothing to practise until a paper is read.</div>
-        <PressBox as="button" type="button" className="btn primary nbacta" onClick={onScan}>Scan a paper</PressBox>
+        <PressBox as="button" type="button" className="btn primary nbacta" data-scan-intent="" onClick={onScan}>Scan a paper</PressBox>
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function NextBestActionCard({ nba, showTypes, onScan, hasPapers = false }
         <div className="eyebrow">Next step</div>
         <div className="line">No lost marks to practise in your saved papers.</div>
         <div className="why">Scan your next marked paper when you get it back.</div>
-        <PressBox as="button" type="button" className="btn primary nbacta" onClick={onScan}>Scan a paper</PressBox>
+        <PressBox as="button" type="button" className="btn primary nbacta" data-scan-intent="" onClick={onScan}>Scan a paper</PressBox>
       </div>
     );
   }
@@ -79,7 +79,7 @@ export function NextBestActionCard({ nba, showTypes, onScan, hasPapers = false }
           {when ? <>Your next re-attempt comes up {when.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })}.</> : null}
           {" "}A new marked paper gives you something fresh to work on.
         </div>
-        <PressBox as="button" type="button" className="btn primary nbacta" onClick={onScan}>Scan a paper</PressBox>
+        <PressBox as="button" type="button" className="btn primary nbacta" data-scan-intent="" onClick={onScan}>Scan a paper</PressBox>
       </div>
     );
   }
@@ -238,7 +238,7 @@ export function ScanPrompt({ onScan }: { onScan: () => void }) {
   return (
     <div className="scanprompt">
       <span>Got a marked paper back?</span>
-      <PressBox as="button" type="button" className="textaction" onClick={onScan}>Scan it <Chevron /></PressBox>
+      <PressBox as="button" type="button" className="textaction" data-scan-intent="" onClick={onScan}>Scan it <Chevron /></PressBox>
     </div>
   );
 }

@@ -25,7 +25,7 @@ test("red is only defined as tokens and consumed through --danger", () => {
   expect(offenders, offenders.join("\n")).toEqual([]);
 });
 
-test("--danger is consumed only by the Settings sign-out and delete rows", () => {
+test("--danger stays in Settings and the shared destructive-control styles", () => {
   const users: string[] = [];
   for (const file of walk(`${process.cwd()}/src/ui`)) {
     if (file.endsWith("styles/tokens.css")) continue;

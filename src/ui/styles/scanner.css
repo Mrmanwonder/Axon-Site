@@ -90,7 +90,7 @@
   align-items: center;
   height: 38px;
   padding: 0 3px;
-  border-radius: 19px;
+  border-radius: var(--radius-20);
 }
 /* Buttons overhang the 38 px capsule by 3 px each way to keep 44 px targets. */
 .sc-tools > * { margin-block: -3px; }
@@ -103,7 +103,7 @@
   padding: 0;
   display: grid;
   place-items: center;
-  border-radius: 22px;
+  border-radius: var(--radius-24);
   border: 0;
   background: transparent;
   color: var(--sc-ink);
@@ -127,7 +127,7 @@
   right: 10px;
   width: 7px;
   height: 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-4);
   background: var(--sc-accent);
   box-shadow: 0 0 0 2px #26262a;
 }
@@ -138,7 +138,7 @@
   position: relative;
   min-height: 44px;
   padding: 0 14px;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   border: 0;
   background: transparent;
   color: var(--sc-ink-2);
@@ -152,7 +152,7 @@
   content: "";
   position: absolute;
   inset: 6px 0;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   background: rgba(255, 255, 255, .16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
   opacity: 0;
@@ -201,7 +201,7 @@
   min-height: 48px;
   min-width: 220px;
   padding: 0 24px;
-  border-radius: 24px;
+  border-radius: var(--radius-24);
   border: 0;
   background: var(--sc-fill);
   color: #fff;
@@ -223,7 +223,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   background: var(--sc-strip);
   font-size: 15px;
   font-weight: 500;
@@ -239,7 +239,7 @@
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: var(--radius-12);
   background: rgba(255, 255, 255, .08);
   color: var(--sc-ink-2);
 }
@@ -253,7 +253,7 @@
   margin-left: auto;
   min-height: 44px;
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   border: 0;
   background: rgba(255, 255, 255, .12);
   font-weight: 600;
@@ -282,7 +282,7 @@
   height: 58px;
   padding: var(--pad);
   display: block;
-  border-radius: 32px;
+  border-radius: var(--radius-32);
   border: .5px solid rgba(255, 255, 255, .16);
   background: rgba(38, 38, 42, .78);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -1px 0 rgba(255, 255, 255, .06);
@@ -294,7 +294,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 26px;
+  border-radius: var(--radius-24);
   background: #fff;
   transition: transform .12s var(--scan-snap);
 }
@@ -324,14 +324,14 @@
   width: 46px;
   height: 62px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: var(--radius-4);
   background: #e6e2d8;
   box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 3px 8px rgba(0, 0, 0, .65), 0 1px 2px rgba(0, 0, 0, .8);
 }
 
 .sc-sheet img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .sc-sheet[data-flagged="true"] { outline: 2px dashed var(--sc-amber); outline-offset: 2px; overflow: visible; }
-.sc-sheet[data-flagged="true"] img { border-radius: 3px; }
+.sc-sheet[data-flagged="true"] img { border-radius: var(--radius-4); }
 .sc-sheet[data-landing="true"] { animation: sc-land .22s cubic-bezier(.2, .8, .3, 1) both; }
 
 @keyframes sc-land {
@@ -346,7 +346,7 @@
   min-width: 24px;
   height: 24px;
   padding: 0 6px;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   background: var(--sc-accent);
   color: #fff;
   font-weight: 700;
@@ -366,7 +366,7 @@
   min-height: 48px;
   min-width: 96px;
   padding: 0 20px;
-  border-radius: 24px;
+  border-radius: var(--radius-24);
   border: 0;
   background: var(--sc-fill);
   color: #fff;
@@ -440,12 +440,12 @@
   transition: transform 120ms ease;
 }
 .sc-tile:active:not(:disabled) { transform: scale(.97); }
-.sc-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+.sc-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-12); }
 .sc-tile .th {
   display: block;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-12);
   background: #e6e2d8;
   box-shadow: 0 0 0 .5px var(--hairline), 0 2px 8px rgba(0, 0, 0, .18);
 }
@@ -460,7 +460,7 @@
   padding: 0 7px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: var(--radius-12);
   background: rgba(20, 20, 22, .78);
   color: #fff;
   font-size: 13px;
@@ -475,7 +475,7 @@
   padding: 0 9px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: var(--radius-12);
   background: var(--amber);
   color: #1c1300;
   font-size: 12px;
@@ -498,7 +498,7 @@
   margin-top: 12px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   overflow: hidden;
   background: var(--surface-sunk);
 }
@@ -662,7 +662,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   min-height: 420px;
   padding: 32px;
   text-align: center;
-  border-radius: 28px;
+  border-radius: var(--radius-32);
   background: var(--surface);
   border: 1px solid var(--hairline);
   transition: border-color .12s ease;
@@ -682,7 +682,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   width: 104px;
   height: 140px;
   margin: -70px 0 0 -52px;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   background: #f2efe8;
   box-shadow: 0 1px 0 #fff inset, 0 10px 24px rgba(0, 0, 0, .28), 0 2px 4px rgba(0, 0, 0, .3);
   transition: transform .2s ease;
@@ -709,7 +709,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 .sc-card {
   margin-bottom: 16px;
   padding: 20px;
-  border-radius: 24px;
+  border-radius: var(--radius-24);
   background: var(--surface);
   border: 1px solid var(--hairline);
 }
@@ -719,7 +719,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 .sc-card p:last-child { margin-bottom: 0; }
 .sc-phone { display: flex; gap: 16px; align-items: center; }
 .sc-phone p { margin: 0; }
-.sc-qr { width: 112px; height: 112px; flex: none; border-radius: 14px; border: 1px solid rgba(0, 0, 0, .18); }
+.sc-qr { width: 112px; height: 112px; flex: none; border-radius: var(--radius-16); border: 1px solid rgba(0, 0, 0, .18); }
 
 .sc-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
 
@@ -730,14 +730,14 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   padding: 0;
   overflow: visible;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   background: #e6e2d8;
   cursor: pointer;
 }
 
-.sc-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.sc-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-6); }
 .sc-thumb[data-flagged="true"] { outline: 2px dashed var(--amber); outline-offset: 2px; }
-.sc-thumb span { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; font-weight: 700; }
+.sc-thumb span { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: var(--radius-6); background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; font-weight: 700; }
 
 .sc-card-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--desk-secondary); }
 .sc-card-row .sc-done { background: var(--sc-fill); }
@@ -746,7 +746,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
 
 .sc-drafts { margin: 0; padding: 0; list-style: none; }
 .sc-drafts li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-top: .5px solid var(--hairline); color: var(--label); }
-.sc-drafts button { min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--hairline); background: transparent; color: var(--label); font-weight: 600; cursor: pointer; }
+.sc-drafts button { min-height: 44px; padding: 0 16px; border-radius: var(--radius-24); border: 1px solid var(--hairline); background: transparent; color: var(--label); font-weight: 600; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .sc-sheet,
@@ -787,7 +787,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   width: 46px;
   height: 60px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-6);
   background: #e6e2d8;
   box-shadow: 0 0 0 .5px var(--hairline), 0 1px 4px rgba(0, 0, 0, .2);
 }
@@ -803,7 +803,7 @@ html.scanner-active:has(.scrim.on) .sc-vf .scanlevel {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 22px;
+  border-radius: var(--radius-24);
   background: var(--surface-sunk);
   color: var(--label-2);
   cursor: pointer;

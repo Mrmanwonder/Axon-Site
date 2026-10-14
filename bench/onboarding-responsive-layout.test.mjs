@@ -26,7 +26,7 @@ test("tablet sheets are bottom attached just like phone sheets", async () => {
   const tablet = css.match(/@media \(min-width:768px\)\{[\s\S]*?\/\* Home —/u)?.[0] ?? "";
 
   assert.match(tablet, /\.sheet\{[^}]*bottom:0/);
-  assert.match(tablet, /border-radius:32px 32px 0 0/);
+  assert.match(tablet, /border-radius:var\(--radius-32\) var\(--radius-32\) 0 0/);
   assert.match(tablet, /border-bottom:0/);
   assert.doesNotMatch(tablet, /\.sheet\{[^}]*bottom:16px/);
 });

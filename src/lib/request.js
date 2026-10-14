@@ -22,17 +22,15 @@ export async function fetchWithTimeout(input, init = {}) {
    later read always goes to the server. Requests with a caller AbortSignal
    are never shared, so one caller cancelling cannot cancel another. */
 const inflightReads = new Map();
-const headerOf = (headers, name) => {
-  if (!headers) return '';
-  if (typeof headers.get === 'function') return headers.get(name) ?? '';
-  const hit = Object.keys(headers).find((k) => k.toLowerCase() === name);
-  return hit ? String(headers[hit]) : '';
-};
 export function readKey(input, init = {}) {
   const method = String(init.method ?? 'GET').toUpperCase();
   if (method !== 'GET' || init.signal || typeof input !== 'string' || !input.includes('/rest/v1/')) return null;
-  const h = init.headers;
-  return [input, headerOf(h, 'authorization'), headerOf(h, 'accept'), headerOf(h, 'prefer'), headerOf(h, 'range'), headerOf(h, 'accept-profile')].join('\n');
+  // Headers accepts objects, Headers instances and tuple arrays. All headers
+  // participate: apikey/profile/range and future representation headers must
+  // not accidentally share a response across authority or format boundaries.
+  if (/\/rest\/v1\/consent_current(?:[?/#]|$)/.test(input)) return null; // dedicated write-fenced sharing in consent.js
+  const headers = [...new Headers(init.headers).entries()].sort(([a], [b]) => a.localeCompare(b));
+  return JSON.stringify([input, headers, init.credentials, init.cache, init.mode, init.redirect]);
 }
 export function dedupedFetch(input, init = {}) {
   const key = readKey(input, init);

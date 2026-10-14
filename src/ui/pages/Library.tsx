@@ -357,7 +357,7 @@ export default function Library() {
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "6px var(--text-gutter) 10px" }}>
-        <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>
+        <span style={{ fontSize: 13, color: "var(--label-3)", fontWeight: 500 }}>
           {papersResource.data !== null && searchState.state !== "loading" && (
             <>{filteredPapers.length} paper{filteredPapers.length === 1 ? "" : "s"}</>
           )}
@@ -365,7 +365,7 @@ export default function Library() {
 
         </span>
         {normalizedQuery
-          ? <span style={{ fontSize: 12.5, color: "var(--label-3)", fontWeight: 500 }}>Best match</span>
+          ? <span style={{ fontSize: 13, color: "var(--label-3)", fontWeight: 500 }}>Best match</span>
           : <AppDropdown
               ariaLabel="Sort library"
               value={sort}

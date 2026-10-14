@@ -17,7 +17,7 @@ test("design-system route shows production identity and live tokens", async ({ p
   await page.getByRole("button", { name: "Light", exact: true }).click();
   await expect(root).toHaveAttribute("data-theme", "light");
   const accent = await page.locator(".ds-swatch").first().locator(".ds-swatch-meta .ds-mono").textContent();
-  expect(accent?.trim().toLowerCase()).toBe("#2c74e8");
+  expect(accent?.trim().toLowerCase()).toBe("#1f63d6");
   await page.getByRole("button", { name: "Dark", exact: true }).click();
   await expect(root).toHaveAttribute("data-theme", "dark");
   await page.getByRole("button", { name: "CBSE", exact: true }).click();

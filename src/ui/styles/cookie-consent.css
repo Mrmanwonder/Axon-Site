@@ -12,7 +12,7 @@
   padding: 16px;
   color: var(--label);
   border: 1px solid color-mix(in srgb, var(--label) 16%, transparent);
-  border-radius: 20px;
+  border-radius: var(--radius-20);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   box-shadow: 0 16px 48px rgba(0, 0, 0, .14);
   backdrop-filter: blur(24px) saturate(1.2);
@@ -53,7 +53,7 @@
 
 .cookie-consent__actions button {
   min-height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius-12);
   padding: 0 14px;
   font: inherit;
   font-size: 13px;

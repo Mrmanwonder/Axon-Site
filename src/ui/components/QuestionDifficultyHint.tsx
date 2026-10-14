@@ -26,7 +26,7 @@ export default function QuestionDifficultyHint({ attemptId }: { attemptId: strin
   const low = value.confidence < .6;
   return <div className="qfield">
     <div className="k">Question difficulty</div>
-    <div className="v" style={{ fontSize: 13.5 }}>
+    <div className="v" style={{ fontSize: 14 }}>
       {questionDifficultyLabel(value)}
       <span style={{ marginLeft: 8, color: "var(--label-2)", fontSize: 12 }}>
         {low ? "Low confidence" : SOURCE_LABEL[value.source] ?? "Evidence-based estimate"}

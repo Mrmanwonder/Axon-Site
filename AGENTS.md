@@ -117,7 +117,7 @@ a stale historical copy and are not the production runtime.
 - **`TEACHER_INK` is a known mistake.** Stage 2 separates the layers by red hue, but
   a teacher's ink can be any colour (owner, 3 Oct 2026), so that mask must stop
   depending on hue; it is tracked in Linear and must not be extended. In the
-  interface red is reserved for the sign-out row alone, not for the teacher's pen.
+  interface red is reserved for Sign out and destructive deletes, not for the teacher's pen.
 - **Two models, on purpose.** The structure pass finds boundaries on a
   downscaled page with a small model; the content pass reads handwriting with a
   frontier one. Both are environment-overridable, because the harness is what
@@ -196,10 +196,10 @@ and leaving either set pushes the column off-centre or strands it above dead spa
 
 ## Colour
 
-Red appears in exactly one place: the sign-out row. A teacher's ink is never assumed to be red. Not errors, not warnings, not
-notification dots, not destructive rows like deleting an account. Amber carries
-attention, blue carries accent. The scan crop contains real red pen, and if the UI
-spent red freely every screen would read as a rebuke.
+Red is reserved for Sign out and destructive deletes. Delete buttons also carry
+an aria-hidden hazard triangle, retaining a text accessible name (owner, 14 Oct
+2026). A teacher's ink is never assumed to be red. Errors, warnings, badges and
+low marks use the existing attention/accent roles.
 
 Cause colours are seven categorical hues of equal weight, never a severity ramp. The
 values are in `Axon.md`; take them from there rather than inventing a shade.

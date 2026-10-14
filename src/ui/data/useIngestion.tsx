@@ -28,8 +28,8 @@
      for the first paper; if the second inherited it silently, a Cambridge past
      paper would be filed as a school test and lose its marking scheme.
 
-   The idle prewarm is preserved too, including its opt-out: sixteen files is a
-   real cost to someone on a metered or 2g connection who may never scan.
+   Speculative loading follows scan intent, with Save-Data/2g opt-outs.
+   Merely reading past papers must not download the capture pipeline.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import {
@@ -174,20 +174,26 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     });
   }, [openSheet, ingestLink, toast]);
 
-  /* Warm the pipeline while the phone is idle so tapping Scan is instant — but
-     not on a connection where sixteen files is a real cost to someone who may
-     never scan. Save-Data is a request, and a slow link is an answer.
-
-     This warms the module only; it does not call initScanUI, because doing that
-     before the Scan screen has mounted would hand the flow a viewfinder that
-     does not exist yet. */
+  /* Warm code on scan intent only; never open a camera or initialise a draft.
+     Recheck metered/offline state at the event, not just at app mount. */
   useEffect(() => {
-    type Conn = { saveData?: boolean; effectiveType?: string };
-    const link = (navigator as Navigator & { connection?: Conn }).connection;
-    if (link?.saveData || /^(slow-)?2g$/.test(link?.effectiveType ?? "")) return;
-    const idle = window.requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 2000));
-    idle(() => { void import("../../scan/ui.js").catch(() => { /* it will retry on demand */ }); });
-  }, []);
+    let requested = false;
+    const warm = (event: Event) => {
+      if (requested || !app.student || document.visibilityState !== "visible") return;
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('a[href="/scan"], [data-scan-intent]')) return;
+      const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+      if (!navigator.onLine || connection?.saveData || /^(slow-)?2g$/.test(connection?.effectiveType ?? "")) return;
+      requested = true;
+      void import("../../scan/ui.js").catch(() => { requested = false; });
+    };
+    document.addEventListener("pointerover", warm);
+    document.addEventListener("focusin", warm);
+    return () => {
+      document.removeEventListener("pointerover", warm);
+      document.removeEventListener("focusin", warm);
+    };
+  }, [app.student?.id]);
 
   const value = useMemo<IngestionValue>(
     () => ({ addPaper, addLink, ingestFiles }),

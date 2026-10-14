@@ -133,7 +133,7 @@
 .sw .tr {
   position: absolute;
   inset: 0;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   background: var(--track-off);
   transition: background var(--d-recompute) ease;
 }
@@ -152,7 +152,7 @@
   left: 2px;
   width: 27px;
   height: 27px;
-  border-radius: 14px;
+  border-radius: var(--radius-16);
   background: var(--p-white);
   box-shadow:
     0 3px 8px rgba(0, 0, 0, .18),
@@ -173,7 +173,7 @@
 .sw .gI {
   width: 2px;
   height: 12px;
-  border-radius: 1px;
+  border-radius: var(--radius-2);
   background: var(--green);
   opacity: 0;
   transition: opacity var(--d-state) ease var(--d-state);
@@ -208,7 +208,7 @@
 .sw:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 3px;
-  border-radius: 18px;
+  border-radius: var(--radius-20);
 }
 
 /* Disabled and in-flight both mean "your tap will not land yet", so they look
@@ -402,7 +402,7 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  border-radius: 15px;
+  border-radius: var(--radius-16);
   background: var(--surface);
   border: .5px solid var(--hairline);
 }
@@ -551,7 +551,7 @@
   position: absolute;
   inset: 17% 9% 24%;
   border: 2px solid color-mix(in srgb, var(--label) 24%, transparent);
-  border-radius: 22px;
+  border-radius: var(--radius-24);
 }
 .page-skeleton__scan-hint {
   position: absolute;
@@ -637,7 +637,7 @@
   align-items: center;
   padding: 7px 12px;
   border: .5px solid var(--hairline);
-  border-radius: 22px;
+  border-radius: var(--radius-24);
   background: var(--nav-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);

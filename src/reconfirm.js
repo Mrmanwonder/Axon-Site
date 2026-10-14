@@ -55,7 +55,9 @@ export async function confirmCurrentNotice({ guardianId, rows, choices, noticeLa
   }));
   if (!out.length) return [];
   forgetInflightConsent();
-  const { data, error } = await sb.from('consent_event').insert(out).select();
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await sb.from('consent_event').insert(out).select();
+    if (error) throw error;
+    return data;
+  } finally { forgetInflightConsent(); }
 }

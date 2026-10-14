@@ -31,6 +31,8 @@ if (params.get("view") === "onboarding-intro" || params.get("view") === "audit-m
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
   ]);
+  await import("../../src/ui/components/EssentialButton.css");
+  await import("../../src/ui/styles/review-2026-10.css");
 }
 function DialogDemo() {
   const { openSheet } = useSheetControls();

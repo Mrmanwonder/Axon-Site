@@ -8,7 +8,7 @@ vi.mock("../../src/ui/data/AppProvider", () => ({ useApp: () => ({ student: mock
 vi.mock("../../src/ui/data/practice", () => ({ ...mocks, deviceTimeZone: () => "Asia/Kolkata" }));
 import { useHomePractice } from "../../src/ui/data/useHomePractice";
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.student = { id: "a" };
+  localStorage.clear(); vi.clearAllMocks(); mocks.student = { id: "a" };
   mocks.nextBestAction.mockResolvedValue({ state: "no_scans" }); mocks.dueQueue.mockResolvedValue([]);
   mocks.focusAreas.mockResolvedValue([]); mocks.progressSummary.mockResolvedValue({ session_dates: [], today: "2026-10-14" });
   mocks.practiceFlags.mockResolvedValue({ mistake_type_ui: false }); mocks.setPracticePref.mockResolvedValue({});

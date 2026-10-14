@@ -76,7 +76,7 @@
 .ob-intro-eyebrow-rule {
   width: 17px;
   height: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-2);
   background: var(--blue);
   flex-shrink: 0;
 }
@@ -98,7 +98,7 @@
 .ob-intro-story p {
   max-width: 37ch;
   margin: clamp(12px, 2svh, 19px) 0 0;
-  font-size: clamp(13.2px, 3.55vw, 16px);
+  font-size: clamp(13px, 3.55vw, 16px);
   font-weight: 400;
   letter-spacing: -.009em;
   line-height: 1.56;
@@ -221,7 +221,7 @@
 .ob-intro-legal { display: flex; justify-content: center; gap: 4px; margin: 14px 0 0;
   font-size: 12px; }
 .ob-intro-legal a { display: inline-flex; align-items: center; min-height: 44px;
-  padding: 0 10px; color: var(--label-2); text-decoration: underline;
+  padding: 0 10px; color: #a3abbc; text-decoration: underline;
   text-underline-offset: 3px; }
 @media (min-width: 800px) {
   .ob-intro-glimpse { grid-column: 1; grid-row: 4; margin: 22px 0 0; }

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { isStale, type Loadable } from "../data/useResource";
 import { topLeaks } from "../data/practice";
-import { useEffect, useState } from "react";
+import ProgressCelebration from "../components/ProgressCelebration";
 import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    HOME — the snapshot
@@ -75,6 +75,14 @@ export default function Home() {
   useRefreshOnReturn(practice.reload);
 
   const navigate = useNavigate();
+  const celebration = student && <ProgressCelebration
+    studentId={student.id}
+    readyPaperIds={papers.filter(p => paperPresentation(p, progressResource).canOpen).map(p => p.id)}
+    fresh={papersResource.state === "ready" && papersResource.source === "live" && progressResource.state === "ready" && progressResource.source === "live"}
+    streak={practice.streak}
+    today={practice.progress.resource.data?.today}
+    progressFresh={practice.progress.resource.state === "ready" && practice.progress.resource.source === "live"}
+  />;
 
   const name = student?.first_name ?? guardian?.name ?? "there";
   const day = new Date().toLocaleDateString(undefined, { weekday: "long" });
@@ -111,6 +119,7 @@ export default function Home() {
         <div className="greet"><h1>{name}</h1></div>
         {/* the exam countdown is the most motivating element; it leads (review #12) */}
         <ExamCard quiet />
+        {celebration}
         <div className="estate">
           <NoPapersArt />
           <h4>No papers yet</h4>
@@ -118,7 +127,7 @@ export default function Home() {
             Add a marked paper and we&rsquo;ll show you where the marks went. Until
             there&rsquo;s one to read, there&rsquo;s nothing here we could honestly tell you.
           </p>
-          <PressBox as="button" type="button" className="btn primary" onClick={addPaper}>
+          <PressBox as="button" type="button" className="btn primary" data-scan-intent="" onClick={addPaper}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             Add your first paper
           </PressBox>
@@ -146,7 +155,7 @@ export default function Home() {
 
       {/* Home is built around the exam countdown (review #12). */}
       <ExamCard />
-      <ScanCelebration paper={papers[0] && paperPresentation(papers[0], progressResource).canOpen ? papers[0] : null} />
+      {celebration}
 
       {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
@@ -252,42 +261,7 @@ export default function Home() {
       {/* The scan prompt closes Home, unless the next step above already is one. */}
       {!(practice.nba.resource.state === "ready" && ["no_lost_marks", "caught_up", "nothing_due"].includes(practice.nba.resource.data.state)) && <ScanPrompt onScan={addPaper} />}
 
-      <ExamCard />
 
     </>
-  );
-}
-
-/* A small, one-time acknowledgement when a newly scanned paper is ready
-   (review #12). Remembered per paper in localStorage so it shows once. */
-const CELEBRATED_KEY = "axon.celebrated-paper";
-function ScanCelebration({ paper }: { paper: { id: string; total_available?: unknown; total_awarded?: unknown } | null }) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    if (!paper) return;
-    let last: string | null = null;
-    try { last = localStorage.getItem(CELEBRATED_KEY); } catch { /* storage blocked */ }
-    if (last === null) {
-      // First visit with papers: record silently so old papers are not celebrated.
-      try { localStorage.setItem(CELEBRATED_KEY, paper.id); } catch { /* ignore */ }
-      return;
-    }
-    if (last !== paper.id) {
-      setShown(true);
-      try { localStorage.setItem(CELEBRATED_KEY, paper.id); } catch { /* ignore */ }
-    }
-  }, [paper?.id]);
-  if (!shown || !paper) return null;
-  const lost = paper.total_available != null && paper.total_awarded != null
-    ? Number(paper.total_available) - Number(paper.total_awarded) : null;
-  return (
-    <div className="card celebrate" role="status">
-      <span className="celebrate-mark" aria-hidden="true">✓</span>
-      <div className="b">
-        <div className="t1">Paper read. Nice work.</div>
-        <div className="t2">{lost != null ? `${lost} marks traced to their causes. ` : ""}Every paper makes your patterns sharper.</div>
-      </div>
-      <button type="button" className="textaction" onClick={() => setShown(false)}>Dismiss</button>
-    </div>
   );
 }

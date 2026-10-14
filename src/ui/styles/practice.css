@@ -9,7 +9,7 @@
 .practice-type { margin: 6px 16px 0; font-size: 13px; font-weight: 600; color: var(--label-2); }
 .practice-input {
   display: block; width: 100%; margin-top: 6px; padding: 12px 14px; min-height: 44px;
-  border-radius: 14px; border: .5px solid var(--hairline); background: var(--surface-sunk);
+  border-radius: var(--radius-16); border: .5px solid var(--hairline); background: var(--surface-sunk);
   color: var(--label); font: inherit; font-size: 15px; line-height: 1.5; resize: vertical;
 }
 .practice-input:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
@@ -32,20 +32,20 @@
 .journalfilters { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px var(--gutter) 12px; }
 .journalfilter { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--label-2); }
 .journalfilter select, .analyticsselect select {
-  min-height: 44px; padding: 0 10px; border-radius: 10px; border: .5px solid var(--hairline);
+  min-height: 44px; padding: 0 10px; border-radius: var(--radius-12); border: .5px solid var(--hairline);
   background: var(--surface-sunk); color: var(--label); font: inherit; font-size: 14px; max-width: 46vw;
 }
-.scorerow .track { display: block; height: 6px; margin-top: 9px; border-radius: 3px; overflow: hidden; background: var(--surface-sunk); }
-.scorerow .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .8; transform-origin: left; }
+.scorerow .track { display: block; height: 6px; margin-top: 9px; border-radius: var(--radius-4); overflow: hidden; background: var(--surface-sunk); }
+.scorerow .track i { display: block; height: 100%; border-radius: var(--radius-4); background: var(--accent); opacity: .8; transform-origin: left; }
 .scorerow .spark { display: flex; align-items: flex-end; gap: 3px; height: 18px; margin-top: 8px; }
-.scorerow .spark i { flex: 1; max-width: 12px; border-radius: 2px; background: var(--accent); opacity: .55; transform-origin: bottom; }
+.scorerow .spark i { flex: 1; max-width: 12px; border-radius: var(--radius-2); background: var(--accent); opacity: .55; transform-origin: bottom; }
 .readylist { list-style: none; margin: 0; padding: 0; }
 .readylist li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 44px; padding: 8px 0; border-bottom: .5px solid var(--hairline); }
 .readylist li:last-child { border-bottom: 0; }
 .readylist .t { font-size: 14px; color: var(--label); }
 .readylist .t small { display: block; font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .ladder { display: inline-grid; grid-template-columns: repeat(4, 10px); gap: 3px; }
-.ladder i { width: 10px; height: 10px; border-radius: 3px; background: var(--surface-sunk); }
+.ladder i { width: 10px; height: 10px; border-radius: var(--radius-4); background: var(--surface-sunk); }
 .ladder i.on { background: var(--accent); }
 .ladder.nodata i { background: transparent; border: 1px dashed var(--label-3); }
 .outlookcard { padding: 16px 18px; }
