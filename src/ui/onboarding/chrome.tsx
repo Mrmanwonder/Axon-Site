@@ -133,7 +133,7 @@ export function Shell({
   );
 }
 
-/** Amber, never red: red is the sign-out row and nothing else. An error here is
+/** Amber, never red: red is for destructive deletes and nothing else. An error here is
     something to fix, not a rebuke. */
 export function Err({ message, lang }: { message?: string | null; lang?: string }) {
   if (!message) return null;

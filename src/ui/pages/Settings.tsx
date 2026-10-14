@@ -15,7 +15,7 @@
      what will happen and offers the action.
    · Red (--danger) marks the irreversible rows only: deleting papers and
      deleting the account. Sign out is reversible and is set in plain ink
-     (owner review, Oct 2026 — previously the only red row was Sign out).
+     (owner, 14 Oct 2026 — previously the only red row was Sign out).
 
    ── Parent Mode ──────────────────────────────────────────────────────────
 
