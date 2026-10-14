@@ -31,7 +31,7 @@ test("--danger stays in Settings and the shared destructive-control styles", () 
     if (file.endsWith("styles/tokens.css")) continue;
     if (/var\(--danger\)/.test(readFileSync(file, "utf8"))) users.push(file.replace(process.cwd() + "/", ""));
   }
-  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/resource-actions.css", "src/ui/styles/review-2026-10.css", "src/ui/styles/scanner.css"]);
+  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/resource-actions.css", "src/ui/styles/review-2026-10.css", "src/ui/styles/scanner.css", "src/ui/styles/system.css"]);
 });
 
 test("Sign out and both deletes are red, and only the deletes carry the hazard icon", () => {

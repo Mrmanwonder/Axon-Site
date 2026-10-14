@@ -139,7 +139,9 @@
   font-size: 15px;
   font-weight: 640;
   letter-spacing: -.016em;
-  transition: background .16s ease, box-shadow .16s ease;
+  /* Switch ink and surface together: a fading surface can briefly put dark
+     ink on the old dark background when the theme changes. */
+  transition: box-shadow .16s ease;
 }
 .ob-intro-continue svg {
   position: absolute;

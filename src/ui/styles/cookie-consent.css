@@ -79,6 +79,8 @@
   border: 1px solid transparent;
   background: var(--p-ink-950);
   color: var(--p-white);
+  /* Keep the contrasting ink/surface pair atomic during theme changes. */
+  transition: transform 120ms cubic-bezier(.1, .9, .2, 1);
 }
 
 [data-theme="dark"] .cookie-consent {
