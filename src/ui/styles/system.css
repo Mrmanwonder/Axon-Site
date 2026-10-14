@@ -1486,8 +1486,8 @@ dialog::backdrop{background:var(--scrim);backdrop-filter:blur(3px);}
 :root {
   --ease-sheet: cubic-bezier(.32, .72, 0, 1);
   --ease-sheet-out: cubic-bezier(.4, 0, .2, 1);
-  --sheet-in: 440ms;
-  --sheet-out: 300ms;
+  --sheet-in: 280ms;
+  --sheet-out: 240ms;
 }
 @keyframes sheet-in { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
 @keyframes sheet-out { from { transform: none; } to { transform: translate3d(0, 100%, 0); } }

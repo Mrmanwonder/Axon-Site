@@ -58,6 +58,7 @@ jobs:
         run: |
           python scripts/exams/test_timetable.py
           python scripts/exams/test_thresholds.py
+          python scripts/exams/test_thresholds_ingest.py
       - name: Fetch, verify and parse timetables
         run: python scripts/exams/ingest.py --discover > "$RUNNER_TEMP/exams.sql"
       - name: Load timetables

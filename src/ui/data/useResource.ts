@@ -5,7 +5,7 @@ export type Loadable<T> =
   | { state: "ready"; data: T; source: "live" | "cache"; fetchedAt: number }
   | { state: "failed"; data: T | null; error: Error; retained: boolean; lastSuccessAt?: number };
 
-export function useResource<T>(key: string | null, read: () => Promise<{ data: T; stale?: boolean }>, cached?: () => Promise<T | null>) {
+export function useResource<T>(key: string | null, read: () => Promise<{ data: T; stale?: boolean }>, cached?: () => Promise<T | null>, revision?: string | number) {
   const [entry, setEntry] = useState<{ key: string | null; resource: Loadable<T> }>({ key, resource: { state: "loading", data: null } });
   const reader = useRef(read);
   reader.current = read;
@@ -50,7 +50,7 @@ export function useResource<T>(key: string | null, read: () => Promise<{ data: T
   useEffect(() => {
     void reload();
     return () => { ++generation.current; };
-  }, [reload]);
+  }, [reload, revision]);
   const updateData = useCallback((updater: (current: T) => T) => {
     setEntry(previous => {
       if (previous.key !== key || previous.resource.data === null) return previous;

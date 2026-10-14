@@ -126,7 +126,8 @@
 }
 
 .app-dropdown-option:hover,
-.app-dropdown-option:focus-visible {
+.app-dropdown-option:focus-visible,
+.app-dropdown-option[data-active="true"] {
   background: var(--surface-sunk);
 }
 

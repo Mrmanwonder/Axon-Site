@@ -14,7 +14,7 @@
    failed read is not zero.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useResource, isStale } from "./useResource";
 import { insightEvidence, syllabusMapData } from "./modules";
 import { buildSyllabusMaps } from "./syllabusMap";
@@ -44,6 +44,28 @@ function librarySignature(papers: InsightPaper[]): string {
   return papers.map((p) => `${p.id}:${p.total_awarded ?? ""}/${p.total_available ?? ""}`).sort().join("|");
 }
 
+/** Loss explanations are deliberately not broadcast in the realtime publication.
+ * Re-read on wake/reconnect and every minute while visible as a bounded fallback.
+ * Library refresh revision also catches same-total corrections immediately.
+ */
+function useEvidenceRefresh(reload: () => Promise<void>) {
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void reload(); };
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [reload]);
+}
+
+function libraryRevision(resource: ReturnType<typeof useApp>["papersResource"]) {
+  return resource.state === "ready" ? resource.fetchedAt : resource.lastSuccessAt;
+}
+
 export function useInsightEvidence() {
   const { student, papers, papersResource } = useApp();
   const signature = useMemo(() => librarySignature(papers as InsightPaper[]), [papers]);
@@ -54,7 +76,8 @@ export function useInsightEvidence() {
   }, async () => {
     const cached = await getCached(`insights:${student!.id}`);
     return (cached as Evidence | null) ?? null;
-  });
+  }, libraryRevision(papersResource));
+  useEvidenceRefresh(reload);
   // Evidence without its papers cannot be filtered or ordered, and computing
   // over an unloaded library reports "0 papers" a moment before the real
   // count. Until the library has painted once, the whole read is loading.
@@ -83,13 +106,14 @@ export function useInsights(filters: InsightFilters): InsightsRead {
 
 /** The per-subject syllabus maps, filtered like the rest of Insights. */
 export function useSyllabusMaps(filters: InsightFilters) {
-  const { student, papers } = useApp();
+  const { student, papers, papersResource } = useApp();
   const { resource: evidenceResource, libraryPending } = useInsightEvidence();
   const signature = useMemo(() => librarySignature(papers as InsightPaper[]), [papers]);
-  const { resource } = useResource<SyllabusMapInput>(student?.id ? `syllabus:${student.id}#${signature}` : null, async () => {
+  const { resource, reload } = useResource<SyllabusMapInput>(student?.id ? `syllabus:${student.id}#${signature}` : null, async () => {
     const r = await syllabusMapData(student!.id);
     return { data: r.data, stale: r.stale };
-  }, async () => (await getCached(`syllabus:${student!.id}`)) as SyllabusMapInput | null);
+  }, async () => (await getCached(`syllabus:${student!.id}`)) as SyllabusMapInput | null, libraryRevision(papersResource));
+  useEvidenceRefresh(reload);
   const attempts = evidenceResource.data?.attempts ?? null;
   const maps = useMemo(
     () => (resource.data && attempts && !libraryPending

@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+import { isStale, type Loadable } from "../data/useResource";
+import { topLeaks } from "../data/practice";
 import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    HOME — the snapshot
@@ -43,6 +46,21 @@ import { JournalLink, DueQueueList, LeaksCard, NextBestActionCard, ProgressStrip
 import TargetGrades from "../components/TargetGrades";
 import "../styles/insights.css";
 import "../styles/home.css";
+
+/** A failed refresh keeps this card's last-good data visibly stale. */
+export function PracticeRead<T>({ label, read, children }: {
+  label: string; read: { resource: Loadable<T>; reload: () => Promise<void> }; children: (data: T) => ReactNode;
+}) {
+  const { resource, reload } = read;
+  return <section aria-label={label}>
+    {(resource.data === null || isStale(resource)) && <div className="subnote" role="status">
+      {resource.state === "failed" ? `${label} could not be refreshed.` : `Loading ${label.toLowerCase()}…`}
+      {resource.data !== null && " Showing last available data."}
+      {resource.state === "failed" && <button type="button" className="textaction" onClick={() => void reload()}>Retry {label.toLowerCase()}</button>}
+    </div>}
+    {resource.data !== null && children(resource.data)}
+  </section>;
+}
 
 function HomeLoading() {
   return <PageSkeleton variant="home" label="Loading papers…" />;
@@ -172,31 +190,21 @@ export default function Home() {
           insight-quoted "Next step" lives on in Insights' "Before your next
           paper"; Home now has one next step, and it starts practice. */}
       <TargetGrades mode="prompt" />
-      {practice.resource.data ? (
-        <>
-          <NextBestActionCard nba={practice.resource.data.nba} showTypes={practice.resource.data.flags.mistake_type_ui} onScan={addPaper} hasPapers={papers.length > 0} />
-          {/* When the next best action is already the due queue, the list would repeat it. */}
-          {!(practice.resource.data.nba.state === "ready" && practice.resource.data.nba.kind === "due") && (
-            <DueQueueList due={practice.resource.data.due} />
-          )}
-          <LeaksCard leaks={practice.resource.data.leaks} showTypes={practice.resource.data.flags.mistake_type_ui} />
-          {practice.resource.data.nba.state !== "no_scans" && practice.resource.data.nba.state !== "no_lost_marks" && (
-            <div className="journallink"><JournalLink /></div>
-          )}
-          <ProgressStrip progress={practice.resource.data.progress} streak={practice.streak} />
-        </>
-      ) : practice.resource.state === "failed" ? (
-        <div className="card nextstep focuscard" role="status">
-          <div className="eyebrow">Next step</div>
-          <div className="why">Your practice plan could not be loaded. Your papers are safe; this is us failing to read them.</div>
-          <PressBox as="button" type="button" className="textaction" onClick={() => void practice.reload()}>Try again <Chevron /></PressBox>
-        </div>
-      ) : (
-        <div className="card nextstep focuscard" role="status" aria-busy="true">
-          <div className="eyebrow">Next step</div>
-          <div className="why">Working out what to practise…</div>
-        </div>
-      )}
+      <PracticeRead label="Practice options" read={practice.flags}>{() => null}</PracticeRead>
+      <PracticeRead label="Next step" read={practice.nba}>{nba =>
+        <NextBestActionCard nba={nba} showTypes={practice.flags.resource.state === "ready" && practice.flags.resource.data.mistake_type_ui} onScan={addPaper} hasPapers={papers.length > 0} />
+      }</PracticeRead>
+      {/* Only a fresh next-action result can suppress a separate due queue. */}
+      {!(practice.nba.resource.state === "ready" && practice.nba.resource.data.state === "ready" && practice.nba.resource.data.kind === "due") &&
+        <PracticeRead label="Due queue" read={practice.due}>{due => <DueQueueList due={due} />}</PracticeRead>}
+      <PracticeRead label="Focus areas" read={practice.leaks}>{leaks => {
+        const showTypes = practice.flags.resource.state === "ready" && practice.flags.resource.data.mistake_type_ui;
+        return <LeaksCard leaks={topLeaks(leaks, showTypes)} showTypes={showTypes} />;
+      }}</PracticeRead>
+      <div className="journallink"><JournalLink /></div>
+      <PracticeRead label="Practice progress" read={practice.progress}>{progress =>
+        <ProgressStrip progress={progress} streak={practice.streak} />
+      }</PracticeRead>
 
       <div className="sectitle">Recent scans</div>
       <div className="list">
@@ -236,7 +244,7 @@ export default function Home() {
       )}
 
       {/* The scan prompt closes Home, unless the next step above already is one. */}
-      {!(practice.resource.data && ["no_lost_marks", "caught_up", "nothing_due"].includes(practice.resource.data.nba.state)) && <ScanPrompt onScan={addPaper} />}
+      {!(practice.nba.resource.state === "ready" && ["no_lost_marks", "caught_up", "nothing_due"].includes(practice.nba.resource.data.state)) && <ScanPrompt onScan={addPaper} />}
 
       <ExamCard />
     </>
