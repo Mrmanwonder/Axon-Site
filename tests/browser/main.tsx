@@ -25,6 +25,10 @@ import Onboarding from "../../src/ui/onboarding/Onboarding";
 import Intro from "../../src/ui/onboarding/Intro";
 import { Shell } from "../../src/ui/onboarding/chrome";
 const params = new URLSearchParams(location.search);
+// Match the production boot script: resolve the fixture theme before paint.
+// AppProvider later applies the same preference; it must not start a theme
+// change halfway through the initial screenshot/accessibility inspection.
+document.documentElement.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
 if (params.get("view") === "onboarding-intro" || params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
   await Promise.all([

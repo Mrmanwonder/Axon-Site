@@ -75,10 +75,12 @@
   color: var(--label);
 }
 
-.cookie-consent__primary {
+.cookie-consent__actions .cookie-consent__primary {
   border: 1px solid transparent;
   background: var(--p-ink-950);
   color: var(--p-white);
+  /* Keep the contrasting ink/surface pair atomic during theme changes. */
+  transition: transform 120ms cubic-bezier(.1, .9, .2, 1);
 }
 
 [data-theme="dark"] .cookie-consent {
@@ -92,7 +94,7 @@
   background: color-mix(in srgb, var(--label) 3%, transparent);
 }
 
-[data-theme="dark"] .cookie-consent__primary {
+[data-theme="dark"] .cookie-consent__actions .cookie-consent__primary {
   background: var(--p-white);
   color: var(--p-ink-950);
 }
