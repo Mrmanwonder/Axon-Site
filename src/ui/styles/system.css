@@ -167,9 +167,8 @@
   .btn.plain{color:var(--label-3);font-weight:500;padding:11px;}
   .btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
-  /* Saved paper/question actions. Compact, neutral chrome; destructive meaning
-     lives in the amber glyph and the consequence sheet, not a giant danger block.
-     Red is reserved for signing out (Axon.md), so destructive actions use amber. */
+  /* Saved paper/question actions. Destructive controls use red and a hazard
+     glyph, with the consequence explained in the confirmation sheet. */
   .resourceactions{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
   /* A true 44x44 target. The glyph is 24px (Material Symbols); the ring stays quiet so the
      paper's own content, not the toolbar, is what the eye lands on. */
@@ -178,11 +177,8 @@
     background:var(--surface-sunk);color:var(--label-2);border:.5px solid var(--hairline);
     cursor:pointer;}
   .resourceaction svg{width:24px;height:24px;}
-  /* The same amber as a bad scan (owner, 4 Oct 2026): the attention colour at
-     full strength on its own wash, as Share wears the accent on its wash.
-     Amber, never red: red is the sign-out row only. */
-  .resourceaction.danger{color:var(--attention);background:var(--attention-wash);
-    border-color:var(--attention-rim);}
+  .resourceaction.danger{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface));
+    border-color:color-mix(in srgb,var(--danger) 28%,var(--hairline));}
   .resourceaction.active{color:var(--accent);background:var(--accent-wash);border-color:color-mix(in srgb,var(--accent) 34%,transparent);}
   .resourceaction.unknown{color:var(--label-3);border-style:dashed;}
   .detailgreet{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
