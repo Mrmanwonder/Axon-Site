@@ -31,7 +31,7 @@
 .sc-reading .sc-close::before { background: var(--surface); border-color: var(--hairline); box-shadow: none; }
 .sc-reading-h { margin: 18px 0 6px; font-size: 26px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; text-wrap: balance; }
 .sc-reading-now { margin: 0; font-size: 15px; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.sc-reading-sub { margin: 10px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--label-3); }
+.sc-reading-sub { margin: 10px 0 0; font-size: 14px; line-height: 1.45; color: var(--label-3); }
 .sc-reading-steps { list-style: none; margin: 26px 0 0; padding: 0; }
 .sc-reading-steps .pline { padding: 11px 0; font-size: 15px; }
 .sc-reading-acts { margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; align-items: stretch; }
@@ -73,7 +73,7 @@
   background: var(--surface);
   box-shadow: 0 0 0 .5px var(--hairline);
   color: var(--label-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

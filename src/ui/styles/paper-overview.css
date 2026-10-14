@@ -31,7 +31,7 @@
 .po .po-qtitle { text-transform: none; letter-spacing: -.01em; font-size: 17px; font-weight: 650; color: var(--label); }
 .po .po-part { align-items: flex-start; }
 .po-part-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-variant-numeric: tabular-nums; }
-.po .po-page { font-size: 12.5px; font-weight: 500; color: var(--po-secondary); }
+.po .po-page { font-size: 13px; font-weight: 500; color: var(--po-secondary); }
 .po .po-prompt { margin-top: 4px; font-size: 14px; line-height: 1.45; color: var(--po-secondary); overflow-wrap: anywhere; }
 .po-prompt.none { font-style: italic; }
 .po-mark { align-self: center; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -46,7 +46,7 @@
 /* Subject: the student can change what triage set; an official assessment's subject is fixed. */
 .po-subject { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 4px var(--gutter, 16px) 12px; }
 .po-subject .k { font-size: 13px; font-weight: 600; color: var(--po-secondary); }
-.po-subject .hint { flex-basis: 100%; font-size: 12.5px; color: var(--po-secondary); }
+.po-subject .hint { flex-basis: 100%; font-size: 13px; color: var(--po-secondary); }
 .po-date input { min-height: 44px; min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--bg); color: var(--label); font: inherit; }
 .po-date .btn { min-height: 44px; }
 .po section:not(.po-summary) > .po-note { margin: 4px calc(var(--text-gutter) + 2px) 10px; }

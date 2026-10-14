@@ -24,17 +24,35 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'self'",
   "form-action 'self' https://*.supabase.co",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.posthog.com",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://*.posthog.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com",
   "font-src 'self'",
   // api.pwnedpasswords.com: the new-password breach check (k-anonymity range
   // query, 5 hex characters of a SHA-1). Without it every check fails closed
   // and no one can create or reset a password (AXO-235).
-  "connect-src 'self' https://*.posthog.com https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com https://api.pwnedpasswords.com",
+  "connect-src 'self' https://*.posthog.com https://cloudflareinsights.com https://*.supabase.co wss://*.supabase.co https://mastery-api.tanmay-harkawat.workers.dev https://*.r2.cloudflarestorage.com https://api.pwnedpasswords.com",
   "worker-src 'self' blob:",
   "media-src 'self' blob:",
 ].join('; ')
+
+// Every path the client router (src/ui/app/routes.tsx) can render, plus files
+// that carry an extension (real assets, which the binding answers itself).
+// Keep in step with routes.tsx; tests/ui or bench checks pin the pair.
+const APP_ROUTES = [
+  /^\/$/,
+  /^\/index\.html$/,
+  /^\/(privacy|terms|cookies|share|design-system|library|scan|insights|tutor|settings)$/,
+  /^\/library\/[^/]+(\/[^/]+)?$/,
+  /^\/scan\/review\/[^/]+$/,
+  /^\/insights\/journal$/,
+  /^\/insights\/syllabus\/[^/]+$/,
+  /^\/practice\/[^/]+$/,
+]
+export function isAppRoute(pathname: string): boolean {
+  if (/\.[A-Za-z0-9]+$/.test(pathname) && pathname !== '/index.html') return true
+  return APP_ROUTES.some((route) => route.test(pathname))
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -86,6 +104,13 @@ export default {
       }
     }
 
+    // The assets binding answers every unknown navigation with the SPA shell
+    // and a 200, so /pricing (or any typo) was a soft 404: crawlers indexed a
+    // "Page not found" body as a real page (issue #301). The shell still
+    // renders the NotFound screen; the status now says what the body says.
+    const isHtml = response.headers.get('Content-Type')?.includes('text/html') ?? false
+    const status = isHtml && response.status === 200 && !documentPath && !isAppRoute(pathname) ? 404 : response.status
+
     const headers = new Headers(response.headers)
     headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     headers.set('X-Content-Type-Options', 'nosniff')
@@ -97,6 +122,6 @@ export default {
         !['/privacy', '/terms', '/cookies'].includes(pathname)) {
       headers.set('X-Robots-Tag', 'noindex, nofollow')
     }
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+    return new Response(response.body, { status, statusText: status === response.status ? response.statusText : 'Not Found', headers })
   },
 }

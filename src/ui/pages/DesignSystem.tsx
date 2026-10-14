@@ -31,7 +31,7 @@ const semanticColors = [
   { name: "Accent", token: "--accent", usage: "Primary action · selected · navigation" },
   { name: "Positive", token: "--positive", usage: "Confirmed state · improvement" },
   { name: "Attention", token: "--attention", usage: "Review · warning · destructive action" },
-  { name: "Sign out", token: "--signout", usage: "Reserved for the sign-out row only" },
+  { name: "Danger", token: "--danger", usage: "Sign out and destructive deletes; deletes also carry a hazard icon" },
 ] as const;
 const surfaceColors = [
   { name: "Background", token: "--bg" },
@@ -246,7 +246,7 @@ export default function DesignSystem() {
           <div className="ds-color-grid">{semanticColors.map(x => <Swatch key={x.token} name={x.name} token={x.token} note={x.usage} theme={theme}/>)}</div>
           <DividerLabel>SURFACES / HIERARCHY</DividerLabel>
           <div className="ds-color-grid ds-color-grid-six">{surfaceColors.map(x => <Swatch key={x.token} name={x.name} token={x.token} theme={theme}/>)}</div>
-          <div className="ds-color-note"><MaterialSymbol name="attention" size={22}/><p><strong>Color is never a verdict.</strong> Red belongs to Sign out only. Amber signals attention. These seven cause hues classify a kind of mistake, never its severity.</p></div>
+          <div className="ds-color-note"><MaterialSymbol name="attention" size={22}/><p><strong>Color is never a verdict.</strong> Red belongs to Sign out and destructive deletes, and deletes also carry a hazard icon. Amber signals attention. These seven cause hues classify a kind of mistake, never its severity.</p></div>
           <DividerLabel>ANALYSIS / SEVEN CATEGORICAL HUES</DividerLabel>
           <div className="ds-cause-grid">{causeColors.map(x => <div className="ds-cause" key={x.token}><i style={{ background: "var(" + x.token + ")" }}/><div><span>{x.name}</span><small>{x.token}</small></div><CopyButton value={"var(" + x.token + ")"} title={x.token}/></div>)}</div>
           <div className="ds-source-note">Defined in <a href={sourceBase + "src/ui/styles/tokens.css"} target="_blank" rel="noreferrer">src/ui/styles/tokens.css ↗</a></div>

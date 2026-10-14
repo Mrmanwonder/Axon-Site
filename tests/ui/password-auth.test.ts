@@ -28,7 +28,9 @@ beforeEach(() => {
 test("password sign-in normalizes only email, keeps password exact, isolates proof and installs matching principal", async () => {
   await expect(passwordSignIn(" Parent@Example.Test ", "  secret  ")).resolves.toEqual(session());
   expect(fake.signIn).toHaveBeenCalledWith({ email: "parent@example.test", password: "  secret  " });
-  expect(fake.createClient.mock.calls[0][2].auth).toEqual({ persistSession: false, autoRefreshToken: false, detectSessionInUrl: false });
+  expect(fake.createClient.mock.calls[0][2].auth).toMatchObject({ persistSession: false, autoRefreshToken: false, detectSessionInUrl: false });
+  // Its own storage slot, never the app client's (#301: multiple GoTrueClient instances).
+  expect(fake.createClient.mock.calls[0][2].auth.storageKey).toMatch(/^axon-isolated-auth-/);
   expect(fake.setSession).toHaveBeenCalledOnce();
 });
 test("a mismatched returned email is never installed", async () => {

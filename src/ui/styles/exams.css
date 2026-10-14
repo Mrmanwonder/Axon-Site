@@ -9,17 +9,17 @@
 .examcard .examnext .t1{font-size:17px;font-weight:650;letter-spacing:-.015em}
 .examcard .examnext .t2{font-variant-numeric:tabular-nums}
 
-.examvariant{margin-top:6px;font-size:12.5px;color:var(--label-2);line-height:1.45}
+.examvariant{margin-top:6px;font-size:13px;color:var(--label-2);line-height:1.45}
 
 .examlist{list-style:none;margin:14px 0 0;padding:0;border-top:.5px solid var(--hairline)}
 .examlist li{display:grid;grid-template-columns:56px 1fr auto;align-items:baseline;gap:10px;padding:10px 0;border-bottom:.5px solid var(--hairline)}
 .examlist li:last-child{border-bottom:0}
 .examlist .d{font-size:13px;font-weight:600;color:var(--label-2);font-variant-numeric:tabular-nums}
 .examlist .w{font-size:14px;font-weight:600;min-width:0}
-.examlist .w small{display:block;font-size:12.5px;font-weight:450;color:var(--label-2);margin-top:2px}
+.examlist .w small{display:block;font-size:13px;font-weight:450;color:var(--label-2);margin-top:2px}
 .examlist .s{font-size:12px;font-weight:650;color:var(--label-2)}
 
-.examwindows{margin-top:12px;font-size:12.5px;color:var(--label-2);line-height:1.5}
+.examwindows{margin-top:12px;font-size:13px;color:var(--label-2);line-height:1.5}
 .examwindows > div + div{margin-top:4px}
 
 .examask{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;margin-top:14px;padding-top:12px;border-top:.5px solid var(--hairline);font-size:14px;font-weight:550}
@@ -59,7 +59,7 @@
    named underneath, in two groups. Papers everyone sits are quieter. */
 .examgroup{display:grid;gap:6px}
 .examgroup + .examgroup{margin-top:6px}
-.examgrouphead{font-size:12.5px;font-weight:600;color:var(--label-2);letter-spacing:-.005em;padding:0 2px}
+.examgrouphead{font-size:13px;font-weight:600;color:var(--label-2);letter-spacing:-.005em;padding:0 2px}
 .examopt.route{align-items:flex-start;padding:12px 14px}
 .examopt.route .mark{margin-top:3px}
 .examoptbody{display:grid;gap:5px;min-width:0}
@@ -68,5 +68,5 @@
   background:var(--surface);border:.5px solid var(--hairline);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--label)}
 .exampaper.known{background:transparent;color:var(--label-2);font-weight:500}
 .examopt.on .exampaper:not(.known){border-color:var(--accent);color:var(--accent)}
-.examnames{font-size:12.5px;font-weight:450;line-height:1.4;color:var(--label-2)}
+.examnames{font-size:13px;font-weight:450;line-height:1.4;color:var(--label-2)}
 .examname{white-space:nowrap}

@@ -12,6 +12,11 @@ import {
 import { computeStreak } from "./streak";
 import { paths } from "../app/paths";
 
+const TZ_SYNC_WAIT_MS = 1500;
+const TZ_SENT_KEY = "axon.practice-tz-sent";
+function readTzSent() { try { return localStorage.getItem(TZ_SENT_KEY); } catch { return null; } }
+function writeTzSent(value: string) { try { localStorage.setItem(TZ_SENT_KEY, value); } catch { /* memory only */ } }
+
 export function useHomePractice() {
   const { student } = useApp();
   const id = student?.id ?? null;
@@ -23,12 +28,16 @@ export function useHomePractice() {
     let pending: Promise<void> | null = null;
     return () => {
       const tz = deviceTimeZone();
-      if (!id || !tz || tzSent.current === `${id}:${tz}`) return Promise.resolve();
+      if (!id || !tz || (tzSent.current === `${id}:${tz}` || readTzSent() === `${id}:${tz}`)) return Promise.resolve();
       if (!pending) pending = setPracticePref(id, { timezone: tz })
-        .then(() => { tzSent.current = `${id}:${tz}`; })
+        .then(() => { tzSent.current = `${id}:${tz}`; writeTzSent(`${id}:${tz}`); })
         .catch(() => { /* Keep the server's last-known timezone. */ })
         .finally(() => { pending = null; });
-      return pending;
+      // Keep #301's bounded wait: a slow preference write cannot strand cards.
+      return new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, TZ_SYNC_WAIT_MS);
+        void pending!.then(() => { clearTimeout(timer); resolve(); });
+      });
     };
   }, [id]);
   const key = (name: string) => id ? `home-practice:${id}:${name}` : null;

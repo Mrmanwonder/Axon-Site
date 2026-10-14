@@ -44,6 +44,24 @@ export default function Intro({ onContinue }: { onContinue: () => void }) {
         </PressBox>
         <p className="ob-intro-footnote">A parent or guardian sets up the account and gives consent before student papers are processed.</p>
       </div>
+
+      {/* A sample, illustrative breakdown so visitors see the value before signing up. */}
+      <section className="ob-intro-glimpse" aria-label="Example of what Axon shows">
+        <h2>Example: where 14 marks went</h2>
+        <ul>
+          <li><span>Key term missing</span><b>−5</b></li>
+          <li><span>Working not shown</span><b>−4</b></li>
+          <li><span>Misread the question</span><b>−3</b></li>
+          <li><span>Ran out of time</span><b>−2</b></li>
+        </ul>
+        <p>Sample data, not a real student.</p>
+      </section>
+
+      <nav className="ob-intro-legal" aria-label="Legal">
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="/cookies">Cookies</a>
+      </nav>
     </div>
   );
 }

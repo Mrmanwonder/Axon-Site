@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { isStale, type Loadable } from "../data/useResource";
 import { topLeaks } from "../data/practice";
+import { useEffect, useState } from "react";
 import { paperDateLabel } from "../../paperDate.js";
 /* ═══════════════════════════════════════════════════════════════════════════
    HOME — the snapshot
@@ -108,6 +109,8 @@ export default function Home() {
     return (
       <>
         <div className="greet"><h1>{name}</h1></div>
+        {/* the exam countdown is the most motivating element; it leads (review #12) */}
+        <ExamCard quiet />
         <div className="estate">
           <NoPapersArt />
           <h4>No papers yet</h4>
@@ -120,7 +123,6 @@ export default function Home() {
             Add your first paper
           </PressBox>
         </div>
-        <ExamCard quiet />
       </>
     );
   }
@@ -141,6 +143,10 @@ export default function Home() {
         <div className="d">{day}</div>
         <h1>{name}</h1>
       </div>
+
+      {/* Home is built around the exam countdown (review #12). */}
+      <ExamCard />
+      <ScanCelebration paper={papers[0] && paperPresentation(papers[0], progressResource).canOpen ? papers[0] : null} />
 
       {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis. Live analysis is unavailable.</div>}
       <div className="subjectchips" aria-label="Your subjects">
@@ -247,6 +253,41 @@ export default function Home() {
       {!(practice.nba.resource.state === "ready" && ["no_lost_marks", "caught_up", "nothing_due"].includes(practice.nba.resource.data.state)) && <ScanPrompt onScan={addPaper} />}
 
       <ExamCard />
+
     </>
+  );
+}
+
+/* A small, one-time acknowledgement when a newly scanned paper is ready
+   (review #12). Remembered per paper in localStorage so it shows once. */
+const CELEBRATED_KEY = "axon.celebrated-paper";
+function ScanCelebration({ paper }: { paper: { id: string; total_available?: unknown; total_awarded?: unknown } | null }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!paper) return;
+    let last: string | null = null;
+    try { last = localStorage.getItem(CELEBRATED_KEY); } catch { /* storage blocked */ }
+    if (last === null) {
+      // First visit with papers: record silently so old papers are not celebrated.
+      try { localStorage.setItem(CELEBRATED_KEY, paper.id); } catch { /* ignore */ }
+      return;
+    }
+    if (last !== paper.id) {
+      setShown(true);
+      try { localStorage.setItem(CELEBRATED_KEY, paper.id); } catch { /* ignore */ }
+    }
+  }, [paper?.id]);
+  if (!shown || !paper) return null;
+  const lost = paper.total_available != null && paper.total_awarded != null
+    ? Number(paper.total_available) - Number(paper.total_awarded) : null;
+  return (
+    <div className="card celebrate" role="status">
+      <span className="celebrate-mark" aria-hidden="true">✓</span>
+      <div className="b">
+        <div className="t1">Paper read. Nice work.</div>
+        <div className="t2">{lost != null ? `${lost} marks traced to their causes. ` : ""}Every paper makes your patterns sharper.</div>
+      </div>
+      <button type="button" className="textaction" onClick={() => setShown(false)}>Dismiss</button>
+    </div>
   );
 }

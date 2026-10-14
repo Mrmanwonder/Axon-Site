@@ -21,6 +21,7 @@ import { useApp } from "../data/AppProvider";
 import { useResource } from "../data/useResource";
 import { gradeOutlook, practicePref, setPracticePref, setTargetGrade, targetGradeScale, targetGrades, type GradeOutlook } from "../data/practice";
 import { paths } from "../app/paths";
+import { withDeadline } from "../lib/deadline";
 import { hapticTick } from "../lib/haptics";
 import "../styles/targets.css";
 
@@ -37,12 +38,17 @@ function useTargets() {
   const id = student?.id ?? null;
   const subjects = student?.subjects ?? [];
   return useResource<Loaded>(id ? `targets:${id}:${subjects.join(",")}` : null, async () => {
-    const [scale, rows, pref] = await Promise.all([targetGradeScale(id!), targetGrades(id!), practicePref(id!)]);
+    // Deadlines, because Settings sat on "Loading targets…" until reload when
+    // one of these hung (#301). Past the deadline the card offers Try again.
+    const [scale, rows, pref] = await withDeadline(
+      Promise.all([targetGradeScale(id!), targetGrades(id!), practicePref(id!)]), 12000,
+      "Targets took too long to load.");
     const optIn = pref?.outlook_opt_in ?? false;
     const outlook: Record<string, GradeOutlook> = {};
     if (optIn) {
+      // Optional suggestions never hold the targets themselves back.
       await Promise.all(subjects.map(async (s) => {
-        try { outlook[s] = await gradeOutlook(id!, s); } catch { /* the suggestion is optional; its absence is stated */ }
+        try { outlook[s] = await withDeadline(gradeOutlook(id!, s), 6000); } catch { /* the suggestion is optional; its absence is stated */ }
       }));
     }
     return {
@@ -83,8 +89,10 @@ function SubjectTarget({ subject, scale, value, outlook, optIn, onSet }: {
           try { await onSet(e.target.value || null, suggestion?.suggested ?? null); } finally { setBusy(false); }
         }}
       >
-        <option value="">Not set</option>
-        {scale.map((g) => <option key={g} value={g}>{g}</option>)}
+        <option value="">Target grade: not set</option>
+        {/* Cambridge AS grades are officially lowercase (a–e), so the value is
+            kept as-is and labelled instead of being uppercased (review #15). */}
+        {scale.map((g) => <option key={g} value={g}>{`Grade ${g}${/^[a-e]$/.test(g) ? " (AS)" : ""}`}</option>)}
       </select>
     </div>
   );

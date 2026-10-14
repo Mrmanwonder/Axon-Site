@@ -58,6 +58,25 @@ type IngestionValue = {
 
 const Ctx = createContext<IngestionValue | null>(null);
 
+/**
+ * The summary toast replaces any toast the scanner raised for an individual
+ * page (the toast surface holds one message), so it has to carry the reason
+ * itself. "1 file(s) could not be used" with no reason was the whole of issue
+ * #301's photo-import report: the refusal (usually the resolution floor) was
+ * said and then immediately overwritten.
+ */
+export function importSummary(result: { accepted: unknown[]; rejected: { name?: string; reason?: string }[] }) {
+  const added = result.accepted.length;
+  const rejected = result.rejected;
+  if (!rejected.length) return `${added} page(s) added. Check the order, then read the paper.`;
+  for (const r of rejected) console.warn("[scan] import refused", r.name, r.reason);
+  const reasons = [...new Set(rejected.map((r) => r.reason).filter(Boolean))];
+  const head = added
+    ? `${added} page(s) added. ${rejected.length} file(s) could not be used`
+    : rejected.length === 1 ? "That file could not be used" : `${rejected.length} files could not be used`;
+  return reasons.length ? `${head}: ${reasons[0]}` : `${head}.`;
+}
+
 export function useIngestion(): IngestionValue {
   const v = useContext(Ctx);
   if (!v) throw new Error("useIngestion called outside IngestionProvider");
@@ -99,7 +118,8 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
       const result = await scan.acceptUploads(files);
       if (importScope.current !== scope) return;
       if (result.accepted.length) navigate("/scan");
-      toast(`${result.accepted.length} page(s) added.${result.rejected.length ? ` ${result.rejected.length} file(s) could not be used.` : " Check the order, then read the paper."}`);
+      if (result.rejected.length) toast(importSummary(result), "warn");
+      else toast(importSummary(result));
     } catch {
       if (importScope.current === scope) toast("These files could not be added. Try selecting them again.", "warn");
     }

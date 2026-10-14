@@ -28,7 +28,23 @@ import { skeletonVariantForPath } from "../components/PageSkeleton";
 /* Split out for the same reason the scanner is: a returning student is signed
    in and will never load this, and onboarding drags the whole eight-step flow
    and its notice text onto a critical path it has no business being on. */
-const Onboarding = lazy(() => import("../onboarding/Onboarding"));
+const loadOnboarding = () => import("../onboarding/Onboarding");
+const Onboarding = lazy(loadOnboarding);
+
+/* ...but a signed-out visitor on the landing page will load it, and fetching
+   it only after the account read settled is what painted a "Loading setup"
+   skeleton between the boot frame and the first screen (issue #301). With no
+   stored Supabase session there is nothing else it could be, so start the
+   chunk while the boot read is in flight. */
+function hasStoredSession() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (/^sb-.+-auth-token$/.test(localStorage.key(i) ?? "")) return true;
+    }
+  } catch { return true; /* unknown: keep the returning-student fast path */ }
+  return false;
+}
+if (typeof window !== "undefined" && !hasStoredSession()) void loadOnboarding().catch(() => { /* lazy() retries */ });
 const ReconfirmNotice = lazy(() => import("../onboarding/ReconfirmNotice"));
 const PasswordRecovery = lazy(() => import("../onboarding/PasswordRecovery"));
 

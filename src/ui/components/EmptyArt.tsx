@@ -31,7 +31,7 @@
    ── Colour ──
 
    Strokes are `currentColor` against `--label-3`, with one accent element each.
-   No red, which is reserved for signing out and would read as a rebuke on the
+   No red, which is reserved for Sign out and destructive deletes and would read as a rebuke on the
    first screen a new student sees. No cause hues either: those mean something
    specific in this app, and spending them on decoration would teach the wrong
    association before the student has ever seen the real thing.

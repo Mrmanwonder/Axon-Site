@@ -72,3 +72,11 @@
 
 /* The reduced-motion rules in app.css/system.css remain authoritative and are
    intentionally not weakened here. */
+
+/* Ambient motion pauses when the tab is hidden or the artwork is offscreen
+   (see lib/pauseOffscreenMotion.ts, review #3). */
+html[data-motion-paused] .avatar-ambient,
+html[data-motion-paused] .paperwork-visual *,
+html[data-motion-paused] .ob-loop *,
+[data-offscreen].avatar-ambient,
+[data-offscreen] * { animation-play-state: paused !important; }

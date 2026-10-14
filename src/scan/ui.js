@@ -261,7 +261,8 @@ function rekeyPlaceholder(from, to) {
 async function takePage(shot, replacing = null) {
   if (S.submitting || S.pendingCaptures >= MAX_PENDING_CAPTURES) {
     shot.bitmap?.close?.();
-    if (!S.submitting) toast('One page is still being prepared. Hold this page for a moment.');
+    shot.failure = S.submitting ? 'A paper is being submitted.' : 'One page is still being prepared. Hold this page for a moment.';
+    if (!S.submitting) toast(shot.failure);
     return false;
   }
 
@@ -410,7 +411,10 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
     if (epoch !== S.epoch) return false;
     S.placeholders.delete(slot);
     await paintTray();
-    toast(error?.refused ? error.message : publicScanMessage(error), 'warn');
+    // Kept on the shot so an upload batch can name the reason in its own
+    // summary; the summary toast otherwise overwrites this one (issue #301).
+    shot.failure = error?.refused ? error.message : publicScanMessage(error);
+    toast(shot.failure, 'warn');
     return false;
   } finally {
     if (epoch === S.epoch) S.busy = false;
@@ -1271,6 +1275,12 @@ async function finishSave({ runId, regions, started, savedDraft, epoch }) {
   if (epoch === S.epoch) await host.refreshLibrary();
 }
 
+// Some pickers, pastes and drags hand over a File with an empty `type`; the
+// name is then the only evidence it is a photo.
+function isImageFile(file) {
+  return /^image\//.test(file?.type ?? '') || (!file?.type && /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif)$/i.test(file?.name ?? ''));
+}
+
 /** Uploaded photos enter the same transaction path as camera captures. */
 export async function acceptUploads(files) {
   const result = { accepted: [], rejected: [] };
@@ -1282,7 +1292,7 @@ export async function acceptUploads(files) {
       result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
       continue;
     }
-    if (!S.ctx?.student || S.submitting || !/^image\//.test(file.type)) {
+    if (!S.ctx?.student || S.submitting || !isImageFile(file)) {
       result.rejected.push({ name: file.name, reason: !S.ctx?.student ? 'Choose a student profile before adding files.' : S.submitting ? 'A paper is being submitted.' : 'Only images can be added.' });
       continue;
     }
@@ -1295,11 +1305,13 @@ export async function acceptUploads(files) {
         result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
         continue;
       }
-      const accepted = await takePage({ bitmap, quad: null, auto: false, sourceKind: 'upload', original: file, transactionId: `upload:${crypto.randomUUID()}` }, S.retaking);
+      const shot = { bitmap, quad: null, auto: false, sourceKind: 'upload', original: file, transactionId: `upload:${crypto.randomUUID()}` };
+      const accepted = await takePage(shot, S.retaking);
       if (accepted) result.accepted.push({ name: file.name });
-      else result.rejected.push({ name: file.name, reason: 'This page could not be prepared.' });
+      else result.rejected.push({ name: file.name, reason: shot.failure ?? 'This page could not be prepared.' });
 
-    } catch {
+    } catch (error) {
+      console.warn('[scan] upload could not be decoded', file.name, file.type, error);
       result.rejected.push({ name: file.name, reason: 'This file could not be opened.' });
     }
   }
