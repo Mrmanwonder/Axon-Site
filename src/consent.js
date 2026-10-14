@@ -14,6 +14,30 @@ import { LANGUAGES } from './notice.js';
 
 const NOTICE_LANGUAGES = LANGUAGES.map((l) => l.code);
 
+/* In-flight de-duplication (review #2). Concurrent readers of consent_current
+   for the same guardian share ONE request; nothing is kept after it settles,
+   so every later read still goes to the server ("never cached"). Writes clear
+   any in-flight entry so a read started after a write is not served from a
+   request that began before it. */
+const inflight = new Map();
+export function readConsentCurrentRows(guardianId) {
+  const hit = inflight.get(guardianId);
+  if (hit) return hit;
+  const req = (async () => {
+    const { data, error } = await sb
+      .from('consent_current')
+      .select('purpose,granted,student_id,notice_version')
+      .eq('guardian_id', guardianId);
+    if (error) throw error;
+    return data ?? [];
+  })();
+  inflight.set(guardianId, req);
+  const clear = () => { if (inflight.get(guardianId) === req) inflight.delete(guardianId); };
+  req.then(clear, clear);
+  return req;
+}
+export function forgetInflightConsent() { inflight.clear(); }
+
 /** Catalogue of purposes, with the required/optional split. */
 export async function listPurposes() {
   const { data, error } = await sb
@@ -29,11 +53,7 @@ export async function listPurposes() {
  * @returns {Promise<Record<string, boolean>>} purpose -> granted
  */
 export async function readConsentState(guardianId, studentId = null) {
-  const { data, error } = await sb
-    .from('consent_current')
-    .select('purpose,granted,student_id')
-    .eq('guardian_id', guardianId);
-  if (error) throw error;
+  const data = await readConsentCurrentRows(guardianId);
 
   // Most specific scope wins, matching private.consent_is_granted() in SQL: a
   // student-scoped decision is not overridden by a guardian-scope one.
@@ -76,6 +96,7 @@ export async function recordConsent({
     method,
   }));
   if (!rows.length) return [];
+  forgetInflightConsent();
   const { data, error } = await sb.from('consent_event').insert(rows).select();
   if (error) throw error;
   return data;

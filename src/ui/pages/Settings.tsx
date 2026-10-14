@@ -13,9 +13,9 @@
    Two copy rules visible here:
    · Deleting is not preceded by "are you sure?". The consequence sheet states
      what will happen and offers the action.
-   · Sign out is the single sanctioned use of red in the whole interface.
-     Deleting an account is more destructive and still is not red, because red
-     here means "this ends the session", not "this is dangerous".
+   · Red (--danger) marks the irreversible rows only: deleting papers and
+     deleting the account. Sign out is reversible and is set in plain ink
+     (owner review, Oct 2026 — previously the only red row was Sign out).
 
    ── Parent Mode ──────────────────────────────────────────────────────────
 
@@ -608,7 +608,7 @@ export default function Settings() {
             });
           })}
         >
-          <div className="lbl">Delete the papers<small>Clears papers and analysis, keeps the profile</small></div>
+          <div className="lbl" style={{ color: "var(--danger)" }}>Delete the papers<small>Clears papers and analysis, keeps the profile</small></div>
           <Chevron />
         </PressBox>
 
@@ -643,7 +643,7 @@ export default function Settings() {
             });
           })}
         >
-          <div className="lbl">Delete this account<small>Removes everything. Cannot be undone.</small></div>
+          <div className="lbl" style={{ color: "var(--danger)" }}>Delete this account<small>Removes everything. Cannot be undone.</small></div>
           <Chevron />
         </PressBox>
       </div>
@@ -693,7 +693,7 @@ export default function Settings() {
           as="button" type="button" className="srow noicon" data-interactive=""
           onClick={() => { hapticFirm(); void signOutNow(); }}
         >
-          <div className="lbl" style={{ color: "var(--signout)" }}>Sign out</div>
+          <div className="lbl">Sign out</div>
         </PressBox>
       </div>
     </>

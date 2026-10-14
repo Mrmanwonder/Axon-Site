@@ -1,0 +1,38 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Review follow-ups (Oct 2026)
+
+   #6  44px minimum hit area (the /design-system rule). Visuals are unchanged:
+       an invisible ::after extends the target around small controls.
+   #10 Wider, centred content on desktop for Home / Library / Journal.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sw,
+.seg button,
+.fchip,
+.crumbs a,
+.textaction,
+.widgetnote a,
+.subjectchip {
+  position: relative;
+}
+.sw::after,
+.seg button::after,
+.fchip::after,
+.crumbs a::after,
+.textaction::after,
+.widgetnote a::after,
+.subjectchip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+.crumbs a { display: inline-flex; align-items: center; min-height: 24px; }
+
+@media (min-width: 1024px) {
+  [data-screen="home"],
+  [data-screen="library"] { --vmax: 1040px; }
+}

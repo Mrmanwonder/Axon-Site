@@ -34,7 +34,7 @@
 
 .cookie-consent__copy span {
   color: var(--label-2);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.42;
 }
 
@@ -52,7 +52,7 @@
 }
 
 .cookie-consent__actions button {
-  min-height: 40px;
+  min-height: 44px;
   border-radius: 12px;
   padding: 0 14px;
   font: inherit;

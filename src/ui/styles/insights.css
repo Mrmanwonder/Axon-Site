@@ -8,7 +8,7 @@
 .greet.insightsgreet .sub, .igrid .sectitle, .igrid .widgetnote, .igrid .coveragehead span,
 .igrid .coveragecard p, .igrid .evidencegap p, .igrid .sparkcol span, .igrid .unknownmark { color: var(--label-2); }
 
-.lede { margin: 0 0 14px; font-size: 14.5px; line-height: 1.5; color: var(--label); letter-spacing: -.01em; }
+.lede { margin: 0 0 14px; font-size: 15px; line-height: 1.5; color: var(--label); letter-spacing: -.01em; }
 .trendlede { margin: 30px 0 0; }
 .trendcard .hd .v.neutral { color: var(--label-2); font-weight: 600; }
 
@@ -17,7 +17,7 @@
 .checkcard ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .checkcard li { display: grid; grid-template-columns: 9px minmax(0, 1fr); gap: 12px; align-items: start; }
 .checkcard li .sw2 { width: 9px; height: 9px; border-radius: 3px; margin-top: 7px; }
-.checkcard .t { font-size: 15.5px; line-height: 1.45; font-weight: 600; letter-spacing: -.015em; color: var(--label); }
+.checkcard .t { font-size: 16px; line-height: 1.45; font-weight: 600; letter-spacing: -.015em; color: var(--label); }
 .checkcard .src { display: inline-flex; align-items: center; min-height: 44px; margin: 2px 0 -10px; font-size: 13px; color: var(--accent); font-weight: 550; }
 
 /* Tally rows: one claim, its sample, its questions */
@@ -27,11 +27,11 @@
 .tallyrow:last-of-type, .sharerow:last-of-type { border-bottom: 0; }
 .tallyrow .top, .sharerow .top { display: flex; align-items: baseline; gap: 9px; }
 .tallyrow .top .sw2 { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; align-self: center; }
-.tallyrow .n, .sharerow .n { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.012em; color: var(--label); overflow-wrap: anywhere; }
+.tallyrow .n, .sharerow .n { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; letter-spacing: -.012em; color: var(--label); overflow-wrap: anywhere; }
 .tallyrow .v, .sharerow .v { font-size: 15px; font-weight: 650; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tallyrow .v small { margin-left: 5px; font-size: 12px; font-weight: 500; color: var(--label-2); }
-.sharerow .v { font-size: 13.5px; font-weight: 600; color: var(--label-2); }
-.tallyrow .meta, .sharerow .meta, .tallycard > .meta { margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.sharerow .v { font-size: 14px; font-weight: 600; color: var(--label-2); }
+.tallyrow .meta, .sharerow .meta, .tallycard > .meta { margin-top: 3px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .tallyrow .meta.def { color: var(--label-2); }
 .tallyrow .disclose { margin-top: 8px; }
 .tallyrow .disclose .toggle { padding: 10px 0; min-height: 44px; font-size: 13px; }
@@ -41,7 +41,7 @@
 .sharerow .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .8; }
 
 /* Cause groups */
-.groupline { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: -4px 0 4px; font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.groupline { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: -4px 0 4px; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
 
 /* Fading causes: the student's own record, stated plainly */
 .fading { padding: 12px 0 2px; }
@@ -51,10 +51,10 @@
 /* The questions a claim rests on */
 .evlist { list-style: none; margin: 0; padding: 0 0 4px; }
 .evrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; color: var(--label); }
-.evrow .q { font-size: 13.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.evrow .p { font-size: 12.5px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evrow .m { font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.evrow .m small { margin-left: 4px; font-size: 11.5px; font-weight: 500; color: var(--label-2); }
+.evrow .q { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.evrow .p { font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evrow .m { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.evrow .m small { margin-left: 4px; font-size: 12px; font-weight: 500; color: var(--label-2); }
 
 /* Below the threshold: one card. Where the student is (papers counted, as
    steps, never a percentage), what opens next, and the one action. */
@@ -63,7 +63,7 @@
 .growcount { display: flex; align-items: baseline; gap: 7px; font-variant-numeric: tabular-nums; }
 .growcount strong { font-size: 28px; line-height: 1; font-weight: 700; letter-spacing: -.03em; color: var(--label); }
 .growcount span { font-size: 15px; font-weight: 600; color: var(--label); letter-spacing: -.012em; }
-.growtag { font-size: 12.5px; color: var(--label-2); padding-bottom: 2px; }
+.growtag { font-size: 13px; color: var(--label-2); padding-bottom: 2px; }
 .growsteps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 16px 0 14px; }
 .growsteps i { display: block; height: 6px; border-radius: 3px; background: var(--surface-sunk); }
 .growsteps i.on { background: var(--accent); }
@@ -81,7 +81,7 @@
 /* Home · the one supported focus, quoted from the student's own question */
 .focuscard { margin-top: 12px; padding: 20px; }
 .focuscard .line { font-size: clamp(16.5px, 4.4vw, 20px); font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--label); }
-.focuscard .why { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font-size: 12.5px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.focuscard .why { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .focuscard .why .sw2 { width: 9px; height: 9px; border-radius: 3px; }
 .focuscard .actions { display: flex; flex-wrap: wrap; gap: 0 20px; }
 .focuscard .textaction { min-height: 44px; margin-top: 6px; }
@@ -92,7 +92,7 @@
 .causelist li:last-child { border-bottom: 0; }
 .causelist .sw2 { width: 9px; height: 9px; border-radius: 3px; align-self: center; }
 .causelist .n { font-size: 14px; font-weight: 600; color: var(--label); letter-spacing: -.01em; }
-.causelist .n small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 450; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.causelist .n small { display: block; margin-top: 2px; font-size: 13px; font-weight: 450; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .causelist .v { font-size: 15px; font-weight: 650; color: var(--label); font-variant-numeric: tabular-nums; }
 .causecard .disclose .toggle { min-height: 44px; font-size: 13px; }
 .causedefs { margin: 0 0 6px; display: grid; gap: 9px; }
@@ -105,8 +105,8 @@
    the light bordered form; untested is a dashed outline, never a colour. */
 .heatcard { padding: 16px 18px; }
 .heathead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.heathead .subj { font-size: 14.5px; font-weight: 650; color: var(--label); }
-.heathead .cov { font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.heathead .subj { font-size: 15px; font-weight: 650; color: var(--label); }
+.heathead .cov { font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .heatlegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 2px 0 12px; font-size: 12px; color: var(--label-2); }
 .heatlegend .ramp, .heatlegend .key { display: inline-flex; align-items: center; gap: 4px; }
 .heatlegend .ramp span:first-child { margin-right: 4px; }
@@ -129,25 +129,25 @@
 .heatunit:first-of-type { border-top: 0; }
 .uname { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 600; color: var(--label); margin-bottom: 8px; }
 .uname span { color: var(--label-2); font-variant-numeric: tabular-nums; }
-.uname em { font-style: normal; font-weight: 500; font-size: 11.5px; color: var(--label-2); margin-left: auto; }
+.uname em { font-style: normal; font-weight: 500; font-size: 12px; color: var(--label-2); margin-left: auto; }
 .heatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
 .heatcell { position: relative; min-height: 76px; padding: 9px 10px 8px; border-radius: 12px; text-align: left; display: flex; flex-direction: column; gap: 3px; color: var(--label); transition: transform var(--d-state) var(--spring); }
 .heatcell:active { transform: scale(.97); }
 .heatcell.on { outline: 2px solid var(--label); outline-offset: 2px; }
 .heatcell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .heatcell .cc { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.heatcell .ct { font-size: 11.5px; line-height: 1.25; color: var(--label); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.heatcell .ct { font-size: 12px; line-height: 1.25; color: var(--label); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .heatcell.untested .ct, .heatcell.untested .cc { color: var(--label-2); }
-.heatcell .cq { margin-top: auto; padding-top: 4px; font-size: 11px; font-weight: 550; color: var(--label); font-variant-numeric: tabular-nums; }
+.heatcell .cq { margin-top: auto; padding-top: 4px; font-size: 12px; font-weight: 550; color: var(--label); font-variant-numeric: tabular-nums; }
 .heatdetail { margin: 10px 0 6px; padding: 14px; border-radius: 12px; background: var(--surface-sunk); }
 .heatdetail .hdtop { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
 .heatdetail .code { font-size: 12px; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.heatdetail h3 { margin: 2px 0 0; font-size: 15.5px; letter-spacing: -.015em; color: var(--label); }
+.heatdetail h3 { margin: 2px 0 0; font-size: 16px; letter-spacing: -.015em; color: var(--label); }
 .heatdetail .v { font-size: 15px; font-weight: 650; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--label); }
-.heatdetail .v small { display: block; font-size: 11.5px; font-weight: 500; color: var(--label-2); }
-.heatdetail .meta { margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--label-2); }
-.objlabel { margin: 14px 0 6px; font-size: 11.5px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--label-2); }
-.objgroup { margin: 8px 0 4px; font-size: 12.5px; font-weight: 600; color: var(--label); }
+.heatdetail .v small { display: block; font-size: 12px; font-weight: 500; color: var(--label-2); }
+.heatdetail .meta { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--label-2); }
+.objlabel { margin: 14px 0 6px; font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--label-2); }
+.objgroup { margin: 8px 0 4px; font-size: 13px; font-weight: 600; color: var(--label); }
 .objlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .objlist li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 13px; line-height: 1.45; color: var(--label-2); }
 .objlist li.hit { color: var(--label); }
@@ -191,7 +191,7 @@
 .radarlegend .ramp span:last-child { margin-left: 4px; }
 .radarlegend .rk.dashed { width: 16px; height: 0; border-radius: 0; border-top: 1.5px dashed var(--label-3); }
 .radarpick { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--surface-sunk); min-height: 44px; }
-.radarpick .rpname { display: flex; gap: 8px; font-size: 14.5px; font-weight: 650; letter-spacing: -.012em; color: var(--label); }
+.radarpick .rpname { display: flex; gap: 8px; font-size: 15px; font-weight: 650; letter-spacing: -.012em; color: var(--label); }
 .radarpick .rpname span { color: var(--label-2); font-variant-numeric: tabular-nums; }
 .radarpick .rpmeta { margin-top: 3px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .radarpick .rpmeta:only-child { margin-top: 0; }
@@ -210,10 +210,26 @@
 .sdjump a.untested { color: var(--label-2); font-weight: 500; }
 .sunit { padding: 16px 18px; margin-bottom: 16px; scroll-margin-top: 12px; }
 .sunithead { margin-bottom: 10px; }
-.sunithead .uname { margin: 0 0 2px; font-size: 14.5px; letter-spacing: -.012em; }
+.sunithead .uname { margin: 0 0 2px; font-size: 15px; letter-spacing: -.012em; }
 .sdetail .greet .sub { color: var(--label-2); }
-.sunitmeta { font-size: 12.5px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.sunitmeta { font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .sunit a.heatcell { text-decoration: none; }
 .stopic { scroll-margin-top: 12px; }
 .stopic .heatdetail { margin-top: 12px; }
 .sdsource { margin-top: 4px; }
+
+/* day-one card + collapsed locked sections (review #11) */
+.dayonecard { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 14px 20px; padding: 18px 20px; margin: 0 0 18px; }
+.dayonecard .dayonetext { flex: 1 1 260px; min-width: 0; }
+.dayonecard h2 { margin: 0; font-size: var(--fs-name); letter-spacing: var(--ls-name); color: var(--label); }
+.dayonecard p { margin: 6px 0 10px; font-size: var(--fs-t2); color: var(--label-2); }
+.dayonecard progress { width: 100%; max-width: 320px; height: 6px; appearance: none; border: 0;
+  border-radius: 3px; background: var(--surface-sunk); overflow: hidden; }
+.dayonecard progress::-webkit-progress-bar { background: var(--surface-sunk); }
+.dayonecard progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; }
+.dayonecard progress::-moz-progress-bar { background: var(--accent); border-radius: 3px; }
+.dayonecard .btn { min-height: 44px; }
+.lockedmore { margin-top: 18px; }
+.lockedmore > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
+  font-size: var(--fs-t2); font-weight: 600; color: var(--label-2); }

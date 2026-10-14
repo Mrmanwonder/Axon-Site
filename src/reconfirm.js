@@ -8,6 +8,7 @@
 
 import { sb } from './supabase.js';
 import { CONSENT_NOTICE_VERSION } from './config.js';
+import { readConsentCurrentRows, forgetInflightConsent } from './consent.js';
 
 /** True when `version` is a x.y.z string older than the current notice. */
 export function isOlderNotice(version, current = CONSENT_NOTICE_VERSION) {
@@ -28,12 +29,8 @@ export function isOlderNotice(version, current = CONSENT_NOTICE_VERSION) {
  * @returns {Promise<{ needed: boolean, rows: {purpose:string, student_id:string|null, granted:boolean}[] }>}
  */
 export async function readReconfirmation(guardianId) {
-  const { data, error } = await sb
-    .from('consent_current')
-    .select('purpose,granted,student_id,notice_version')
-    .eq('guardian_id', guardianId);
-  if (error) throw error;
-  const rows = (data ?? []).filter((r) => r.granted && isOlderNotice(r.notice_version));
+  const data = await readConsentCurrentRows(guardianId);
+  const rows = data.filter((r) => r.granted && isOlderNotice(r.notice_version));
   return {
     needed: rows.length > 0,
     rows: rows.map(({ purpose, student_id, granted }) => ({ purpose, student_id, granted })),
@@ -57,6 +54,7 @@ export async function confirmCurrentNotice({ guardianId, rows, choices, noticeLa
     method: 'in_app_itemised',
   }));
   if (!out.length) return [];
+  forgetInflightConsent();
   const { data, error } = await sb.from('consent_event').insert(out).select();
   if (error) throw error;
   return data;
