@@ -22,6 +22,8 @@ import { fetchWithTimeout } from './lib/request.js';
 import { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD } from './lib/auth/providers.js';
 export { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD };
 
+import { isolatedAuthStorage } from './lib/auth/isolatedStorage.js';
+
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   global: { fetch: fetchWithTimeout },
   auth: {
@@ -278,6 +280,9 @@ function verificationClient() {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+      // Its own key and memory-only storage, so it never shares the app
+      // client's storage slot ("Multiple GoTrueClient instances", #301).
+      ...isolatedAuthStorage(),
     },
   });
 }

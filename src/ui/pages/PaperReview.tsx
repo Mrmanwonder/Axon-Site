@@ -11,7 +11,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useScan } from "../scan/ScanProvider";
 import type { ResumeReviewResult } from "../scan/ScanProvider";
 import { useApp } from "../data/AppProvider";
@@ -134,7 +134,8 @@ export default function PaperReview() {
   const { ensureScan, reviewOpen, sends, retrySend } = useScan();
   // A paper still sending from this device: its own pages and progress.
   const localSend = sends.find((job) => job.paperId === draftId || job.id === draftId) ?? null;
-  const { student, progressResource, refreshLibrary } = useApp();
+  const { student, progressResource, refreshLibrary, papers } = useApp();
+  const libraryPaper = draftId ? (papers ?? []).find((p) => p.id === draftId) ?? null : null;
 
   const [result, setResult] = useState<ResumeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -318,6 +319,12 @@ export default function PaperReview() {
         <FailedPaperActions paperId={draftId} />
       </div>
     );
+  }
+
+  if (result.state === "gone" && draftId && libraryPaper) {
+    // Library knows this paper, it just has no run to review (an added link,
+    // or a run that has been swept). Its own page is where it lives (#301).
+    return <Navigate to={paths.paper(draftId)} replace />;
   }
 
   return (
