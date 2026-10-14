@@ -143,7 +143,7 @@ export default function Onboarding() {
      still missing. A refused provider round trip opens on the account step —
      landing would make the tap look like it did nothing. */
   const [step, setStep] = useState<Step>(
-    s ? "nameOnly" : providerError ? "account" : "landing",
+    s ? "nameOnly" : providerError || new URLSearchParams(location.search).get("start") === "account" ? "account" : "landing",
   );
   const [flowDirection, setFlowDirection] = useState<"forward" | "back">("forward");
   /* The direction hint is needed only while this onboarding overlay exists.

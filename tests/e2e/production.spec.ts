@@ -25,7 +25,7 @@ test('production shell and a cached paper reopen offline', async ({ page, contex
     });
   });
 
-  await page.goto(origin, { waitUntil: 'load' });
+  await page.goto(origin + '/?start=account', { waitUntil: 'load' });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
