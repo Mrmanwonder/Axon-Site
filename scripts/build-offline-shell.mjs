@@ -10,6 +10,7 @@ function include(key) {
   for (const imported of entry.imports ?? []) include(imported);
 }
 for (const [key, entry] of Object.entries(manifest)) if (entry.isEntry) include(key);
+include('src/ui/app/Application.tsx');
 // Reader routes are lazy at runtime but must exist after an offline reopen.
 // Installing their assets does not import/execute them or load the scanner.
 for (const page of ['Home', 'Library', 'PaperOverview', 'QuestionDetail', 'Insights']) {

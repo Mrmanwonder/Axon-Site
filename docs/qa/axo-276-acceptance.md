@@ -148,7 +148,8 @@ an accountable owner. AXO-276 remains the single consolidated ledger.
 
 Final command outcomes and PR revisions are recorded in the PR descriptions and AXO-276
 alongside this ledger. Local logs contain only synthetic fixtures; live credentials were
-never supplied to a process while access was blocked. No source fix is labeled deployed.
+never supplied to a process while access was blocked. Deployment evidence is recorded
+separately from production acceptance below.
 
 
 ## Follow-ups requested on 14 October 2026
@@ -191,4 +192,32 @@ colour/radius expectations and dev-only CSP injection; these were corrected befo
 rerunning. Physical device and actual screen-reader evidence remain outstanding.
 
 Production retry at 04:37 UTC on 14 October still returned HTTP 403. Trial credentials
-were not used or stored in files. No production data or schema was changed.
+were not used or stored in files. No production data or schema had changed at that
+checkpoint; the subsequent authorized migration is recorded below.
+
+## Merge checkpoint — 16 October 2026 (Asia/Calcutta)
+
+- Backend [#195](https://github.com/Mrmanwonder/axon-backend/pull/195) merged as
+  `b79f21c1980c4180638ead242d80d58e1f526fde`. [Post-merge CI and every Worker
+  deployment job passed](https://github.com/Mrmanwonder/axon-backend/actions/runs/38715260217).
+  Deployment success does not certify live behavior or provider-cost outcomes.
+- Frontend #306 merged into #305; [#305](https://github.com/Mrmanwonder/Axon-Site/pull/305)
+  then merged to main as `75914a339d715aa99043ffabb2772df6f5cbf9f0` after
+  [full CI](https://github.com/Mrmanwonder/Axon-Site/actions/runs/38716960611) and CodeQL
+  passed at `5b6ecea7f09eef2bcfe9016be43826e1cca955c3`. The CSP checker now uses
+  parse5, with five cases covering mixed-case tags and misleading attributes.
+- The additive `insight_snapshot` migration was applied before frontend merge;
+  application returned success and the live ledger confirmed version `20261015094822`.
+  The filename matches that version. Direct post-apply management SQL timed out;
+  [the production migration workflow](https://github.com/Mrmanwonder/Axon-Site/actions/runs/38804982248)
+  subsequently passed and reported 174 ledger rows, zero pending migrations.
+- Landing [#307](https://github.com/Mrmanwonder/Axon-Site/pull/307) now targets main.
+  Its final merge/check outcome is recorded in that PR and AXO-276. One prior WebKit
+  test exceeded its 30-second budget while doing six axe audits and screenshots;
+  each viewport/theme now has an independent test/context/trace, with all assertions
+  retained and the same timeout. The separate startup test checks deferred downloads
+  and Continue under the production CSP.
+- AXO-276 remains In Progress. Live authenticated behavior, running frontend revision,
+  physical Android/iPhone camera trials, actual screen-reader use, live performance,
+  provider cost/cancellation and the broader audit/monitoring gates remain unverified.
+  Main-branch merges and synthetic browser checks do not certify these outcomes.
