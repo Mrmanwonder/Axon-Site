@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
-const migration = readFileSync('supabase/migrations/20261014070000_insight_snapshot.sql', 'utf8');
+const migration = readFileSync('supabase/migrations/20261015094822_insight_snapshot.sql', 'utf8');
 const a = '00000000-0000-0000-0000-000000000001';
 const b = '00000000-0000-0000-0000-000000000002';
 test('snapshot preserves RLS, eligibility, explicit fields and >1000 evidence rows', async () => {
