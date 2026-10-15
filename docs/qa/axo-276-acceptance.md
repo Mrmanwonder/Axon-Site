@@ -127,9 +127,12 @@ network completion and durable completion must be timed separately.
 
 Frontend remediation is stacked on PR #305; landing separation is a separate PR on
 that remediation. Backend remediation targets main independently. Revert in reverse
-stack order. Deploy `20261014070000_insight_snapshot.sql` before the frontend that
+stack order. Deploy `20261015094822_insight_snapshot.sql` before the frontend that
 calls it. The additive SECURITY INVOKER RPC retains RLS and uses only existing
-analytics views; no live migration was applied here. Roll back frontend callers
+analytics views. The additive migration was applied on 15 October before the
+authorized frontend merge; its filename matches the live migration ledger.
+The apply operation and ledger read succeeded, but post-apply SQL verification
+was blocked by management-connection timeouts. Roll back frontend callers
 before dropping the RPC. Backend rollback restores prior body/deadline behavior.
 No prompts or model configuration change. Threshold
 SQL is still applied atomically by the existing loader; source failures before output do not
