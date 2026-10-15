@@ -37,6 +37,7 @@ jobs:
       - run: npm run build
       - run: npm run test:ui
       - run: npm run test:db
+      - run: python3 scripts/exams/test_thresholds_ingest.py
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
       - name: Preserve design fixture screenshots for review

@@ -1,0 +1,25 @@
+import { test, expect } from '@playwright/test';
+test('Insights filters support keyboard selection, focus restoration and ordinary Tab order @a11y', async ({ page }) => {
+  await page.goto('/tests/browser/index.html?view=insights&scenario=insights');
+  const subject = page.getByRole('button', { name: 'Filter insights by subject' });
+  await subject.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = page.getByRole('listbox', { name: 'Filter insights by subject' });
+  await expect(menu).toBeFocused();
+  await page.keyboard.press('End');
+  const lastId = await menu.getByRole('option').last().getAttribute('id');
+  await expect(menu).toHaveAttribute('aria-activedescendant', lastId!);
+  await page.keyboard.press('Home');
+  await page.keyboard.press('p');
+  const physicsId = await menu.getByRole('option', { name: 'Physics', exact: true }).getAttribute('id');
+  await expect(menu).toHaveAttribute('aria-activedescendant', physicsId!);
+  await page.keyboard.press('Enter');
+  await expect(subject).toBeFocused();
+  await expect(subject).toHaveText(/Physics/);
+  await subject.press('ArrowDown');
+  await page.keyboard.press('Escape');
+  await expect(subject).toBeFocused();
+  await subject.press('ArrowDown');
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Filter insights by paper type' })).toBeFocused();
+});

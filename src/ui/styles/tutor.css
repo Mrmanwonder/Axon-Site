@@ -49,7 +49,7 @@
 
 .tutor .ta.pending { display: flex; align-items: center; gap: 10px; color: var(--label-2); }
 .tutor .tdot {
-  width: 8px; height: 8px; border-radius: 4px; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: var(--radius-4); flex-shrink: 0;
   background: var(--accent);
   animation: tutor-breathe 1.4s ease-in-out infinite;
 }

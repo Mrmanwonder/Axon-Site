@@ -221,6 +221,7 @@ export default function QuestionDetail() {
       body:
         "This permanently removes this question's saved answer, marks, explanation and extracted crop from the paper. The rest of the paper stays.",
       primary: "Delete question",
+      destructive: true,
       onConfirm: async () => {
         await deleteQuestion(qId);
         toast("Question deleted.");

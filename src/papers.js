@@ -13,6 +13,7 @@
 // scanning, that needs a connection.
 
 import { sb } from './supabase.js';
+import { localDataEpoch } from './local-data.js';
 import { readThrough, clearCache } from './cache.js';
 import { isCalendarDate } from './paperDate.js';
 import { explainRetry, pageAssetUrls, putObject, uploadComplete, uploadIntent } from './scan/functions.js';
@@ -523,30 +524,28 @@ export async function readQuestionDifficulty(attemptId) {
 
 /** Only categorical responses cross into Insights; neither OCR text nor marks
  * are sent to product analytics from this interaction. */
+// One transaction and one browser request for all Insights sections. Sharing
+// lasts only while the read is running, and is scoped to the local-data epoch
+// so signing out or switching profiles cannot reuse an outgoing account read.
+const insightFlights = new Map();
+function insightSnapshot(studentId) {
+  const key = `${localDataEpoch()}:${studentId}`;
+  if (!insightFlights.has(key)) {
+    const pending = readThrough(`insight-snapshot:${studentId}`, async () => {
+      const { data, error } = await sb.rpc('insight_snapshot', { p_student_id: studentId });
+      if (error) throw error;
+      if (!data?.evidence || !data?.syllabus) throw new Error('Insights returned an incomplete response.');
+      return data;
+    });
+    insightFlights.set(key, pending);
+    const clear = () => { if (insightFlights.get(key) === pending) insightFlights.delete(key); };
+    pending.then(clear, clear);
+  }
+  return insightFlights.get(key);
+}
 export async function insightEvidence(studentId) {
-  return readThrough(`insights:${studentId}`, async () => {
-    const [attempts, losses, felt, difficulty] = await Promise.all([
-      readAllPages(() => sb
-        .from('attempt_analytics')
-        .select('id,paper_id,question_label,question_text,max_marks,marks_awarded,question_order,answer_blank')
-        .eq('student_id', studentId)
-        .order('id', { ascending: true })),
-      readAllPages(() => sb
-        .from('mark_loss_analytics')
-        .select('id,attempt_id,cause,marks_lost,do_this_next,command_word,concepts,loss_reasons,depends_on_parts,created_at')
-        .eq('student_id', studentId)
-        .order('id', { ascending: true })),
-      readAllPages(() => sb.from('paper_difficulty_analytics')
-        .select('paper_id,rating,responded_at')
-        .eq('student_id', studentId)
-        .order('paper_id', { ascending: true })),
-      readAllPages(() => sb.from('question_difficulty_analytics')
-        .select('attempt_id,paper_id,band,normalized_score,confidence,source,method_version,max_marks,marks_awarded')
-        .eq('student_id', studentId)
-        .order('attempt_id', { ascending: true })),
-    ]);
-    return { attempts, losses, felt, difficulty };
-  });
+  const result = await insightSnapshot(studentId);
+  return { ...result, data: result.data.evidence };
 }
 
 /**
@@ -649,39 +648,8 @@ export async function relabelAttempt(attemptId, label) {
 * reads through attempt_analytics (hard rule 3).
 */
 export async function syllabusMapData(studentId) {
-  return readThrough(`syllabus:${studentId}`, async () => {
-    const { data: subjects, error: subjectError } = await sb
-      .from('student_subject')
-      .select('subject,subject_offering_id,display_name_snapshot,external_code_snapshot')
-      .eq('student_id', studentId);
-    if (subjectError) throw subjectError;
-    const offeringIds = [...new Set((subjects ?? []).map((s) => s.subject_offering_id).filter(Boolean))];
-    if (!offeringIds.length) return { subjects: subjects ?? [], links: [], documents: [], topics: [], evidence: [] };
-    const { data: links, error: linkError } = await sb
-      .from('subject_offering_syllabus')
-      .select('subject_offering_id,document_id')
-      .in('subject_offering_id', offeringIds);
-    if (linkError) throw linkError;
-    const documentIds = [...new Set((links ?? []).map((l) => l.document_id))];
-    if (!documentIds.length) return { subjects, links: [], documents: [], topics: [], evidence: [] };
-    const [{ data: documents, error: documentError }, topics, evidence] = await Promise.all([
-      sb.from('syllabus_document')
-        .select('id,provider_key,syllabus_code,title,version_label,valid_from_year,valid_to_year,source_url,fetched_at')
-        .in('id', documentIds),
-      readAllPages(() => sb
-        .from('syllabus_topic')
-        .select('id,document_id,parent_id,code,kind,title,objective_text,notes_text,group_title,qualification_scope,sort_order')
-        .in('document_id', documentIds)
-        .order('sort_order', { ascending: true })),
-      readAllPages(() => sb
-        .from('topic_evidence')
-        .select('attempt_id,paper_id,topic_id,document_id,is_primary,max_marks,marks_awarded')
-        .eq('student_id', studentId)
-        .order('attempt_id', { ascending: true })),
-    ]);
-    if (documentError) throw documentError;
-    return { subjects, links, documents: documents ?? [], topics, evidence };
-  });
+  const result = await insightSnapshot(studentId);
+  return { ...result, data: result.data.syllabus };
 }
 
 /**

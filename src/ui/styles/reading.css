@@ -51,7 +51,7 @@
   display: block;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: var(--radius-8);
   background: var(--surface-sunk);
   box-shadow: 0 0 0 .5px var(--hairline);
   opacity: .45;
@@ -69,7 +69,7 @@
   padding: 0 5px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: var(--radius-12);
   background: var(--surface);
   box-shadow: 0 0 0 .5px var(--hairline);
   color: var(--label-2);

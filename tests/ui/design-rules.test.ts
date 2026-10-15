@@ -25,13 +25,13 @@ test("red is only defined as tokens and consumed through --danger", () => {
   expect(offenders, offenders.join("\n")).toEqual([]);
 });
 
-test("--danger is consumed only by the Settings sign-out and delete rows", () => {
+test("--danger stays in Settings and the shared destructive-control styles", () => {
   const users: string[] = [];
   for (const file of walk(`${process.cwd()}/src/ui`)) {
     if (file.endsWith("styles/tokens.css")) continue;
     if (/var\(--danger\)/.test(readFileSync(file, "utf8"))) users.push(file.replace(process.cwd() + "/", ""));
   }
-  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/review-2026-10.css"]);
+  expect(users.sort()).toEqual(["src/ui/pages/Settings.tsx", "src/ui/styles/resource-actions.css", "src/ui/styles/review-2026-10.css", "src/ui/styles/scanner.css", "src/ui/styles/system.css"]);
 });
 
 test("Sign out and both deletes are red, and only the deletes carry the hazard icon", () => {

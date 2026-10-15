@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    TOKENS
 
-   Every value here was lifted from reference/prototype.html, which Axon.md
-   names as the design system of record. Nothing was invented, rounded or
-   "tidied": where the prototype says 15.5px, this file says 15.5px.
+   Based on reference/prototype.html. Owner review, 14 Oct 2026: text has
+   a 12px floor and whole-pixel sizes; component corners use one shared scale.
 
    Four layers, each allowed to read only from the one above it:
 
@@ -326,17 +325,17 @@
 
   /* radii */
   --r-card: clamp(20px, 5vw, 24px);
-  --r-sheet: 32px;
-  --r-nav: 32px;
+  --r-sheet: var(--radius-32);
+  --r-nav: var(--radius-32);
   --r-pill: 26px;
-  --r-btn: 18px;
-  --r-cta: 20px;
-  --r-chip: 8px;
-  --r-fchip: 14px;
-  --r-field: 14px;
-  --r-tile: 12px;
-  --r-tier: 6px;
-  --r-thumb: 8px;
+  --r-btn: var(--radius-16);
+  --r-cta: var(--radius-20);
+  --r-chip: var(--radius-8);
+  --r-fchip: var(--radius-16);
+  --r-field: var(--radius-16);
+  --r-tile: var(--radius-12);
+  --r-tier: var(--radius-6);
+  --r-thumb: var(--radius-8);
 
   /* type scale: whole pixels, nothing below 12px (review #9) */
   --fs-h1: clamp(27px, 7.4vw, 34px);
@@ -448,4 +447,18 @@
   :root {
     --rail-w: 216px;
   }
+}
+
+/* Shared corner scale. Circles remain 50%; lens pill geometry remains 26px. */
+:root {
+  --radius-2: 2px;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+  --radius-32: 32px;
+  --radius-round: 999px;
 }

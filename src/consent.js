@@ -20,15 +20,18 @@ const NOTICE_LANGUAGES = LANGUAGES.map((l) => l.code);
    any in-flight entry so a read started after a write is not served from a
    request that began before it. */
 const inflight = new Map();
+let consentRevision = 0;
 export function readConsentCurrentRows(guardianId) {
   const hit = inflight.get(guardianId);
   if (hit) return hit;
+  const revision = consentRevision;
   const req = (async () => {
     const { data, error } = await sb
       .from('consent_current')
       .select('purpose,granted,student_id,notice_version')
       .eq('guardian_id', guardianId);
     if (error) throw error;
+    if (revision !== consentRevision) throw new Error("Consent changed while reading. Read the current decision again.");
     return data ?? [];
   })();
   inflight.set(guardianId, req);
@@ -36,7 +39,8 @@ export function readConsentCurrentRows(guardianId) {
   req.then(clear, clear);
   return req;
 }
-export function forgetInflightConsent() { inflight.clear(); }
+export function forgetInflightConsent() { ++consentRevision; inflight.clear(); }
+globalThis.addEventListener?.("axon:local-data", forgetInflightConsent);
 
 /** Catalogue of purposes, with the required/optional split. */
 export async function listPurposes() {
@@ -97,9 +101,11 @@ export async function recordConsent({
   }));
   if (!rows.length) return [];
   forgetInflightConsent();
-  const { data, error } = await sb.from('consent_event').insert(rows).select();
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await sb.from('consent_event').insert(rows).select();
+    if (error) throw error;
+    return data;
+  } finally { forgetInflightConsent(); }
 }
 
 /** Withdrawal is a grant of `false`, recorded as its own event. */

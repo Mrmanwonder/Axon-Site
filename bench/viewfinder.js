@@ -1,0 +1,127 @@
+
+// Drives the real capture controller against a camera we author frame by frame.
+//
+// A fake webcam gives you a rolling colour pattern, which tells you the loop
+// runs and nothing about whether it finds a page. A canvas stream is a real
+// MediaStream showing a real scene — a sheet on a dark desk, with a couple of
+// pixels of hand shake — so the detector, the steadiness window and the shutter
+// are all exercised on the thing they are actually for.
+import { createCapture } from '../src/scan/capture.js';
+
+// The scene is drawn in a 960x1280 coordinate system and rendered at 3.15x
+// that, because the camera this stands in for is not a small one: camera.js
+// asks for 4032x3024, and the live gate refuses any page whose long edge comes
+// out under CONDITIONING.MIN_LONG_EDGE (2400) in the camera's own pixels. At
+// 960x1280 the page here measured 900px, so this harness spent however long
+// asserting that a shot it had made unreachable never happened. A test that
+// cannot pass is worse than no test: it reports the same failure whether the
+// capture loop works or not.
+const SCALE = Number(new URLSearchParams(location.search).get("scale") ?? 3.15);
+// Square: camera.js asks the track for 4032x3024 after start, and a canvas
+// stream answers with a 3024x3024 frame, so a portrait scene would be re-cropped
+// mid-run and the page would overfill the view.
+const W = 960, H = 960;
+const scene = document.createElement('canvas');
+scene.width = Math.round(W * SCALE); scene.height = Math.round(H * SCALE);
+const g = scene.getContext('2d');
+
+const params = new URLSearchParams(location.search);
+const scenario = params.get('scenario') ?? 'page';
+const shake = Number(params.get('shake') ?? 2);   // pixels of hand wobble
+// Real movement, on top of the wobble: the page swings across the frame and
+// back, the way it does while someone is framing a shot. Two pixels of shake
+// exercises steadiness; nothing in this harness exercised *tracking* until
+// there was something to track, and a detector that re-searches the whole
+// frame twelve times a second looks fine standing still and loses the page
+// exactly here. `?sweep=N` is the amplitude in scene pixels.
+const sweep = Number(params.get('sweep') ?? 0);
+let t = 0;
+let drawing = true;
+let drawHandle = 0;
+
+function draw() {
+  t++;
+  const jx = Math.sin(t / 7) * shake + Math.sin(t / 40) * sweep;
+  const jy = Math.cos(t / 5) * shake + Math.cos(t / 55) * sweep * 0.5;
+
+  g.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  g.fillStyle = '#2b2f36'; g.fillRect(0, 0, W, H);          // desk
+  if (scenario !== 'blank') {
+  g.save();
+  g.translate(W / 2 + jx, H / 2 + jy);
+  g.rotate(0.03);
+  // The page covered 48% of the frame, and CAPTURE.MIN_FILL is 0.6 — so the
+  // gate was right to say "move closer" and this harness was holding the page
+  // too far away to ever be photographed. 1.22 puts it at ~71%, held the way
+  // someone photographing a page actually holds one, with all four edges still
+  // clear of the frame.
+  g.scale(0.75, 0.75);
+  g.fillStyle = '#efeee9';                                   // the page
+  g.fillRect(-330, -450, 660, 900);
+  g.strokeStyle = '#c9c7c0'; g.lineWidth = 2;
+  for (let y = -390; y < 430; y += 46) {                     // ruled lines
+    g.beginPath(); g.moveTo(-290, y); g.lineTo(290, y); g.stroke();
+  }
+  g.strokeStyle = '#2a2f5a'; g.lineWidth = 5;                // handwriting
+  for (let y = -376; y < 420; y += 46) {
+    g.beginPath(); g.moveTo(-270, y);
+    g.lineTo(-270 + 300 + ((y * 7) % 220), y + Math.sin(y) * 3);
+    g.stroke();
+  }
+  g.fillStyle = '#c02226';                                   // marking
+  for (let i = 0; i < 8; i++) g.fillRect(232, -400 + i * 106, 26, 34);
+  g.restore();
+  }
+  if (drawing) drawHandle = requestAnimationFrame(draw);
+}
+draw();
+
+const stream = scene.captureStream(15);
+const log = document.getElementById('log');
+const events = [];
+const result = { live: false, states: [], shots: 0, firstShotMs: null, firstLockMs: null, cameraReadyAt: null, errors: [] };
+window.__vf = result;
+
+const started = performance.now();
+const capture = createCapture({
+  video: document.getElementById('v'),
+  overlay: document.getElementById('overlay'),
+  onState: (s) => {
+    if (s.hasPage && result.cameraReadyAt !== null) result.firstLockMs ??= Math.round(performance.now() - result.cameraReadyAt);
+    const line = `${Math.round(performance.now() - started)}ms  page=${s.hasPage ? 'yes' : 'no '}  ` +
+      `phase=${s.phase}  engine=${s.engine?.status}/${s.engine?.source ?? '-'}  edge=${s.pageLongEdge}  reason=${s.reason ?? '-'}  ${s.hint}`;
+    events.push(line);
+    result.states.push({ hasPage: s.hasPage, steady: s.steady, blocking: s.blocking,
+                         pageLongEdge: s.pageLongEdge, hint: s.hint,
+                         at: Math.round(performance.now() - started),
+                         phase: s.phase, reason: s.reason, tone: s.tone, engine: s.engine?.status,
+                         engineSource: s.engine?.source, score: s.engine?.score, fill: s.fill,
+                         videoTransform: document.getElementById('v').style.transform });
+    log.textContent = events.slice(-14).join('\n');
+  },
+  onShot: (shot) => {
+    result.shots++;
+    result.firstShotMs ??= Math.round(performance.now() - started);
+    result.lastShot = { auto: shot.auto, hasQuad: !!shot.quad,
+                        size: `${shot.bitmap.width}x${shot.bitmap.height}`,
+                        overlayPhase: capture.overlayPhase };
+    shot.bitmap.close?.();
+  },
+});
+
+result.shoot = () => capture.shoot();
+result.stop = () => { drawing = false; cancelAnimationFrame(drawHandle); capture.stop(); };
+
+// `?auto=0` for runs about the frames rather than the shutter — a shot
+// mid-run disarms the gate and changes what is being measured. See
+// bench/tracking-continuity.mjs.
+if (params.get('auto') === '0') capture.setAutoCapture(false);
+
+try {
+  await capture.start(stream);
+  result.cameraReadyAt = performance.now();
+  result.live = true;
+} catch (e) {
+  result.errors.push(e.message);
+  log.textContent = 'start failed: ' + e.message;
+}

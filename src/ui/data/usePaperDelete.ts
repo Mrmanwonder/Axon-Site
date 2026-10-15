@@ -23,6 +23,7 @@ export function usePaperDelete() {
         ["Usage logs stay, anonymised.", "We keep which model ran, how long it took and what it cost. The student, paper and page references are removed."],
       ],
       primary: "Delete paper",
+      destructive: true,
       onConfirm: async () => {
         await deletePaper(paperId);
         removePaperFromLibrary(paperId);

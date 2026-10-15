@@ -44,11 +44,15 @@ export default function PressBox<T extends ElementType = "div">({
 
   const go = (to: number) => {
     if (disabled) return;
+    if (el.current) el.current.style.willChange = "transform";
     spring(key, {
       to,
       ...SPRING.press,
-      onUpdate: (p) => {
-        if (el.current) el.current.style.transform = `scale(${p.toFixed(4)})`;
+      onUpdate: (p, velocity) => {
+        if (el.current) {
+          el.current.style.transform = p === 1 ? "" : `scale(${p.toFixed(4)})`;
+          if (p === 1 && velocity === 0) el.current.style.willChange = "auto";
+        }
       },
     });
   };
@@ -65,7 +69,6 @@ export default function PressBox<T extends ElementType = "div">({
       onPointerUp={() => go(1)}
       onPointerLeave={() => go(1)}
       onPointerCancel={() => go(1)}
-      style={{ willChange: "transform", ...(rest as { style?: object }).style }}
     />
   );
 }

@@ -27,7 +27,7 @@
 #obroot .obpassword-row input { flex: 1; min-width: 0; }
 #obroot .obpassword-toggle {
   flex: 0 0 auto; min-width: 52px; min-height: 44px; margin: -10px -8px -10px 0; padding: 0 10px;
-  background: transparent; border: 0; border-radius: 12px; cursor: pointer;
+  background: transparent; border: 0; border-radius: var(--radius-12); cursor: pointer;
   font: inherit; font-size: 13px; font-weight: 600; color: var(--label-2);
 }
 #obroot .obpassword-toggle:hover { color: var(--label); }
@@ -66,14 +66,14 @@
   margin: 0 var(--gutter); display: flex; flex-wrap: wrap; justify-content: center; gap: 0 6px;
 }
 #obroot .obemail-links button {
-  background: transparent; border: 0; padding: 12px; min-height: 46px; border-radius: 12px;
+  background: transparent; border: 0; padding: 12px; min-height: 46px; border-radius: var(--radius-12);
   font: inherit; font-size: 13px; font-weight: 550; color: var(--label-2); cursor: pointer;
 }
 #obroot .obemail-links button:hover { color: var(--label); }
 #obroot .obemail-links button:disabled { opacity: .42; cursor: default; }
 #obroot .obemail-fine { margin: 0 var(--text-gutter); text-align: center; font-size: 13px; line-height: 1.5; color: var(--label-3); }
 #obroot .obemail-notice {
-  margin: 4px var(--gutter) 0; padding: 14px; border: .5px solid var(--hairline); border-radius: 14px;
+  margin: 4px var(--gutter) 0; padding: 14px; border: .5px solid var(--hairline); border-radius: var(--radius-16);
   background: var(--surface); color: var(--label-2); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere;
 }
 #obroot .obemail .btn.primary:disabled { opacity: .38; }

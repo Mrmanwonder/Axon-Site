@@ -14,8 +14,8 @@ import "./styles/system.css";
 import "./styles/shell.css";
 import "./styles/performance.css";
 import "./styles/cookie-consent.css";
-import "./styles/review-2026-10.css";
 import "./components/EssentialButton.css";
+import "./styles/review-2026-10.css";
 
 startPauseOffscreenMotion();
 

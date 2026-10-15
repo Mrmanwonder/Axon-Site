@@ -9,6 +9,12 @@ export const localDataEpoch = () => epoch;
 const notify = detail => globalThis.dispatchEvent?.(new CustomEvent('axon:local-data', { detail }));
 function begin(message) {
   ++epoch; suspended = true;
+  // Reward markers are local profile metadata and follow the same purge rules.
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if ((key.startsWith('axon.reward-') && (!message.studentId || key.endsWith(`:${message.studentId}`))) || key === 'axon.celebrated-paper') localStorage.removeItem(key);
+    }
+  } catch { /* unavailable storage contains no usable local markers */ }
   for (const db of handles) db.close();
   handles.clear();
   notify(message);

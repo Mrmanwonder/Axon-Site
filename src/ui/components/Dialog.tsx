@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import { useKeyboardInset } from "../lib/keyboardInset";
 
 /* Sheets rise from the bottom edge and fall back to it, on the iOS sheet curve:
-   no overshoot, a long soft landing (transform and opacity only, 440 ms in,
-   300 ms out; nothing under reduced motion). The timings live in system.css
+   no overshoot, a long soft landing (transform and opacity only, 280 ms in,
+   240 ms out; nothing under reduced motion). The timings live in system.css
    (`--sheet-in`, `--sheet-out`); EXIT_MS must match `--sheet-out`. The browser still
    owns modal focus, background inertness and the Escape event. Anything inside
    the sheet that closes it should call `useDialogDismiss()` so it leaves the
    same way it arrived instead of vanishing. */
 
-export const SHEET_EXIT_MS = 300;
+export const SHEET_EXIT_MS = 240;
 const EXIT_MS = SHEET_EXIT_MS;
 const reducedMotion = () => document.documentElement.dataset.motion === "reduce"
   || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);

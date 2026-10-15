@@ -25,3 +25,14 @@ test('writes, other tokens and abortable requests are never shared', () => {
   assert.equal(readKey('https://x.supabase.co/auth/v1/user', {}), null);
   assert.notEqual(readKey(url, { headers: { Authorization: 'a' } }), readKey(url, { headers: { Authorization: 'b' } }));
 });
+
+test('tuple headers and objects share only with matching authority and representation', () => {
+  const url = 'https://x.supabase.co/rest/v1/attempts';
+  assert.equal(readKey(url, { headers: [['Authorization', 'a'], ['Accept', 'application/json']] }), readKey(url, { headers: { accept: 'application/json', authorization: 'a' } }));
+  assert.notEqual(readKey(url, { headers: [['Authorization', 'a']] }), readKey(url, { headers: [['Authorization', 'b']] }));
+  assert.notEqual(readKey(url, { headers: { apikey: 'a' } }), readKey(url, { headers: { apikey: 'b' } }));
+  assert.notEqual(readKey(url, { headers: { 'content-profile': 'a' } }), readKey(url, { headers: { 'content-profile': 'b' } }));
+});
+test('consent has its own write-fenced sharing and is not shared at the transport layer', () => {
+  assert.equal(readKey('https://x.supabase.co/rest/v1/consent_current?guardian_id=eq.g'), null);
+});

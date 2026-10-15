@@ -1,3 +1,4 @@
+import MaterialSymbol from "../components/MaterialSymbol";
 /* ═══════════════════════════════════════════════════════════════════════════
    PAPER REVIEW — re-entry
 
@@ -380,7 +381,7 @@ function DeletePaperButton({ paperId }: { paperId: string }) {
   const requestDelete = usePaperDelete();
   return (
     <button type="button" className="btn ghost danger-soft" onClick={() => requestDelete(paperId)}>
-      Delete this paper
+      <MaterialSymbol name="warning" /> Delete this paper
     </button>
   );
 }

@@ -1,0 +1,30 @@
+import { beforeEach, expect, test, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), epoch: 0 }));
+vi.mock("../../src/supabase.js", () => ({ sb: { rpc: mocks.rpc } }));
+vi.mock("../../src/local-data.js", () => ({ localDataEpoch: () => mocks.epoch }));
+vi.mock("../../src/cache.js", () => ({ readThrough: async (_key: string, read: () => Promise<unknown>) => ({ data: await read(), stale: false }), clearCache: vi.fn() }));
+import { insightEvidence, syllabusMapData } from "../../src/papers.js";
+const snapshot = { evidence: { attempts: [], losses: [], felt: [], difficulty: [] }, syllabus: { subjects: [], links: [], documents: [], topics: [], evidence: [] } };
+beforeEach(() => { mocks.rpc.mockReset(); mocks.epoch++; });
+test("concurrent Insights sections share one RPC; settled requests are never memoized", async () => {
+  mocks.rpc.mockResolvedValue({ data: snapshot });
+  const [evidence, syllabus, duplicate] = await Promise.all([insightEvidence("a"), syllabusMapData("a"), insightEvidence("a")]);
+  expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  expect(mocks.rpc).toHaveBeenCalledWith("insight_snapshot", { p_student_id: "a" });
+  expect(evidence.data).toEqual(snapshot.evidence); expect(duplicate).toEqual(evidence);
+  expect(syllabus.data).toEqual(snapshot.syllabus);
+  await insightEvidence("a"); expect(mocks.rpc).toHaveBeenCalledTimes(2);
+});
+test("profile and cleanup epoch isolate in-flight reads, and rejected reads can retry", async () => {
+  let resolve!: (value: unknown) => void;
+  mocks.rpc.mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockResolvedValue({ data: snapshot });
+  const first = insightEvidence("a");
+  await insightEvidence("b");
+  mocks.epoch++;
+  await insightEvidence("a");
+  expect(mocks.rpc).toHaveBeenCalledTimes(3);
+  resolve({ data: snapshot }); await first;
+  mocks.rpc.mockResolvedValueOnce({ error: new Error("offline") });
+  await expect(insightEvidence("a")).rejects.toThrow("offline");
+  await expect(insightEvidence("a")).resolves.toMatchObject({ data: snapshot.evidence });
+});

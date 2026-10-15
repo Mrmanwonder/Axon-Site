@@ -1,3 +1,4 @@
+import { readSessionItem } from "../lib/sessionStorage";
 /* ═══════════════════════════════════════════════════════════════════════════
    ROOT
 
@@ -101,11 +102,11 @@ function ReadyWithReconfirm() {
   return <AppShell />;
 }
 
-function Gate() {
+export function Gate() {
   const { gate, passwordRecovery } = useApp();
   const { pathname } = useLocation();
   const skeletonVariant = skeletonVariantForPath(pathname);
-  const cleanupError = sessionStorage.getItem("axon.cleanup-error");
+  const cleanupError = readSessionItem("axon.cleanup-error");
   if (cleanupError) return <main><h1>Local cleanup needs attention</h1><p>{cleanupError}</p><button onClick={async () => { try { const { LocalDataService } = await import("../../local-data.js"); await LocalDataService.clearAll(); sessionStorage.removeItem("axon.cleanup-error"); location.reload(); } catch { /* Keep the recovery message visible. */ } }}>Retry local cleanup</button></main>;
 
   if (passwordRecovery) return <Suspense fallback={<SkeletonLoader label="Loading password reset" variant="onboarding" />}><PasswordRecovery /></Suspense>;

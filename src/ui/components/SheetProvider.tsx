@@ -1,3 +1,4 @@
+import MaterialSymbol from "./MaterialSymbol";
 /* ═══════════════════════════════════════════════════════════════════════════
    THE CONSEQUENCE SHEET
 
@@ -33,6 +34,7 @@ export type SheetConfig = {
     strip?: RegExp;
   };
   primary?: string;
+  destructive?: boolean;
   /** An informational sheet: one button with this label that only closes it. */
   acknowledge?: string;
   onConfirm?: (value: string) => void | Promise<void>;
@@ -155,7 +157,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
         {cfg.acknowledge
           ? <SheetCancel busy={busy} fallback={closeSheet} label={cfg.acknowledge} className="btn primary" />
           : <>
-            {!cfg.choices && <button type="button" className="btn primary" disabled={busy} onClick={() => void act()}>{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
+            {!cfg.choices && <button type="button" className={"btn primary" + (cfg.destructive ? " destructive" : "")} disabled={busy} onClick={() => void act()}>{cfg.destructive && <MaterialSymbol name="warning" />}{busy ? "Working…" : cfg.primary ?? "Confirm"}</button>}
             <SheetCancel busy={busy} fallback={closeSheet} />
           </>}
       </div>
