@@ -9,7 +9,7 @@
      URLs whose linear and AS routes are all verified), records its SHA-256,
      reads it with cambridge_thresholds.py and checks every route.
   4. Writes SQL to stdout for scripts/syllabus/load.mjs (one transaction):
-     each table replaces that syllabus and series. Routes that pass every check
+     each validated route replaces its previous version. Routes that pass every check
      are verified ('auto:cambridge-thresholds-v1'); the rest stay drafts.
 
 A table whose own title disagrees with its file name is not loaded at all.
@@ -25,6 +25,9 @@ import io
 import json
 import os
 import sys
+import random
+import time
+import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -40,10 +43,57 @@ CHECKER = "auto:cambridge-thresholds-v1"
 UA = {"User-Agent": "Axon exam ingest (axon-site)"}
 
 
-def get(url, timeout=60):
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
+class FetchError(RuntimeError):
+    def __init__(self, kind, url):
+        self.kind = kind
+        super().__init__(f"{kind}: {url}")
+
+
+def get(url, timeout=30, attempts=3, budget=90):
+    """Bounded transient retries; timeout is per socket operation, budget spans
+    attempts. Chunked reading checks the budget between socket reads."""
+    deadline = time.monotonic() + budget
+    last_kind = "upstream_timeout"
+    for attempt in range(attempts):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        req = urllib.request.Request(url, headers=UA)
+        retry_after = 0
+        try:
+            with urllib.request.urlopen(req, timeout=min(timeout, remaining)) as r:
+                chunks = []
+                while True:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError()
+                    chunk = r.read1(64 * 1024)
+                    if not chunk:
+                        return b"".join(chunks)
+                    chunks.append(chunk)
+        except urllib.error.HTTPError as error:
+            if error.code != 429 and not 500 <= error.code < 600:
+                raise FetchError(f"upstream_http_{error.code}", url) from error
+            last_kind = f"upstream_http_{error.code}"
+            try:
+                retry_after = max(0, float(error.headers.get("Retry-After", "0")))
+            except (ValueError, TypeError):
+                pass
+        except (TimeoutError, urllib.error.URLError, ConnectionError) as error:
+            reason = getattr(error, "reason", error)
+            last_kind = "upstream_timeout" if isinstance(reason, TimeoutError) else "upstream_network"
+        if attempt + 1 < attempts:
+            delay = max(retry_after, 2 ** attempt + random.uniform(0, 0.5))
+            if delay >= deadline - time.monotonic():
+                break
+            time.sleep(delay)
+    raise FetchError(last_kind, url)
+
+
+def discovery(page, parser, label):
+    rows = parser(get(page).decode("utf-8", "replace"))
+    if not rows:
+        raise FetchError(f"source_drift_{label}", page)
+    return rows
 
 
 def pdf_lines(data):
@@ -66,10 +116,15 @@ def warn(msg):
 
 def table_sql(url, sha, table, routes, weights_url, weights_sha):
     code, series = table["syllabus_code"], table["series"]
-    out = [f"delete from public.grade_threshold_set where provider_key = 'cambridge' and syllabus_code = {q(code)} and series_key = {q(series)};"]
+    out = []
+    identity = f"provider_key = 'cambridge' and syllabus_code = {q(code)} and series_key = {q(series)}"
     for r in routes:
         grades = ", ".join(f"({q(g)}, {m})" for g, m in r["grades"])
         ver = r["status"] == "verified"
+        route_key = f"{identity} and qualification = {q(r['qualification'])} and option_code = {q(r['option_code'])}"
+        if not ver:
+            out.append(f"do $threshold$ begin if not exists (select 1 from public.grade_threshold_set where {route_key} and status = 'verified') then")
+        out.append(f"delete from public.grade_threshold_set where {route_key};")
         out.append(
             "with s as (insert into public.grade_threshold_set (provider_key, syllabus_code, series_key, qualification, option_code, "
             "components, component_max, component_weight, max_total, source_url, source_sha256, status, verified_by, verified_at, "
@@ -80,15 +135,24 @@ def table_sql(url, sha, table, routes, weights_url, weights_sha):
             f"{q(CHECKER) if ver else 'null'}, {'now()' if ver else 'null'}, {q(r['assessment'])}, "
             f"{q(weights_url)}, {q(weights_sha)}, {q(json.dumps(r['checks']))}::jsonb) returning id) "
             f"insert into public.grade_threshold (set_id, grade, min_total) select s.id, v.g, v.m from s, (values {grades}) as v(g, m);")
-    # Component thresholds (AXO-270): the same table, one row per component.
-    out.append(f"delete from public.grade_threshold_component where provider_key = 'cambridge' and syllabus_code = {q(code)} and series_key = {q(series)};")
+        if not ver:
+            out.append("end if; end $threshold$;")
+    # Components follow the same no-downgrade rule, independently of routes.
     for c in ct.components_for_db(table, routes):
         ver = c["status"] == "verified"
+        component_key = f"{identity} and component = {q(c['component'])}"
+        if not ver:
+            out.append(f"do $threshold$ begin if not exists (select 1 from public.grade_threshold_component where {component_key} and status = 'verified') then")
+        out.append(f"delete from public.grade_threshold_component where {component_key};")
         out.append(
             "insert into public.grade_threshold_component (provider_key, syllabus_code, series_key, component, max_raw, grades, "
             "source_url, source_sha256, status, verified_by, verified_at) values ("
             f"'cambridge', {q(code)}, {q(series)}, {q(c['component'])}, {c['max_raw']}, {q(json.dumps(c['grades']))}::jsonb, "
             f"{q(url)}, {q(sha)}, {q(c['status'])}, {q(CHECKER) if ver else 'null'}, {'now()' if ver else 'null'});")
+        if not ver:
+            out.append("end if; end $threshold$;")
+    # Missing or ambiguous routes are not deleted. Source drift cannot silently
+    # remove last validated data; revocation requires explicit source review.
     return out
 
 
@@ -105,20 +169,20 @@ def main():
 
     tables = []
     for page in QUALIFICATION_PAGES:
-        series_pages = ct.threshold_series_pages(get(page).decode("utf-8", "replace"))[: args.series]
+        series_pages = discovery(page, ct.threshold_series_pages, "series")[: args.series]
         if not series_pages:
             raise SystemExit(f"{page}: no series pages found; the page layout may have changed")
         for sp in series_pages:
-            found = ct.threshold_pdfs(get(sp).decode("utf-8", "replace"))
+            found = discovery(sp, ct.threshold_pdfs, "tables")
             print(f"-- {sp}: {len(found)} tables", file=sys.stderr)
             tables.extend(found)
 
     weighting_html = get(WEIGHTING_PAGE).decode("utf-8", "replace")
     wlinks = sorted({ct.absolute(h) for h in __import__("re").findall(r'href="([^"]*syllabus-component-weighting-factors[^"]*\.pdf)"', weighting_html)})
     if not wlinks:
-        raise SystemExit(f"{WEIGHTING_PAGE}: no weighting factors file found; nothing can be verified")
+        raise FetchError("source_drift_weights", WEIGHTING_PAGE)
     weights_url = wlinks[0]
-    wdata = get(weights_url, timeout=120)
+    wdata = get(weights_url, timeout=40, budget=120)
     weights_sha = hashlib.sha256(wdata).hexdigest()
     weights = ct.parse_weighting_lines(pdf_lines(wdata))
     covered = sorted({k[0] for k in weights})
@@ -165,9 +229,22 @@ def main():
         stats["tables"] += 1
         for r in routes:
             stats["verified" if r["status"] == "verified" else "draft"] += 1
-    print(f"-- {json.dumps(stats)}", file=sys.stderr)
+    stats["outcome"] = "partial_ingest" if stats["failed"] else "complete"
+    summary = f"-- {json.dumps(stats)}"
+    print(summary, file=sys.stderr)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as report:
+            report.write(summary + "\n")
     print("\n".join(out))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FetchError as error:
+        summary = f"Threshold ingest stopped: {error}. No threshold SQL was emitted; existing data is unchanged."
+        warn(summary)
+        if os.environ.get("GITHUB_STEP_SUMMARY"):
+            with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as report:
+                report.write(summary + "\n")
+        raise SystemExit(1)

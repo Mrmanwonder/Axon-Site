@@ -100,7 +100,7 @@ export default function SyllabusRadar({ units, ready, selected, onSelect, label 
           const y0 = sin < -0.25 ? q.y - (lines.length - 1) * lh : sin > 0.25 ? q.y + 4 : q.y - ((lines.length - 1) * lh) / 2;
           return (
             <text key={u.id} className={`rlabel${u.id === selected ? " on" : ""}${u.state === "untested" ? " untested" : ""}`}
-              y={y0} textAnchor={anchor} style={named ? undefined : { fontSize: n > 24 ? 11 : 12.5 }}>
+              y={y0} textAnchor={anchor} style={named ? undefined : { fontSize: n > 24 ? 12 : 13 }}>
               {lines.map((l, k) => <tspan key={k} x={q.x} dy={k === 0 ? "0.35em" : lh}>{l}</tspan>)}
             </text>
           );

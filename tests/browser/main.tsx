@@ -25,12 +25,18 @@ import Onboarding from "../../src/ui/onboarding/Onboarding";
 import Intro from "../../src/ui/onboarding/Intro";
 import { Shell } from "../../src/ui/onboarding/chrome";
 const params = new URLSearchParams(location.search);
+// Match the production boot script: resolve the fixture theme before paint.
+// AppProvider later applies the same preference; it must not start a theme
+// change halfway through the initial screenshot/accessibility inspection.
+document.documentElement.dataset.theme = params.get("theme") === "light" ? "light" : "dark";
 // Views that judge layout load the app's real stylesheets; the behaviour-only views stay unstyled.
 if (params.get("view") === "onboarding-intro" || params.get("view") === "audit-motion" || params.get("view") === "paper" || params.get("view") === "scan-screen" || params.get("scenario") === "insights" || params.get("scenario") === "insights-early" || params.get("scenario")?.startsWith("exams") || params.get("styled") === "1") {
   await Promise.all([
     import("../../src/ui/styles/app.css"), import("../../src/ui/styles/system.css"),
     import("../../src/ui/styles/shell.css"), import("../../src/ui/styles/performance.css"),
   ]);
+  await import("../../src/ui/components/EssentialButton.css");
+  await import("../../src/ui/styles/review-2026-10.css");
 }
 function DialogDemo() {
   const { openSheet } = useSheetControls();

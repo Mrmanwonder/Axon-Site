@@ -18,14 +18,14 @@ import { clearLocalData, putCached, readThrough } from './cache.js';
 // bundler the vendored global has nothing left to offer, and an import is
 // type-checkable and tree-shakeable where a global is neither.
 import { createClient } from '@supabase/supabase-js';
-import { fetchWithTimeout } from './lib/request.js';
+import { dedupedFetch } from './lib/request.js';
 import { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD } from './lib/auth/providers.js';
 export { OAUTH_PROVIDERS, PROVIDER_LABEL, SIGN_IN_PROVIDERS, WORKOS_PASSWORD };
 
 import { isolatedAuthStorage } from './lib/auth/isolatedStorage.js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  global: { fetch: fetchWithTimeout },
+  global: { fetch: dedupedFetch },
   auth: {
     persistSession: true,
     autoRefreshToken: true,

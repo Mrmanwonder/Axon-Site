@@ -23,6 +23,7 @@ import { errorJournal, practiceFlags, MISTAKE_TYPE_LABEL, type JournalRow, type 
 import { useStartPractice } from "../data/useHomePractice";
 import { numMark } from "../data/causes";
 import { paths } from "../app/paths";
+import { useIngestion } from "../data/useIngestion";
 import "../styles/insights.css";
 import "../styles/practice.css";
 
@@ -30,6 +31,7 @@ const STATUS_LABEL: Record<JournalRow["status"], string> = { open: "Open", retri
 const ALL = "";
 
 export default function ErrorJournal() {
+  const { addPaper } = useIngestion();
   const { student } = useApp();
   const start = useStartPractice();
   const { resource, reload } = useResource(student?.id ? `journal:${student.id}` : null, async () => {
@@ -78,6 +80,7 @@ export default function ErrorJournal() {
         <div className="estate">
           <h4>No lost marks to list</h4>
           <p>Parts appear here once a marked paper is read and its readings are confirmed.</p>
+          <PressBox as="button" type="button" className="btn primary" onClick={addPaper}>Scan a marked paper</PressBox>
         </div>
       ) : (
         <>

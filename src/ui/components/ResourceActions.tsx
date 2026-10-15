@@ -60,7 +60,7 @@ export default function ResourceActions({
           onClick={onDelete}
           data-interactive=""
         >
-          <MaterialSymbol name="delete" />
+          <MaterialSymbol name="warning" />
           <span className="material-action-label">{deleteBusy ? "Deleting…" : "Delete"}</span>
         </PressBox>
       )}

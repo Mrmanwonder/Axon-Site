@@ -21,7 +21,7 @@
 .po .row .t2, .po .row .t2 > span:not(.conf) { color: var(--po-secondary); }
 .po .conf.likely, .po .conf.unsure { color: var(--po-secondary); }
 
-.po-next { margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5;
+.po-next { margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-12); font-size: 14px; line-height: 1.5;
   background: var(--attention-wash-soft); border: .5px solid var(--attention-rim); }
 .po-next-accept { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
 .po-next-accept .hint { flex: 1 1 200px; font-size: 13px; color: var(--label-2); }
@@ -31,7 +31,7 @@
 .po .po-qtitle { text-transform: none; letter-spacing: -.01em; font-size: 17px; font-weight: 650; color: var(--label); }
 .po .po-part { align-items: flex-start; }
 .po-part-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-variant-numeric: tabular-nums; }
-.po .po-page { font-size: 12.5px; font-weight: 500; color: var(--po-secondary); }
+.po .po-page { font-size: 13px; font-weight: 500; color: var(--po-secondary); }
 .po .po-prompt { margin-top: 4px; font-size: 14px; line-height: 1.45; color: var(--po-secondary); overflow-wrap: anywhere; }
 .po-prompt.none { font-style: italic; }
 .po-mark { align-self: center; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -46,20 +46,20 @@
 /* Subject: the student can change what triage set; an official assessment's subject is fixed. */
 .po-subject { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 4px var(--gutter, 16px) 12px; }
 .po-subject .k { font-size: 13px; font-weight: 600; color: var(--po-secondary); }
-.po-subject .hint { flex-basis: 100%; font-size: 12.5px; color: var(--po-secondary); }
-.po-date input { min-height: 44px; min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--bg); color: var(--label); font: inherit; }
+.po-subject .hint { flex-basis: 100%; font-size: 13px; color: var(--po-secondary); }
+.po-date input { min-height: 44px; min-width: 0; max-width: 100%; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--radius-12); background: var(--bg); color: var(--label); font: inherit; }
 .po-date .btn { min-height: 44px; }
 .po section:not(.po-summary) > .po-note { margin: 4px calc(var(--text-gutter) + 2px) 10px; }
 /* A part Axon could not place carries its own way out: the student places it. */
 .po-unplaced + .po-unplaced { border-top: .5px solid var(--hairline); }
 .po-unplaced .po-part::before { display: none; }
-.po-place { display: block; min-height: 44px; margin: -6px 18px 8px; padding: 0 14px; border: 0; border-radius: 12px;
+.po-place { display: block; min-height: 44px; margin: -6px 18px 8px; padding: 0 14px; border: 0; border-radius: var(--radius-12);
   background: var(--accent-wash); color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 
 
 /* AXO-216: one card per flagged part, under its row. Amber carries attention;
    the part's own chip keeps the dashed "unsure" form. */
-.flagcard { margin: 0 var(--gutter, 16px) 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45;
+.flagcard { margin: 0 var(--gutter, 16px) 10px; padding: 10px 12px; border-radius: var(--radius-12); font-size: 14px; line-height: 1.45;
   background: var(--attention-wash-soft); border: .5px solid var(--attention-rim); }
 .flagcard-t { font-weight: 600; color: var(--label); }
 .flagcard-n { margin-top: 2px; color: var(--po-secondary, var(--label-2)); font-size: 13px; }
@@ -67,7 +67,7 @@
 .flagcard-acts .qact { min-height: 44px; }
 .flagcard-err { margin: 6px 0 0; font-size: 13px; color: var(--label); }
 .fixpart { display: grid; gap: 12px; }
-.fixpart-crop { border-radius: 10px; overflow: hidden; }
+.fixpart-crop { border-radius: var(--radius-12); overflow: hidden; }
 .fixpart textarea { width: 100%; min-height: 44px; font: inherit; }
 
 /* AXO-268: subject, paper type and exam date in one card, label on the left,

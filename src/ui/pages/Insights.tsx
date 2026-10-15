@@ -171,11 +171,25 @@ export default function Insights() {
   const tierOptions: AppDropdownOption[] = [{ value: "all", label: "Any tier" }, { value: "tier_1", label: "Teacher marks" }, { value: "tier_2", label: "Scheme match" }];
   const filtered = filters.subject !== "all" || filters.type !== "all" || filters.range !== "all" || filters.tier !== "all";
 
+  const dayOne = !!model && !model.evidence.enough && !filtered;
   if (state === "loading" && !model) return <PageSkeleton variant="insights" label="Loading analysis…" />;
   if (!model) return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
   return <>
     <div className="greet insightsgreet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work. A grade outlook appears only if you turn it on.</div></div>
+
+    {/* Day one (review #11): one clear next step at the top, with progress
+        toward the pattern threshold, instead of a page of locked sections. */}
+    {dayOne && <div className="card dayonecard" role="region" aria-label="Get started">
+      <div className="dayonetext">
+        <h2>{model.evidence.papers === 0 ? "Scan your first marked paper" : "Scan your next marked paper"}</h2>
+        <p>{model.evidence.papers === 0
+          ? "You get its own breakdown right away. Patterns across papers start at " + PATTERN_PAPERS + "."
+          : `${Math.min(model.evidence.papers, PATTERN_PAPERS)} of ${PATTERN_PAPERS} papers toward your first patterns.`}</p>
+        <progress max={PATTERN_PAPERS} value={Math.min(model.evidence.papers, PATTERN_PAPERS)} aria-label={`${Math.min(model.evidence.papers, PATTERN_PAPERS)} of ${PATTERN_PAPERS} papers`} />
+      </div>
+      <PressBox as="button" type="button" className="btn primary" onClick={addPaper}>Scan a marked paper</PressBox>
+    </div>}
 
     <div className="filterbar insightfilters" aria-label="Filter insights">
       <AppDropdown ariaLabel="Filter insights by subject" value={filters.subject} options={subjectOptions} onChange={set("subject")} selected={filters.subject !== "all"} />
@@ -219,7 +233,11 @@ export default function Insights() {
 
     {/* AXO-259 to 262: practice analytics per subject. Outside the filters on
         purpose: each read is its own server calculation over confirmed evidence. */}
-    <PracticeAnalytics subjects={subjects} initialSubject={filters.subject === "all" ? null : filters.subject} syllabus={syllabus.maps} />
+    {dayOne
+      ? <details className="lockedmore"><summary>More insights that unlock as you add papers</summary>
+          <PracticeAnalytics subjects={subjects} initialSubject={null} syllabus={syllabus.maps} />
+        </details>
+      : <PracticeAnalytics subjects={subjects} initialSubject={filters.subject === "all" ? null : filters.subject} syllabus={syllabus.maps} />}
 
     {(stale || state === "failed") && <div role="status" className="subnote">Last available analysis.</div>}
   </>;
@@ -242,7 +260,7 @@ function SyllabusSection({ maps, state, subject }: {
   </section>;
 }
 
-function Body({ model, describe, addPaper, filtered, syllabus }: {
+function Body({ model, describe, filtered, syllabus }: {
   model: InsightsModel; describe: (r: QuestionRef) => string; addPaper: () => void; filtered: boolean; syllabus: React.ReactNode;
 }) {
   const ev = model.evidence;
@@ -277,7 +295,7 @@ function Body({ model, describe, addPaper, filtered, syllabus }: {
               <li>Questions left blank at the end of a paper</li>
             </ul>
           </div>
-          {!filtered && <PressBox as="button" type="button" className="btn primary growcta" onClick={addPaper}>Scan a marked paper</PressBox>}
+          {/* the scan CTA lives in the day-one card at the top of the page */}
           <p className="widgetnote">Every paper you have scanned already has its own explanations in <Link to={paths.library}>Library</Link>.</p>
         </div>
       </section>

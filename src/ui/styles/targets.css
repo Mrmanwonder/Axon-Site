@@ -4,10 +4,10 @@
 .targetcard .tgrid { display: grid; margin-top: 4px; }
 .targetcard .trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 52px; padding: 8px 0; position: relative; }
 .targetcard .tgrid .trow + .trow::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .5px; background: var(--hairline); }
-.targetcard .trow .n { display: block; min-width: 0; font-size: 15.5px; font-weight: 500; letter-spacing: -.01em; color: var(--label); }
-.targetcard .trow .hint { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; line-height: 1.4; letter-spacing: -.005em; color: var(--label-3); }
+.targetcard .trow .n { display: block; min-width: 0; font-size: 16px; font-weight: 500; letter-spacing: -.01em; color: var(--label); }
+.targetcard .trow .hint { display: block; margin-top: 2px; font-size: 13px; font-weight: 400; line-height: 1.4; letter-spacing: -.005em; color: var(--label-3); }
 .targetcard select {
-  min-height: 44px; min-width: 88px; padding: 0 30px 0 12px; border-radius: 10px;
+  min-height: 44px; min-width: 88px; padding: 0 30px 0 12px; border-radius: var(--radius-12);
   border: .5px solid var(--hairline); background-color: var(--surface-sunk); color: var(--label);
   font: inherit; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: left;
   -webkit-appearance: none; appearance: none; cursor: pointer;
@@ -16,7 +16,7 @@
 }
 .targetcard select:disabled { opacity: .5; }
 .targetcard select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.targetcard .tnote { margin-top: 6px; font-size: 12.5px; line-height: 1.4; color: var(--label-3); }
+.targetcard .tnote { margin-top: 6px; font-size: 13px; line-height: 1.4; color: var(--label-3); }
 .targetcard .toutlook { margin-top: 10px; border-top: .5px solid var(--hairline); padding-top: 12px; }
 .targetcard .actions { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; align-items: center; }
 .targetcard .actions:empty { display: none; }

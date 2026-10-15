@@ -1,29 +1,16 @@
-/* Home's practice reads (AXO-250 to 255), fetched together and kept apart in
-   state: one failed read hides one card with its own message, it never turns
-   the rest of Home into an empty state. */
-
+/* Each Home card owns its read, last-good value and retry. The SQL due_queue,
+   focus_areas and next_best_action each refresh their own error items under the
+   same database lock; none needs another card to succeed first. */
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "./AppProvider";
 import { useResource } from "./useResource";
 import {
-  deviceTimeZone, dueQueue, focusAreas, nextBestAction, practiceFlags, practicePref, progressSummary,
-  setPracticePref, startPracticeSession, targetGrades, topLeaks,
-  type DueItem, type FocusArea, type FocusKind, type NextBestAction, type PracticeFlags, type PracticePref,
-  type ProgressSummary, type TargetGrade,
+  deviceTimeZone, dueQueue, focusAreas, nextBestAction, practiceFlags, progressSummary,
+  setPracticePref, startPracticeSession, type FocusKind,
 } from "./practice";
 import { computeStreak } from "./streak";
 import { paths } from "../app/paths";
-
-type HomePracticeData = {
-  nba: NextBestAction;
-  due: DueItem[];
-  leaks: FocusArea[];
-  progress: ProgressSummary;
-  flags: PracticeFlags;
-  pref: PracticePref | null;
-  targets: TargetGrade[];
-};
 
 const TZ_SYNC_WAIT_MS = 1500;
 const TZ_SENT_KEY = "axon.practice-tz-sent";
@@ -34,33 +21,38 @@ export function useHomePractice() {
   const { student } = useApp();
   const id = student?.id ?? null;
   const tzSent = useRef<string | null>(null);
-
-  const { resource, reload } = useResource<HomePracticeData>(id ? `home-practice:${id}` : null, async () => {
-    // The day the streak and "today" are counted in is the device's.
-    const tz = deviceTimeZone();
-    // Sent once per student and zone, not on every visit (remembered across
-    // reloads), and never allowed to hold Home's cards for more than a moment:
-    // this write used to sit in front of every read and, when the database
-    // was slow, took Home's first paint with it (issue #301).
-    const tzKey = `${id}:${tz}`;
-    if (tz && tzSent.current !== tzKey && readTzSent() !== tzKey) {
-      const sync = setPracticePref(id!, { timezone: tz })
-        .then(() => { tzSent.current = tzKey; writeTzSent(tzKey); })
-        .catch(() => { /* an unknown zone keeps UTC */ });
-      await Promise.race([sync, new Promise((resolve) => setTimeout(resolve, TZ_SYNC_WAIT_MS))]);
-    }
-    // next_best_action brings the error items up to date first; the rest read after.
-    const nba = await nextBestAction(id!);
-    const [due, leaks, progress, flags, pref, targets] = await Promise.all([
-      dueQueue(id!), focusAreas(id!, null, 8), progressSummary(id!), practiceFlags(), practicePref(id!), targetGrades(id!),
-    ]);
-    return { data: { nba, due, leaks: topLeaks(leaks, flags.mistake_type_ui), progress, flags, pref, targets } };
-  });
-
-  const streak = useMemo(() => resource.data ? computeStreak(resource.data.progress.session_dates, resource.data.progress.today) : null,
-    [resource.data]);
-
-  return { resource, reload, streak };
+  // Only calendar-dependent reads wait for the timezone. Share the write, and
+  // retry it on the next refresh after failure. A profile switch gets a new
+  // coordinator and useResource refuses late results from the previous profile.
+  const calendar = useMemo(() => {
+    let pending: Promise<void> | null = null;
+    return () => {
+      const tz = deviceTimeZone();
+      if (!id || !tz || (tzSent.current === `${id}:${tz}` || readTzSent() === `${id}:${tz}`)) return Promise.resolve();
+      if (!pending) pending = setPracticePref(id, { timezone: tz })
+        .then(() => { tzSent.current = `${id}:${tz}`; writeTzSent(`${id}:${tz}`); })
+        .catch(() => { /* Keep the server's last-known timezone. */ })
+        .finally(() => { pending = null; });
+      // Keep #301's bounded wait: a slow preference write cannot strand cards.
+      return new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, TZ_SYNC_WAIT_MS);
+        void pending!.then(() => { clearTimeout(timer); resolve(); });
+      });
+    };
+  }, [id]);
+  const key = (name: string) => id ? `home-practice:${id}:${name}` : null;
+  const nba = useResource(key("nba"), async () => { await calendar(); return { data: await nextBestAction(id!) }; });
+  const due = useResource(key("due"), async () => { await calendar(); return { data: await dueQueue(id!) }; });
+  const leaks = useResource(key("leaks"), async () => { await calendar(); return { data: await focusAreas(id!, null, 8) }; });
+  const progress = useResource(key("progress"), async () => { await calendar(); return { data: await progressSummary(id!) }; });
+  const flags = useResource(key("flags"), async () => ({ data: await practiceFlags() }));
+  // Preferences and targets belong to TargetGrades; Home did not consume them.
+  const reload = useCallback(async () => {
+    await Promise.all([nba.reload(), due.reload(), leaks.reload(), progress.reload(), flags.reload()]);
+  }, [nba.reload, due.reload, leaks.reload, progress.reload, flags.reload]);
+  const streak = useMemo(() => progress.resource.data
+    ? computeStreak(progress.resource.data.session_dates, progress.resource.data.today) : null, [progress.resource.data]);
+  return { nba, due, leaks, progress, flags, reload, streak };
 }
 
 /** Starts a session and opens it. One function, so every button that says
@@ -81,6 +73,10 @@ export function useRefreshOnReturn(reload: () => Promise<void>) {
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === "visible") void reload(); };
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onVisible);
+    };
   }, [reload]);
 }

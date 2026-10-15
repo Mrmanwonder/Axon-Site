@@ -67,7 +67,7 @@
   align-items: center;
   gap: 9px;
   color: #a5b4cf;
-  font-size: clamp(10px, 2.65vw, 11.5px);
+  font-size: 12px;
   font-weight: 630;
   letter-spacing: .067em;
   line-height: 1.35;
@@ -76,7 +76,7 @@
 .ob-intro-eyebrow-rule {
   width: 17px;
   height: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-2);
   background: var(--blue);
   flex-shrink: 0;
 }
@@ -98,7 +98,7 @@
 .ob-intro-story p {
   max-width: 37ch;
   margin: clamp(12px, 2svh, 19px) 0 0;
-  font-size: clamp(13.2px, 3.55vw, 16px);
+  font-size: clamp(13px, 3.55vw, 16px);
   font-weight: 400;
   letter-spacing: -.009em;
   line-height: 1.56;
@@ -129,16 +129,19 @@
   position: relative;
   width: 100%;
   min-height: 55px;
-  border: 1px solid rgba(147,185,255,.34);
-  border-radius: 15px;
+  /* one token-driven primary across the app (review #7): same pill as B5 */
+  border: 0;
+  border-radius: var(--r-btn);
   padding: 15px 44px;
-  background: color-mix(in srgb, var(--blue) 80%, #000 20%);
-  color: #fff;
-  box-shadow: 0 6px 19px rgba(28,86,186,.24), inset 0 1px 0 rgba(255,255,255,.15);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-ink);
+  box-shadow: none;
   font-size: 15px;
   font-weight: 640;
   letter-spacing: -.016em;
-  transition: background .16s ease, box-shadow .16s ease;
+  /* Switch ink and surface together: a fading surface can briefly put dark
+     ink on the old dark background when the theme changes. */
+  transition: box-shadow .16s ease;
 }
 .ob-intro-continue svg {
   position: absolute;
@@ -147,12 +150,12 @@
   height: 17px;
 }
 #obroot .ob-intro-continue:focus-visible {
-  outline: 2px solid #fff;
+  outline: var(--focus-ring);
   outline-offset: 4px;
 }
 .ob-intro-footnote {
   color: #818da2;
-  font-size: clamp(10.5px, 2.8vw, 11.5px);
+  font-size: 12px;
   line-height: 1.48;
   margin: 13px auto 0;
   max-width: 42ch;
@@ -203,3 +206,26 @@
 }
 [data-motion="reduce"] #obroot.obroot-intro .obview > .ob-intro { animation: none !important; }
 [data-motion="reduce"] #obroot .ob-intro-continue { transition: none !important; }
+
+/* ── feature glimpse + legal footer (review #14) ── */
+.ob-intro-glimpse {
+  width: 100%; max-width: 490px; margin: 22px auto 0; padding: 14px 16px;
+  border: 1px solid var(--hairline); border-radius: var(--r-field);
+  background: var(--surface); box-shadow: var(--card-shadow);
+}
+.ob-intro-glimpse h2 { margin: 0 0 8px; font-size: 12px; font-weight: 630;
+  letter-spacing: var(--ls-sec); text-transform: uppercase; color: var(--label-2); }
+.ob-intro-glimpse ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ob-intro-glimpse li { display: flex; justify-content: space-between; gap: 12px;
+  font-size: 14px; color: var(--label); }
+.ob-intro-glimpse li b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ob-intro-glimpse p { margin: 10px 0 0; font-size: 13px; color: var(--label-2); }
+.ob-intro-legal { display: flex; justify-content: center; gap: 4px; margin: 14px 0 0;
+  font-size: 12px; }
+.ob-intro-legal a { display: inline-flex; align-items: center; min-height: 44px;
+  padding: 0 10px; color: #a3abbc; text-decoration: underline;
+  text-underline-offset: 3px; }
+@media (min-width: 800px) {
+  .ob-intro-glimpse { grid-column: 1; grid-row: 4; margin: 22px 0 0; }
+  .ob-intro-legal { grid-column: 1 / -1; grid-row: 5; justify-content: flex-start; }
+}

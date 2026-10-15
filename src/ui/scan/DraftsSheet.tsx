@@ -1,3 +1,4 @@
+import MaterialSymbol from "../components/MaterialSymbol";
 /* ═══════════════════════════════════════════════════════════════════════════
    SAVED DRAFTS
 
@@ -77,16 +78,14 @@ function DraftRow({ draft, onOpen, onDelete }: { draft: Draft; onOpen: (id: stri
       {confirming ? (
         <div className="sc-draft-confirm">
           <button type="button" className="btn danger-soft" onClick={() => { hapticTick(); onDelete(draft.id); }}>
-            Delete {pages} from this phone
+            <MaterialSymbol name="warning" /> Delete {pages} from this phone
           </button>
           <button type="button" className="btn plain" onClick={() => setConfirming(false)}>Keep</button>
         </div>
       ) : (
         <button type="button" className="sc-draft-del" aria-label={`Delete draft, ${pages}`}
                 onClick={() => { hapticTick(); setConfirming(true); }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />
-          </svg>
+          <MaterialSymbol name="warning" />
         </button>
       )}
     </li>

@@ -46,3 +46,27 @@ test("spring position and velocity agree at the same elapsed time on 30/60/120Hz
   expect(Math.max(...samples.map(s => s.vel)) - Math.min(...samples.map(s => s.vel))).toBeLessThan(0.05);
   vi.unstubAllGlobals();
 });
+
+import { readFileSync } from "node:fs";
+import Dialog, { SHEET_EXIT_MS } from "../../src/ui/components/Dialog";
+test("sheet CSS durations meet policy and the dismissal callback matches the exit", () => {
+  const css = readFileSync("src/ui/styles/system.css", "utf8");
+  const entrance = Number(css.match(/--sheet-in:\s*(\d+)ms/)![1]);
+  const exit = Number(css.match(/--sheet-out:\s*(\d+)ms/)![1]);
+  expect(entrance).toBeLessThanOrEqual(280); expect(exit).toBe(SHEET_EXIT_MS);
+  vi.useFakeTimers();
+  const onClose = vi.fn();
+  const { container, unmount } = render(<Dialog title="Test sheet" onClose={onClose}>Content</Dialog>);
+  act(() => container.querySelector("dialog")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  act(() => vi.advanceTimersByTime(exit - 1)); expect(onClose).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(1)); expect(onClose).toHaveBeenCalledTimes(1);
+  unmount(); vi.useRealTimers();
+});
+test("reduced-motion sheets dismiss immediately", () => {
+  document.documentElement.dataset.motion = "reduce";
+  const onClose = vi.fn();
+  const { container, unmount } = render(<Dialog title="Static sheet" onClose={onClose}>Content</Dialog>);
+  act(() => container.querySelector("dialog")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  unmount(); delete document.documentElement.dataset.motion;
+});

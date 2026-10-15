@@ -26,11 +26,23 @@
 .progressrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .pstat { display: flex; flex-direction: column; gap: 4px; }
 .pstat strong { font-size: 24px; line-height: 1; font-weight: 700; letter-spacing: -.03em; color: var(--label); font-variant-numeric: tabular-nums; }
-.pstat span { font-size: 12.5px; line-height: 1.35; color: var(--label-2); }
+.pstat span { font-size: 13px; line-height: 1.35; color: var(--label-2); }
 .weekbars { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); align-items: end; gap: 6px; height: 36px; margin: 16px 0 10px; }
-.weekbars i { display: block; height: 100%; border-radius: 3px; background: var(--surface-sunk); transform-origin: bottom; }
+.weekbars i { display: block; height: 100%; border-radius: var(--radius-4); background: var(--surface-sunk); transform-origin: bottom; }
 .weekbars i.on { background: var(--accent); opacity: .8; }
-.progresscard .meta { font-size: 12.5px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.progresscard .meta { font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .progresscard .subnote { margin: 8px 0 0; color: var(--label-2); }
 .journallink { display: flex; justify-content: flex-end; margin: 4px var(--text-gutter) 0; }
 .scanprompt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px var(--text-gutter) 0; font-size: 14px; color: var(--label-2); }
+
+/* one-time scan celebration (review #12) */
+.card.celebrate { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin: 0 0 14px;
+  animation: celebrate-in var(--d-recompute) var(--spring) both; }
+.celebrate-mark { display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+  border-radius: 50%; background: var(--positive-wash); color: var(--positive); font-weight: 700; }
+.card.celebrate .b { flex: 1; min-width: 0; }
+.card.celebrate .t1 { font-weight: 600; color: var(--label); }
+.card.celebrate .t2 { font-size: var(--fs-t2); color: var(--label-2); }
+.card.celebrate .textaction { min-height: 44px; }
+@keyframes celebrate-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .card.celebrate { animation: none; } }

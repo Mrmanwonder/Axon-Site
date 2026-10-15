@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    TOKENS
 
-   Every value here was lifted from reference/prototype.html, which Axon.md
-   names as the design system of record. Nothing was invented, rounded or
-   "tidied": where the prototype says 15.5px, this file says 15.5px.
+   Based on reference/prototype.html. Owner review, 14 Oct 2026: text has
+   a 12px floor and whole-pixel sizes; component corners use one shared scale.
 
    Four layers, each allowed to read only from the one above it:
 
@@ -43,13 +42,15 @@
   /* accent scales — the two themes need different hues at the same role,
      because #3A86FF on white is not the same perceived weight as on black */
   --p-blue-d: #3A86FF;
-  --p-blue-l: #2C74E8;
+  /* light-theme hues darkened to clear WCAG AA (>=4.5:1) as TEXT on both
+     --bg (#F4F4F7) and --surface (#FFF); was 2.9-4.4:1 (review, Oct 2026) */
+  --p-blue-l: #1F63D6;
   --p-green-d: #30D158;
-  --p-green-l: #249B49;
+  --p-green-l: #1A7535;
   --p-amber-d: #FF9F0A;
-  --p-amber-l: #C77A06;
+  --p-amber-l: #9A5B00;
   --p-red-d: #FF6B57;
-  --p-red-l: #D8462F;
+  --p-red-l: #B23A26;
 
   /* avatar gradient stops */
   --p-avatar-from: #5AA0FF;
@@ -92,14 +93,16 @@
   /* 3 · role — text */
   --label: var(--p-mist-100);
   --label-2: rgba(235, 235, 245, .6);
-  --label-3: rgba(235, 235, 245, .32);
+  /* was .32 (2.4-2.65:1); #8E8E99 is 5.5:1 on --surface */
+  --label-3: #8E8E99;
   --statusfg: var(--p-white);
 
   /* 3 · role — meaning.
      accent    = blue, the only thing that draws the eye forward
      attention = amber, everything that would reach for red elsewhere
      positive  = green, confirmed states and gains
-     signout   = red, and red appears nowhere else in the interface
+     danger    = red, for Sign out and destructive deletes (papers/account);
+     the deletes also carry a hazard icon
 
      --blue / --green / --amber / --red are the design system's OWN names and
      the ones system.css uses in 44 places. They are not legacy and must not be
@@ -116,6 +119,7 @@
   --positive: var(--green);
   --attention: var(--amber);
   --signout: var(--red);
+  --danger: var(--red);
 
   /* tinted washes of the role colours, used as backgrounds behind them */
   --accent-wash: rgba(58, 134, 255, .15);
@@ -149,8 +153,9 @@
   --card-shadow: 0 1px 2px rgba(28, 28, 40, .05), 0 8px 20px rgba(28, 28, 40, .05);
 
   --label: var(--p-ink-950);
-  --label-2: rgba(60, 60, 67, .68);
-  --label-3: rgba(60, 60, 67, .4);
+  /* opaque so contrast is predictable: 7.4:1 and 5.2:1 on --bg (were ~4:1 and 2.1:1) */
+  --label-2: #4A4A50;
+  --label-3: #66666C;
   --statusfg: var(--p-ink-950);
 
   --blue: var(--p-blue-l);
@@ -162,6 +167,7 @@
   --positive: var(--green);
   --attention: var(--amber);
   --signout: var(--red);
+  --danger: var(--red);
 
   --accent-wash: rgba(58, 134, 255, .15);
   --accent-glow: rgba(58, 134, 255, .26);
@@ -319,36 +325,36 @@
 
   /* radii */
   --r-card: clamp(20px, 5vw, 24px);
-  --r-sheet: 32px;
-  --r-nav: 32px;
+  --r-sheet: var(--radius-32);
+  --r-nav: var(--radius-32);
   --r-pill: 26px;
-  --r-btn: 18px;
-  --r-cta: 20px;
-  --r-chip: 8px;
-  --r-fchip: 14px;
-  --r-field: 14px;
-  --r-tile: 12px;
-  --r-tier: 6px;
-  --r-thumb: 8px;
+  --r-btn: var(--radius-16);
+  --r-cta: var(--radius-20);
+  --r-chip: var(--radius-8);
+  --r-fchip: var(--radius-16);
+  --r-field: var(--radius-16);
+  --r-tile: var(--radius-12);
+  --r-tier: var(--radius-6);
+  --r-thumb: var(--radius-8);
 
-  /* type scale */
+  /* type scale: whole pixels, nothing below 12px (review #9) */
   --fs-h1: clamp(27px, 7.4vw, 34px);
   --fs-insight: clamp(18px, 4.8vw, 21px);
-  --fs-sec: clamp(11.5px, 3vw, 12.5px);
+  --fs-sec: clamp(12px, 3vw, 13px);
   --fs-title: 21px;
   --fs-name: 19px;
   --fs-estate-h: 18px;
   --fs-hdr: 16px;
   --fs-btn: 16px;
-  --fs-t1: 15.5px;
+  --fs-t1: 16px;
   --fs-t2: 13px;
-  --fs-meta: 12.5px;
-  --fs-chip: 11.5px;
-  --fs-tier: 11px;
+  --fs-meta: 13px;
+  --fs-chip: 12px;
+  --fs-tier: 12px;
 
   /* user-adjustable text size overrides these three (Settings -> Text size) */
   --fs-body: 15px;
-  --fs-row: 15.5px;
+  --fs-row: 16px;
   --fs-row2: 13px;
   --fs-lbl: 16px;
 
@@ -405,7 +411,7 @@
 [data-text="s"] {
   --fs-h1: clamp(24px, 6.6vw, 30px);
   --fs-insight: clamp(16px, 4.3vw, 19px);
-  --fs-sec: clamp(10.5px, 2.7vw, 11.5px);
+  --fs-sec: 12px;
   --fs-body: 14px;
   --fs-row: 14px;
   --fs-row2: 12px;
@@ -414,7 +420,7 @@
 
 [data-text="m"] {
   --fs-body: 15px;
-  --fs-row: 15.5px;
+  --fs-row: 16px;
   --fs-row2: 13px;
   --fs-lbl: 16px;
 }
@@ -422,10 +428,10 @@
 [data-text="l"] {
   --fs-h1: clamp(30px, 8.2vw, 38px);
   --fs-insight: clamp(20px, 5.3vw, 24px);
-  --fs-sec: clamp(12.5px, 3.3vw, 13.5px);
+  --fs-sec: clamp(13px, 3.3vw, 14px);
   --fs-body: 17px;
-  --fs-row: 17.5px;
-  --fs-row2: 14.5px;
+  --fs-row: 18px;
+  --fs-row2: 15px;
   --fs-lbl: 18px;
 }
 
@@ -441,4 +447,18 @@
   :root {
     --rail-w: 216px;
   }
+}
+
+/* Shared corner scale. Circles remain 50%; lens pill geometry remains 26px. */
+:root {
+  --radius-2: 2px;
+  --radius-4: 4px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+  --radius-32: 32px;
+  --radius-round: 999px;
 }

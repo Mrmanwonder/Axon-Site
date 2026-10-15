@@ -89,8 +89,10 @@ function SubjectTarget({ subject, scale, value, outlook, optIn, onSet }: {
           try { await onSet(e.target.value || null, suggestion?.suggested ?? null); } finally { setBusy(false); }
         }}
       >
-        <option value="">Not set</option>
-        {scale.map((g) => <option key={g} value={g}>{g}</option>)}
+        <option value="">Target grade: not set</option>
+        {/* Cambridge AS grades are officially lowercase (a–e), so the value is
+            kept as-is and labelled instead of being uppercased (review #15). */}
+        {scale.map((g) => <option key={g} value={g}>{`Grade ${g}${/^[a-e]$/.test(g) ? " (AS)" : ""}`}</option>)}
       </select>
     </div>
   );

@@ -66,12 +66,29 @@ export default function AppDropdown({
   align = "left",
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const search = useRef({ text: "", at: 0 });
   const [position, setPosition] = useState<MenuPosition>({ top: 0, left: 0, width: 180, maxHeight: 280 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
   const active = options.find((option) => option.value === value) ?? options[0];
+
+  const openMenu = (last = false) => {
+    if (!options.length) return;
+    const selectedIndex = options.findIndex(option => option.value === value);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : last ? options.length - 1 : 0);
+    search.current = { text: "", at: 0 };
+    setOpen(true);
+  };
+  const boundedIndex = Math.min(activeIndex, options.length - 1);
+  useLayoutEffect(() => {
+    if (!open) return;
+    if (!options.length) { setOpen(false); return; }
+    menuRef.current?.focus({ preventScroll: true });
+    document.getElementById(`${menuId}-option-${boundedIndex}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, boundedIndex, menuId, options.length]);
 
   // Layout effect: the menu is placed before the browser paints it. A plain
   // effect drew it for one frame at the top-left corner of the screen first
@@ -150,11 +167,12 @@ export default function AppDropdown({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => setOpen((current) => !current)}
+        disabled={!options.length}
+        onClick={() => open ? setOpen(false) : openMenu()}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            setOpen(true);
+            openMenu(event.key === "ArrowUp");
           }
         }}
       >
@@ -168,6 +186,41 @@ export default function AppDropdown({
           id={menuId}
           className="app-dropdown-menu"
           role="listbox"
+          tabIndex={-1}
+          aria-activedescendant={boundedIndex >= 0 ? `${menuId}-option-${boundedIndex}` : undefined}
+          onKeyDown={event => {
+            if (event.key === "Tab") {
+              // Restore the trigger before the browser advances through the
+              // page's tab order; the portal must not send Tab to the page end.
+              triggerRef.current?.focus();
+              setOpen(false);
+              return;
+            }
+            if (event.key === "Escape") {
+              event.preventDefault(); event.stopPropagation();
+              setOpen(false); triggerRef.current?.focus(); return;
+            }
+            let next = boundedIndex;
+            if (event.key === "ArrowDown") next = Math.min(options.length - 1, boundedIndex + 1);
+            else if (event.key === "ArrowUp") next = Math.max(0, boundedIndex - 1);
+            else if (event.key === "Home") next = 0;
+            else if (event.key === "End") next = options.length - 1;
+            else if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              if (options[boundedIndex]) choose(options[boundedIndex].value);
+              return;
+            } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+              const now = Date.now();
+              const text = (now - search.current.at < 700 ? search.current.text : "") + event.key.toLocaleLowerCase();
+              search.current = { text, at: now };
+              const query = [...text].every(char => char === text[0]) ? text[0] : text;
+              for (let offset = 1; offset <= options.length; offset++) {
+                const index = (boundedIndex + offset) % options.length;
+                if (options[index].label.toLocaleLowerCase().startsWith(query)) { next = index; break; }
+              }
+            } else return;
+            event.preventDefault(); setActiveIndex(next);
+          }}
           aria-label={ariaLabel}
           style={{
             top: position.top,
@@ -176,12 +229,17 @@ export default function AppDropdown({
             maxHeight: position.maxHeight,
           }}
         >
-          {options.map((option) => {
+          {options.map((option, index) => {
             const isSelected = option.value === value;
             return (
               <button
                 key={option.value}
                 type="button"
+                tabIndex={-1}
+                id={`${menuId}-option-${index}`}
+                data-active={index === boundedIndex || undefined}
+                onPointerMove={() => setActiveIndex(index)}
+                onMouseDown={event => event.preventDefault()}
                 className="app-dropdown-option"
                 role="option"
                 aria-selected={isSelected}

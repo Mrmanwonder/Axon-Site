@@ -15,7 +15,7 @@
   min-height: 52px;
   padding: 0 21px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   color: var(--button-primary-ink);
   background: var(--button-primary-bg);
   text-decoration: none;
@@ -34,9 +34,9 @@
 }
 
 .essential-button--compact,
-.ds-site .essential-button--compact { min-height: 44px; padding: 0 17px; border-radius: 13px; font-size: 13px; gap: 9px; }
+.ds-site .essential-button--compact { min-height: 44px; padding: 0 17px; border-radius: var(--radius-12); font-size: 13px; gap: 9px; }
 .essential-button--large,
-.ds-site .essential-button--large { min-height: 56px; padding: 0 24px; border-radius: 18px; font-size: 15px; }
+.ds-site .essential-button--large { min-height: 56px; padding: 0 24px; border-radius: var(--radius-20); font-size: 15px; }
 .essential-button--full,
 .ds-site .essential-button--full { width: 100%; }
 .essential-button--secondary,
@@ -70,7 +70,7 @@
  * Intro, brand-specific and scanner controls retain their own rules. */
 .btn:is(.primary, .ghost, .plain):not(.ob-intro-continue) {
   min-height: 52px;
-  border-radius: 16px;
+  border-radius: var(--radius-16);
   font-size: 15px;
   letter-spacing: -.018em;
   transition: transform var(--d-state) var(--spring), opacity var(--d-state) ease;
