@@ -10,7 +10,7 @@
   outline-offset: var(--focus-offset);
 }
 
-/* AXO-251..255 - the practice cards. Role tokens only; the gain figure uses
+/* AXO-251..255 — the practice cards. Role tokens only; the gain figure uses
    the accent, never red, and stays well under 28px. */
 .nbacard .line { font-size: clamp(17px, 4.6vw, 21px); }
 .nbacard .nbameta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; }
@@ -94,5 +94,3 @@
 }
 .paper-empty .btn { width: 100%; max-width: 320px; min-height: 52px; }
 .paper-empty-hint { margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--label-2); }
-
-
