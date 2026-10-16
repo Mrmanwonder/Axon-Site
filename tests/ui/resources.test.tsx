@@ -74,7 +74,7 @@ test("failed progress refresh disables recovery without surfacing sync status", 
 });
 test("consent failures remain failures", async () => { mocks.consent.mockRejectedValue(new Error("offline")); mount(null); expect(await screen.findByText("consent:failed")).toBeTruthy(); });
 test("auth read error enters boot error", async () => { mocks.session.mockRejectedValue(new Error("auth unavailable")); mount(null); expect(await screen.findByText("boot_error")).toBeTruthy(); });
-test("Insights shows failed reads instead of an indefinite blank", async () => { mocks.insights.mockRejectedValue(new Error("offline")); mount(<Insights />); expect(await screen.findByText("Can't reach your analysis")).toBeTruthy(); });
+test("Insights shows failed reads instead of an indefinite blank", async () => { mocks.insights.mockRejectedValue(new Error("offline")); mount(<Insights />); expect(await screen.findByText("Can’t reach your analysis")).toBeTruthy(); });
 test("cached analytics carries an explicit label", async () => { mocks.insights.mockResolvedValue({ data: { attempts: [], losses: [] }, stale: true }); mount(<Insights />); expect(await screen.findByText("Last available analysis.")).toBeTruthy(); });
 test("reversed completion cannot replace a newer resource and changing student hides old data", async () => {
   const first = deferred<any>(); const second = deferred<any>(); const read = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise).mockReturnValue(new Promise(() => {}));
@@ -146,5 +146,3 @@ test("Coverage shows while evidence builds and disappears once patterns are read
 // AXO-251 replaced Home's insight-quoted focus with the practice next best
 // action; its states are covered in tests/ui/home-practice.test.tsx. The
 // insight sentence itself stays covered above, in Insights.
-
-
