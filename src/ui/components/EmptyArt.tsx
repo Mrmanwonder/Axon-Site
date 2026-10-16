@@ -26,7 +26,7 @@ export function NoPapersArt() {
 /** The shape an answer will have, before there is one.
 
     An axis that exists and bars that do not. Always five, never a count of
-    anything - see the header. */
+    anything — see the header. */
 export function NotEnoughDataArt() {
   return (
     <svg className="art" viewBox="0 0 168 128" role="img"
@@ -43,7 +43,7 @@ export function NotEnoughDataArt() {
       </g>
 
       {/* Five outlines. Uneven heights, so it reads as a chart rather than a
-          progress bar - but categorically uneven, not ranked: the tallest is in
+          progress bar — but categorically uneven, not ranked: the tallest is in
           the middle, because a left-to-right descent is a leaderboard and this
           app does not draw those. */}
       <g className="ghost bars">
@@ -56,10 +56,8 @@ export function NotEnoughDataArt() {
 
       {/* Nothing here is filled in, and that is the point. A single solid bar
           would sit directly above a progress row reading "1 of 4" and would be
-          read as that one paper - which is the whole failure this screen exists
+          read as that one paper — which is the whole failure this screen exists
           to prevent, drawn instead of written. */}
     </svg>
   );
 }
-
-
