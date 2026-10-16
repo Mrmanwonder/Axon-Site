@@ -10,7 +10,7 @@
   outline-offset: var(--focus-offset);
 }
 
-/* AXO-251..255 — the practice cards. Role tokens only; the gain figure uses
+/* AXO-251..255 - the practice cards. Role tokens only; the gain figure uses
    the accent, never red, and stays well under 28px. */
 .nbacard .line { font-size: clamp(17px, 4.6vw, 21px); }
 .nbacard .nbameta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; }
@@ -46,3 +46,53 @@
 .card.celebrate .textaction { min-height: 44px; }
 @keyframes celebrate-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .card.celebrate { animation: none; } }
+
+/* A single first-paper action. Artwork is decorative, with no sample marks. */
+.paper-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px var(--gutter);
+  padding: clamp(28px, 5vw, 48px) clamp(20px, 4vw, 36px) 28px;
+  border: .5px solid var(--hairline);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+}
+.paper-empty-art {
+  display: block;
+  flex: none;
+  width: min(100%, 240px);
+  height: auto;
+  margin: 0 0 24px;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.paper-empty-art .back { fill: var(--surface-sunk); stroke: var(--hairline); }
+.paper-empty-art .middle { fill: var(--field); stroke: var(--hairline); }
+.paper-empty-art .front { fill: var(--surface); stroke: var(--label-3); stroke-width: 1.25; }
+.paper-empty-art .lines { stroke: var(--label-3); stroke-width: 2; opacity: .5; }
+.paper-empty-art .annotation { stroke: var(--accent); stroke-width: 2; }
+.paper-empty-art .corners { stroke: var(--accent); stroke-width: 2; opacity: .65; }
+.paper-empty h2 {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 28px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.035em;
+  color: var(--label);
+}
+.paper-empty p {
+  max-width: 32ch;
+  margin: 12px 0 24px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--label-2);
+  text-wrap: pretty;
+}
+.paper-empty .btn { width: 100%; max-width: 320px; min-height: 52px; }
+.paper-empty-hint { margin-top: 12px; font-size: 12px; line-height: 1.5; color: var(--label-2); }
+
+
