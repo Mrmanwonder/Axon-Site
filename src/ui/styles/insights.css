@@ -78,7 +78,7 @@
 .growcard .widgetnote a { color: var(--accent); font-weight: 550; }
 .igrid .unknownmark svg { display: block; }
 
-/* Home · the one supported focus, quoted from the student's own question */
+/* Home � the one supported focus, quoted from the student's own question */
 .focuscard { margin-top: 12px; padding: 20px; }
 .focuscard .line { font-size: clamp(17px, 4.4vw, 20px); font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--label); }
 .focuscard .why { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
@@ -218,18 +218,9 @@
 .stopic .heatdetail { margin-top: 12px; }
 .sdsource { margin-top: 4px; }
 
-/* day-one card + collapsed locked sections (review #11) */
-.dayonecard { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 14px 20px; padding: 18px 20px; margin: 0 0 18px; }
-.dayonecard .dayonetext { flex: 1 1 260px; min-width: 0; }
-.dayonecard h2 { margin: 0; font-size: var(--fs-name); letter-spacing: var(--ls-name); color: var(--label); }
-.dayonecard p { margin: 6px 0 10px; font-size: var(--fs-t2); color: var(--label-2); }
-.dayonecard progress { width: 100%; max-width: 320px; height: 6px; appearance: none; border: 0;
-  border-radius: var(--radius-4); background: var(--surface-sunk); overflow: hidden; }
-.dayonecard progress::-webkit-progress-bar { background: var(--surface-sunk); }
-.dayonecard progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-4); }
-.dayonecard progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-4); }
-.dayonecard .btn { min-height: 44px; }
+/* Secondary insights stay collapsed while coverage is still growing. */
 .lockedmore { margin-top: 18px; }
 .lockedmore > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
   font-size: var(--fs-t2); font-weight: 600; color: var(--label-2); }
+
+
