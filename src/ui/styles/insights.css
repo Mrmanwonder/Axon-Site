@@ -78,7 +78,7 @@
 .growcard .widgetnote a { color: var(--accent); font-weight: 550; }
 .igrid .unknownmark svg { display: block; }
 
-/* Home � the one supported focus, quoted from the student's own question */
+/* Home · the one supported focus, quoted from the student's own question */
 .focuscard { margin-top: 12px; padding: 20px; }
 .focuscard .line { font-size: clamp(17px, 4.4vw, 20px); font-weight: 650; line-height: 1.35; letter-spacing: -.02em; color: var(--label); }
 .focuscard .why { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 10px; font-size: 13px; line-height: 1.45; color: var(--label-2); font-variant-numeric: tabular-nums; }
@@ -222,5 +222,3 @@
 .lockedmore { margin-top: 18px; }
 .lockedmore > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center;
   font-size: var(--fs-t2); font-weight: 600; color: var(--label-2); }
-
-
