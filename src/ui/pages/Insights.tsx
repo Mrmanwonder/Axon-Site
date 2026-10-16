@@ -1,5 +1,5 @@
-/* ���������������������������������������������������������������������������
-   INSIGHTS - what the student's confirmed history says, and nothing else
+/* ═══════════════════════════════════════════════════════════════════════════
+   INSIGHTS — what the student's confirmed history says, and nothing else
 
    Every module renders from `buildInsights` (src/ui/data/insights.ts), which
    reads only the analytics views. Each claim carries its sample size and opens
@@ -7,16 +7,16 @@
    against their own paper.
 
    Order is by usefulness to the next paper, not by data type:
-     1. Before your next paper - the student's own fixes for mistakes that recur
-     2. Recurring mistakes - causes seen in two or more papers of one subject
-     3. Where your marks go - the cause breakdown, split knowledge / technique
-     4. Trend - the student against their own earlier papers, never others
-     5. Question size, command words, answer stage, topics - where marks go
+     1. Before your next paper — the student's own fixes for mistakes that recur
+     2. Recurring mistakes — causes seen in two or more papers of one subject
+     3. Where your marks go — the cause breakdown, split knowledge / technique
+     4. Trend — the student against their own earlier papers, never others
+     5. Question size, command words, answer stage, topics — where marks go
      6. End of paper, knock-on errors, subjects
 
    Nothing here ranks, predicts or compares the student with anyone else, and
    nothing is shown as a percentage. Under four papers only coverage is shown.
-   ��������������������������������������������������������������������������� */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -74,7 +74,7 @@ function groupLede(g: InsightsModel["groups"], total: number): string {
 }
 
 const plural = (n: number, one: string, many = one + "s") => `${n} ${n === 1 ? one : many}`;
-const sample = (t: { questions: number; papers: number }) => `${plural(t.questions, "question")} � ${plural(t.papers, "paper")}`;
+const sample = (t: { questions: number; papers: number }) => `${plural(t.questions, "question")} · ${plural(t.papers, "paper")}`;
 
 function EvidenceGap({ title, children }: { title: string; children: React.ReactNode }) {
   return <div className="card evidencegap"><div className="unknownmark" aria-hidden="true"><InfoSymbol size={18} /></div><div><h3>{title}</h3><p>{children}</p></div></div>;
@@ -161,7 +161,7 @@ export default function Insights() {
       const p = byId.get(r.paperId);
       if (!p) return "";
       const subject = subjectOf(p);
-      return [subject, paperTypeLabel(p.type, providerKey)].filter(Boolean).join(" � ");
+      return [subject, paperTypeLabel(p.type, providerKey)].filter(Boolean).join(" · ");
     };
   }, [papers, providerKey]);
 
@@ -172,7 +172,7 @@ export default function Insights() {
   const filtered = filters.subject !== "all" || filters.type !== "all" || filters.range !== "all" || filters.tier !== "all";
 
   const dayOne = !!model && !model.evidence.enough && !filtered;
-  if (state === "loading" && !model) return <PageSkeleton variant="insights" label="Loading analysis." />;
+  if (state === "loading" && !model) return <PageSkeleton variant="insights" label="Loading analysis…" />;
   if (!model) return <><div className="greet"><h1>Insights</h1></div><div className="estate"><h4>Can&rsquo;t reach your analysis</h4><p>Your papers are safe. This view needs a connection to work out what changed.</p></div></>;
 
   return <>
@@ -206,8 +206,8 @@ export default function Insights() {
       <div className="card tallycard">
         <p className="lede">Difficulty estimates are about the questions, not your ability. {plural(difficulty.rated, "question")} have a recorded difficulty rating.</p>
         {difficulty.rows.length ? difficulty.rows.map(row => <div className="tallyrow" key={row.topic + row.band}>
-          <div className="top"><span className="n">{row.topic} � {BANDS[row.band - 1]} questions</span><span className="v">{numMark(row.lost)}<small>marks lost</small></span></div>
-          <div className="meta">{plural(row.count, "question")} across {plural(row.papers, "paper")} � {row.confidence === "low" ? "low-confidence estimates" : row.confidence === "mixed" ? "mixed confidence" : "supported estimates"}</div>
+          <div className="top"><span className="n">{row.topic} · {BANDS[row.band - 1]} questions</span><span className="v">{numMark(row.lost)}<small>marks lost</small></span></div>
+          <div className="meta">{plural(row.count, "question")} across {plural(row.papers, "paper")} · {row.confidence === "low" ? "low-confidence estimates" : row.confidence === "mixed" ? "mixed confidence" : "supported estimates"}</div>
         </div>) : <p className="widgetnote">A topic-specific pattern needs at least three rated questions across two papers. Low-confidence estimates stay estimates, not official ratings.</p>}
         <p className="widgetnote">Based on saved teacher-marked questions. Official evidence outranks estimates; method versions and evidence are retained separately.</p>
       </div>
@@ -237,11 +237,11 @@ function SyllabusSection({ maps, state, subject }: {
     <div className="sectitle">Syllabus map</div>
     {!maps ? (state === "failed"
       ? <EvidenceGap title="Syllabus map unavailable">Axon couldn&rsquo;t load the syllabus right now. Your papers are unaffected.</EvidenceGap>
-      : <div className="card heatcard" role="status" aria-label="Loading syllabus map"><p className="lede">Loading the syllabus.</p></div>)
+      : <div className="card heatcard" role="status" aria-label="Loading syllabus map"><p className="lede">Loading the syllabus…</p></div>)
       : maps.maps.length ? <SyllabusMap data={maps} initialSubject={subject} />
       : <EvidenceGap title="No syllabus map yet">
           {maps.withoutSyllabus.length
-            ? `The official syllabus for ${maps.withoutSyllabus.join(", ")} isn't available in Axon yet. Topics will appear here once it is.`
+            ? `The official syllabus for ${maps.withoutSyllabus.join(", ")} isn’t available in Axon yet. Topics will appear here once it is.`
             : "Add your subjects in Settings and Axon will lay your papers out on their official syllabus."}
         </EvidenceGap>}
   </section>;
@@ -251,7 +251,7 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
   model: InsightsModel; describe: (r: QuestionRef) => string; addPaper: () => void; filtered: boolean; syllabus: React.ReactNode;
 }) {
   const ev = model.evidence;
-  const evidenceLine = `${plural(ev.questions, "confirmed question")} � ${plural(ev.papers, "paper")}`;
+  const evidenceLine = `${plural(ev.questions, "confirmed question")} · ${plural(ev.papers, "paper")}`;
 
   if (!ev.enough) {
     const counted = Math.min(ev.papers, PATTERN_PAPERS);
@@ -295,7 +295,7 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
   const causeTotal = model.causes.reduce((n, c) => n + c.marks, 0);
 
   return <div className="igrid">
-    {/* 1 � The student's own rules for the next paper. */}
+    {/* 1 · The student's own rules for the next paper. */}
     <section className="isection">
       <div className="sectitle">Before your next paper</div>
       {model.checklist.length ? <div className="card checkcard">
@@ -306,7 +306,7 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
               <div>
                 <div className="t">{c.text}</div>
                 <PressBox as={Link} to={paths.question(c.ref.paperId, c.ref.attemptId)} className="src">
-                  From {c.ref.label} � {describe(c.ref)} � {CAUSE_LABEL[c.cause]}
+                  From {c.ref.label} · {describe(c.ref)} · {CAUSE_LABEL[c.cause]}
                 </PressBox>
               </div>
             </li>
@@ -318,27 +318,27 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
       </EvidenceGap>}
     </section>
 
-    {/* 2 � Recurring mistakes, and ones that have stopped. */}
+    {/* 2 · Recurring mistakes, and ones that have stopped. */}
     <section className="isection">
       <div className="sectitle">Mistakes that repeat</div>
       {model.patterns.length ? <div className="card tallycard">
         <MoreList shown={3} noun="patterns" items={model.patterns.map((p) => (
           <TallyRow key={p.cause + (p.subject ?? "")} swatch={CAUSE_HUE[p.cause]}
-            label={`${CAUSE_LABEL[p.cause]}${p.subject ? ` � ${p.subject}` : ""}`}
+            label={`${CAUSE_LABEL[p.cause]}${p.subject ? ` · ${p.subject}` : ""}`}
             tally={p} describe={describe}
-            extra={<div className="meta">{`In ${p.recentHits} of your last ${plural(p.recentWindow, "paper")}`}{p.subject ? "" : " � subject not set"}</div>} />
+            extra={<div className="meta">{`In ${p.recentHits} of your last ${plural(p.recentWindow, "paper")}`}{p.subject ? "" : " · subject not set"}</div>} />
         ))} />
         {model.fading.length > 0 && <div className="fading">
           {model.fading.map((f) => (
             <p key={f.cause + (f.subject ?? "")}>
-              <strong>{CAUSE_LABEL[f.cause]}{f.subject ? ` � ${f.subject}` : ""}</strong> appeared in {plural(f.earlierPapers, "earlier paper")} and in none of your last {f.recentWindow}.
+              <strong>{CAUSE_LABEL[f.cause]}{f.subject ? ` · ${f.subject}` : ""}</strong> appeared in {plural(f.earlierPapers, "earlier paper")} and in none of your last {f.recentWindow}.
             </p>
           ))}
         </div>}
         <p className="widgetnote">A mistake counts as repeating when it costs marks in two or more papers of a subject with at least {PATTERN_PAPERS} papers. {evidenceLine}.</p>
       </div> : model.fading.length ? <div className="card tallycard"><div className="fading">
         {model.fading.map((f) => (
-          <p key={f.cause + (f.subject ?? "")}><strong>{CAUSE_LABEL[f.cause]}{f.subject ? ` � ${f.subject}` : ""}</strong> appeared in {plural(f.earlierPapers, "earlier paper")} and in none of your last {f.recentWindow}.</p>
+          <p key={f.cause + (f.subject ?? "")}><strong>{CAUSE_LABEL[f.cause]}{f.subject ? ` · ${f.subject}` : ""}</strong> appeared in {plural(f.earlierPapers, "earlier paper")} and in none of your last {f.recentWindow}.</p>
         ))}
       </div></div> : <EvidenceGap title="No repeating mistakes">
         No cause has cost marks in two different papers of the same subject in this evidence. A subject is read for repeats once it has {PATTERN_PAPERS} papers. {evidenceLine}.
@@ -347,7 +347,7 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
 
     {syllabus}
 
-    {/* 3 � Where marks go, by kind. */}
+    {/* 3 · Where marks go, by kind. */}
     <section className="isection">
       <div className="sectitle">Where your marks go</div>
       {causeTotal > 0 ? <div className="card causecard">
@@ -377,11 +377,11 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
       </div> : <EvidenceGap title="No explained marks lost">No confirmed marks lost have a cause in this evidence. {evidenceLine}.</EvidenceGap>}
     </section>
 
-    {/* 4 � Trend, against the student's own earlier papers. */}
+    {/* 4 · Trend, against the student's own earlier papers. */}
     <section className="isection">
       <div className="sectitle">Trend</div>
       {model.trend.points.length >= PATTERN_PAPERS ? <div className="card trendcard">
-        <div className="hd"><span className="k">Share of marks lost � paper by paper</span><span className="v neutral">{plural(model.trend.points.length, "paper")}</span></div>
+        <div className="hd"><span className="k">Share of marks lost · paper by paper</span><span className="v neutral">{plural(model.trend.points.length, "paper")}</span></div>
         <div className="spark" role="img" aria-label={`Marks lost on ${model.trend.points.length} papers, oldest first`}>
           {model.trend.points.map((p) => (
             <div className="sparkcol" key={p.paperId} title={`${numMark(p.lost)} of ${numMark(p.available)} lost`}>
@@ -401,7 +401,7 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
       </EvidenceGap>}
     </section>
 
-    {/* 5 � Question size: the one view with a complete denominator. */}
+    {/* 5 · Question size: the one view with a complete denominator. */}
     <section className="isection">
       <div className="sectitle">By question size</div>
       {model.tariff.length >= 2 ? <div className="card sharecard">
@@ -415,11 +415,11 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
       <div className="sectitle">Command words</div>
       {model.commandWords.rows.length ? <div className="card tallycard">
         <MoreList shown={3} noun="command words" items={model.commandWords.rows.map((r) => <TallyRow key={r.word} label={r.word} tally={r} describe={describe}
-          extra={r.rate ? <div className="meta">{`On every question that prints "${r.word}": ${numMark(r.rate.lost)} of ${numMark(r.rate.available)} marks lost, ${plural(r.rate.questions, "question")}`}{r.rate.standsOut ? ". More than your usual share." : "."}</div> : null} />)} />
+          extra={r.rate ? <div className="meta">{`On every question that prints “${r.word}”: ${numMark(r.rate.lost)} of ${numMark(r.rate.available)} marks lost, ${plural(r.rate.questions, "question")}`}{r.rate.standsOut ? ". More than your usual share." : "."}</div> : null} />)} />
         <p className="widgetnote">Marks lost on questions by the instruction word printed on them. Where the word is printed on at least {MIN_COMMAND_WORD_QUESTIONS} questions, the line underneath counts all of them, full marks included. &ldquo;More than your usual share&rdquo; appears only when that holds beyond chance. {model.commandWords.coverage.tagged} of {plural(model.commandWords.coverage.total, "explained question")} carry a command word; a word is shown once it covers {MIN_COMMAND_WORD_QUESTIONS} questions that lost marks.</p>
       </div> : <EvidenceGap title="No command word repeats yet">{model.commandWords.coverage.tagged
         ? `A command word is shown once it covers ${MIN_COMMAND_WORD_QUESTIONS} questions that lost marks. None does yet (${model.commandWords.coverage.tagged} of ${model.commandWords.coverage.total} explained questions carry one).`
-        : "None of the explained questions in this evidence carry a command word yet. Axon doesn't guess one from loose text."}</EvidenceGap>}
+        : "None of the explained questions in this evidence carry a command word yet. Axon doesn’t guess one from loose text."}</EvidenceGap>}
     </section>
 
     <section className="isection">
@@ -474,11 +474,9 @@ function Body({ model, describe, filtered, syllabus, addPaper }: {
     {model.subjects.length >= 2 && <section className="isection">
       <div className="sectitle">By subject</div>
       <div className="card sharecard">
-        {model.subjects.map((s) => <ShareRow key={s.subject ?? "unset"} label={s.subject ?? "Subject not set"} lost={s.lost} available={s.available} meta={`${plural(s.questions, "question")} � ${plural(s.papers, "paper")}`} />)}
+        {model.subjects.map((s) => <ShareRow key={s.subject ?? "unset"} label={s.subject ?? "Subject not set"} lost={s.lost} available={s.available} meta={`${plural(s.questions, "question")} · ${plural(s.papers, "paper")}`} />)}
         <p className="widgetnote">Each subject against its own marks. Patterns above are found within one subject at a time.</p>
       </div>
     </section>}
   </div>;
 }
-
-
