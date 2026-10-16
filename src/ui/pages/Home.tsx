@@ -3,15 +3,15 @@ import { isStale, type Loadable } from "../data/useResource";
 import { topLeaks } from "../data/practice";
 import ProgressCelebration from "../components/ProgressCelebration";
 import { paperDateLabel } from "../../paperDate.js";
-/* ���������������������������������������������������������������������������
-   HOME - the snapshot
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOME — the snapshot
 
-   �� Why this screen is not a straight port ��
+   ── Why this screen is not a straight port ──
 
    The pre-port `index.html` carries a fully populated Home: "14 papers",
    "You're losing most marks to unstated assumptions", "7 marks lost". Those are
    the prototype's invented numbers. `__axonHomeEmpty` exists to swap them for
-   the empty state - and nothing in `src/` has ever called it. `AGENTS.md`
+   the empty state — and nothing in `src/` has ever called it. `AGENTS.md`
    documents `__axonRenderHome` as one of the render bridges; it was never
    implemented either.
 
@@ -19,14 +19,14 @@ import { paperDateLabel } from "../../paperDate.js";
    owns no papers is shown fourteen papers and seven marks lost, presented as
    their own. AGENTS.md names this exactly: "those read as this student's marks,
    which is the most confident lie the interface can tell." It also runs
-   straight into hard rule 4 - never fill a gap with a plausible guess.
+   straight into hard rule 4 — never fill a gap with a plausible guess.
 
    So this screen renders from `papers`, `useAnalytics` and the practice reads
    (AXO-244: next best action, due queue, leaks, progress) and from nothing
    else. Where there is no data there is no card. Every practice number comes
    from error items the server derives from confirmed evidence only, and each
    card states its own empty, loading and failed states.
-   ��������������������������������������������������������������������������� */
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 import { Link, useNavigate } from "react-router-dom";
 import { useApp } from "../data/AppProvider";
@@ -56,7 +56,7 @@ export function PracticeRead<T>({ label, read, children }: {
   const { resource, reload } = read;
   return <section aria-label={label}>
     {(resource.data === null || isStale(resource)) && <div className="subnote" role="status">
-      {resource.state === "failed" ? `${label} could not be refreshed.` : `Loading ${label.toLowerCase()}.`}
+      {resource.state === "failed" ? `${label} could not be refreshed.` : `Loading ${label.toLowerCase()}…`}
       {resource.data !== null && " Showing last available data."}
       {resource.state === "failed" && <button type="button" className="textaction" onClick={() => void reload()}>Retry {label.toLowerCase()}</button>}
     </div>}
@@ -65,7 +65,7 @@ export function PracticeRead<T>({ label, read, children }: {
 }
 
 function HomeLoading() {
-  return <PageSkeleton variant="home" label="Loading papers." />;
+  return <PageSkeleton variant="home" label="Loading papers…" />;
 }
 
 export default function Home() {
@@ -97,7 +97,7 @@ export default function Home() {
 
   // A library we could not read is not an empty one. Offering "Add your first
   // paper" to someone who already has papers, because the read failed, is the
-  // same confident lie as inventing a paper count - it just fails in the other
+  // same confident lie as inventing a paper count — it just fails in the other
   // direction.
   if (!papers.length && papersError) {
     return (
@@ -200,8 +200,8 @@ export default function Home() {
         </PressBox>
       )}
 
-      {/* AXO-255: the practice home in the brief's order - next best action,
-          today's queue, the three biggest leaks, the progress strip - with the
+      {/* AXO-255: the practice home in the brief's order — next best action,
+          today's queue, the three biggest leaks, the progress strip — with the
           scan prompt last. Each card owns its loading and failure; a failed
           practice read never turns Home into an empty state. The old
           insight-quoted "Next step" lives on in Insights' "Before your next
@@ -236,8 +236,8 @@ export default function Home() {
             data-interactive=""
           >
             <div className="b">
-              <div className="t1">{p.subject ? `${p.subject} � ` : ""}{paperTypeLabel(p.type, providerKeyForStudent(student))}</div>
-              <div className="t2">{presentation.statusLabel}{presentation.stale ? " � last-known status" : ""}</div>
+              <div className="t1">{p.subject ? `${p.subject} · ` : ""}{paperTypeLabel(p.type, providerKeyForStudent(student))}</div>
+              <div className="t2">{presentation.statusLabel}{presentation.stale ? " · last-known status" : ""}</div>
 
               <div className="t2">
                 <span className={"tier " + (p.tier === "tier_2" ? "t2" : "t1")}>
@@ -267,5 +267,3 @@ export default function Home() {
     </>
   );
 }
-
-
