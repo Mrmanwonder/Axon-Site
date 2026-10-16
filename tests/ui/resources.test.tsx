@@ -125,6 +125,8 @@ test("Coverage shows while evidence builds and disappears once patterns are read
   mocks.insights.mockResolvedValue({ data: { attempts: few.attempts, losses: few.losses }, stale: false });
   const first = mount(<Insights />);
   expect(await screen.findByText("Coverage")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Get started" })).toBeNull();
+  expect(screen.getAllByRole("button", { name: "Scan a marked paper" })).toHaveLength(1);
   expect(screen.queryByText("Mistakes that repeat")).toBeNull();
   first.unmount();
   const enough = evidence(5);
@@ -133,6 +135,7 @@ test("Coverage shows while evidence builds and disappears once patterns are read
   mount(<Insights />);
   await screen.findByText("Where your marks go");
   expect(screen.queryByText("Coverage")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Scan a marked paper" })).toBeNull();
   expect(screen.queryByText(/of 4 papers/)).toBeNull();
   // The checklist quotes the most recent fix, and links to the question it came from.
   expect(screen.getByText("Name the law in sentence one (5)")).toBeTruthy();

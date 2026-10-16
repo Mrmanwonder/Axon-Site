@@ -36,6 +36,7 @@ import { paperTypeLabel, providerKeyForStudent } from "../data/modules";
 import PressBox from "../components/PressBox";
 import Chevron from "../components/Chevron";
 import { NoPapersArt } from "../components/EmptyArt";
+import { MaterialSymbol } from "../components/MaterialSymbols";
 import PageSkeleton from "../components/PageSkeleton";
 import { useIngestion } from "../data/useIngestion";
 import { isPartialTotal } from "../data/paperTotals";
@@ -120,18 +121,19 @@ export default function Home() {
         {/* the exam countdown is the most motivating element; it leads (review #12) */}
         <ExamCard quiet />
         {celebration}
-        <div className="estate">
+        <section className="paper-empty" aria-labelledby="paper-empty-title">
           <NoPapersArt />
-          <h4>No papers yet</h4>
+          <h2 id="paper-empty-title">No papers yet</h2>
           <p>
-            Add a marked paper and we&rsquo;ll show you where the marks went. Until
-            there&rsquo;s one to read, there&rsquo;s nothing here we could honestly tell you.
+            Start with a teacher-marked paper. See where marks were lost
+            and what to work on next.
           </p>
           <PressBox as="button" type="button" className="btn primary" data-scan-intent="" onClick={addPaper}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <MaterialSymbol name="rescan" />
             Add your first paper
           </PressBox>
-        </div>
+          <span className="paper-empty-hint">Scan a page or import a file</span>
+        </section>
       </>
     );
   }

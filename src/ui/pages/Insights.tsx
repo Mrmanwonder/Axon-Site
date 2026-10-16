@@ -178,19 +178,6 @@ export default function Insights() {
   return <>
     <div className="greet insightsgreet"><h1>Insights</h1><div className="sub">Patterns from teacher-marked work. A grade outlook appears only if you turn it on.</div></div>
 
-    {/* Day one (review #11): one clear next step at the top, with progress
-        toward the pattern threshold, instead of a page of locked sections. */}
-    {dayOne && <div className="card dayonecard" role="region" aria-label="Get started">
-      <div className="dayonetext">
-        <h2>{model.evidence.papers === 0 ? "Scan your first marked paper" : "Scan your next marked paper"}</h2>
-        <p>{model.evidence.papers === 0
-          ? "You get its own breakdown right away. Patterns across papers start at " + PATTERN_PAPERS + "."
-          : `${Math.min(model.evidence.papers, PATTERN_PAPERS)} of ${PATTERN_PAPERS} papers toward your first patterns.`}</p>
-        <progress max={PATTERN_PAPERS} value={Math.min(model.evidence.papers, PATTERN_PAPERS)} aria-label={`${Math.min(model.evidence.papers, PATTERN_PAPERS)} of ${PATTERN_PAPERS} papers`} />
-      </div>
-      <PressBox as="button" type="button" className="btn primary" onClick={addPaper}>Scan a marked paper</PressBox>
-    </div>}
-
     <div className="filterbar insightfilters" aria-label="Filter insights">
       <AppDropdown ariaLabel="Filter insights by subject" value={filters.subject} options={subjectOptions} onChange={set("subject")} selected={filters.subject !== "all"} />
       <AppDropdown ariaLabel="Filter insights by paper type" value={filters.type} options={typeOptions} onChange={set("type")} selected={filters.type !== "all"} />
@@ -260,7 +247,7 @@ function SyllabusSection({ maps, state, subject }: {
   </section>;
 }
 
-function Body({ model, describe, filtered, syllabus }: {
+function Body({ model, describe, filtered, syllabus, addPaper }: {
   model: InsightsModel; describe: (r: QuestionRef) => string; addPaper: () => void; filtered: boolean; syllabus: React.ReactNode;
 }) {
   const ev = model.evidence;
@@ -295,8 +282,10 @@ function Body({ model, describe, filtered, syllabus }: {
               <li>Questions left blank at the end of a paper</li>
             </ul>
           </div>
-          {/* the scan CTA lives in the day-one card at the top of the page */}
-          <p className="widgetnote">Every paper you have scanned already has its own explanations in <Link to={paths.library}>Library</Link>.</p>
+          <PressBox as="button" type="button" className="btn primary growcta" onClick={addPaper}>Scan a marked paper</PressBox>
+          <p className="widgetnote">{ev.papers === 0
+            ? <>Each paper gets its own breakdown in <Link to={paths.library}>Library</Link>.</>
+            : <>Every paper you have scanned already has its own explanations in <Link to={paths.library}>Library</Link>.</>}</p>
         </div>
       </section>
       {syllabus}
