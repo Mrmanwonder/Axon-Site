@@ -103,6 +103,22 @@ Paste each into Dashboard → Authentication → Email Templates and set the sub
 | Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon verification code` |
 | Reset password | `recovery.html` | `Reset your Axon password` |
 
+The templates use Google Fonts Onest (400/500/600/700) in a `<link>` in each
+email's `<head>`, with `'Onest','Helvetica Neue',Helvetica,Arial,sans-serif`
+**inline** on all text-bearing elements. This is progressive enhancement:
+Gmail, Outlook and other clients may ignore external stylesheets and display
+Helvetica/Arial; do not design critical layouts around Onest metrics. Loading
+Onest may make a network request to Google Fonts from supported clients.
+There are no font file attachments or base64-embedded fonts.
+
+After editing the source, run `node scripts/build-email-templates.mjs` and
+verify tracked output is synchronized using
+`node scripts/build-email-templates.mjs --check`. Publishing the repo or merging
+a PR **does not update** the live Supabase templates: paste the updated three
+HTML files into the corresponding Dashboard templates, save, then test real
+messages in Gmail, Outlook, Apple Mail and mobile mail applications. Confirm
+the OTP and reset link remain functional with images/fonts blocked.
+
 The code is in the subject and preheader so Gmail and phone lock screens can offer
 their own "Copy code" action; an email cannot copy on click. The reset button points at
 `{{ .SiteURL }}/?token_hash=…&type=recovery`, so Authentication → URL Configuration → Site URL
