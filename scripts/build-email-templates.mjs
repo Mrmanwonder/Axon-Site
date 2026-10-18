@@ -7,13 +7,15 @@
 // subject and preheader (Gmail and phone lock screens read those and offer their
 // own "Copy code" action), and a button that signs in with no code at all.
 //
-// Colour: dark, to match the app. No red anywhere. No images, so nothing is
-// blocked or tracked, and no remote fonts.
-import { writeFileSync, mkdirSync } from 'node:fs';
+// Colour: dark, to match the app. No red or remote images. In supporting
+// clients Google Fonts may fetch Onest from an external host. This is optional:
+// clients that strip the stylesheet retain inline Helvetica/Arial fallbacks.
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const out = new URL('../supabase/templates/', import.meta.url);
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+// Keep this inline on every text-bearing element: Gmail and Outlook may block Onest.
+const FONT = "'Onest','Helvetica Neue',Helvetica,Arial,sans-serif";
 
 const shell = ({ preheader, heading, lead, body, note, footer }) => `<!doctype html>
 <html lang="en">
@@ -22,9 +24,11 @@ const shell = ({ preheader, heading, lead, body, note, footer }) => `<!doctype h
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light">
 <meta name="supported-color-schemes" content="dark light">
+<!-- This is progressive enhancement; inline font stacks remain usable without it. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;display=swap">
 <title>${heading}</title>
 </head>
-<body style="margin:0;padding:0;background:#070A12;">
+<body style="margin:0;padding:0;background:#070A12;font-family:${FONT};">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#070A12;font-size:1px;line-height:1px;">${preheader}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#070A12;">
 <tr><td align="center" style="padding:32px 16px;">
@@ -36,7 +40,7 @@ const shell = ({ preheader, heading, lead, body, note, footer }) => `<!doctype h
       </tr></table>
     </td></tr>
     <tr><td style="background:#0E1424;border:1px solid #1D2640;border-radius:20px;padding:32px 28px;font-family:${FONT};">
-      <h1 style="margin:0 0 10px 0;font-family:${FONT};font-size:26px;line-height:1.2;font-weight:650;letter-spacing:-0.03em;color:#F4F6FB;">${heading}</h1>
+      <h1 style="margin:0 0 10px 0;font-family:${FONT};font-size:26px;line-height:1.2;font-weight:700;letter-spacing:-0.03em;color:#F4F6FB;">${heading}</h1>
       <p style="margin:0 0 24px 0;font-family:${FONT};font-size:15px;line-height:1.55;color:#A9B3CC;">${lead}</p>
 ${body}
       <p style="margin:24px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.55;color:#8993AD;">${note}</p>
@@ -96,6 +100,20 @@ const templates = {
   }),
 };
 
-mkdirSync(out, { recursive: true });
-for (const [name, html] of Object.entries(templates)) writeFileSync(new URL(name, out), html);
-console.log('wrote', Object.keys(templates).map(n => fileURLToPath(new URL(n, out))).join('\n      '));
+const check = process.argv.includes('--check');
+if (!check) mkdirSync(out, { recursive: true });
+for (const [name, html] of Object.entries(templates)) {
+  const path = new URL(name, out);
+  if (check) {
+    let actual;
+    try { actual = readFileSync(path, 'utf8'); } catch { actual = null; }
+    if (actual !== html) {
+      console.error('Email template is out of date:', fileURLToPath(path));
+      process.exitCode = 1;
+    }
+  } else {
+    writeFileSync(path, html);
+  }
+}
+if (check && !process.exitCode) console.log('Email templates are in sync');
+if (!check) console.log('wrote', Object.keys(templates).map(n => fileURLToPath(new URL(n, out))).join('\n      '));
