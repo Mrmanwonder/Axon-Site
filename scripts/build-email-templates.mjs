@@ -7,9 +7,9 @@
 // subject and preheader (Gmail and phone lock screens read those and offer their
 // own "Copy code" action), and a button that signs in with no code at all.
 //
-// Colour: dark, to match the app. No red anywhere. No images, so nothing is
-// blocked or tracked. Onest is an optional Google Fonts enhancement: clients that
-// strip the linked stylesheet keep the same layout with inline safe fallbacks.
+// Colour: dark, to match the app. No red or remote images. In supporting
+// clients Google Fonts may fetch Onest from an external host. This is optional:
+// clients that strip the stylesheet retain inline Helvetica/Arial fallbacks.
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
