@@ -92,37 +92,76 @@ After deployment:
 The Stripe webhook is the only service-role function in this repository that
 updates entitlement state; it must fail loudly on database or signature errors.
 
-## Email templates (Supabase Dashboard, not deployable from the repo)
+## Email templates (automatically deployed to hosted Supabase)
 
-Source: `node scripts/build-email-templates.mjs` writes `supabase/templates/*.html`.
-Paste each into Dashboard → Authentication → Email Templates and set the subject:
+**Source of truth:** `scripts/build-email-templates.mjs` generates the three
+versioned `supabase/templates/*.html` files. The production publisher is
+`scripts/deploy-email-templates.mjs`, run by
+[.github/workflows/auth-email-deploy.yml](../.github/workflows/auth-email-deploy.yml).
 
-| Template | File | Subject |
-| --- | --- | --- |
-| Magic link (sign-in code) | `magic_link.html` | `{{ .Token }} is your Axon verification code` |
-| Confirm signup | `confirmation.html` | `{{ .Token }} is your Axon verification code` |
-| Reset password | `recovery.html` | `Reset your Axon password` |
+The workflow uses Supabase's **Management API** (GET and PATCH
+`/v1/projects/dlgcqieyevoebefhcggi/config/auth`) to publish exactly these
+template-content fields and their corresponding subjects:
 
-The templates use Google Fonts Onest (400/500/600/700) in a `<link>` in each
-email's `<head>`, with `'Onest','Helvetica Neue',Helvetica,Arial,sans-serif`
-**inline** on all text-bearing elements. This is progressive enhancement:
-Gmail, Outlook and other clients may ignore external stylesheets and display
-Helvetica/Arial; do not design critical layouts around Onest metrics. Loading
-Onest may make a network request to Google Fonts from supported clients.
-There are no font file attachments or base64-embedded fonts.
+| Email | Generated file | Management API fields | Subject |
+| --- | --- | --- | --- |
+| Sign-in / magic link OTP | `magic_link.html` | `mailer_templates_magic_link_content` / `mailer_subjects_magic_link` | `{{ .Token }} is your Axon verification code` |
+| Sign-up confirmation | `confirmation.html` | `mailer_templates_confirmation_content` / `mailer_subjects_confirmation` | `{{ .Token }} is your Axon verification code` |
+| Password recovery | `recovery.html` | `mailer_templates_recovery_content` / `mailer_subjects_recovery` | `Reset your Axon password` |
 
-After editing the source, run `node scripts/build-email-templates.mjs` and
-verify tracked output is synchronized using
-`node scripts/build-email-templates.mjs --check`. Publishing the repo or merging
-a PR **does not update** the live Supabase templates: paste the updated three
-HTML files into the corresponding Dashboard templates, save, then test real
-messages in Gmail, Outlook, Apple Mail and mobile mail applications. Confirm
-the OTP and reset link remain functional with images/fonts blocked.
+### One-time credential requirement
 
-The code is in the subject and preheader so Gmail and phone lock screens can offer
-their own "Copy code" action; an email cannot copy on click. The reset button points at
-`{{ .SiteURL }}/?token_hash=…&type=recovery`, so Authentication → URL Configuration → Site URL
-must be the production address and that address must be in the redirect allow-list.
+Configure the **`SUPABASE_ACCESS_TOKEN`** secret in GitHub Actions, available to
+the `production` environment used by the workflow. This **must** be a Supabase
+Management API personal access token or equivalent appropriately scoped token;
+**`SUPABASE_DB_URL` and `SUPABASE_SERVICE_ROLE_KEY` cannot authorize it**.
+Fine-grained tokens need `auth_config_read`, `auth_config_write`, and the
+project administration write permission required by the API. The project ref
+is fixed in source and is **not** a secret.
+
+Token setup/permissions: https://supabase.com/docs/reference/api/v1-update-auth-service-config
+
+### Release and rollback
+
+1. Edit `scripts/build-email-templates.mjs`; regenerate with
+   `node scripts/build-email-templates.mjs`. Commit the generator **and**
+   its generated HTML. `node scripts/build-email-templates.mjs --check`
+   verifies parity.
+2. Open a pull request. Its `Publish Supabase Auth emails` check validates
+   the generator, markup, OTP/recovery placeholders, font declarations,
+   and deployment manifest **without any production secrets**.
+3. On merge to `main`, changes to the templates, generator, deployment
+   script or workflow automatically deploy to production. This job has a
+   single concurrency group and uses the `production` GitHub environment.
+   Unchanged fields are skipped, unrelated Auth/SMTP settings are untouched,
+   and the written values are read back for verification.
+4. For an operator preview, open Actions → **Publish Supabase Auth emails** →
+   Run workflow on `main` with `dry_run=true` (default). A manual
+   `dry_run=false` run publishes the templates even if there is no new commit.
+5. Test actual OTP and password-reset messages in Gmail, Outlook, Apple Mail
+   and mobile email after the first successful production deployment. Verify
+   correct link/code operation when web fonts are unavailable. Roll back by
+   reverting the template commit and allowing this same workflow to deploy
+   the previous version.
+
+**Fail-closed behavior:** Missing or invalid token, unsynchronized generator
+output, missing placeholders, an unexpected API response, or a failed
+post-deployment read-back fails the job. The workflow will not silently report
+successful publication when nothing was verified. It does not echo remote
+Auth config, email bodies, or the token into GitHub logs.
+
+### Typography and auth links
+
+The templates use Google Fonts Onest weights 400/500/600/700 as a progressive
+enhancement, with an **inline**
+`'Onest','Helvetica Neue',Helvetica,Arial,sans-serif` fallback on text.
+Gmail, Outlook and other clients may ignore remote fonts; some supporting
+clients make requests to Google Fonts.
+
+The OTP appears in the subject and preheader so compatible clients can
+offer their own copy-code action. The recovery URL is
+`{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery`: maintain the
+production Site URL and the Auth redirect allow-list.
 
 ## Slow auth emails
 
