@@ -24,3 +24,18 @@ test('Supabase auth emails match their generator and retain safe Onest fallback 
     assert.ok(stacks.every(stack => stack === font), `${name} has a mismatched font stack`);
   }
 });
+
+test('password recovery matches the confirmation code panel without changing the secure recovery link', () => {
+  const confirmation = readFileSync(new URL('confirmation.html', out), 'utf8');
+  const recovery = readFileSync(new URL('recovery.html', out), 'utf8');
+  const panel = 'background:#161E36;border:1px solid #2C3B68;border-radius:14px;';
+
+  assert.ok(confirmation.includes(panel), 'confirmation has the verification-code panel');
+  assert.ok(recovery.includes(panel), 'recovery uses the same panel surface and border');
+  assert.ok(!recovery.includes('background:#3A86FF;border-radius:14px;'), 'no old solid-blue reset button');
+  assert.ok(recovery.includes('padding:22px 12px'), 'the reset link uses the same panel spacing');
+  assert.ok(recovery.includes('margin:12px 0 0 0'), 'matching explanatory text under the panel');
+  assert.ok(recovery.includes('href="{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery"'), 'one-time recovery link is preserved');
+  assert.ok(recovery.includes('Choose a new password'), 'action stays understandable');
+  assert.ok(confirmation.includes('{{ .Token }}'), 'confirmation still displays the code');
+});
