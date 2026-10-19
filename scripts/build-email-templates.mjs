@@ -53,11 +53,16 @@ ${body}
 </html>
 `;
 
-const button = (label, href = '{{ .ConfirmationURL }}') => `      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-        <td align="center" style="background:#3A86FF;border-radius:14px;">
-          <a href="${href}" style="display:block;padding:16px 20px;font-family:${FONT};font-size:16px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;">${label}</a>
+// The recovery action shares the OTP card's surface and geometry, but remains
+// a real tappable link. Padding belongs to <a>, preserving a large touch target.
+const PANEL_STYLE = 'background:#161E36;border:1px solid #2C3B68;border-radius:14px;';
+
+const resetAction = (label, href) => `      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+        <td align="center" style="${PANEL_STYLE}">
+          <a href="${href}" style="display:block;padding:22px 12px;font-family:${FONT};font-size:20px;font-weight:700;line-height:1.3;color:#F4F6FB;text-decoration:underline;">${label} <span style="color:#3A86FF;">&rarr;</span></a>
         </td>
-      </tr></table>`;
+      </tr></table>
+      <p style="margin:12px 0 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:#8993AD;text-align:center;">Open the link on the device where you started.</p>`;
 
 // The code sits on a raised dark surface with a hairline border, in the same
 // sans-serif as the rest of the email with tabular figures. A flat slab of
@@ -66,7 +71,7 @@ const button = (label, href = '{{ .ConfirmationURL }}') => `      <table role="p
 // code above, which is what Gmail's own detector looks for to offer its
 // "Copy code" chip; nothing in an email can force it.
 const code = `      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-        <td align="center" style="background:#161E36;border:1px solid #2C3B68;border-radius:14px;padding:22px 12px;">
+        <td align="center" style="${PANEL_STYLE}padding:22px 12px;">
           <span style="display:block;font-family:${FONT};font-size:34px;line-height:1.1;font-weight:700;letter-spacing:0.1em;font-variant-numeric:tabular-nums;color:#F4F6FB;-webkit-user-select:all;user-select:all;">{{ .Token }}</span>
         </td>
       </tr></table>
@@ -91,10 +96,10 @@ const templates = {
   'recovery.html': shell({
     preheader: 'Choose a new password for your Axon account.',
     heading: 'Reset your password',
-    lead: 'Use the button below to choose a new password. Open it on the device where you started, and it works once.',
+    lead: 'Use the secure link below to choose a new password. It works once.',
     // The page exchanges the token itself, so a mail scanner that only fetches the
     // URL cannot use up the one-time link before the person taps it.
-    body: button('Choose a new password', '{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery'),
+    body: resetAction('Choose a new password', '{{ .SiteURL }}/?token_hash={{ .TokenHash }}&type=recovery'),
     note: 'Did not ask for this? You can ignore this email and your password stays as it is.',
     footer,
   }),
