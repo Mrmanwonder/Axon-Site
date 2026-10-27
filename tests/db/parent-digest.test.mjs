@@ -68,17 +68,17 @@ const STUBS = `
 
 async function load(db) {
   const migration = await readFile(
-    new URL('../../supabase/migrations/20261012210000_axo_263_parent_digest.sql', import.meta.url), 'utf8');
+    new URL('../../supabase/migrations/20261012192356_axo_263_parent_digest.sql', import.meta.url), 'utf8');
   await db.exec(migration);
   // AXO-266: the digest now needs a grant under notice 1.4.0 or later.
   const gate = await readFile(
-    new URL('../../supabase/migrations/20261013120000_axo_266_digest_consent_notice_1_2_0.sql', import.meta.url), 'utf8');
+    new URL('../../supabase/migrations/20261013014712_axo_266_digest_consent_notice_1_2_0.sql', import.meta.url), 'utf8');
   await db.exec(gate);
   const gate2 = await readFile(
-    new URL('../../supabase/migrations/20261013140000_axo_266_digest_consent_notice_1_3_0.sql', import.meta.url), 'utf8');
+    new URL('../../supabase/migrations/20261013022329_axo_266_digest_consent_notice_1_3_0.sql', import.meta.url), 'utf8');
   await db.exec(gate2);
   const gate3 = await readFile(
-    new URL('../../supabase/migrations/20261013160000_axo_266_digest_content_notice_1_4_0.sql', import.meta.url), 'utf8');
+    new URL('../../supabase/migrations/20261013031450_axo_266_digest_content_notice_1_4_0.sql', import.meta.url), 'utf8');
   await db.exec(gate3);
   await db.exec(gate3); // idempotent
   // AXO-270: the trend must clear a two-proportion test.

@@ -31,9 +31,12 @@ class BootBoundary extends Component<{ children: ReactNode }, { failed: boolean 
     return this.state.failed ? <main><h1>Axon could not load</h1><p>Check your connection and try again.</p><button onClick={() => location.reload()}>Try again</button></main> : this.props.children;
   }
 }
+// The same centred mark index.html paints (.bootmark is styled inline there),
+// so the hand-off from the static document to the app chunk shows no new frame.
+const BootMark = () => <div className="bootmark" role="status" aria-label="Loading Axon">Axon</div>;
 function Entry() {
   const [start, setStart] = useState(() => needsApplication(location));
-  return start ? <BootBoundary><Suspense fallback={<main aria-busy="true"><p role="status">Loading your Axon workspace…</p></main>}><Application /></Suspense></BootBoundary> :
+  return start ? <BootBoundary><Suspense fallback={<BootMark />}><Application /></Suspense></BootBoundary> :
     <Shell variant="intro"><Intro onContinue={() => {
       history.replaceState(history.state, "", "/?start=account");
       setStart(true);
