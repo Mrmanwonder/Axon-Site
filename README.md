@@ -2,7 +2,7 @@
 
 A responsive web app that shows a student exactly where their marks go: scan or import a
 marked paper, confirm what was read, and see where marks were lost and what to do
-differently. Read `Axon.md` first; it holds the product rules, the design language and the
+differently. Read `docs/specs/Axon.md` first; it holds the product rules, the design language and the
 owner's decisions, and outranks this file.
 
 Cambridge (IGCSE, AS and A Level) is the primary audience. The catalog also carries CBSE
@@ -66,7 +66,7 @@ HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
   unspecified type starts as a school test; server triage may identify an official
   past paper from a confidently read printed code. Type can be corrected on the paper.
   The upload queue begins only when the student chooses to read the pages.
-- **The pipeline** — the ten stages of `SCANNING_SYSTEM.md`: conditioning and teacher-ink
+- **The pipeline** — the ten stages of `docs/specs/SCANNING_SYSTEM.md`: conditioning and teacher-ink
   separation on device (today this isolates red ink only; teacher ink can be any colour,
   which is a known gap), then structure, content, mark attribution, reconciliation, tier
   routing and explanation server-side, then review, then commit.
@@ -95,7 +95,7 @@ fabricated authority and worse than none. Matching is by question text and delib
 strict; matching on the paper code would be far better and needs the code extracted at
 stage 3.
 
-**The container question is open.** `SCANNING_SYSTEM.md` §3 recommends wrapping the app
+**The container question is open.** `docs/specs/SCANNING_SYSTEM.md` §3 recommends wrapping the app
 in Capacitor and using the native document scanner for capture. What is built is the
 pure-web alternative that document names as the honest fallback. Nothing below stage 0
 depends on the answer.
@@ -141,7 +141,7 @@ Copy `.env.example` for public build configuration. `VITE_SITE_URL` is the publi
 HTTPS canonical origin; no service credential may use Vite's browser-exposed prefix.
 Private deployment variables are documented in `supabase/DEPLOY.md`. Legal routes,
 indexing policy, consent/storage classification, security headers, owner follow-ups and
-the release QA checklist are documented in `PRODUCTION_READINESS.md`.
+the release QA checklist are documented in `docs/audits/PRODUCTION_READINESS.md`.
 
 Real routing needs a CDN-level rewrite: every path falls back to `/index.html` with a
 200, so a deep link to `/library/<paper>/<question>` resolves on a cold load rather
@@ -150,7 +150,7 @@ than 404ing before React ever runs.
 The production extraction and explanation runtime is the Cloudflare Workers
 monorepo at `Mrmanwonder/axon-backend`. Supabase Edge Functions in this repository
 are billing-only. The Workers use Cloudflare Queues/R2 and the shared Gemini client
-in `axon-backend/shared/src/openrouter.ts`; deploy and secret changes for the
+in `axon-backend/shared/src/model-client.ts`; deploy and secret changes for the
 model pipeline belong there.
 
 ### Provider sign-in
