@@ -114,7 +114,7 @@ a stale historical copy and are not the production runtime.
 - **`device.js` falls back to the main thread when a module worker cannot be
   constructed.** That path is not theoretical on the phones this is built for,
   and a dropped frame is worth far less than a student who cannot scan at all.
-- **`TEACHER_INK` is a known mistake.** Stage 2 separates the layers by red hue, but
+- **The red-hue mask is a known mistake.** (`TEACHER_INK` was removed.) Stage 2 separates the layers by red hue, but
   a teacher's ink can be any colour (owner, 3 Oct 2026), so that mask must stop
   depending on hue; it is tracked in Linear and must not be extended. In the
   interface red is reserved for Sign out and destructive deletes, not for the teacher's pen.

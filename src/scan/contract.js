@@ -22,12 +22,9 @@ export const UPLOAD_EXTENSIONS = Object.freeze({
 });
 
 
-// ── the one red ────────────────────────────────────────────────────────────
-// Red means the teacher's pen. That is a pipeline fact — stage 2 separates the
-// layers by hue — and it is also the design rule that keeps red out of the
-// interface. They are the same rule, so they get one name, and anyone who later
-// reaches for red as an error colour collides with this constant first.
-export const TEACHER_INK = 'red';
+// There is no teacher-ink colour constant. A teacher's ink can be any colour
+// (owner, 3 Oct 2026); the red mask in stage 2 is a hint, never a fact about who
+// wrote what (AXO-161). Red in the interface is a design rule of its own.
 
 // ── stage 0 · capture ──────────────────────────────────────────────────────
 

@@ -206,11 +206,10 @@ to the question regions from stage 3.
 
 ### Design system connection
 
-Red is reserved for teacher's ink and never appears in interface chrome. That
-rule was made on design grounds and it turns out to be the same rule the
-pipeline runs on. Worth keeping them named as one thing in code — a single
-`TEACHER_INK` semantic — so nobody later introduces a red error state without
-noticing what they've collided with.
+A teacher's ink can be any colour (owner, 3 Oct 2026), so the pipeline and the
+design system no longer share a "red means teacher" rule. In the interface red
+is reserved for Sign out and destructive deletes (Axon.md section 6). The red
+mask in stage 2 is a hint only; replacing it is tracked in AXO-161.
 
 ---
 
