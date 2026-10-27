@@ -26,8 +26,10 @@ on:
       - "curriculum/exams/**"
       - "scripts/exams/**"
       - ".github/workflows/exam-ingest.yml"
+  # 22:37 UTC is the quietest hour for students in India (04:07 IST) and
+  # clear of the 03:00–04:30 UTC retention jobs (AXO-291).
   schedule:
-    - cron: "41 3 * * *"
+    - cron: "37 22 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -60,20 +62,22 @@ jobs:
           python scripts/exams/test_thresholds.py
           python scripts/exams/test_thresholds_ingest.py
       - name: Fetch, verify and parse timetables
-        run: python scripts/exams/ingest.py --discover > "$RUNNER_TEMP/exams.sql"
+        # A push changed the parser or the manifest: load everything again.
+        # Otherwise an unchanged file writes nothing (AXO-291).
+        run: python scripts/exams/ingest.py --discover ${{ github.event_name == 'push' && '--rewrite' || '' }} > "$RUNNER_TEMP/exams.sql"
       - name: Load timetables
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/exams.sql"
+        run: node scripts/syllabus/load.mjs --skip-if-slow "$RUNNER_TEMP/exams.sql"
       - name: Fetch and check grade thresholds
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           set -o pipefail
           node scripts/exams/known.mjs > "$RUNNER_TEMP/gt-known.txt"
-          python scripts/exams/thresholds_ingest.py --series 3 --known "$RUNNER_TEMP/gt-known.txt" > "$RUNNER_TEMP/gt.sql" 2> >(tee "$RUNNER_TEMP/gt.log" >&2)
+          python scripts/exams/thresholds_ingest.py --series 3 --known "$RUNNER_TEMP/gt-known.txt" ${{ github.event_name == 'push' && '--rewrite' || '' }} > "$RUNNER_TEMP/gt.sql" 2> >(tee "$RUNNER_TEMP/gt.log" >&2)
           grep '^-- ' "$RUNNER_TEMP/gt.log" >> "$GITHUB_STEP_SUMMARY" || true
       - name: Load grade thresholds
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/gt.sql"
+        run: node scripts/syllabus/load.mjs --skip-if-slow "$RUNNER_TEMP/gt.sql"

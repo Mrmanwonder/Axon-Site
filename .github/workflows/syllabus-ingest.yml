@@ -6,9 +6,12 @@ name: Ingest syllabi
 # SHA-256, and every objective must pass the parser's audit, or nothing loads.
 # Documents load as DRAFT; a person marks them verified before students see them.
 
+# After a migration it runs once the exam ingest has finished, never beside it:
+# two loaders at once on the Nano instance is part of what stalled it on 26
+# Oct (AXO-291).
 on:
   workflow_run:
-    workflows: ["Apply migrations"]
+    workflows: ["Ingest exam timetables"]
     types: [completed]
     branches: [main]
   push:
@@ -28,7 +31,8 @@ permissions:
 
 jobs:
   ingest:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Only the exam ingest that followed "Apply migrations", not its daily run.
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'workflow_run' && github.event.workflow_run.conclusion != 'cancelled')
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -52,4 +56,4 @@ jobs:
       - name: Load as draft
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: node scripts/syllabus/load.mjs "$RUNNER_TEMP/syllabus.sql"
+        run: node scripts/syllabus/load.mjs --skip-if-slow "$RUNNER_TEMP/syllabus.sql"

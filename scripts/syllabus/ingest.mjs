@@ -123,12 +123,18 @@ begin
   end if;
   insert into public.syllabus_document (id, provider_key, syllabus_code, title, version_label, valid_from_year, valid_to_year, source_url, source_sha256, fetched_at, status, extraction_notes)
   values (${q(docId)}, ${q(doc.provider_key)}, ${q(doc.syllabus_code)}, ${q(doc.title)}, ${q(doc.version_label)}, ${doc.valid_from_year ?? "null"}, ${doc.valid_to_year ?? "null"}, ${q(doc.source_url)}, ${q(doc.source_sha256)}, ${q(fetchedAt)}, 'draft', ${q(notes)})
-  on conflict (id) do update set title = excluded.title, source_url = excluded.source_url, source_sha256 = excluded.source_sha256, fetched_at = excluded.fetched_at, extraction_notes = excluded.extraction_notes, updated_at = now();
+  on conflict (id) do update set title = excluded.title, source_url = excluded.source_url, source_sha256 = excluded.source_sha256, fetched_at = excluded.fetched_at, extraction_notes = excluded.extraction_notes, updated_at = now()
+  -- Unchanged: nothing is written (AXO-291), so fetched_at is when this content was first loaded.
+  where (syllabus_document.title, syllabus_document.source_url, syllabus_document.source_sha256, syllabus_document.extraction_notes)
+        is distinct from (excluded.title, excluded.source_url, excluded.source_sha256, excluded.extraction_notes);
   delete from public.syllabus_topic where document_id = ${q(docId)} and id <> all (array[${rows.map((r) => q(r.id)).join(",")}]::uuid[]);
   insert into public.syllabus_topic (id, document_id, parent_id, code, kind, title, objective_text, notes_text, group_title, qualification_scope, sort_order, depth, source_page)
   values
   ${values.join(",\n  ")}
-  on conflict (id) do update set parent_id = excluded.parent_id, code = excluded.code, kind = excluded.kind, title = excluded.title, objective_text = excluded.objective_text, notes_text = excluded.notes_text, group_title = excluded.group_title, qualification_scope = excluded.qualification_scope, sort_order = excluded.sort_order, depth = excluded.depth, source_page = excluded.source_page;
+  on conflict (id) do update set parent_id = excluded.parent_id, code = excluded.code, kind = excluded.kind, title = excluded.title, objective_text = excluded.objective_text, notes_text = excluded.notes_text, group_title = excluded.group_title, qualification_scope = excluded.qualification_scope, sort_order = excluded.sort_order, depth = excluded.depth, source_page = excluded.source_page
+  -- Only rows that changed are written (AXO-291: every daily run used to rewrite all of them).
+  where (syllabus_topic.parent_id, syllabus_topic.code, syllabus_topic.kind, syllabus_topic.title, syllabus_topic.objective_text, syllabus_topic.notes_text, syllabus_topic.group_title, syllabus_topic.qualification_scope, syllabus_topic.sort_order, syllabus_topic.depth, syllabus_topic.source_page)
+        is distinct from (excluded.parent_id, excluded.code, excluded.kind, excluded.title, excluded.objective_text, excluded.notes_text, excluded.group_title, excluded.qualification_scope, excluded.sort_order, excluded.depth, excluded.source_page);
   insert into public.subject_offering_syllabus (subject_offering_id, document_id)
   select so.id, ${q(docId)}
   from public.subject_offering so
