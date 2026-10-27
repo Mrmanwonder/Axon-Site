@@ -31,8 +31,10 @@ permissions:
 
 jobs:
   ingest:
-    # Only the exam ingest that followed "Apply migrations", not its daily run.
-    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'workflow_run' && github.event.workflow_run.conclusion != 'cancelled')
+    # Only the exam ingest that followed a successful "Apply migrations" (it is
+    # skipped otherwise), not its daily run. A failed exam load does not block
+    # the syllabus load.
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'workflow_run' && contains(fromJSON('["success","failure"]'), github.event.workflow_run.conclusion))
     runs-on: ubuntu-latest
     environment: production
     steps:
