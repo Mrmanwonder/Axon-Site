@@ -156,15 +156,37 @@ def table_sql(url, sha, table, routes, weights_url, weights_sha):
     return out
 
 
+def read_known(path):
+    """The state the database already holds (scripts/exams/known.mjs).
+
+    Returns (verified, loaded): URLs not to download again, and for every
+    loaded table the (file SHA-256, weighting file SHA-256) it was loaded from.
+    A bare URL per line (the format before AXO-291) counts as verified.
+    """
+    verified, loaded = set(), {}
+    if not path or not os.path.exists(path):
+        return verified, loaded
+    for line in open(path):
+        parts = line.rstrip("\n").split("\t")
+        if parts == [""]:
+            continue
+        if len(parts) == 1:
+            verified.add(parts[0].strip())
+        elif parts[0] == "verified" and len(parts) == 2:
+            verified.add(parts[1])
+        elif parts[0] == "loaded" and len(parts) == 4:
+            loaded[parts[1]] = (parts[2], parts[3])
+    return verified, loaded
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--series", type=int, default=3, help="newest series pages to read per qualification")
-    ap.add_argument("--known", help="file of source URLs already fully verified; these are not downloaded again")
+    ap.add_argument("--known", help="output of scripts/exams/known.mjs: verified tables are not downloaded again, unchanged ones not rewritten")
     ap.add_argument("--codes", help="comma-separated syllabus codes to limit to")
+    ap.add_argument("--rewrite", action="store_true", help="write every table again even when its files are unchanged (a parser change)")
     args = ap.parse_args()
-    known = set()
-    if args.known and os.path.exists(args.known):
-        known = {line.strip() for line in open(args.known) if line.strip()}
+    known, loaded = read_known(args.known)
     only = set(args.codes.split(",")) if args.codes else None
 
     tables = []
@@ -188,7 +210,7 @@ def main():
     covered = sorted({k[0] for k in weights})
     print(f"-- weighting factors: {len(weights)} components, series {', '.join(covered)} ({weights_sha[:12]})", file=sys.stderr)
 
-    out, stats = [], {"tables": 0, "skipped_known": 0, "verified": 0, "draft": 0, "failed": 0}
+    out, stats = [], {"tables": 0, "skipped_known": 0, "unchanged": 0, "verified": 0, "draft": 0, "failed": 0}
     for url, code, series in sorted(set(tables)):
         if only and code not in only:
             continue
@@ -198,6 +220,11 @@ def main():
         try:
             data = get(url)
             sha = hashlib.sha256(data).hexdigest()
+            # Same file and same weighting file as the rows already stored: the
+            # checks would give the same answer, so nothing is written (AXO-291).
+            if not args.rewrite and loaded.get(url) == (sha, weights_sha):
+                stats["unchanged"] += 1
+                continue
             table = ct.parse_threshold_lines(pdf_lines(data))
         except Exception as e:  # one unreadable table never blocks the rest
             stats["failed"] += 1
