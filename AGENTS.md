@@ -3,7 +3,7 @@
 Axon is a Vite-built React app (`src/ui/`); `index.html` is the HTML entry point,
 not the app implementation. Install dependencies with `npm ci`, develop with
 `npm run dev`, check with `npm run typecheck`, `npm test`, `npm run test:ui`, and
-build with `npm run build`. Read `Axon.md` first: it is the product and design
+build with `npm run build`. Read `docs/specs/Axon.md` first: it is the product and design
 source of truth. Current design primitives and tokens live in `src/ui/styles/`;
 `src/ui/styles/system.css` preserves component styling from the pre-React port.
 Do not treat historical code in `index.html` as shipping architecture.
@@ -83,7 +83,7 @@ there is nothing to tamper with. The advisor flags it; that flag is expected.
 
 ## The scanning pipeline
 
-`SCANNING_SYSTEM.md` specifies it; this is where the code for it lives and the
+`docs/specs/SCANNING_SYSTEM.md` specifies it; this is where the code for it lives and the
 handful of things about that arrangement which are easy to get wrong.
 
 Ten stages in three places. `src/scan/` is stages 0 to 2 and the client half of
@@ -134,7 +134,7 @@ a stale historical copy and are not the production runtime.
 
 ## The four hard rules
 
-`Axon.md` names four rules whose violation is a product failure. Each is enforced
+`docs/specs/Axon.md` names four rules whose violation is a product failure. Each is enforced
 by a constraint rather than a convention, because a rule that lives only in a prompt
 eventually gets broken:
 
@@ -202,7 +202,7 @@ an aria-hidden hazard triangle, retaining a text accessible name (owner, 14 Oct
 low marks use the existing attention/accent roles.
 
 Cause colours are seven categorical hues of equal weight, never a severity ramp. The
-values are in `Axon.md`; take them from there rather than inventing a shade.
+values are in `docs/specs/Axon.md`; take them from there rather than inventing a shade.
 
 ## Haptics
 
@@ -220,14 +220,14 @@ one of those handlers, keep all of them on the same mapping.
 
 ## The backend
 
-`REVIEW_PIPELINE.md` is the specification; these are the rules that are easiest to
+`docs/specs/REVIEW_PIPELINE.md` is the specification; these are the rules that are easiest to
 break by accident.
 
 - **Heavy server-side image work belongs in the Cloudflare crop Worker, not a
   Supabase Edge Function.** Device conditioning stays device-side; production
   server processing is implemented in `axon-backend`.
 - **Every Gemini call goes through
-  `Mrmanwonder/axon-backend/shared/src/openrouter.ts`.** No production Worker
+  `Mrmanwonder/axon-backend/shared/src/model-client.ts`.** No production Worker
   should fetch the model provider directly, because routing, retries, validation,
   logging, and optional Tavily tools belong in one shared client.
 - **Model credentials and Tavily credentials are Cloudflare Worker secrets.**
@@ -285,7 +285,7 @@ break by accident.
 
 ## Storage
 
-`STORAGE_R2.md` is the specification. Two things worth repeating:
+`docs/specs/STORAGE_R2.md` is the specification. Two things worth repeating:
 
 - **Bytes never pass through a function.** Devices PUT to a presigned URL and the
   server confirms with a HEAD. Without that confirmation a client can register a row

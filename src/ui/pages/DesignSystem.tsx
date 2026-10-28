@@ -378,7 +378,7 @@ export default function DesignSystem() {
               ["06", "Copy is part of the system.", "Specific, warm and actionable, without exclamation marks or false certainty."],
             ].map(x => <div className="ds-principle" key={x[0]}><span>{x[0]}</span><strong>{x[1]}</strong><p>{x[2]}</p></div>)}
           </div>
-          <div className="ds-footer"><div><img src="/axon-lockup-v2.svg" alt="Axon" /><p>A maintained window into the real Axon design system.</p></div><div><a href={sourceBase + "Axon.md"} target="_blank" rel="noreferrer">Product rules ↗</a><a href={sourceBase + "Constitution/Volume_I_Design_System_Specification.md"} target="_blank" rel="noreferrer">Constitution ↗</a><a href={sourceBase + "src/ui/styles/"} target="_blank" rel="noreferrer">Design source ↗</a></div></div>
+          <div className="ds-footer"><div><img src="/axon-lockup-v2.svg" alt="Axon" /><p>A maintained window into the real Axon design system.</p></div><div><a href={sourceBase + "docs/specs/Axon.md"} target="_blank" rel="noreferrer">Product rules ↗</a><a href={sourceBase + "docs/specs/Constitution/Volume_I_Design_System_Specification.md"} target="_blank" rel="noreferrer">Constitution ↗</a><a href={sourceBase + "src/ui/styles/"} target="_blank" rel="noreferrer">Design source ↗</a></div></div>
         </section>
       </div>
     </main>
