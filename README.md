@@ -60,7 +60,7 @@ HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
   interrupted booklet resumes at the first page that has not landed. Laptops get an
   import screen (drop, paste, QR to continue on a phone) rather than a webcam. Detection
   thresholds are first guesses until they are tuned on real phone footage.
-- **Ingestion** — upload from the gallery or files, or paste a link. Uploads take the
+- **Ingestion** — upload photos or PDFs from the gallery or files, or paste a link. Uploads take the
   same road as captures rather than bypassing conditioning. The send path no longer
   opens a paper-type sheet before the reading screen (7 Oct 2026 decision D7): an
   unspecified type starts as a school test; server triage may identify an official
@@ -81,10 +81,11 @@ The harness runs and both gates are enforced, but until there are papers in it, 
 about the pipeline's accuracy is known rather than assumed. Neither gate has been met,
 because neither has been measured.
 
-**PDFs and HEIC.** The import screen accepts photos only. PDFs are not rasterised, so
-nothing could read them, and the app says so rather than accepting a file it cannot use.
-PDF import is a priority (tracked in Linear under the scanner rebuild), as is accepting
-every common image type.
+**PDFs and HEIC import, but have not been tried on a phone.** A PDF becomes one page per sheet, rendered
+at the conditioning resolution and stored as a lossless PNG original; a HEIC photo is decoded
+where the browser cannot (Chrome, Firefox). Both decoders load only when a file needs them
+(`src/scan/import-decode.js`; licences in `third_party/pdfjs/` and `third_party/heic-to/`).
+Real-device behaviour (memory on a 25-page PDF, iOS file pickers) is unverified.
 
 **Links** are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over
 the bytes, so a server-side fetcher has to resolve them.

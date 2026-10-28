@@ -6,8 +6,8 @@
    photos the student already has (drag, drop, choose, paste), take a link, or
    hand over to the phone, which is the better scanner.
 
-   Images only today. A PDF is not turned into pages yet, and the screen says so
-   instead of accepting a file it would then fail on.
+   Photos and PDFs. A PDF becomes one page per sheet on the device
+   (src/scan/import-decode.js) and then takes the same road as a photo.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -97,11 +97,11 @@ export default function ImportDesk({ onReview }: { onReview: () => void }) {
           }}
         >
           <div className="sc-pile" aria-hidden="true"><b /><b /><b /></div>
-          <h2>{over ? "Let go to add these pages" : "Drop photos here"}</h2>
-          <p>One page per photo works best.</p>
+          <h2>{over ? "Let go to add these pages" : "Drop photos or a PDF here"}</h2>
+          <p>One page per photo works best. A PDF adds every page.</p>
           <PressBox as="button" type="button" className="sc-btn" disabled={submitting}
                     onClick={addPaper}>Choose files</PressBox>
-          <p className="sc-fine">Photos only · you can also paste an image</p>
+          <p className="sc-fine">Photos and PDFs · you can also paste an image</p>
         </div>
 
         <div className="sc-desk-side">

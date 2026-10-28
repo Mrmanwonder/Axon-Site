@@ -48,6 +48,7 @@ import {
 /** What a paper is until a printed paper code or the student says otherwise (D7). */
 const DEFAULT_PAPER_TYPE = "unit_test";
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import { IMPORT_ACCEPT } from "../../scan/import-decode.js";
 
 type IngestionValue = {
   /** Open the OS picker. The same path for the Scan tab and for anywhere else. */
@@ -210,7 +211,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
         ref={inputRef}
         type="file"
         multiple
-        accept="image/*"
+        accept={IMPORT_ACCEPT}
         hidden
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];
