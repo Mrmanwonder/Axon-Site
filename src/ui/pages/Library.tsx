@@ -21,6 +21,10 @@ import Chevron from "../components/Chevron";
 import AppDropdown from "../components/AppDropdown";
 import type { AppDropdownOption } from "../components/AppDropdown";
 import PageSkeleton from "../components/PageSkeleton";
+import { LibraryEmptyArt } from "../components/EmptyArt";
+import { MaterialSymbol } from "../components/MaterialSymbols";
+import { paths } from "../app/paths";
+import "../styles/empty-states.css";
 import { useToast } from "../components/ToastProvider";
 import { useOptionalScan } from "../scan/ScanProvider";
 
@@ -330,6 +334,34 @@ export default function Library() {
     return <PageSkeleton variant="library" label="Loading papers…" />;
   }
 
+  // An empty archive is not a failed or loading archive. Hide search and sort
+  // until there are actual records to search; the first action enters Scan.
+  if (!papers.length && papersResource.state === "ready" && !papersError) {
+    return (
+      <>
+        <div className="greet"><h1>Library</h1></div>
+        <section className="axon-empty axon-empty--library" aria-labelledby="library-empty-title">
+          <div className="axon-empty__artwork">
+            <LibraryEmptyArt />
+          </div>
+          <div className="axon-empty__content">
+            <p className="axon-empty__eyebrow">Your paper archive</p>
+            <h2 id="library-empty-title" className="axon-empty__title">Nothing here yet.</h2>
+            <p className="axon-empty__copy">
+              Your marked papers will live here, ready to revisit whenever you need them.
+              Start by scanning your first one.
+            </p>
+            <PressBox as={Link} to={paths.scan} className="btn primary axon-empty__cta" data-scan-intent="">
+              <MaterialSymbol name="rescan" />
+              Scan a marked paper
+            </PressBox>
+            <span className="axon-empty__hint">Use your camera or import a file</span>
+          </div>
+        </section>
+      </>
+    );
+  }
+
   return (
     <>
       <div className="greet">
@@ -392,16 +424,6 @@ export default function Library() {
             <div className="lbl">
               We couldn&rsquo;t load your papers
               <small>Your papers are safe — this is us failing to read them, not them being gone. Try again in a moment.</small>
-            </div>
-          </div>
-        )}
-
-        {!papers.length && papersResource.state === "ready" && (
-
-          <div className="srow noicon">
-            <div className="lbl">
-              Nothing here yet
-              <small>Add a paper and it&rsquo;ll show up, readable even offline</small>
             </div>
           </div>
         )}
