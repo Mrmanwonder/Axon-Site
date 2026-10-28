@@ -48,6 +48,7 @@ import { JournalLink, DueQueueList, LeaksCard, NextBestActionCard, ProgressStrip
 import TargetGrades from "../components/TargetGrades";
 import "../styles/insights.css";
 import "../styles/home.css";
+import "../styles/empty-states.css";
 
 /** A failed refresh keeps this card's last-good data visibly stale. */
 export function PracticeRead<T>({ label, read, children }: {
@@ -121,18 +122,23 @@ export default function Home() {
         {/* the exam countdown is the most motivating element; it leads (review #12) */}
         <ExamCard quiet />
         {celebration}
-        <section className="paper-empty" aria-labelledby="paper-empty-title">
-          <NoPapersArt />
-          <h2 id="paper-empty-title">No papers yet</h2>
-          <p>
-            Start with a teacher-marked paper. See where marks were lost
-            and what to work on next.
-          </p>
-          <PressBox as="button" type="button" className="btn primary" data-scan-intent="" onClick={addPaper}>
-            <MaterialSymbol name="rescan" />
-            Add your first paper
-          </PressBox>
-          <span className="paper-empty-hint">Scan a page or import a file</span>
+        <section className="axon-empty axon-empty--home" aria-labelledby="paper-empty-title">
+          <div className="axon-empty__content">
+            <p className="axon-empty__eyebrow">01 / From paper to perspective</p>
+            <h2 className="axon-empty__title" id="paper-empty-title">No papers yet.</h2>
+            <p className="axon-empty__copy">
+              Begin with a paper your teacher has already marked.
+              See the feedback, understand what happened, and know what to revisit.
+            </p>
+            <PressBox as={Link} to={paths.scan} className="btn primary axon-empty__cta" data-scan-intent="">
+              <MaterialSymbol name="rescan" />
+              Scan a marked paper
+            </PressBox>
+            <span className="axon-empty__hint">Use your camera or import a file</span>
+          </div>
+          <div className="axon-empty__artwork">
+            <NoPapersArt />
+          </div>
         </section>
       </>
     );
