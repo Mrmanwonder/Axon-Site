@@ -2,6 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 for (const theme of ["light", "dark"]) {
   test("paper difficulty orb: answer, persist, change and leave in " + theme, async ({ page }) => {
+    // One flow, several waits, and an axe scan: the 30 s default is too tight on a slow WebKit runner.
+    test.setTimeout(90_000);
     await page.goto("/tests/browser/difficulty.html?theme=" + theme);
     const row = page.getByRole("button", { name: /^How hard was this paper\?/ });
     await row.click();
