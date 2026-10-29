@@ -1,35 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { paperDifficultyFeedback, savePaperDifficultyFeedback } from "../data/modules";
-import { useToast } from "./ToastProvider";
+import Chevron from "./Chevron";
+import Dialog from "./Dialog";
+import PaperDifficultyOrb, { DIFFICULTY_WORDS } from "./PaperDifficultyOrb";
 import "../styles/paper-difficulty.css";
-
-const CHOICES = [
-  { value: 1, label: "Very easy" },
-  { value: 2, label: "Easy" },
-  { value: 3, label: "About right" },
-  { value: 4, label: "Hard" },
-  { value: 5, label: "Very hard" },
-] as const;
 
 type Response = { rating: number | null; skipped: boolean } | null;
 type Load = "loading" | "ready" | "error";
 
-/** Always optional, never blocks the saving/analysis flow. An existing answer
- * is read before asking; failure or offline status never masquerades as no response. */
+/** AXO-302: a row on every paper that opens the orb sheet. Always optional and
+ * never prompts by itself. An existing answer is read first; a failed or offline
+ * read is reported, never shown as "no answer". */
 export default function PaperDifficultyPrompt({ paperId, studentId, ready }: {
   paperId: string; studentId: string; ready: boolean;
 }) {
   const [answer, setAnswer] = useState<Response>(null);
   const [load, setLoad] = useState<Load>("loading");
-  const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
   const generation = useRef(0);
-  const flight = useRef(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const version = ++generation.current;
-    flight.current = false; setBusy(false); setEditing(false); setAnswer(null); setLoad("loading");
+    setOpen(false); setSaved(false); setAnswer(null); setLoad("loading");
     if (!ready) return;
     let cancelled = false;
     paperDifficultyFeedback(studentId, paperId)
@@ -57,50 +51,36 @@ export default function PaperDifficultyPrompt({ paperId, studentId, ready }: {
       }}>Retry</button>
     </div>
   );
-  if (answer?.skipped) return null;
-  if (answer?.rating && !editing) return (
-    <div className="pd-inline">
-      <span>How this paper felt: <strong>{CHOICES[answer.rating - 1]?.label ?? "Recorded"}</strong></span>
-      <button type="button" className="pd-inline-action" onClick={() => setEditing(true)}>Edit</button>
-    </div>
-  );
 
-  async function choose(rating: number | null) {
-    if (flight.current) return;
-    const version = generation.current; flight.current = true;
-    setBusy(true);
-    try {
-      await savePaperDifficultyFeedback({ paperId, studentId, rating, skipped: rating === null });
-      if (generation.current !== version) return;
-      setAnswer({ rating, skipped: rating === null });
-      setEditing(false);
-      if (rating !== null) toast("How it felt is saved.");
-    } catch {
-      if (generation.current === version) toast("Couldn't save that response. Try again when you're connected.", "warn");
-    } finally {
-      if (generation.current === version) { flight.current = false; setBusy(false); }
-    }
+  const rating = answer?.rating ?? null;
+
+  async function save(value: number) {
+    const version = generation.current;
+    await savePaperDifficultyFeedback({ paperId, studentId, rating: value, skipped: false });
+    // A save that lands after the student moved to another paper belongs to the
+    // paper it was made on, not to this one.
+    if (generation.current !== version) return;
+    setAnswer({ rating: value, skipped: false });
+    setSaved(true);
   }
 
-  return (
-    <section className="pd-prompt" aria-labelledby="pd-title">
-      <div className="pd-head">
-        <h2 id="pd-title">How did this paper feel?</h2>
-        <button type="button" className="pd-skip" disabled={busy}
-          onClick={() => editing ? setEditing(false) : void choose(null)}>
-          {editing ? "Cancel" : "Not now"}
-        </button>
-      </div>
-      <p>Only for you. Your teacher&rsquo;s marks stay as they are.</p>
-      <div className="pd-options" role="group" aria-label="How difficult the paper felt">
-        {CHOICES.map(({ value, label }) => (
-          <button key={value} type="button" disabled={busy}
-            className={"pd-option" + (answer?.rating === value ? " chosen" : "")}
-            aria-pressed={answer?.rating === value} onClick={() => void choose(value)}>
-            {label}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
+  return <>
+    <div className="list pd-entry">
+      <button ref={trigger} type="button" className="srow noicon pd-row" aria-haspopup="dialog"
+        onClick={() => { setSaved(false); setOpen(true); }}>
+        <span className="lbl">
+          {rating ? "How hard it felt" : "How hard was this paper?"}
+          <small>{rating ? "Only for you. Tap to change." : "Only for you. Your teacher’s marks stay as they are."}</small>
+        </span>
+        {rating && <span className="aux">{DIFFICULTY_WORDS[rating - 1]}</span>}
+        <Chevron />
+      </button>
+    </div>
+    {open && <Dialog className="pd-sheet" restoreFocus={trigger.current}
+      title={saved ? "Saved" : "How was the paper?"}
+      description={saved ? "Thanks. This stays between you and Axon." : "Only for you. Your teacher’s marks stay as they are."}
+      onClose={() => setOpen(false)}>
+      <PaperDifficultyOrb initial={rating} saved={saved} onSave={save} />
+    </Dialog>}
+  </>;
 }
