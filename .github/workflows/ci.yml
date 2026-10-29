@@ -83,6 +83,7 @@ jobs:
       - run: npm run check:contract-parity
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CROSS_REPO_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
 
   eval-gate:
     name: eval gate (model_route changes need a passing eval run)
