@@ -400,9 +400,8 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
     if (!flagFor(page) && page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
     }
-    if (page.layer_fallback === 'non_red_marking') {
-      toast('The marking may use a different ink colour. Check the teacher marks during review.');
-    }
+    // No toast for a page whose marking is not red: a teacher's ink can be any
+    // colour, so it is not a reason to doubt the page (AXO-161).
     // An enhancement pass is not proof that blurred handwriting became legible.
     // The measured quality/geometry gates own the actionable retake guidance;
     // never replace their warning with an optimistic "sharpened" toast.
