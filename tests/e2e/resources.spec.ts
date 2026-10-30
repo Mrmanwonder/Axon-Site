@@ -275,8 +275,8 @@ test("review mark radios follow native keyboard behavior and closed review is ab
 
 
 test("Library search controls remain usable inside the mobile viewport", async ({ page }) => {
-  await page.goto("/tests/browser/index.html");
-  await expect(page.getByText("Nothing here yet.")).toBeVisible();
+  // An empty library hides search and filters, so use a library that has papers.
+  await page.goto("/tests/browser/index.html?scenario=insights");
 
   const search = page.getByRole("searchbox", { name: "Search library" });
   await expect(search).toBeVisible();
