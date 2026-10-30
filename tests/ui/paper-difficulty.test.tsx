@@ -71,6 +71,21 @@ test("End and Home jump to the ends", async () => {
   expect(slider.getAttribute("aria-valuenow")).toBe("1");
 });
 
+test("keyboard feedback does not wait for an animation frame", async () => {
+  mount();
+  const slider = await open();
+  document.documentElement.dataset.motion = "full";
+  const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockReturnValue(1);
+  try {
+    fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(frame).toHaveBeenCalled();
+    expect(slider.getAttribute("aria-valuetext")).toBe("Hard");
+    expect(slider.getAttribute("aria-valuenow")).toBe("4");
+    fireEvent.keyDown(slider, { key: "Home" });
+    expect(slider.getAttribute("aria-valuetext")).toBe("Very easy");
+  } finally { frame.mockRestore(); }
+});
+
 test("an existing answer is shown on the row and the sheet reopens on it", async () => {
   fixture.read.mockResolvedValue({ rating: 2, skipped: false });
   const user = userEvent.setup();

@@ -160,6 +160,9 @@ export default function PaperDifficultyOrb({ initial, saved, onSave }: {
     e.preventDefault();
     setTouched(true);
     s.target = r;
+    // Input feedback and the accessible value must not wait for the visual
+    // spring's next frame, which can be delayed or paused by the browser.
+    paintRef.current();
     settle();
   };
 

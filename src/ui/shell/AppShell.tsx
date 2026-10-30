@@ -16,6 +16,8 @@ import { Outlet, useLocation, useNavigation } from "react-router-dom";
 import TabNav from "./TabNav";
 import Header from "./Header";
 import { activeIndex, destinations } from "../app/nav";
+import { paths } from "../app/paths";
+import { preloadMainRoute } from "../app/mainRouteModules";
 import ReviewSheet from "../scan/ReviewSheet";
 import DocumentMeta from "../components/DocumentMeta";
 import SkeletonLoader from "../components/SkeletonLoader";
@@ -33,6 +35,18 @@ export default function AppShell() {
 
   const i = activeIndex(displayedPath);
   const title = i >= 0 ? destinations[i].label : "";
+
+  useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (!navigator.onLine || connection?.saveData) return;
+    // Warm the small reading/settings routes after the first screen has had
+    // time to paint. Scan stays intent-only, including on touch devices.
+    const warm = () => {
+      for (const path of [paths.home, paths.library, paths.insights, paths.settings]) preloadMainRoute(path);
+    };
+    const timer = window.setTimeout(warm, 800);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.focus();

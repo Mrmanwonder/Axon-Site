@@ -35,6 +35,7 @@ import { useApp } from "../data/AppProvider";
 import { AvatarDisc } from "../components/AvatarPicker";
 import { destinations, activeIndex } from "../app/nav";
 import { paths } from "../app/paths";
+import { preloadMainRoute } from "../app/mainRouteModules";
 import { LibraryNavGlyph } from "../components/NavGlyphs";
 import { lensMapFor, PILL_R } from "../lib/lens";
 import { spring, seed, releaseSpring, SPRING } from "../lib/spring";
@@ -234,6 +235,8 @@ export default function TabNav() {
                 tabRefs.current[i] = el;
               }}
               onClick={() => go(d.path)}
+              onPointerEnter={() => preloadMainRoute(d.path)}
+              onFocus={() => preloadMainRoute(d.path)}
               onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => onTabKeyDown(event, i)}
             >
               {d.path === paths.library || d.icon ? (
