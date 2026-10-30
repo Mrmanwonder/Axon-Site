@@ -90,6 +90,10 @@ paper-difficulty drag test. Its trace sampled the reopened sheet while it was
 entering and sent the drag below the viewport. The test now waits for a stable,
 actionable slider before reading pointer coordinates. The original failure
 reproduced locally; the corrected flow passed 12 repeated Chromium/WebKit runs.
-The subsequent CI run exposed WebKit's active-page handoff after axe opened and
-closed its temporary aggregation page. The test explicitly restores the original
-page and targets its keyboard input at the slider; all 12 repeats pass again.
+Subsequent CI runs exposed keyboard feedback remaining at About right in WebKit.
+Restoring page focus after axe's temporary aggregation page was insufficient.
+A deterministic unit test reproduced the failure with animation frames held:
+the control published its keyboard target only in the next visual spring frame.
+It now publishes the label and ARIA value immediately on keyboard input while
+retaining the visual spring. The regression fails before that change and passes
+after it. This also prevents delayed feedback when a browser defers animation.
