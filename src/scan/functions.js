@@ -37,7 +37,7 @@ async function resilientFetch(url, init, timeoutMs = REQUEST_TIMEOUT_MS, onRetry
   }
 }
 let refreshing = null;
-export async function post(path, body, { timeoutMs, onRetry, signal } = {}) {
+export async function post(path, body, { timeoutMs, onRetry, signal, raw = false } = {}) {
   let session = await currentSession();
   if (!session) throw Object.assign(new Error('Sign in first.'), { code: 'unauthenticated', status: 401 });
   const owner = session.user?.id;
@@ -62,6 +62,8 @@ export async function post(path, body, { timeoutMs, onRetry, signal } = {}) {
       if (refreshed.error || !session || session.user?.id !== owner) throw Object.assign(new Error('Sign in again to continue this upload.'), { status: 401 });
       onRetry?.(); continue; // Retry the API confirmation, never its PUTs.
     }
+    // `raw` hands back the Response itself, for a route that answers with a file.
+    if (raw && res.ok) return res;
     const text = await res.text(); let data = null;
     if (text) { try { data = JSON.parse(text); } catch { /* not JSON */ } }
     if (!res.ok) throw Object.assign(new Error(data?.error || data?.message || 'That did not work (' + res.status + ').'), { status: res.status, body: data });
@@ -70,6 +72,20 @@ export async function post(path, body, { timeoutMs, onRetry, signal } = {}) {
 }
 const optionsFor = options => typeof options === 'function' ? { onRetry: options } : options;
 export const uploadPolicy = (options) => post('/upload-policy', {}, options);
+
+/**
+ * AXO-295: fetch a pasted link on the server and return it as a File, so the device imports it
+ * exactly like one the student chose. The server decides the type from the file's bytes.
+ * @param {string} url
+ * @returns {Promise<File>}
+ */
+export async function fetchLink(url, { signal } = {}) {
+  const res = await post('/link-fetch', { url }, { raw: true, timeoutMs: 45000, signal });
+  const type = res.headers.get('Content-Type') || 'application/octet-stream';
+  let name = 'Linked paper';
+  try { name = decodeURIComponent(res.headers.get('X-Axon-Filename') || name); } catch { /* keep the default */ }
+  return new File([await res.blob()], name, { type });
+}
 export const attachOriginals = (body, options) => post('/paper-originals', body, options);
 
 /** Ask for presigned R2 upload URLs for a batch of page/mask objects. */

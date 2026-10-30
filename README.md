@@ -87,8 +87,10 @@ where the browser cannot (Chrome, Firefox). Both decoders load only when a file 
 (`src/scan/import-decode.js`; licences in `third_party/pdfjs/` and `third_party/heic-to/`).
 Real-device behaviour (memory on a 25-page PDF, iOS file pickers) is unverified.
 
-**Links** are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over
-the bytes, so a server-side fetcher has to resolve them.
+**Links** are fetched by `mastery-api` (`/link-fetch`, AXO-295): https only, public hosts only,
+redirects re-checked, 25 MB cap, type decided from the file's bytes, Google Drive and Docs share
+links rewritten to their downloads. The file then imports on the device like any other. A link
+that needs a sign-in is refused with that reason. Links added before this stay `pending`.
 
 **The Tier 2 scheme library is empty.** Every paper falls back to Tier 1 and says so,
 which is the correct behaviour with no scheme held — an approximated scheme would be a
