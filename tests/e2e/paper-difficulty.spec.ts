@@ -13,8 +13,11 @@ for (const theme of ["light", "dark"]) {
     await page.waitForTimeout(900);
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze();
     expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`)).toEqual([]);
-    await slider.focus();
-    await page.keyboard.press("ArrowRight");
+    // Axe aggregates its result in a temporary page. WebKit may leave this
+    // page inactive after that page closes, so explicitly restore it before
+    // delivering keyboard input and waiting for the orb's animation frame.
+    await page.bringToFront();
+    await slider.press("ArrowRight");
     await expect(slider).toHaveAttribute("aria-valuetext", "Hard");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Saved" })).toBeVisible();

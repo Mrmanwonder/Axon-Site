@@ -90,3 +90,6 @@ paper-difficulty drag test. Its trace sampled the reopened sheet while it was
 entering and sent the drag below the viewport. The test now waits for a stable,
 actionable slider before reading pointer coordinates. The original failure
 reproduced locally; the corrected flow passed 12 repeated Chromium/WebKit runs.
+The subsequent CI run exposed WebKit's active-page handoff after axe opened and
+closed its temporary aggregation page. The test explicitly restores the original
+page and targets its keyboard input at the slider; all 12 repeats pass again.
