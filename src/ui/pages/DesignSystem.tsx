@@ -30,7 +30,7 @@ const sourceBase = "https://github.com/Mrmanwonder/Axon-Site/blob/main/";
 const semanticColors = [
   { name: "Accent", token: "--accent", usage: "Primary action · selected · navigation" },
   { name: "Positive", token: "--positive", usage: "Confirmed state · improvement" },
-  { name: "Attention", token: "--attention", usage: "Review · warning · destructive action" },
+  { name: "Attention", token: "--attention", usage: "Review · warning · needs attention" },
   { name: "Danger", token: "--danger", usage: "Sign out and destructive deletes; deletes also carry a hazard icon" },
 ] as const;
 const surfaceColors = [

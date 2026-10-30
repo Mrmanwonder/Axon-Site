@@ -91,7 +91,7 @@
 .ds-hero h1 em { font-style: normal; color: var(--accent); }
 .ds-hero-copy > p { font-size: clamp(14px, 1.25vw, 16px); color: var(--label-2); line-height: 1.68; max-width: 480px; margin: 0; }
 .ds-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; margin-top: 35px; }
-.ds-hero-button { background: var(--accent); color: white; font-size: 12px !important; font-weight: 650 !important; min-height: 46px; border: none; border-radius: var(--radius-12); padding: 0 20px; }
+.ds-hero-button { background: var(--p-blue-l); color: white; font-size: 12px !important; font-weight: 650 !important; min-height: 46px; border: none; border-radius: var(--radius-12); padding: 0 20px; }
 .ds-hero-button span { margin-left: 23px; }
 .ds-text-link { color: var(--label-2) !important; font-size: 12px; }
 .ds-text-link:hover { color: var(--accent) !important; }
