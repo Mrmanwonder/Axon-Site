@@ -1,22 +1,71 @@
-/* AXO-190: quiet optional prompt; no blocking overlay, no badges or grades.
-   AXO-268: inset to the page gutter like every other card (it ran edge to edge),
-   one compact row of five equal choices, no caption or decorative dots. */
+/* AXO-190: optional, never blocking, no badges or grades.
+   AXO-302: a row on the paper opens the orb sheet. The sheet uses the shared
+   sheet rise (system.css); the orb itself is drawn here and driven by
+   PaperDifficultyOrb, which sets --c0..--c2, --cx, --amb, --w, --dk, --bo,
+   --tx, --ty, --sx and --sk on the sheet each frame. */
 /* Secondary text uses the paper overview's AA-safe role: --label-2 on --surface failed
    WCAG AA contrast in the light theme (axe, paper-overview.spec). */
-.pd-prompt { margin: 14px var(--gutter, 16px) 4px; padding: 14px 16px 16px; background: var(--surface); border: .5px solid var(--hairline); border-radius: var(--r-card); }
-.pd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.pd-prompt h2 { margin: 0; font-size: 16px; line-height: 1.3; letter-spacing: -.015em; font-weight: 600; }
-.pd-prompt p { color: var(--po-secondary, var(--label-2)); margin: 2px 0 12px; font-size: 13px; line-height: 1.45; }
-.pd-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.pd-option { display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px 4px; min-height: 44px; border-radius: var(--radius-12); border: .5px solid var(--hairline); color: var(--label); background: var(--surface-sunk); font: inherit; font-size: 13px; line-height: 1.2; font-weight: 500; cursor: pointer; transition: transform 120ms, border-color 120ms, background 120ms; }
-.pd-option:hover { border-color: var(--accent); }
-.pd-option:active { transform: scale(.97); }
-.pd-option:focus-visible,.pd-skip:focus-visible,.pd-inline-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.pd-option.chosen { border-color: var(--accent); background: var(--accent-wash); color: var(--accent); }
-.pd-skip,.pd-inline-action { border: 0; background: transparent; color: var(--po-secondary, var(--label-2)); min-height: 44px; cursor: pointer; font: inherit; font-size: 13px; }
-.pd-skip { flex: 0 0 auto; margin: -10px -6px -10px 0; padding: 0 6px; }
+.list.pd-entry { margin-top: 14px; margin-bottom: 4px; }
+.pd-row { width: 100%; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pd-row .lbl small { color: var(--po-secondary, var(--label-2)); }
+.pd-row .aux { font-size: 15px; color: var(--label); font-weight: 600; }
+.pd-row:focus-visible, .pd-inline-action:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pd-inline-action { border: 0; background: transparent; color: var(--accent); min-height: 44px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
 .pd-inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px var(--text-gutter, 20px) 0; color: var(--po-secondary, var(--label-2)); font-size: 13px; }
-.pd-inline strong { color: var(--label); font-weight: 600; }
-.pd-inline-action { color: var(--accent); font-weight: 600; }
-@media (max-width: 359px) { .pd-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media(prefers-reduced-motion: reduce) { .pd-option { transition: none; } }
+
+/* ── the sheet ── */
+.sheet.pd-sheet { overflow: hidden; isolation: isolate; user-select: none; -webkit-user-select: none; }
+.sheet.pd-sheet::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(ellipse 130% 60% at 50% 42%, var(--amb, rgba(122, 74, 240, .3)), transparent 72%); pointer-events: none; }
+.pd-sheet h4 { text-align: center; }
+.pd-sheet .body { text-align: center; margin-top: 7px; color: var(--po-secondary, var(--label-2)); }
+.pd-orb-wrap { display: block; }
+.pd-zone { position: relative; height: clamp(250px, 40dvh, 318px); cursor: grab; touch-action: pan-y; outline: none; }
+.pd-zone:active { cursor: grabbing; }
+.pd-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--radius-16); }
+.pd-halo { position: absolute; left: 50%; top: 50%; width: 380px; height: 380px; margin: -190px 0 0 -190px; border-radius: 50%; background: radial-gradient(closest-side, var(--c1), transparent); opacity: calc(.2 + var(--w, .5) * .18); animation: pd-fade 2.2s ease-out .5s backwards, pd-breathe 14s ease-in-out infinite alternate; pointer-events: none; }
+[data-theme="light"] .pd-halo { opacity: calc(.16 + var(--w, .5) * .14); }
+.pd-ow { position: absolute; left: 50%; top: 50%; width: 208px; height: 208px; margin: -104px 0 0 -104px; transform: translate(var(--tx, 0px), var(--ty, 0px)) scaleX(var(--sx, 1)) skewX(var(--sk, 0deg)); animation: pd-fade 2.2s ease-out .5s backwards; }
+.pd-breath { width: 100%; height: 100%; animation: pd-breath 11s ease-in-out infinite alternate; }
+.pd-press { width: 100%; height: 100%; transition: transform 120ms ease-out; }
+.pd-zone:active .pd-press { transform: scale(.985); }
+.pd-orb { position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; isolation: isolate; background: radial-gradient(circle at 50% 32%, var(--c1), var(--c2) 88%); box-shadow: 0 0 90px -12px var(--c1), 0 34px 54px -28px var(--c0), inset 0 -26px 50px rgba(0, 0, 0, .4), inset 0 0 0 .5px rgba(255, 255, 255, .22); }
+.pd-spin { position: absolute; inset: -28%; animation: pd-spin 140s linear infinite; }
+.pd-spin.s2 { animation-direction: reverse; animation-duration: 220s; }
+.pd-bl { position: absolute; border-radius: 50%; filter: blur(20px); mix-blend-mode: screen; opacity: var(--bo, .7); }
+.pd-bl.k1 { left: 12%; top: 14%; width: 46%; height: 46%; background: var(--c0); animation: pd-dr1 32s ease-in-out infinite alternate; }
+.pd-bl.k2 { left: 44%; top: 46%; width: 50%; height: 50%; background: var(--cx); animation: pd-dr2 38s ease-in-out infinite alternate; }
+.pd-bl.k3 { left: 20%; top: 52%; width: 38%; height: 38%; background: var(--c1); animation: pd-dr1 44s ease-in-out infinite alternate-reverse; }
+.pd-bl.k4 { left: 50%; top: 8%; width: 36%; height: 36%; background: var(--cx); animation: pd-dr2 36s ease-in-out infinite alternate-reverse; }
+.pd-dark { position: absolute; inset: 0; z-index: 2; background: radial-gradient(circle at 50% 46%, transparent 34%, rgba(0, 0, 0, var(--dk, .2)) 100%); pointer-events: none; }
+.pd-top { position: absolute; left: 22%; top: 2%; width: 56%; height: 34%; border-radius: 50%; background: radial-gradient(closest-side, var(--c0), transparent); opacity: calc(.2 + var(--w, .5) * .18); filter: blur(8px); z-index: 3; mix-blend-mode: screen; }
+.pd-pool { position: absolute; left: -12%; right: -12%; bottom: -10%; height: 46%; border-radius: 50%; background: radial-gradient(ellipse at 50% 90%, #fff 0%, var(--c0) 34%, transparent 72%); opacity: calc(.7 - var(--w, .5) * .45); filter: blur(3px); z-index: 3; }
+.pd-arc { position: absolute; left: 12%; right: 12%; bottom: 3%; height: 22%; border-radius: 50%; border-bottom: 3px solid rgba(255, 255, 255, .8); filter: blur(1.2px); opacity: calc(.75 - var(--w, .5) * .25); z-index: 3; }
+.pd-gloss { position: absolute; left: 14%; top: 7%; width: 46%; height: 26%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, .7), transparent); transform: rotate(-26deg); opacity: calc(1 - var(--w, .5) * .6); z-index: 4; }
+.pd-rim { position: absolute; inset: 0; border-radius: 50%; padding: 2px; background: conic-gradient(from 190deg, #fff, var(--cx), var(--c0), rgba(255, 255, 255, .12), var(--c1), var(--cx), #fff); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); opacity: .95; z-index: 5; }
+.pd-gr { position: absolute; inset: 0; opacity: .12; mix-blend-mode: overlay; z-index: 5; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
+.pd-ring { position: absolute; left: 50%; top: 50%; width: 208px; height: 208px; margin: -104px 0 0 -104px; border-radius: 50%; border: 2px solid var(--c0); opacity: 0; pointer-events: none; }
+.pd-ring.go { animation: pd-ring 1.9s cubic-bezier(.2, .7, .2, 1); }
+.pd-pips { position: absolute; left: 0; right: 0; bottom: 4px; display: flex; justify-content: center; gap: 14px; }
+.pd-pips i { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--label-3) 55%, transparent); transition: transform 440ms cubic-bezier(.32, .72, 0, 1), background 440ms, box-shadow 440ms; }
+.pd-pips i.on { background: var(--label); transform: scale(1.7); box-shadow: 0 0 8px 1px color-mix(in srgb, var(--label) 45%, transparent), 0 0 18px 3px color-mix(in srgb, var(--label) 30%, transparent); }
+.pd-hint { position: absolute; left: 0; right: 0; top: 4px; text-align: center; font-size: 13px; color: var(--label-3); transition: opacity 800ms; pointer-events: none; }
+.pd-word { margin: 10px 0 2px; text-align: center; font-size: 20px; font-weight: 600; letter-spacing: -.022em; min-height: 26px; color: var(--label); }
+.pd-count { text-align: center; font-size: 13px; color: var(--label-3); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.pd-fault { margin: 8px 0 0; text-align: center; font-size: 13px; color: var(--po-secondary, var(--label-2)); }
+.pd-acts { margin-top: 14px; }
+.pd-orb-wrap[data-done] .pd-acts, .pd-orb-wrap[data-done] .pd-pips, .pd-orb-wrap[data-done] .pd-hint { opacity: 0; pointer-events: none; transition: opacity 400ms; }
+
+@keyframes pd-spin { to { transform: rotate(360deg); } }
+@keyframes pd-breath { from { transform: scale(1); } to { transform: scale(1.022); } }
+@keyframes pd-breathe { from { transform: scale(.96); } to { transform: scale(1.04); } }
+@keyframes pd-dr1 { from { transform: translate(-8%, -6%) scale(1); } to { transform: translate(9%, 10%) scale(1.14); } }
+@keyframes pd-dr2 { from { transform: translate(7%, 8%) scale(1.08); } to { transform: translate(-9%, -8%) scale(.94); } }
+@keyframes pd-fade { from { opacity: 0; } }
+@keyframes pd-ring { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(2.4); } }
+@media (prefers-reduced-motion: reduce) {
+  .pd-spin, .pd-bl, .pd-halo, .pd-breath, .pd-ow { animation: none; }
+  .pd-press, .pd-pips i, .pd-hint { transition: none; }
+}
+[data-motion="reduce"] .pd-spin, [data-motion="reduce"] .pd-bl, [data-motion="reduce"] .pd-halo,
+[data-motion="reduce"] .pd-breath, [data-motion="reduce"] .pd-ow { animation: none; }
+[data-motion="reduce"] .pd-press, [data-motion="reduce"] .pd-pips i, [data-motion="reduce"] .pd-hint { transition: none; }
