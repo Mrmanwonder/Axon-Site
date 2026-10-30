@@ -28,6 +28,10 @@ for (const theme of ["light", "dark"]) {
     await expect(slider).toHaveAttribute("aria-valuetext", "Hard");
 
     // Dragging the orb moves it off the saved step; Not now leaves the answer alone.
+    // Attribute reads can succeed while the reopened sheet is still entering.
+    // Let Playwright wait for a stable, actionable slider before taking raw
+    // pointer coordinates, or the drag can start below the viewport.
+    await slider.hover();
     const box = (await slider.boundingBox())!;
     const y = box.y + box.height / 2;
     await page.mouse.move(box.x + box.width / 2, y);

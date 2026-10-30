@@ -84,3 +84,9 @@ remaining backend response time.
 Responsive browser emulation is not a physical-device trial. No database/schema,
 billing, consent or backend deployment changes are included. Deployment and
 live acceptance of the patched build remain separate from local verification.
+
+The first CI run passed the new checks but exposed a timing race in the existing
+paper-difficulty drag test. Its trace sampled the reopened sheet while it was
+entering and sent the drag below the viewport. The test now waits for a stable,
+actionable slider before reading pointer coordinates. The original failure
+reproduced locally; the corrected flow passed 12 repeated Chromium/WebKit runs.
