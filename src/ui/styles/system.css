@@ -832,7 +832,7 @@
   .row .t1,.cheap .t1,.method .t1{font-size:var(--fs-row,16px);}
   .row .t2,.cheap .t2,.method .t2{font-size:var(--fs-row2,13px);}
   .srow .lbl{font-size:var(--fs-lbl,16px);}
-  .srow .lbl small{font-size:calc(var(--fs-row2,13px) - 12px);}
+  .srow .lbl small{font-size:var(--fs-row2,13px);}
   .sheet .body,.estate p{font-size:var(--fs-body,15px);}
 
   /* ── reduce motion ──

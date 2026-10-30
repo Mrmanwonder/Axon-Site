@@ -114,7 +114,6 @@
   stroke-linejoin: round;
 }
 .axon-paper-art .ground { fill: var(--label); opacity: .07; }
-.axon-paper-art .field-line { stroke: var(--hairline); stroke-width: 1.1; }
 .axon-paper-art .back-sheet rect { fill: var(--surface-sunk); stroke: var(--label-3); stroke-width: 1.3; }
 .axon-paper-art .back-sheet path { stroke: var(--label-3); stroke-width: 1.4; opacity: .38; }
 .axon-paper-art .second-sheet rect { fill: var(--field); stroke: var(--label-3); stroke-width: 1.3; }
@@ -126,7 +125,6 @@
 .axon-paper-art .ink-dot { fill: var(--accent); stroke: none; }
 .axon-paper-art .page-turn { stroke: var(--label-3); stroke-width: 1.2; }
 .axon-paper-art .scan-edges { stroke: var(--accent); stroke-width: 2.2; }
-.axon-paper-art .fine-notes { stroke: var(--label-3); stroke-width: 1.2; opacity: .65; }
 
 /* Library is a quiet archive display: more whitespace, finer linework. */
 .axon-empty--library {
@@ -162,7 +160,6 @@
   stroke-linejoin: round;
 }
 .axon-file-art .ground { fill: var(--label); opacity: .055; stroke: none; }
-.axon-file-art .field-line { stroke: var(--hairline); stroke-width: 1; }
 .axon-file-art .cabinet { stroke: var(--label); stroke-width: 1.12; }
 .axon-file-art .side { fill: var(--surface-sunk); }
 .axon-file-art .top { fill: var(--surface); }
@@ -174,15 +171,13 @@
 .axon-file-art .label-line { stroke: var(--label-3); stroke-width: 1; }
 .axon-file-art .handle { stroke-width: 1.6; }
 .axon-file-art .inner-shade { fill: var(--surface-sunk); }
-.axon-file-art .rear-rim { stroke: var(--label-3); stroke-width: 1; }
-.axon-file-art .drawer-inner { fill: var(--field); }
-.axon-file-art .drawer-depth { stroke: var(--label-3); }
+.axon-file-art .drawer-back { fill: var(--surface-sunk); }
+.axon-file-art .drawer-floor { fill: var(--field); }
+.axon-file-art .drawer-left { fill: var(--surface); }
+.axon-file-art .drawer-side { fill: var(--surface-sunk); }
 .axon-file-art .drawer-front { fill: var(--surface); }
 .axon-file-art .drawer-trim { fill: var(--field); }
-.axon-file-art .track { stroke: var(--label-3); stroke-width: 1.4; }
 .axon-file-art .screw { fill: var(--label-3); stroke: none; }
-.axon-file-art .side-details { stroke: var(--label-3); stroke-width: 1; opacity: .7; }
-.axon-file-art .accent-detail { stroke: var(--accent); stroke-width: 2; }
 
 @keyframes axon-empty-enter {
   from { opacity: 0; transform: translateY(7px); }

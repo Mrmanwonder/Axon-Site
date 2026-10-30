@@ -513,8 +513,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setGuardian(g);
       if (!g) return setGate("onboarding");
 
-      const profilesResult = await loadProfiles(g.id);
+      // Both reads use the authenticated guardian and are independent. Await
+      // both before selecting anyone; local profile data is never authority.
+      const [profilesRead, scopeRead] = await Promise.allSettled([
+        loadProfiles(g.id),
+        navigator.onLine === false ? Promise.resolve(null) : studentScopeState(),
+      ]);
       if (cancelled) return;
+      if (profilesRead.status === "rejected") throw profilesRead.reason;
+      const profilesResult = profilesRead.value;
       const owned = profilesResult.data;
       setProfiles(owned);
       setProfileStale(profilesResult.stale);
@@ -532,7 +539,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return setGate("choose_profile");
       }
 
-      let scope = await studentScopeState();
+      if (scopeRead.status === "rejected") throw scopeRead.reason;
+      let scope = scopeRead.value ?? await studentScopeState();
       if (cancelled) return;
 
       let selected = scope.active

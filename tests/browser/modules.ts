@@ -413,6 +413,15 @@ export const listPurposes = async () => [];
 export const startCheckout = async () => { throw new Error("Billing is not available in this fixture."); };
 export const parentModeState = async () => ({ fresh: false, amrPresent: false });
 export const sendParentCode = async () => { throw new Error("Parent verification is not available in this fixture."); };
+// Main-tab code may be preloaded by TabNav; importing Settings must stay
+// network-free in this fixture, and consequential actions remain unavailable.
+const unavailableAccountAction = () => { throw new Error("Account actions are not available in this fixture."); };
+export const getEntitlements = unavailableAccountAction;
+export const openBillingPortal = unavailableAccountAction;
+export const exportMyData = unavailableAccountAction;
+export const downloadJson = unavailableAccountAction;
+export const deleteAccount = unavailableAccountAction;
+export const isParentModeRequired = () => false;
 export const unlockWithCode = async () => ({ outcome: "failed", message: "Fixture only." });
 export const NOTICE_LANGUAGES = notice.LANGUAGES;
 export const noticeStrings = notice.noticeStrings;

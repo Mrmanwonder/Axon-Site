@@ -44,6 +44,8 @@ type BackendOptions = {
   trace: TraceRow[];
   authorityDelayMs?: number;
   dataDelayMs?: number;
+  curriculum?: boolean;
+  empty?: boolean;
 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -143,6 +145,9 @@ function payloadFor(url: URL) {
     return { id: "guardian", auth_user_id: runMarker, name: "Parent", contact: "perf@example.test" };
   }
   if (key === "student") return [student];
+  if (key === "curriculum_programme") return [{ id: "programme", provider_id: "provider", key: "cambridge_a_level", label: "A Level" }];
+  if (key === "curriculum_stage") return [{ id: "stage", key: "year_12", label: "Year 12", school_year_label: "Year 12" }];
+  if (key === "curriculum_provider") return [{ id: "provider", key: "cambridge", name: "Cambridge" }];
   if (key === "student_subject") {
     return [{
       student_id: student.id,
@@ -195,7 +200,14 @@ async function installBackend(context: BrowserContext, options: BackendOptions) 
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(payloadFor(url)),
+        headers: {
+          "access-control-allow-origin": "*",
+          "access-control-allow-headers": "*",
+          "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        },
+        body: JSON.stringify(options.empty && ["paper", "paper_progress"].includes(key) ? [] : options.curriculum && key === "student"
+          ? [{ ...student, programme_id: "programme", stage_id: "stage" }]
+          : payloadFor(url)),
       });
     } catch (error) {
       // Warm-cache assertions intentionally navigate while delayed background
@@ -317,6 +329,68 @@ test.describe("production startup performance @performance", () => {
     expect(authWaterfall.some(row => row.key === "rpc/student_scope_state")).toBe(true);
   });
 
+  test("profile boot overlaps independent reads at 150ms RTT", async ({ browser, browserName }) => {
+    test.skip(browserName !== "chromium");
+    const samples: number[] = [];
+    let trace: TraceRow[] = [];
+    for (let i = 0; i < 3; i++) {
+      const context = await browser.newContext({ serviceWorkers: "block" });
+      await seedAuthenticatedContext(context);
+      trace = [];
+      const started = Date.now();
+      await installBackend(context, { startedAt: started, trace, authorityDelayMs: 150, curriculum: true });
+      const page = await context.newPage();
+      await page.goto(origin);
+      await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
+      samples.push(Date.now() - started);
+      await context.close();
+    }
+    console.log("[AXO-306] profile-150ms", JSON.stringify({ samples, wall: summary(samples), waterfall: trace }));
+    const row = (key: string) => trace.find(row => row.key === key)!;
+    expect(row("rpc/student_scope_state").at).toBeLessThan(row("student").doneAt!);
+    expect(row("curriculum_programme").at).toBeLessThan(row("student_subject").doneAt!);
+    expect(row("curriculum_stage").at).toBeLessThan(row("student_subject").doneAt!);
+  });
+
+  test("idle route warming removes the first Library chunk wait without mounting other screens", async ({ browser, browserName }) => {
+    test.skip(browserName !== "chromium");
+    const samples: number[] = [];
+    const requests: { at: number; clicked: number }[] = [];
+    for (let i = 0; i < 3; i++) {
+      // Measure page-module loading independently of the offline installer's
+      // asset precache, which also downloads Library without evaluating it.
+      const context = await browser.newContext({ serviceWorkers: "block" });
+      await seedAuthenticatedContext(context);
+      const started = Date.now();
+      const trace: TraceRow[] = [];
+      await installBackend(context, { startedAt: started, trace });
+      let libraryRequestedAt = 0;
+      let scanRequested = false;
+      context.on("request", request => { if (/\/assets\/Scan-.*\.js$/.test(request.url())) scanRequested = true; });
+      await context.route(/\/assets\/Library-.*\.js$/, async route => {
+        libraryRequestedAt = Date.now();
+        await sleep(300);
+        await route.continue();
+      });
+      const page = await context.newPage();
+      await page.goto(origin);
+      await expect(page.getByText("Recent scans", { exact: true })).toBeVisible();
+      // Fixed dwell represents reading the first screen; includes the 800ms
+      // deferred preload and the deliberately slow 300ms route asset.
+      await page.waitForTimeout(1600);
+      expect(scanRequested).toBe(false);
+      expect(trace.some(row => row.key === "rpc/get_entitlements")).toBe(false);
+      const clicked = Date.now();
+      await page.getByRole("button", { name: /^Library/ }).click();
+      await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
+      samples.push(Date.now() - clicked);
+      requests.push({ at: libraryRequestedAt - started, clicked: clicked - started });
+      await context.close();
+    }
+    console.log("[AXO-306] library-first-visit", JSON.stringify({ assetDelayMs: 300, samples, wall: summary(samples), requests }));
+    for (const request of requests) expect(request.at).toBeLessThan(request.clicked);
+  });
+
   test("records warm Home/Library cached paint and lazy Library route latency", async ({ browser, browserName }) => {
     test.skip(browserName !== "chromium", "Production performance baseline is pinned to Chromium.");
     // Five Home and five Library samples intentionally hold data reads open to
@@ -416,3 +490,65 @@ test.describe("production startup performance @performance", () => {
     await context.close();
   });
 });
+
+for (const theme of ["dark", "light"]) {
+  for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 667, height: 375 }, { width: 768, height: 900 }, { width: 1280, height: 900 }]) {
+    test(`empty artwork and readable settings: ${theme} ${viewport.width}px @ui-refinements`, async ({ browser }, testInfo) => {
+      test.setTimeout(45_000);
+      // WebKit cannot route requests owned by a service worker. Keep every
+      // unsigned fixture request inside the mocked backend in both engines.
+      const context = await browser.newContext({ viewport, serviceWorkers: "block" });
+      await seedAuthenticatedContext(context);
+      await installBackend(context, { startedAt: Date.now(), trace: [], empty: true });
+      const page = await context.newPage();
+      page.setDefaultTimeout(8000);
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await page.goto(origin);
+      await expect(page.getByRole("heading", { name: "No papers yet." })).toBeVisible();
+      await page.getByRole("button", { name: "Necessary only", exact: true }).click();
+      await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+      const checkWidth = async () => {
+        expect(await page.locator("main.view").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      };
+      await checkWidth();
+      await expect(page.locator(".axon-paper-art")).toHaveAttribute("aria-hidden", "true");
+      await page.screenshot({ path: testInfo.outputPath(`home-${theme}-${viewport.width}.png`) });
+
+      await page.getByRole("button", { name: "Library", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Nothing here yet." })).toBeVisible();
+      await checkWidth();
+      await expect(page.getByRole("link", { name: "Scan a marked paper", exact: true })).toHaveAttribute("href", "/scan");
+      await page.screenshot({ path: testInfo.outputPath(`library-${theme}-${viewport.width}.png`) });
+
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+      const about = page.locator(".list").filter({ has: page.getByRole("link", { name: /^Contact us/ }) });
+      const descriptions = about.locator(".lbl small");
+      await expect(descriptions).toHaveCount(5);
+      await page.getByRole("button", { name: theme === "light" ? "Light" : "Dark", exact: true }).click();
+      for (const [size, pixels] of [["s", 12], ["m", 13], ["l", 15]] as const) {
+        await page.getByRole("button", { name: size.toUpperCase(), exact: true }).click();
+        await expect.poll(() => descriptions.evaluateAll(els => els.map(el => parseFloat(getComputedStyle(el).fontSize)))).toEqual(Array(5).fill(pixels));
+        await checkWidth();
+        const separator = await about.locator(".srow").nth(1).evaluate(el => {
+          const style = getComputedStyle(el, "::before");
+          return { height: parseFloat(style.height), content: style.content, color: style.backgroundColor };
+        });
+        expect(separator.height).toBeGreaterThan(0);
+        expect(separator.content).toBe('""');
+        expect(separator.color).not.toBe("rgba(0, 0, 0, 0)");
+      }
+      await about.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`settings-${theme}-${viewport.width}.png`) });
+      const privacy = page.getByRole("link", { name: /^Privacy Policy/ });
+      await privacy.focus();
+      await expect(privacy).toBeFocused();
+      await privacy.press("Enter");
+      await expect(page.getByRole("heading", { name: "Privacy Policy", exact: true })).toBeVisible();
+      expect(errors).toEqual([]);
+      await context.close();
+    });
+  }
+}

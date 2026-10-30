@@ -26,35 +26,41 @@ export async function loadProfiles(guardianId: string): Promise<{ data: Student[
     if (!students.length) return [];
 
     const ids = students.map(student => student.id);
-    const subjectResult = await sb.from("student_subject")
-      .select("student_id,subject,subject_offering_id,selected_level,display_name_snapshot,external_code_snapshot")
-      .in("student_id", ids);
-    if (subjectResult.error) throw subjectResult.error;
-    const subjectRows = (subjectResult.data ?? []) as SubjectRow[];
-
     const programmeIds = [...new Set(students.map(s => s.programme_id).filter(Boolean))] as string[];
     const stageIds = [...new Set(students.map(s => s.stage_id).filter(Boolean))] as string[];
 
-    const [programmeResult, stageResult] = await Promise.all([
-      programmeIds.length
-        ? sb.from("curriculum_programme").select("id,provider_id,key,label").in("id", programmeIds)
-        : Promise.resolve({ data: [], error: null }),
+    // Subjects and stages do not depend on the programme/provider lookup.
+    // Start all three branches together, including providers as soon as their
+    // programme ids arrive rather than waiting for an unrelated subject read.
+    const [subjectResult, curriculum, stageResult] = await Promise.all([
+      sb.from("student_subject")
+        .select("student_id,subject,subject_offering_id,selected_level,display_name_snapshot,external_code_snapshot")
+        .in("student_id", ids),
+      (async () => {
+        const programmeResult = programmeIds.length
+          ? await sb.from("curriculum_programme").select("id,provider_id,key,label").in("id", programmeIds)
+          : { data: [], error: null };
+        if (programmeResult.error) throw programmeResult.error;
+        const programmes = (programmeResult.data ?? []) as ProgrammeRow[];
+        const providerIds = [...new Set(programmes.map(row => row.provider_id))];
+        const providerResult = providerIds.length
+          ? await sb.from("curriculum_provider").select("id,key,name").in("id", providerIds)
+          : { data: [], error: null };
+        if (providerResult.error) throw providerResult.error;
+        return { programmes, providers: (providerResult.data ?? []) as ProviderRow[] };
+      })(),
       stageIds.length
         ? sb.from("curriculum_stage").select("id,key,label,school_year_label").in("id", stageIds)
         : Promise.resolve({ data: [], error: null }),
     ]);
-    if (programmeResult.error) throw programmeResult.error;
+    if (subjectResult.error) throw subjectResult.error;
     if (stageResult.error) throw stageResult.error;
 
-    const programmes = (programmeResult.data ?? []) as ProgrammeRow[];
+    const subjectRows = (subjectResult.data ?? []) as SubjectRow[];
+    const { programmes, providers } = curriculum;
     const stages = (stageResult.data ?? []) as StageRow[];
-    const providerIds = [...new Set(programmes.map(row => row.provider_id))];
-    const providerResult = providerIds.length
-      ? await sb.from("curriculum_provider").select("id,key,name").in("id", providerIds)
-      : { data: [], error: null };
-    if (providerResult.error) throw providerResult.error;
 
-    const providerById = new Map(((providerResult.data ?? []) as ProviderRow[]).map(row => [row.id, row]));
+    const providerById = new Map(providers.map(row => [row.id, row]));
     const programmeById = new Map(programmes.map(row => [row.id, row]));
     const stageById = new Map(stages.map(row => [row.id, row]));
 

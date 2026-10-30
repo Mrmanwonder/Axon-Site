@@ -138,6 +138,35 @@ test("single-profile boot establishes its only server scope automatically", asyn
   expect(screen.getByTestId("gate").textContent).toBe("ready");
 });
 
+test("boot reads live scope alongside profiles and waits for both", async () => {
+  const profiles = deferred<{ data: typeof A[]; stale: boolean }>();
+  const scope = deferred<{ active: boolean; student_id: string; remaining_seconds: number }>();
+  fixture.loadProfiles.mockReturnValue(profiles.promise);
+  fixture.scopeState.mockReturnValue(scope.promise);
+  mount();
+
+  await waitFor(() => expect(fixture.scopeState).toHaveBeenCalledOnce());
+  expect(fixture.loadProfiles).toHaveBeenCalledOnce();
+  expect(screen.getByTestId("student").textContent).toBe("none");
+  await act(async () => profiles.resolve({ data: [A, B], stale: false }));
+  expect(screen.getByTestId("gate").textContent).toBe("loading");
+  await act(async () => scope.resolve({ active: true, student_id: A.id, remaining_seconds: 1200 }));
+  expect(await screen.findByText(A.id)).toBeTruthy();
+  expect(screen.getByTestId("gate").textContent).toBe("ready");
+});
+
+test("early scope failure remains a boot error after profiles finish", async () => {
+  const profiles = deferred<{ data: typeof A[]; stale: boolean }>();
+  fixture.loadProfiles.mockReturnValue(profiles.promise);
+  fixture.scopeState.mockRejectedValue(new Error("scope unavailable"));
+  mount();
+  await waitFor(() => expect(fixture.scopeState).toHaveBeenCalledOnce());
+  expect(screen.getByTestId("student").textContent).toBe("none");
+  await act(async () => profiles.resolve({ data: [A, B], stale: false }));
+  await waitFor(() => expect(screen.getByTestId("gate").textContent).toBe("boot_error"));
+  expect(screen.getByTestId("student").textContent).toBe("none");
+});
+
 test("switch does not expose incoming sibling until server scope and outgoing purge both finish", async () => {
   const scope = deferred<{ active: boolean; student_id: string; remaining_seconds: number }>();
   const purge = deferred<void>();

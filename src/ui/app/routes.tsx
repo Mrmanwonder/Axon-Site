@@ -3,6 +3,8 @@ import Root from "../shell/Root";
 import AppRouteErrorBoundary from "../pages/AppRouteErrorBoundary";
 
 import NotFound from "../pages/NotFound";
+import { paths } from "./paths";
+import { mainRouteModules } from "./mainRouteModules";
 
 export { paths, SHEET } from "./paths";
 export type { SheetName } from "./paths";
@@ -25,18 +27,18 @@ export const router = createBrowserRouter([
     HydrateFallback,
     errorElement: <AppRouteErrorBoundary />,
     children: [
-      { index: true, HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Home")).default }) },
-      { path: "library", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Library")).default }) },
+      { index: true, HydrateFallback, lazy: async () => ({ Component: (await mainRouteModules[paths.home]()).default }) },
+      { path: "library", HydrateFallback, lazy: async () => ({ Component: (await mainRouteModules[paths.library]()).default }) },
       { path: "library/:paperId", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/PaperOverview")).default }) },
       { path: "library/:paperId/:qId", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/QuestionDetail")).default }) },
-      { path: "scan", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Scan")).default }) },
+      { path: "scan", HydrateFallback, lazy: async () => ({ Component: (await mainRouteModules[paths.scan]()).default }) },
       { path: "scan/review/:draftId", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/PaperReview")).default }) },
-      { path: "insights", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Insights")).default }) },
+      { path: "insights", HydrateFallback, lazy: async () => ({ Component: (await mainRouteModules[paths.insights]()).default }) },
       { path: "insights/journal", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/ErrorJournal")).default }) },
       { path: "practice/:sessionId", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Practice")).default }) },
       { path: "insights/syllabus/:offeringId", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/SyllabusDetail")).default }) },
       { path: "tutor", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Tutor")).default }) },
-      { path: "settings", HydrateFallback, lazy: async () => ({ Component: (await import("../pages/Settings")).default }) },
+      { path: "settings", HydrateFallback, lazy: async () => ({ Component: (await mainRouteModules[paths.settings]()).default }) },
       { path: "index.html", element: <Navigate to="/" replace /> },
     ],
   },
