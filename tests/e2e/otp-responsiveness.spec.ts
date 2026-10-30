@@ -34,7 +34,11 @@ test("slow OTP delivery opens code entry immediately, recovers from failure, and
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByLabel("Email", { exact: true }).fill("parent@example.test");
   await page.getByRole("button", { name: "Email me a code" }).click();
-  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  // AXO-301: "immediately" means before delivery settles, and the mocked delivery
+  // never settles until __axoReleaseOtp() below, so a longer wait here still
+  // proves code entry did not wait for it. The 5 s default flaked on loaded
+  // WebKit CI runners: the trace showed this heading arriving late, not missing.
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("status").filter({ hasText: "Sending a code" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __axoOtpAttempts: number }).__axoOtpAttempts)).toBe(1);

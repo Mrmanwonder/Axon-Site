@@ -333,7 +333,7 @@ test.describe("import screen on a laptop", () => {
       await open(page, "desk", theme);
       await shot(page, `d-empty-${theme}`);
       await expect(page.getByRole("heading", { name: "Add a paper" })).toBeVisible();
-      await expect(page.getByText("Drop photos here")).toBeVisible();
+      await expect(page.getByText("Drop photos or a PDF here")).toBeVisible();
       await expect(page.getByRole("button", { name: "Choose files" })).toBeVisible();
       await expect(page.getByRole("img", { name: /QR code/ })).toBeVisible();
       // No webcam: no video element, no shutter.

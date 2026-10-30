@@ -21,6 +21,7 @@ import { fixSavedPart, paperTypesFor, relabelAttempt } from '../papers.js';
 import { providerKeyForStudent } from '../curriculum.js';
 import { publicScanMessage } from './errors.js';
 import { closestDuplicatePage } from './similarity.js';
+import { classifyImport, importPages } from './import-decode.js';
 
 import { preloadUploadPolicy } from './upload-policy.js';
 import { sendQueue } from './send-queue.js';
@@ -400,9 +401,8 @@ async function processCapturedPage(shot, replacing, reservedSlot, epoch) {
     if (!flagFor(page) && page.quality?.verdict === 'warn') {
       toast(page.quality.reasons[0] ?? 'That page is a little soft.', 'warn');
     }
-    if (page.layer_fallback === 'non_red_marking') {
-      toast('The marking may use a different ink colour. Check the teacher marks during review.');
-    }
+    // No toast for a page whose marking is not red: a teacher's ink can be any
+    // colour, so it is not a reason to doubt the page (AXO-161).
     // An enhancement pass is not proof that blurred handwriting became legible.
     // The measured quality/geometry gates own the actionable retake guidance;
     // never replace their warning with an optimistic "sharpened" toast.
@@ -1275,44 +1275,48 @@ async function finishSave({ runId, regions, started, savedDraft, epoch }) {
   if (epoch === S.epoch) await host.refreshLibrary();
 }
 
-// Some pickers, pastes and drags hand over a File with an empty `type`; the
-// name is then the only evidence it is a photo.
-function isImageFile(file) {
-  return /^image\//.test(file?.type ?? '') || (!file?.type && /\.(png|jpe?g|webp|gif|bmp|avif|heic|heif)$/i.test(file?.name ?? ''));
-}
-
-/** Uploaded photos enter the same transaction path as camera captures. */
+/**
+ * Uploaded photos and PDFs enter the same transaction path as camera captures.
+ * A PDF becomes one page per sheet (import-decode.js); a HEIC photo is decoded
+ * where the browser cannot.
+ */
 export async function acceptUploads(files) {
   const result = { accepted: [], rejected: [] };
   const epoch = S.epoch;
   const studentId = S.ctx?.student?.id;
   const current = () => epoch === S.epoch && studentId === S.ctx?.student?.id;
+  const switched = 'The student profile changed. Select these files again for the current student.';
   for (const file of files) {
     if (!current()) {
-      result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
+      result.rejected.push({ name: file.name, reason: switched });
       continue;
     }
-    if (!S.ctx?.student || S.submitting || !isImageFile(file)) {
-      result.rejected.push({ name: file.name, reason: !S.ctx?.student ? 'Choose a student profile before adding files.' : S.submitting ? 'A paper is being submitted.' : 'Only images can be added.' });
+    if (!S.ctx?.student || S.submitting || !classifyImport(file)) {
+      result.rejected.push({ name: file.name, reason: !S.ctx?.student ? 'Choose a student profile before adding files.' : S.submitting ? 'A paper is being submitted.' : 'Only photos and PDFs can be added.' });
       continue;
     }
     try {
-      const bitmap = await createImageBitmap(file);
-      // Decode can outlive a profile switch or reset, including away and back.
-      // takePage would otherwise bind this old selection to the new epoch.
-      if (!current()) {
-        bitmap.close?.();
-        result.rejected.push({ name: file.name, reason: 'The student profile changed. Select these files again for the current student.' });
-        continue;
+      const alreadyHeld = (S.draft?.pages.length ?? 0) + S.pendingCaptures;
+      for await (const page of importPages(file, { alreadyHeld })) {
+        if ('refused' in page) {
+          result.rejected.push({ name: file.name, reason: page.reason });
+          continue;
+        }
+        // Decode can outlive a profile switch or reset, including away and back.
+        // takePage would otherwise bind this old selection to the new epoch.
+        if (!current()) {
+          page.bitmap.close?.();
+          result.rejected.push({ name: page.label, reason: switched });
+          break;
+        }
+        const shot = { bitmap: page.bitmap, quad: null, auto: false, sourceKind: page.sourceKind, original: page.original, transactionId: `upload:${crypto.randomUUID()}` };
+        const accepted = await takePage(shot, S.retaking);
+        if (accepted) result.accepted.push({ name: page.label });
+        else result.rejected.push({ name: page.label, reason: shot.failure ?? 'This page could not be prepared.' });
       }
-      const shot = { bitmap, quad: null, auto: false, sourceKind: 'upload', original: file, transactionId: `upload:${crypto.randomUUID()}` };
-      const accepted = await takePage(shot, S.retaking);
-      if (accepted) result.accepted.push({ name: file.name });
-      else result.rejected.push({ name: file.name, reason: shot.failure ?? 'This page could not be prepared.' });
-
     } catch (error) {
-      console.warn('[scan] upload could not be decoded', file.name, file.type, error);
-      result.rejected.push({ name: file.name, reason: 'This file could not be opened.' });
+      console.warn('[scan] import could not be decoded', file.name, file.type, error);
+      result.rejected.push({ name: file.name, reason: classifyImport(file) === 'pdf' ? 'This PDF could not be opened. If it is password-protected, remove the password and try again.' : 'This file could not be opened.' });
     }
   }
   return result;
