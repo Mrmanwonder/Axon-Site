@@ -58,13 +58,13 @@ beforeEach(() => {
 });
 test("cold Library does not assert empty or a final zero before papers complete", async () => {
   const read = deferred<any>(); mocks.papers.mockReturnValue(read.promise); mount(<Library />);
-  await screen.findByText("ready"); expect(screen.queryByText("Nothing here yet")).toBeNull(); expect(screen.queryByText("0 papers")).toBeNull();
-  await act(async () => read.resolve({ data: [], stale: false })); expect(await screen.findByText("Nothing here yet")).toBeTruthy();
+  await screen.findByText("ready"); expect(screen.queryByText("Nothing here yet.")).toBeNull(); expect(screen.queryByText("0 papers")).toBeNull();
+  await act(async () => read.resolve({ data: [], stale: false })); expect(await screen.findByText("Nothing here yet.")).toBeTruthy();
 });
 test("Home waits for papers even when analytics completed first", async () => {
   const read = deferred<any>(); mocks.papers.mockReturnValue(read.promise); mount(<Home />);
-  await waitFor(() => expect(mocks.analytics).toHaveBeenCalled()); expect(screen.queryByText("No papers yet")).toBeNull();
-  await act(async () => read.resolve({ data: [], stale: false })); expect(await screen.findByText("No papers yet")).toBeTruthy();
+  await waitFor(() => expect(mocks.analytics).toHaveBeenCalled()); expect(screen.queryByText("No papers yet.")).toBeNull();
+  await act(async () => read.resolve({ data: [], stale: false })); expect(await screen.findByText("No papers yet.")).toBeTruthy();
 });
 test("failed progress refresh disables recovery without surfacing sync status", async () => {
   mocks.papers.mockResolvedValue({ data: [{ id: "p", date_taken: "2026-01-01" }] }); mocks.progress.mockResolvedValue(new Map([["p", { status: "reading" }]])); mount(<Library />);
