@@ -336,7 +336,7 @@ test("empty search result is distinct from an empty Library and keeps filters ed
   await userEvent.type(screen.getByRole("searchbox", { name: "Search library" }), "no-such-answer-token");
 
   expect(await screen.findByText("No matching papers")).toBeTruthy();
-  expect(screen.queryByText("Nothing here yet")).toBeNull();
+  expect(screen.queryByText("Nothing here yet.")).toBeNull();
   expect((screen.getByRole("button", { name: "Filter by subject" }) as HTMLButtonElement).disabled).toBe(false);
   expect((screen.getByRole("button", { name: "Filter by date" }) as HTMLButtonElement).disabled).toBe(false);
 });

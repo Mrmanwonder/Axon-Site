@@ -29,7 +29,7 @@ test("Home: asks once where the student sits, then reads that zone's timetable",
   await expect(card.getByText("Where do you sit your exams?")).toBeVisible();
   await expect(card.getByRole("button", { name: "Country where you sit your exams" })).toContainText("India");
   await expect(card.getByText("Cambridge zone 4.")).toBeVisible();
-  // The empty Home's one primary action stays "Add your first paper".
+  // The empty Home's one primary action is "Scan a marked paper".
   await expect(card.getByRole("button", { name: "Save" })).not.toHaveClass(/primary/);
   const { violations } = await new AxeBuilder({ page }).include(".examcard").analyze();
   expect(violations.map((v) => [v.id, v.nodes.map((n) => n.target.join(" "))])).toEqual([]);

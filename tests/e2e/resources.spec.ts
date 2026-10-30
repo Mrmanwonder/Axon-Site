@@ -6,15 +6,15 @@ test("cold library remains loading until the delayed empty result", async ({ pag
 
   await page.goto("/tests/browser/index.html"); const loading = page.getByRole("status", { name: "Loading papers…" }); await expect(loading).toBeVisible(); await expect(loading).toHaveAttribute("data-skeleton", "library");
 
-  await expect(page.getByText("Nothing here yet")).toHaveCount(0); await expect(page.getByText("0 papers", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Nothing here yet.")).toHaveCount(0); await expect(page.getByText("0 papers", { exact: true })).toHaveCount(0);
 
-  await expect(page.getByText("Nothing here yet")).toBeVisible();
+  await expect(page.getByText("Nothing here yet.")).toBeVisible();
 
 });
 
 test("Home does not confuse early analytics with paper completion", async ({ page }) => {
 
-  await page.goto("/tests/browser/index.html?view=home"); const loading = page.getByRole("status", { name: "Loading papers…" }); await expect(loading).toBeVisible(); await expect(loading).toHaveAttribute("data-skeleton", "home"); await expect(page.getByText("No papers yet")).toHaveCount(0); await expect(page.getByText("No papers yet")).toBeVisible();
+  await page.goto("/tests/browser/index.html?view=home"); const loading = page.getByRole("status", { name: "Loading papers…" }); await expect(loading).toBeVisible(); await expect(loading).toHaveAttribute("data-skeleton", "home"); await expect(page.getByText("No papers yet.")).toHaveCount(0); await expect(page.getByText("No papers yet.")).toBeVisible();
 
 });
 
@@ -24,7 +24,7 @@ test("auth read failure is a boot error", async ({ page }) => { await page.goto(
 
 test("consent failure stays explicit", async ({ page }) => { await page.goto("/tests/browser/index.html?scenario=consent-error"); await expect(page.getByText("Consent failed")).toBeVisible(); });
 
-test("resource status accessibility @a11y", async ({ page }) => { await page.goto("/tests/browser/index.html"); await expect(page.getByText("Nothing here yet")).toBeVisible(); expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]); });
+test("resource status accessibility @a11y", async ({ page }) => { await page.goto("/tests/browser/index.html"); await expect(page.getByText("Nothing here yet.")).toBeVisible(); expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]); });
 
 test("capture stops a permission result after detachment", async ({ page }) => {
   await page.goto("/tests/browser/index.html");
@@ -276,7 +276,7 @@ test("review mark radios follow native keyboard behavior and closed review is ab
 
 test("Library search controls remain usable inside the mobile viewport", async ({ page }) => {
   await page.goto("/tests/browser/index.html");
-  await expect(page.getByText("Nothing here yet")).toBeVisible();
+  await expect(page.getByText("Nothing here yet.")).toBeVisible();
 
   const search = page.getByRole("searchbox", { name: "Search library" });
   await expect(search).toBeVisible();
