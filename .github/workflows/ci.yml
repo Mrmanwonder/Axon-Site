@@ -40,6 +40,20 @@ jobs:
       - run: python3 scripts/exams/test_thresholds_ingest.py
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
+      # AXO-301: a failed e2e test keeps its trace (playwright.config.ts: trace
+      # "retain-on-failure"), but nothing uploaded it, so a CI-only failure could
+      # not be read. Only failures: passing runs leave no trace to upload.
+      - name: Upload traces of failed e2e tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failures
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            test-results/**/trace.zip
+            test-results/**/error-context.md
+            test-results/**/test-failed-*.png
       - name: Preserve design fixture screenshots for review
         if: always()
         uses: actions/upload-artifact@v4
@@ -69,6 +83,7 @@ jobs:
       - run: npm run check:contract-parity
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CROSS_REPO_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
 
   eval-gate:
     name: eval gate (model_route changes need a passing eval run)

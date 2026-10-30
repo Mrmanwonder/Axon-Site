@@ -60,15 +60,15 @@ HTTPS (a tunnel or a deploy preview), or on Android plug the phone in and run
   interrupted booklet resumes at the first page that has not landed. Laptops get an
   import screen (drop, paste, QR to continue on a phone) rather than a webcam. Detection
   thresholds are first guesses until they are tuned on real phone footage.
-- **Ingestion** — upload from the gallery or files, or paste a link. Uploads take the
+- **Ingestion** — upload photos or PDFs from the gallery or files, or paste a link. Uploads take the
   same road as captures rather than bypassing conditioning. The send path no longer
   opens a paper-type sheet before the reading screen (7 Oct 2026 decision D7): an
   unspecified type starts as a school test; server triage may identify an official
   past paper from a confidently read printed code. Type can be corrected on the paper.
   The upload queue begins only when the student chooses to read the pages.
 - **The pipeline** — the ten stages of `docs/specs/SCANNING_SYSTEM.md`: conditioning and teacher-ink
-  separation on device (today this isolates red ink only; teacher ink can be any colour,
-  which is a known gap), then structure, content, mark attribution, reconciliation, tier
+  separation on device (a colour hint only: it finds red ink best, and teacher ink can be any
+  colour, so it never lowers confidence; the marks are read from the crop either way), then structure, content, mark attribution, reconciliation, tier
   routing and explanation server-side, then review, then commit.
 - **Review** — required, not skippable, with unreadable and unsure questions first and
   every field shown against its own crop.
@@ -81,13 +81,16 @@ The harness runs and both gates are enforced, but until there are papers in it, 
 about the pipeline's accuracy is known rather than assumed. Neither gate has been met,
 because neither has been measured.
 
-**PDFs and HEIC.** The import screen accepts photos only. PDFs are not rasterised, so
-nothing could read them, and the app says so rather than accepting a file it cannot use.
-PDF import is a priority (tracked in Linear under the scanner rebuild), as is accepting
-every common image type.
+**PDFs and HEIC import, but have not been tried on a phone.** A PDF becomes one page per sheet, rendered
+at the conditioning resolution and stored as a lossless PNG original; a HEIC photo is decoded
+where the browser cannot (Chrome, Firefox). Both decoders load only when a file needs them
+(`src/scan/import-decode.js`; licences in `third_party/pdfjs/` and `third_party/heic-to/`).
+Real-device behaviour (memory on a 25-page PDF, iOS file pickers) is unverified.
 
-**Links** are stored `pending`: a browser cannot fetch a cross-origin PDF and hand over
-the bytes, so a server-side fetcher has to resolve them.
+**Links** are fetched by `mastery-api` (`/link-fetch`, AXO-295): https only, public hosts only,
+redirects re-checked, 25 MB cap, type decided from the file's bytes, Google Drive and Docs share
+links rewritten to their downloads. The file then imports on the device like any other. A link
+that needs a sign-in is refused with that reason. Links added before this stay `pending`.
 
 **The Tier 2 scheme library is empty.** Every paper falls back to Tier 1 and says so,
 which is the correct behaviour with no scheme held — an approximated scheme would be a
@@ -106,8 +109,9 @@ Ten stages across three places. The device conditions each page and separates th
 teacher's ink from the student's writing before anything is uploaded — mobile data
 is the binding constraint on time-to-result far more often than server compute is, and
 the ink mask is a map of the teacher marks on the page for the price of no model calls
-at all. Today that mask finds red ink only, and a teacher may mark in black, blue, pink or
-any other colour, so it must stop depending on hue (see the teacher-ink issue in Linear). The server then finds the questions on downscaled proxies with a small model,
+at all. That mask finds red ink best, and a teacher may mark in black, blue, pink or any other
+colour, so it is a hint: a page it cannot separate is not trusted any less, and the model
+reads the marks from each question's crop whatever their colour (AXO-161). The server then finds the questions on downscaled proxies with a small model,
 reads each question from its own crop with a frontier one, binds the marks to the
 questions, and checks the arithmetic against the total the teacher wrote.
 

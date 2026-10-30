@@ -41,13 +41,9 @@ import { useApp } from "./AppProvider";
 import { useScan } from "../scan/ScanProvider";
 import { useToast } from "../components/ToastProvider";
 import { useSheetControls } from "../components/SheetProvider";
-import {
-  sb, parsePaperLink,
-} from "./modules";
-
-/** What a paper is until a printed paper code or the student says otherwise (D7). */
-const DEFAULT_PAPER_TYPE = "unit_test";
+import { parsePaperLink } from "./modules";
 import { hapticTick, hapticFirm } from "../lib/haptics";
+import { IMPORT_ACCEPT } from "../../scan/import-decode.js";
 
 type IngestionValue = {
   /** Open the OS picker. The same path for the Scan tab and for anywhere else. */
@@ -127,28 +123,23 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
 
   const ingestLink = useCallback(async (url: string) => {
     if (!app.student) return toast("Create a student profile first.", "warn");
-    const requestId = crypto.randomUUID();
-    const run = async (type: string) => {
-      if (linkFlight.current) return;
-      linkFlight.current = true;
-      try {
-        const { error } = await sb.rpc("create_link_paper", {
-          p_request_id: requestId, p_student_id: app.student!.id,
-          p_type: type, p_date: new Date().toISOString().slice(0, 10), p_url: url,
-        });
-        if (error) throw error;
-        hapticFirm();
-        toast("Link saved. We'll fetch it and tell you when it's readable.");
-        await app.refreshLibrary();
-      } catch (e) {
-        toast((e as Error).message || "That link could not be added.", "warn");
-      } finally { linkFlight.current = false; }
-    };
-    // No "What kind of paper is this?" (council D7): a link starts as a school
-    // test, and triage makes it a past paper only on a printed paper code read
-    // with high confidence. The type can be changed on the paper.
-    void run(app.takePendingPaperType() ?? DEFAULT_PAPER_TYPE);
-  }, [app, toast]);
+    if (linkFlight.current) return;
+    linkFlight.current = true;
+    const scope = importScope.current;
+    try {
+      // AXO-295: the server fetches the link (a browser cannot read a cross-origin file) and hands
+      // the file back; it then takes the same road as a file the student chose. No placeholder
+      // paper is created, so a link that cannot be fetched leaves nothing behind.
+      toast("Fetching the link…");
+      const { fetchLink } = await import("../../scan/functions.js");
+      const file = await fetchLink(url);
+      if (importScope.current !== scope) return;
+      hapticFirm();
+      await ingestFiles([file]);
+    } catch (e) {
+      if (importScope.current === scope) toast((e as Error).message || "That link could not be added.", "warn");
+    } finally { linkFlight.current = false; }
+  }, [app, toast, ingestFiles]);
 
   const addPaper = useCallback(() => {
     hapticTick();
@@ -159,7 +150,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
     hapticTick();
     openSheet({
       title: "Add a link",
-      body: "Paste a link to a school-shared PDF or drive file. We fetch it on our side — a browser can't hand us the file directly.",
+      body: "Paste a link to a PDF or photo that is shared publicly: a school site, Google Drive or Google Docs. We fetch it on our side and add its pages here.",
       input: { label: "Paper link", id: "linkUrl", placeholder: "https://…", inputMode: "url" },
       primary: "Add this link",
       onConfirm: async (raw) => {
@@ -210,7 +201,7 @@ export function IngestionProvider({ children }: { children: ReactNode }) {
         ref={inputRef}
         type="file"
         multiple
-        accept="image/*"
+        accept={IMPORT_ACCEPT}
         hidden
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];

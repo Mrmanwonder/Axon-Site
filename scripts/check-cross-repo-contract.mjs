@@ -22,10 +22,19 @@ function parseContract(source) {
 async function githubFile(repo, path, ref) {
   const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
   const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'axon-contract-parity' };
-  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  // Both repositories are private (AXO-297). The workflow's own GITHUB_TOKEN can read only its
+  // own repository, so reading the counterpart needs CROSS_REPO_TOKEN: a fine-grained token with
+  // Contents: read on both repos, stored as an Actions secret in each.
+  const token = process.env.CROSS_REPO_TOKEN || process.env.GITHUB_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(url, { headers });
   if (response.status === 404 && ref !== 'main') return githubFile(repo, path, 'main');
-  if (!response.ok) throw new Error(`Could not read ${repo}@${ref}/${path}: HTTP ${response.status}`);
+  if (!response.ok) {
+    const hint = [401, 403, 404].includes(response.status) && !process.env.CROSS_REPO_TOKEN
+      ? ' Set the CROSS_REPO_TOKEN secret (fine-grained token, Contents: read on both repositories).'
+      : '';
+    throw new Error(`Could not read ${repo}@${ref}/${path}: HTTP ${response.status}.${hint}`);
+  }
   const payload = await response.json();
   return Buffer.from(payload.content.replace(/\n/g, ''), 'base64').toString('utf8');
 }
