@@ -253,6 +253,7 @@
 }
 .public-header, .public-footer { width: min(100% - 32px, 760px); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; }
 .public-header { min-height: 72px; border-bottom: 1px solid var(--hairline); }
+.public-header .essential-button { border-radius: var(--radius-round); }
 .wordmark { color: var(--label); font-size: 22px; font-weight: 700; letter-spacing: -.04em; text-decoration: none; }
 .legal-content { width: min(100% - 32px, 720px); margin: 0 auto; padding: clamp(42px, 8vw, 84px) 0 64px; }
 .legal-content .eyebrow { margin: 0 0 10px; color: var(--accent); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
@@ -261,7 +262,7 @@
 .legal-content section { padding: 28px 0; border-top: 1px solid var(--hairline); }
 .legal-content h2 { margin: 0 0 12px; font-size: clamp(21px, 5vw, 27px); line-height: 1.2; }
 .legal-content h3 { margin: 24px 0 8px; font-size: 17px; }
-.legal-content p { margin: 0 0 14px; color: var(--label-2); font-size: 16px; line-height: 1.7; max-width: 68ch; overflow-wrap: anywhere; }
+.legal-content p { margin: 0 0 14px; color: var(--label-2); font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
 .legal-content section :is(p, li) {
   font-family: "Sentient", Georgia, "Times New Roman", serif;
   font-size: 16px;
