@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import DocumentMeta from "../components/DocumentMeta";
+import EssentialButton from "../components/EssentialButton";
 import { paths } from "../app/paths";
 import META from "./publicMetadata.json";
 import { LEGAL_EFFECTIVE_DATE, LEGAL_LAST_UPDATED } from "../lib/legal";
@@ -15,7 +16,7 @@ export default function LegalPage({ kind, children }: Props) {
       <DocumentMeta title={meta.title} description={meta.description} path={meta.path} />
       <header className="public-header">
         <Link className="wordmark" to={paths.home} aria-label="Axon home">Axon</Link>
-        <Link className="public-cta" to={paths.home}>Open Axon</Link>
+        <EssentialButton to={paths.home}>Open Axon</EssentialButton>
       </header>
       <main className="legal-content" id="main-content">
         <p className="eyebrow">Legal</p>
