@@ -28,6 +28,7 @@ for (const { route, title } of pages) {
       const prose = page.locator(".legal-content section p").first();
       await expect(prose).toHaveCSS("font-family", /^Sentient, Georgia, "?Times New Roman"?, serif$/);
       await expect(prose).toHaveCSS("font-size", "16px");
+      await expect(prose).toHaveCSS("max-width", "none");
       expect(await prose.evaluate(el => parseFloat(getComputedStyle(el).lineHeight))).toBeCloseTo(27.2, 2);
       expect(await page.evaluate(() => [...document.fonts].some(font => font.family === "Sentient" && font.status === "loaded"))).toBe(true);
       await expect(page.locator(".legal-content h1")).toHaveCSS("font-family", /Onest/);
@@ -38,7 +39,7 @@ for (const { route, title } of pages) {
       await expect(cta).toHaveAttribute("href", "/");
       await expect(cta.locator(".essential-button__arrow")).toHaveAttribute("aria-hidden", "true");
       await expect(cta).toHaveCSS("min-height", "52px");
-      await expect(cta).toHaveCSS("border-radius", "16px");
+      await expect(cta).toHaveCSS("border-radius", "999px");
 
       for (const viewport of viewports) {
         await page.setViewportSize(viewport);
